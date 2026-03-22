@@ -24,15 +24,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function pollForScores() {
-    // Poll every 3 seconds until we get data, then switch to normal refresh
+    // Poll every 3 seconds until backend has refreshed at least once
     const poll = async () => {
         const status = await ApiClient.getStatus();
-        if (status.countries_tracked > 0) {
+        if (status.last_refresh) {
+            // Data is ready
             await MapModule.updateScores();
             await updateStatusBar();
             return;
         }
-        setTimeout(poll, 3000);
+        // Also try loading whatever partial data exists
+        if (status.countries_tracked > 0) {
+            await MapModule.updateScores();
+            await updateStatusBar();
+        }
+        setTimeout(poll, 4000);
     };
     await poll();
 }
@@ -42,6 +48,8 @@ async function updateStatusBar() {
     if (status.last_refresh) {
         const date = new Date(status.last_refresh);
         document.getElementById('last-update').textContent = date.toLocaleTimeString();
+    } else {
+        document.getElementById('last-update').textContent = 'Refreshing...';
     }
     if (status.hotspot_count !== undefined) {
         document.getElementById('hotspot-count').textContent = status.hotspot_count;
