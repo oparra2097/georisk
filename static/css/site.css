@@ -1,0 +1,260 @@
+/* ===== Site-wide styles (nav, footer, page layout) ===== */
+
+:root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #111827;
+    --bg-tertiary: #1a2035;
+    --text-primary: #e5e7eb;
+    --text-secondary: #9ca3af;
+    --text-muted: #6b7280;
+    --accent: #3b82f6;
+    --accent-dim: #1e3a5f;
+    --border: #1f2937;
+    --green: #10b981;
+    --red: #ef4444;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+a:hover {
+    text-decoration: underline;
+}
+
+
+/* ===== Navigation ===== */
+
+.site-nav {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.nav-brand {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+    text-decoration: none;
+}
+.nav-brand:hover {
+    text-decoration: none;
+    color: #fff;
+}
+
+.nav-links {
+    display: flex;
+    gap: 8px;
+}
+
+.nav-link {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.15s, background 0.15s;
+}
+.nav-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    text-decoration: none;
+}
+.nav-link.active {
+    color: var(--text-primary);
+    background: var(--accent-dim);
+}
+
+.nav-social {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.social-icon {
+    color: var(--text-muted);
+    transition: color 0.15s;
+    display: flex;
+    align-items: center;
+}
+.social-icon:hover {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+
+/* ===== Main Content ===== */
+
+.site-main {
+    flex: 1;
+}
+
+
+/* ===== Footer ===== */
+
+.site-footer {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 20px 24px;
+    margin-top: auto;
+}
+
+.footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.footer-brand {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.footer-copy {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+
+/* ===== Generic Page Layout ===== */
+
+.page-section {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    letter-spacing: -0.5px;
+}
+
+.page-body p {
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: 20px;
+    font-size: 15px;
+}
+
+.page-body h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-top: 32px;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.page-body ul {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 20px;
+}
+.page-body ul li {
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 6px 0;
+    padding-left: 16px;
+    position: relative;
+}
+.page-body ul li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.page-intro {
+    font-size: 16px !important;
+    color: var(--text-secondary);
+}
+
+
+/* ===== Research Placeholder ===== */
+
+.research-placeholder {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-muted);
+    font-size: 15px;
+}
+.research-placeholder svg {
+    margin-bottom: 16px;
+}
+
+
+/* ===== Spinner (reuse) ===== */
+
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+
+/* ===== Responsive ===== */
+
+@media (max-width: 640px) {
+    .nav-inner {
+        padding: 0 16px;
+    }
+    .nav-links {
+        gap: 4px;
+    }
+    .nav-link {
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+    .footer-inner {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
+    }
+}

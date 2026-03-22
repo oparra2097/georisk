@@ -1,0 +1,275 @@
+/* ===== Homepage Styles ===== */
+
+/* ===== Ticker Bar ===== */
+
+.ticker-bar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    height: 36px;
+    overflow: hidden;
+    position: relative;
+}
+
+.ticker-track {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    white-space: nowrap;
+    animation: ticker-scroll 40s linear infinite;
+}
+
+.ticker-track:hover {
+    animation-play-state: paused;
+}
+
+.ticker-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 20px;
+    font-size: 13px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.ticker-name {
+    color: var(--text-secondary);
+}
+
+.ticker-price {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.ticker-change {
+    font-size: 12px;
+    font-weight: 600;
+}
+.ticker-change.up {
+    color: var(--green);
+}
+.ticker-change.down {
+    color: var(--red);
+}
+
+.ticker-sep {
+    color: var(--border);
+    padding: 0 4px;
+    flex-shrink: 0;
+}
+
+.ticker-loading {
+    padding: 0 24px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+@keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+
+/* ===== Hero Section ===== */
+
+.hero {
+    text-align: center;
+    padding: 72px 24px 56px;
+    border-bottom: 1px solid var(--border);
+}
+
+.hero-title {
+    font-size: 42px;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hero-subtitle {
+    font-size: 17px;
+    color: var(--text-secondary);
+    max-width: 520px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+
+/* ===== Sections ===== */
+
+.section {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 24px;
+}
+
+.section-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+}
+
+
+/* ===== Market Grid ===== */
+
+.market-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.market-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    transition: border-color 0.15s;
+}
+.market-card:hover {
+    border-color: var(--text-muted);
+}
+
+.market-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.market-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.market-type-badge {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.market-price {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+}
+
+.market-change {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+.market-change.up {
+    color: var(--green);
+}
+.market-change.down {
+    color: var(--red);
+}
+.market-change.flat {
+    color: var(--text-muted);
+}
+
+.market-sparkline {
+    height: 40px;
+    width: 100%;
+}
+
+.market-loading {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+
+/* ===== Project Grid ===== */
+
+.project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.project-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    text-decoration: none;
+    transition: border-color 0.15s, transform 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.project-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    text-decoration: none;
+}
+
+.project-icon {
+    color: var(--accent);
+}
+
+.project-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.project-desc {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.project-link {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-top: auto;
+}
+
+
+/* ===== Responsive ===== */
+
+@media (max-width: 640px) {
+    .hero {
+        padding: 48px 20px 40px;
+    }
+    .hero-title {
+        font-size: 32px;
+    }
+    .hero-subtitle {
+        font-size: 15px;
+    }
+    .section {
+        padding: 32px 16px;
+    }
+    .market-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 10px;
+    }
+    .market-card {
+        padding: 14px;
+    }
+    .market-price {
+        font-size: 18px;
+    }
+    .project-grid {
+        grid-template-columns: 1fr;
+    }
+}

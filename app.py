@@ -14,8 +14,20 @@ def create_app():
     app.register_blueprint(api_bp, url_prefix='/api')
 
     @app.route('/')
-    def index():
-        return render_template('index.html')
+    def home():
+        return render_template('home.html', active_page='home')
+
+    @app.route('/georisk')
+    def georisk():
+        return render_template('georisk.html')
+
+    @app.route('/about')
+    def about():
+        return render_template('about.html', active_page='about')
+
+    @app.route('/research')
+    def research():
+        return render_template('research.html', active_page='research')
 
     init_scheduler(app)
     return app

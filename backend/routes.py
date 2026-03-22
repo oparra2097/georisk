@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify
 from backend.cache.store import store
+from backend.data_sources.market_data import get_market_data
 from config import Config
 
 api_bp = Blueprint('api', __name__)
@@ -56,6 +57,13 @@ def get_hotspots():
     return jsonify({
         'hotspots': [h.to_dict() for h in hotspots]
     })
+
+
+@api_bp.route('/markets')
+def get_markets():
+    """Return live market data (cached 5 minutes)."""
+    data = get_market_data()
+    return jsonify(data)
 
 
 @api_bp.route('/status')

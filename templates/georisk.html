@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoRisk Monitor</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/map.css">
+    <link rel="stylesheet" href="/static/css/panel.css">
+    <link rel="stylesheet" href="/static/css/sidebar.css">
+</head>
+<body>
+    <header id="app-header">
+        <div class="header-left">
+            <h1>GeoRisk Monitor</h1>
+            <span class="header-subtitle">Real-Time Geopolitical Risk Dashboard</span>
+        </div>
+        <div id="status-bar">
+            <div class="status-item">
+                <span class="status-label">Last Updated</span>
+                <span id="last-update" class="status-value">Loading...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Hotspots</span>
+                <span id="hotspot-count" class="status-value hotspot-badge">--</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Countries</span>
+                <span id="country-count" class="status-value">--</span>
+            </div>
+        </div>
+    </header>
+
+    <main id="app-main">
+        <section id="map-container">
+            <div id="map-loading">
+                <div class="spinner"></div>
+                <p>Loading geopolitical data...</p>
+            </div>
+            <div id="map-svg-wrapper"></div>
+            <div id="map-legend"></div>
+            <div id="map-tooltip" class="hidden"></div>
+        </section>
+
+        <aside id="news-sidebar">
+            <div class="sidebar-header">
+                <h2>Live Headlines</h2>
+                <select id="news-region-filter">
+                    <option value="global">Global</option>
+                    <option value="hotspots">Hotspots Only</option>
+                </select>
+            </div>
+            <ul id="news-feed">
+                <li class="news-loading">Loading headlines...</li>
+            </ul>
+        </aside>
+    </main>
+
+    <div id="country-panel" class="hidden">
+        <div class="panel-backdrop"></div>
+        <div class="panel-content">
+            <button id="panel-close">&times;</button>
+            <div class="panel-header">
+                <h2 id="panel-country-name"></h2>
+                <div id="panel-composite-score" class="composite-badge"></div>
+            </div>
+            <div class="panel-body">
+                <div class="panel-chart-section">
+                    <h3>Risk Profile</h3>
+                    <canvas id="panel-radar-chart" width="300" height="300"></canvas>
+                </div>
+                <div class="panel-bars-section">
+                    <h3>Indicator Breakdown</h3>
+                    <div id="panel-indicator-bars"></div>
+                </div>
+                <div class="panel-headlines-section">
+                    <h3>Recent Headlines</h3>
+                    <ul id="panel-headlines"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/map.js"></script>
+    <script src="/static/js/sidebar.js"></script>
+    <script src="/static/js/panel.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
