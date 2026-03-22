@@ -63,6 +63,7 @@ body {
 #status-bar {
     display: flex;
     gap: 24px;
+    align-items: center;
 }
 
 .status-item {
@@ -128,6 +129,44 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* Header breadcrumb home link */
+.header-home-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 700;
+    transition: color 0.15s;
+}
+.header-home-link:hover {
+    color: #60a5fa;
+}
+
+.header-sep {
+    color: var(--text-muted);
+    margin: 0 8px;
+    font-weight: 300;
+}
+
+/* Export button */
+.export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 5px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s;
+    cursor: pointer;
+}
+.export-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
 }
 
 .hidden {

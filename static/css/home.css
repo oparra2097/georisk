@@ -1,11 +1,11 @@
-/* ===== Homepage Styles ===== */
+/* ===== Homepage Styles (compact) ===== */
 
 /* ===== Ticker Bar ===== */
 
 .ticker-bar {
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
-    height: 36px;
+    height: 34px;
     overflow: hidden;
     position: relative;
 }
@@ -26,8 +26,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 0 20px;
-    font-size: 13px;
+    padding: 0 18px;
+    font-size: 12px;
     font-weight: 500;
     flex-shrink: 0;
 }
@@ -42,26 +42,22 @@
 }
 
 .ticker-change {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
 }
-.ticker-change.up {
-    color: var(--green);
-}
-.ticker-change.down {
-    color: var(--red);
-}
+.ticker-change.up { color: var(--green); }
+.ticker-change.down { color: var(--red); }
 
 .ticker-sep {
     color: var(--border);
-    padding: 0 4px;
+    padding: 0 2px;
     flex-shrink: 0;
 }
 
 .ticker-loading {
     padding: 0 24px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 12px;
 }
 
 @keyframes ticker-scroll {
@@ -70,48 +66,37 @@
 }
 
 
-/* ===== Hero Section ===== */
-
-.hero {
-    text-align: center;
-    padding: 72px 24px 56px;
-    border-bottom: 1px solid var(--border);
-}
-
-.hero-title {
-    font-size: 42px;
-    font-weight: 800;
-    letter-spacing: -1.5px;
-    margin-bottom: 12px;
-    background: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.hero-subtitle {
-    font-size: 17px;
-    color: var(--text-secondary);
-    max-width: 520px;
-    margin: 0 auto;
-    line-height: 1.6;
-}
-
-
 /* ===== Sections ===== */
 
 .section {
     max-width: 1100px;
     margin: 0 auto;
-    padding: 48px 24px;
+    padding: 28px 24px 16px;
 }
 
-.section-title {
-    font-size: 20px;
+.section-tools {
+    padding-top: 12px;
+}
+
+.section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.section-label {
+    font-size: 11px;
     font-weight: 600;
-    margin-bottom: 24px;
-    letter-spacing: -0.3px;
-    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+}
+
+.section-timestamp {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
 }
 
 
@@ -119,15 +104,15 @@
 
 .market-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
 }
 
 .market-card {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px;
+    border-radius: 8px;
+    padding: 14px 16px;
     transition: border-color 0.15s;
 }
 .market-card:hover {
@@ -137,21 +122,21 @@
 .market-card-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 8px;
+    align-items: center;
+    margin-bottom: 6px;
 }
 
 .market-label {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-secondary);
     font-weight: 500;
 }
 
 .market-type-badge {
-    font-size: 10px;
+    font-size: 9px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: 2px 6px;
+    padding: 1px 5px;
     border-radius: 3px;
     background: var(--bg-tertiary);
     color: var(--text-muted);
@@ -159,117 +144,113 @@
 }
 
 .market-price {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 700;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     letter-spacing: -0.5px;
 }
 
 .market-change {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
-.market-change.up {
-    color: var(--green);
-}
-.market-change.down {
-    color: var(--red);
-}
-.market-change.flat {
-    color: var(--text-muted);
-}
+.market-change.up { color: var(--green); }
+.market-change.down { color: var(--red); }
+.market-change.flat { color: var(--text-muted); }
 
 .market-sparkline {
-    height: 40px;
+    height: 32px;
     width: 100%;
 }
 
 .market-loading {
     grid-column: 1 / -1;
     text-align: center;
-    padding: 40px;
+    padding: 32px;
     color: var(--text-muted);
-    font-size: 14px;
 }
 
 
-/* ===== Project Grid ===== */
+/* ===== Project Row (compact) ===== */
 
-.project-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
-}
-
-.project-card {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 24px;
-    text-decoration: none;
-    transition: border-color 0.15s, transform 0.15s;
+.project-row {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
-.project-card:hover {
+
+.project-card-compact {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-decoration: none;
+    transition: border-color 0.15s;
+}
+.project-card-compact:hover {
     border-color: var(--accent);
-    transform: translateY(-2px);
     text-decoration: none;
 }
 
-.project-icon {
+.project-ico {
     color: var(--accent);
+    flex-shrink: 0;
 }
 
-.project-name {
-    font-size: 18px;
+.project-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.project-name-sm {
+    display: block;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
 }
 
-.project-desc {
-    font-size: 14px;
-    color: var(--text-secondary);
-    line-height: 1.6;
+.project-desc-sm {
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 1px;
 }
 
-.project-link {
-    font-size: 13px;
-    font-weight: 600;
+.project-arrow {
+    font-size: 16px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.project-card-compact:hover .project-arrow {
     color: var(--accent);
-    margin-top: auto;
 }
 
 
 /* ===== Responsive ===== */
 
-@media (max-width: 640px) {
-    .hero {
-        padding: 48px 20px 40px;
-    }
-    .hero-title {
-        font-size: 32px;
-    }
-    .hero-subtitle {
-        font-size: 15px;
-    }
-    .section {
-        padding: 32px 16px;
-    }
+@media (max-width: 768px) {
     .market-grid {
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-        gap: 10px;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
     }
     .market-card {
-        padding: 14px;
+        padding: 12px;
     }
     .market-price {
-        font-size: 18px;
+        font-size: 16px;
     }
-    .project-grid {
-        grid-template-columns: 1fr;
+}
+
+@media (max-width: 480px) {
+    .market-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .section {
+        padding: 20px 16px 12px;
     }
 }

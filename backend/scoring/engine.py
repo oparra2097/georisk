@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from backend.models import IndicatorScore, CountryRisk, NewsArticle
 from backend.cache.store import store
 from backend.data_sources import country_codes
@@ -109,39 +110,62 @@ def score_single_country(country_alpha2):
     return risk, headlines[:15]
 
 
+def _score_country_safe(code):
+    """Score one country, catching exceptions. Returns (code, risk, headlines)."""
+    try:
+        risk, headlines = score_single_country(code)
+        return (code, risk, headlines)
+    except Exception as e:
+        logger.error(f"Failed to score {code}: {e}")
+        risk = CountryRisk(
+            country_code=code,
+            country_name=country_codes.iso_alpha2_to_name(code),
+            composite_score=1.0,
+            updated_at=datetime.utcnow()
+        )
+        return (code, risk, [])
+
+
+def _score_batch(codes, scored_dict):
+    """Score a batch of countries in parallel (10 at a time)."""
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_score_country_safe, c): c for c in codes}
+        for future in as_completed(futures):
+            code, risk, headlines = future.result()
+            store.update_country(code, risk)
+            if headlines:
+                store.update_headlines(code, headlines)
+            scored_dict[code] = risk
+
+
 def refresh_all_scores():
-    """Refresh scores for all tracked countries."""
+    """Refresh scores for all tracked countries using parallel processing."""
     logger.info("Starting score refresh cycle...")
     start = datetime.utcnow()
 
-    all_codes = PRIORITY_COUNTRIES.copy()
-
-    remaining = [c for c in country_codes.get_all_country_codes()
-                 if c not in all_codes]
-    all_codes.extend(remaining)
-
     scored = {}
-    for code in all_codes:
-        try:
-            risk, headlines = score_single_country(code)
-            store.update_country(code, risk)
-            store.update_headlines(code, headlines)
-            scored[code] = risk
-        except Exception as e:
-            logger.error(f"Failed to score {code}: {e}")
-            risk = CountryRisk(
-                country_code=code,
-                country_name=country_codes.iso_alpha2_to_name(code),
-                composite_score=1.0,
-                updated_at=datetime.utcnow()
-            )
-            store.update_country(code, risk)
-            scored[code] = risk
 
+    # Phase 1: Priority countries (parallel, 10 workers)
+    logger.info(f"Phase 1: Scoring {len(PRIORITY_COUNTRIES)} priority countries...")
+    _score_batch(PRIORITY_COUNTRIES, scored)
+
+    # Signal frontend that priority data is ready
+    store.set_last_refresh(datetime.utcnow())
+    p1_elapsed = (datetime.utcnow() - start).total_seconds()
+    logger.info(f"Phase 1 complete: {len(scored)} priority countries in {p1_elapsed:.1f}s")
+
+    # Phase 2: Remaining countries (parallel, 10 workers)
+    remaining = [c for c in country_codes.get_all_country_codes()
+                 if c not in PRIORITY_COUNTRIES]
+    logger.info(f"Phase 2: Scoring {len(remaining)} remaining countries...")
+    _score_batch(remaining, scored)
+
+    # Normalize and update cache
     normalize_scores_absolute(scored)
     for code, risk in scored.items():
         store.update_country(code, risk)
 
+    # Global headlines
     global_articles = fetch_global_headlines()
     global_headlines = []
     for art in global_articles[:30]:

@@ -170,11 +170,15 @@ def fetch_country_volume(country_alpha2, timespan='24h'):
 
 def fetch_country_data(country_alpha2, timespan='24h'):
     """
-    Fetch all GDELT data for a country:
+    Fetch all GDELT data for a country in parallel:
     1. Articles (for headlines and NLP analysis)
     2. Tone (separate API call since artlist doesn't include tone)
-    3. Theme volumes per indicator
+    3. Theme volumes per indicator (6 calls)
+
+    All 8 HTTP calls run concurrently via ThreadPoolExecutor.
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     result = {
         'articles': [],
         'article_count': 0,
@@ -182,18 +186,23 @@ def fetch_country_data(country_alpha2, timespan='24h'):
         'theme_volumes': {}
     }
 
-    # Step 1: Fetch articles
-    articles = fetch_country_articles(country_alpha2, timespan)
-    result['articles'] = articles
-    result['article_count'] = len(articles)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        # Submit all calls at once
+        art_future = executor.submit(fetch_country_articles, country_alpha2, timespan)
+        tone_future = executor.submit(fetch_country_tone, country_alpha2, timespan)
 
-    # Step 2: Fetch tone (separate call)
-    result['avg_tone'] = fetch_country_tone(country_alpha2, timespan)
+        theme_futures = {}
+        for indicator in INDICATOR_THEMES:
+            theme_futures[indicator] = executor.submit(
+                fetch_theme_volume, country_alpha2, indicator, timespan
+            )
 
-    # Step 3: Fetch theme volumes per indicator
-    for indicator in INDICATOR_THEMES:
-        result['theme_volumes'][indicator] = fetch_theme_volume(
-            country_alpha2, indicator, timespan
-        )
+        # Collect results
+        result['articles'] = art_future.result()
+        result['article_count'] = len(result['articles'])
+        result['avg_tone'] = tone_future.result()
+
+        for indicator, future in theme_futures.items():
+            result['theme_volumes'][indicator] = future.result()
 
     return result
