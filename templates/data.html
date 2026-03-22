@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Data - Parra Macro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/data.css">
+{% endblock %}
+
+{% block content %}
+<div class="data-page">
+    <!-- COFER Section -->
+    <section class="data-section">
+        <div class="data-section-header">
+            <div>
+                <h1 class="data-title">Central Bank FX Reserves</h1>
+                <p class="data-source">IMF COFER &mdash; Currency Composition of Official Foreign Exchange Reserves</p>
+            </div>
+            <div class="data-controls">
+                <select id="cofer-view" class="data-select">
+                    <option value="share">% Share</option>
+                    <option value="amount">$ Billions</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="chart-container" id="cofer-chart-container">
+            <canvas id="cofer-chart"></canvas>
+            <div class="chart-loading" id="cofer-loading">
+                <div class="spinner"></div>
+                <p>Loading COFER data from IMF...</p>
+            </div>
+        </div>
+
+        <div class="data-table-container" id="cofer-table-container">
+            <table class="data-table" id="cofer-table">
+                <thead id="cofer-thead"></thead>
+                <tbody id="cofer-tbody"></tbody>
+            </table>
+        </div>
+
+        <div class="data-meta" id="cofer-meta"></div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="/static/js/data.js"></script>
+{% endblock %}

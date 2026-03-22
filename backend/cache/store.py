@@ -25,6 +25,9 @@ class RiskDataStore:
         self._headlines: Dict[str, List[NewsArticle]] = {}
         self._global_headlines: List[NewsArticle] = []
         self._last_refresh: Optional[datetime] = None
+        # Per-country NewsAPI article cache (survives GDELT refreshes)
+        self._newsapi_cache: Dict[str, list] = {}
+        self._newsapi_region_index: int = 0
         self._initialized = True
 
     def update_country(self, country_code: str, risk: CountryRisk):
@@ -71,6 +74,25 @@ class RiskDataStore:
     def country_count(self) -> int:
         with self._lock:
             return len(self._scores)
+
+    # --- NewsAPI regional cache ---
+
+    def set_newsapi_articles(self, country_code: str, articles: list):
+        """Cache NewsAPI articles for a country (independent of GDELT refresh)."""
+        with self._lock:
+            self._newsapi_cache[country_code] = articles
+
+    def get_newsapi_articles(self, country_code: str) -> list:
+        """Get cached NewsAPI articles for a country."""
+        with self._lock:
+            return self._newsapi_cache.get(country_code, [])
+
+    def get_next_region_index(self) -> int:
+        """Get and increment the region rotation index."""
+        with self._lock:
+            idx = self._newsapi_region_index
+            self._newsapi_region_index = (idx + 1) % 5
+            return idx
 
 
 store = RiskDataStore()

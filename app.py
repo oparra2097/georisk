@@ -25,6 +25,10 @@ def create_app():
     def about():
         return render_template('about.html', active_page='about')
 
+    @app.route('/data')
+    def data():
+        return render_template('data.html', active_page='data')
+
     @app.route('/research')
     def research():
         return render_template('research.html', active_page='research')

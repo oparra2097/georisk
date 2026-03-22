@@ -1,11 +1,13 @@
 const MapModule = {
     svg: null,
+    g: null,  // group for zoomable content
     projection: null,
     pathGenerator: null,
     colorScale: null,
     countryCodeMap: {},
     scores: {},
     tooltip: null,
+    zoom: null,
 
     async init(containerId) {
         this.tooltip = document.getElementById('map-tooltip');
@@ -19,11 +21,14 @@ const MapModule = {
             .attr('viewBox', `0 0 ${width} ${height}`)
             .attr('preserveAspectRatio', 'xMidYMid meet');
 
-        // Ocean background
+        // Ocean background (fixed, not zoomable)
         this.svg.append('rect')
             .attr('width', width)
             .attr('height', height)
             .attr('fill', '#0a0e1a');
+
+        // Zoomable group for all map content
+        this.g = this.svg.append('g');
 
         this.projection = d3.geoNaturalEarth1()
             .scale(153)
@@ -35,6 +40,22 @@ const MapModule = {
             .domain([0, 25, 50, 75, 100])
             .range(['#10b981', '#10b981', '#f59e0b', '#f97316', '#ef4444'])
             .clamp(true);
+
+        // Setup zoom behavior
+        this.zoom = d3.zoom()
+            .scaleExtent([1, 8])
+            .on('zoom', (event) => {
+                this.g.attr('transform', event.transform);
+            });
+
+        this.svg.call(this.zoom);
+
+        // Double-click to reset zoom
+        this.svg.on('dblclick.zoom', () => {
+            this.svg.transition()
+                .duration(500)
+                .call(this.zoom.transform, d3.zoomIdentity);
+        });
 
         await this.loadCountryCodes();
         await this.loadMap();
@@ -65,7 +86,7 @@ const MapModule = {
             );
             const countries = topojson.feature(world, world.objects.countries);
 
-            this.svg.selectAll('path.country')
+            this.g.selectAll('path.country')
                 .data(countries.features)
                 .join('path')
                 .attr('class', 'country')
@@ -86,7 +107,7 @@ const MapModule = {
     async updateScores() {
         this.scores = await ApiClient.getScores();
 
-        this.svg.selectAll('path.country')
+        this.g.selectAll('path.country')
             .transition()
             .duration(600)
             .attr('fill', d => {
@@ -104,7 +125,7 @@ const MapModule = {
     },
 
     highlightHotspots() {
-        this.svg.selectAll('path.country')
+        this.g.selectAll('path.country')
             .classed('hotspot', d => {
                 const alpha2 = this.countryCodeMap[String(d.id)];
                 const scoreData = this.scores[alpha2];

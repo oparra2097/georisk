@@ -163,3 +163,62 @@
     color: var(--text-muted);
     margin-top: 4px;
 }
+
+
+/* ===== Responsive: Country Panel ===== */
+
+@media (max-width: 768px) {
+    .panel-content {
+        width: 100%;
+        border-left: none;
+        padding: 20px 16px;
+    }
+
+    .panel-header h2 {
+        font-size: 18px;
+    }
+
+    .composite-badge {
+        font-size: 26px;
+        padding: 6px 12px;
+        min-width: 64px;
+    }
+
+    .indicator-name {
+        width: 110px;
+        font-size: 11px;
+    }
+
+    .indicator-value {
+        font-size: 12px;
+    }
+
+    #panel-radar-chart {
+        max-width: 260px;
+    }
+
+    #panel-headlines a {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .panel-content {
+        padding: 16px 12px;
+    }
+
+    .panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .indicator-bar {
+        gap: 8px;
+    }
+
+    .indicator-name {
+        width: 90px;
+        font-size: 10px;
+    }
+}

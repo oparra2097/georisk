@@ -3,6 +3,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, send_file
 from backend.cache.store import store
 from backend.data_sources.market_data import get_market_data
+from backend.data_sources.imf_cofer import get_cofer_data
 from config import Config
 
 api_bp = Blueprint('api', __name__)
@@ -146,6 +147,13 @@ def export_excel():
 def get_markets():
     """Return live market data (cached 5 minutes)."""
     data = get_market_data()
+    return jsonify(data)
+
+
+@api_bp.route('/cofer')
+def get_cofer():
+    """Return IMF COFER data (cached 24 hours)."""
+    data = get_cofer_data()
     return jsonify(data)
 
 

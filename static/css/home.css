@@ -234,6 +234,17 @@
 /* ===== Responsive ===== */
 
 @media (max-width: 768px) {
+    .ticker-bar {
+        height: 30px;
+    }
+    .ticker-item {
+        padding: 0 12px;
+        font-size: 11px;
+        gap: 4px;
+    }
+    .ticker-change {
+        font-size: 10px;
+    }
     .market-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
@@ -244,13 +255,69 @@
     .market-price {
         font-size: 16px;
     }
+    .market-label {
+        font-size: 11px;
+    }
+    .market-change {
+        font-size: 11px;
+    }
+    .project-card-compact {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+    .project-name-sm {
+        font-size: 13px;
+    }
+    .project-desc-sm {
+        font-size: 11px;
+    }
 }
 
 @media (max-width: 480px) {
     .market-grid {
         grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+    .market-card {
+        padding: 10px;
+        border-radius: 6px;
+    }
+    .market-price {
+        font-size: 14px;
+    }
+    .market-label {
+        font-size: 10px;
+    }
+    .market-type-badge {
+        font-size: 8px;
+        padding: 1px 4px;
+    }
+    .market-change {
+        font-size: 10px;
+    }
+    .market-sparkline {
+        height: 24px;
     }
     .section {
-        padding: 20px 16px 12px;
+        padding: 16px 12px 10px;
+    }
+    .section-header {
+        margin-bottom: 12px;
+    }
+    .section-label {
+        font-size: 10px;
+    }
+    .project-card-compact {
+        padding: 10px 12px;
+    }
+    .project-name-sm {
+        font-size: 12px;
+    }
+    .project-desc-sm {
+        font-size: 10px;
+    }
+    .project-ico {
+        width: 16px;
+        height: 16px;
     }
 }
