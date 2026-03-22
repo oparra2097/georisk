@@ -1,3 +1,17 @@
+"""
+Composite score calculation with absolute scoring.
+
+No percentile normalization - scores are absolute:
+  0-20  = Very Low Risk
+  20-40 = Low Risk
+  40-60 = Moderate Risk
+  60-80 = High Risk
+  80-100 = Critical Risk
+
+A score of 75 always means the same thing regardless of what
+other countries are doing. Switzerland stays low, Syria stays high.
+"""
+
 from backend.models import IndicatorScore
 
 INDICATOR_WEIGHTS = {
@@ -11,7 +25,11 @@ INDICATOR_WEIGHTS = {
 
 
 def calculate_composite_score(indicators: IndicatorScore) -> float:
-    """Weighted average of all 6 indicator scores."""
+    """
+    Weighted average of all 6 indicator scores.
+    Military conflict gets highest weight (0.25) as the most impactful factor.
+    Result is absolute 0-100.
+    """
     score = (
         indicators.political_stability * INDICATOR_WEIGHTS['political_stability'] +
         indicators.military_conflict * INDICATOR_WEIGHTS['military_conflict'] +
@@ -20,29 +38,17 @@ def calculate_composite_score(indicators: IndicatorScore) -> float:
         indicators.terrorism * INDICATOR_WEIGHTS['terrorism'] +
         indicators.diplomatic_tensions * INDICATOR_WEIGHTS['diplomatic_tensions']
     )
-    return round(max(1.0, min(100.0, score)), 1)
+    return round(max(0.0, min(100.0, score)), 1)
 
 
-def normalize_scores_percentile(scores_dict):
+def normalize_scores_absolute(scores_dict):
     """
-    Apply percentile normalization across all countries.
-    This spreads scores across 1-100 to avoid clustering.
+    With absolute scoring, no normalization is needed.
+    We just ensure all scores are properly clamped to 0-100.
+    This function exists for compatibility with the engine.
     """
-    if not scores_dict:
-        return scores_dict
-
-    composites = [s.composite_score for s in scores_dict.values()]
-    composites_sorted = sorted(composites)
-    n = len(composites_sorted)
-
-    if n <= 1:
-        return scores_dict
-
     for country_risk in scores_dict.values():
-        raw = country_risk.composite_score
-        count_below = sum(1 for c in composites_sorted if c < raw)
-        count_equal = sum(1 for c in composites_sorted if c == raw)
-        percentile = ((count_below + 0.5 * count_equal) / n) * 100.0
-        country_risk.composite_score = round(max(1.0, min(100.0, percentile)), 1)
-
+        country_risk.composite_score = round(
+            max(0.0, min(100.0, country_risk.composite_score)), 1
+        )
     return scores_dict

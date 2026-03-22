@@ -11,7 +11,7 @@ from backend.scoring.keyword_analyzer import analyze_articles
 from backend.scoring.indicator_calculators import (
     calculate_indicator_score, get_baseline
 )
-from backend.scoring.normalizer import calculate_composite_score, normalize_scores_percentile
+from backend.scoring.normalizer import calculate_composite_score, normalize_scores_absolute
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +138,7 @@ def refresh_all_scores():
             store.update_country(code, risk)
             scored[code] = risk
 
-    normalize_scores_percentile(scored)
+    normalize_scores_absolute(scored)
     for code, risk in scored.items():
         store.update_country(code, risk)
 
