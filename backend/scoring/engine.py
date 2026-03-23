@@ -1,3 +1,17 @@
+"""
+GeoRisk scoring engine with multi-provider news support.
+
+Provider assignment:
+  AMERICAS  → NewsAPI.org  (100 req/day)
+  EUROPE    → NewsData.io  (200 req/day)
+  MENA      → NewsData.io  (200 req/day)
+  AFRICA    → GNews API    (100 req/day)
+  ASIA_PAC  → GNews API    (100 req/day)
+
+GDELT (unlimited, no key) runs for all 50 countries every 15 min.
+News providers rotate through regions every 2 hours.
+"""
+
 import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -6,7 +20,14 @@ from backend.cache.store import store
 from backend.data_sources import country_codes
 from backend.data_sources.gdelt_client import fetch_country_data
 from backend.data_sources.newsapi_client import (
-    fetch_headlines_for_country, fetch_global_headlines
+    fetch_headlines_for_country as newsapi_fetch,
+    fetch_global_headlines
+)
+from backend.data_sources.newsdata_client import (
+    fetch_headlines_for_country as newsdata_fetch
+)
+from backend.data_sources.gnews_client import (
+    fetch_headlines_for_country as gnews_fetch
 )
 from backend.scoring.keyword_analyzer import analyze_articles
 from backend.scoring.indicator_calculators import (
@@ -18,9 +39,7 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
-# Only score the 50 priority countries (5 regions x 10 countries).
-# This keeps GDELT API calls to 100 per cycle (2 calls per country)
-# instead of 374+ which was timing out on Render.
+# Only score the 50 priority countries (5 regions x 10 countries)
 PRIORITY_COUNTRIES = []
 for _region_codes in Config.REGIONS.values():
     PRIORITY_COUNTRIES.extend(_region_codes)
@@ -30,19 +49,44 @@ INDICATORS = [
     'protests_civil_unrest', 'terrorism', 'diplomatic_tensions'
 ]
 
+# Map provider name → fetch function
+_PROVIDER_FETCHERS = {
+    'newsapi': newsapi_fetch,
+    'newsdata': newsdata_fetch,
+    'gnews': gnews_fetch,
+}
 
-def score_single_country(country_alpha2, use_newsapi=False):
+# Build country → provider mapping from config
+_COUNTRY_PROVIDER = {}
+for _region, _codes in Config.REGIONS.items():
+    _provider = Config.REGION_PROVIDER.get(_region, 'newsapi')
+    for _code in _codes:
+        _COUNTRY_PROVIDER[_code] = _provider
+
+
+def _fetch_news_for_country(country_alpha2):
+    """Fetch news articles using the provider assigned to this country's region."""
+    provider = _COUNTRY_PROVIDER.get(country_alpha2, 'newsapi')
+    fetcher = _PROVIDER_FETCHERS.get(provider, newsapi_fetch)
+    try:
+        articles = fetcher(country_alpha2)
+        return articles
+    except Exception as e:
+        logger.warning(f"{provider} failed for {country_alpha2}: {e}")
+        return []
+
+
+def score_single_country(country_alpha2, use_news=False):
     """
     Score a single country using GDELT + keyword analysis.
-    GDELT provides: articles (for NLP) + tone (for media negativity).
-    Theme volumes are derived from keyword analysis of article titles.
+    If use_news=True, fetch fresh articles from the assigned provider.
+    Otherwise, use cached articles from the store.
     """
     country_name = country_codes.iso_alpha2_to_name(country_alpha2)
 
     gdelt_data = fetch_country_data(country_alpha2)
 
-    # GDELT articles only have title (no description/body).
-    # Duplicate title into description for keyword analyzer.
+    # GDELT articles only have title (no description/body)
     gdelt_articles = gdelt_data.get('articles', [])
     gdelt_article_dicts = []
     for art in gdelt_articles:
@@ -52,15 +96,15 @@ def score_single_country(country_alpha2, use_newsapi=False):
             'description': title
         })
 
-    # Get NewsAPI articles (either fresh or from cache)
-    newsapi_articles = []
-    if use_newsapi:
-        newsapi_articles = fetch_headlines_for_country(country_alpha2)
-        store.set_newsapi_articles(country_alpha2, newsapi_articles)
+    # Get news articles (fresh from provider or from cache)
+    news_articles = []
+    if use_news:
+        news_articles = _fetch_news_for_country(country_alpha2)
+        store.set_newsapi_articles(country_alpha2, news_articles)
     else:
-        newsapi_articles = store.get_newsapi_articles(country_alpha2)
+        news_articles = store.get_newsapi_articles(country_alpha2)
 
-    all_articles = gdelt_article_dicts + newsapi_articles
+    all_articles = gdelt_article_dicts + news_articles
     analysis = analyze_articles(all_articles)
 
     avg_tone = gdelt_data.get('avg_tone', 0.0)
@@ -68,7 +112,6 @@ def score_single_country(country_alpha2, use_newsapi=False):
     indicator_scores = {}
     for ind in INDICATORS:
         signal = analysis.get(ind, {'signal_strength': 0.0, 'theme_volume': 0})
-        # Theme volume now comes from keyword analysis, not separate GDELT calls
         volume = signal.get('theme_volume', 0)
         baseline = get_baseline(ind)
         indicator_scores[ind] = calculate_indicator_score(
@@ -106,7 +149,7 @@ def score_single_country(country_alpha2, use_newsapi=False):
     )
 
     headlines = []
-    for art in newsapi_articles[:10]:
+    for art in news_articles[:10]:
         headlines.append(NewsArticle(
             title=art.get('title', ''),
             description=art.get('description', ''),
@@ -129,10 +172,10 @@ def score_single_country(country_alpha2, use_newsapi=False):
     return risk, headlines[:15]
 
 
-def _score_country_safe(code, use_newsapi=False):
+def _score_country_safe(code, use_news=False):
     """Score one country, catching exceptions."""
     try:
-        risk, headlines = score_single_country(code, use_newsapi=use_newsapi)
+        risk, headlines = score_single_country(code, use_news=use_news)
         return (code, risk, headlines)
     except Exception as e:
         logger.error(f"Failed to score {code}: {e}")
@@ -145,12 +188,12 @@ def _score_country_safe(code, use_newsapi=False):
         return (code, risk, [])
 
 
-def _score_batch(codes, scored_dict, use_newsapi=False):
+def _score_batch(codes, scored_dict, use_news=False):
     """Score a batch of countries in parallel (5 at a time)."""
     try:
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {
-                executor.submit(_score_country_safe, c, use_newsapi): c
+                executor.submit(_score_country_safe, c, use_news): c
                 for c in codes
             }
             for future in as_completed(futures):
@@ -169,13 +212,14 @@ def _score_batch(codes, scored_dict, use_newsapi=False):
 def refresh_gdelt_scores():
     """
     GDELT-only refresh (every 15 min).
-    Scores only the 50 priority countries (2 GDELT calls each = 100 total).
+    Scores all 50 priority countries (2 GDELT calls each = 100 total).
+    Uses cached news articles from the store.
     """
     logger.info("Starting GDELT refresh cycle...")
     start = datetime.utcnow()
     scored = {}
 
-    _score_batch(PRIORITY_COUNTRIES, scored, use_newsapi=False)
+    _score_batch(PRIORITY_COUNTRIES, scored, use_news=False)
 
     normalize_scores_absolute(scored)
     for code, risk in scored.items():
@@ -189,36 +233,44 @@ def refresh_gdelt_scores():
     save_daily_snapshot(store)
 
 
-def refresh_newsapi_region():
+def refresh_news_region():
     """
-    NewsAPI regional refresh (every ~2.5 hours).
-    Fetches fresh NewsAPI data for ONE region (10 countries) + global headlines.
+    Multi-provider news refresh (every ~2 hours).
+    Rotates through 5 regions. Each region uses its assigned provider:
+      AMERICAS  → NewsAPI.org
+      EUROPE    → NewsData.io
+      MENA      → NewsData.io
+      AFRICA    → GNews API
+      ASIA_PAC  → GNews API
     """
     region_index = store.get_next_region_index()
     region_name = Config.REGION_ORDER[region_index]
     region_codes = Config.REGIONS[region_name]
+    provider = Config.REGION_PROVIDER.get(region_name, 'newsapi')
 
-    logger.info(f"NewsAPI refresh: {region_name} ({len(region_codes)} countries)...")
+    logger.info(f"News refresh: {region_name} via {provider} "
+                f"({len(region_codes)} countries)...")
     start = datetime.utcnow()
     scored = {}
 
-    _score_batch(region_codes, scored, use_newsapi=True)
+    _score_batch(region_codes, scored, use_news=True)
 
-    # Also refresh global headlines (+1 request)
-    try:
-        global_articles = fetch_global_headlines()
-        global_headlines = []
-        for art in global_articles[:30]:
-            global_headlines.append(NewsArticle(
-                title=art.get('title', ''),
-                description=art.get('description', ''),
-                url=art.get('url', ''),
-                source=art.get('source', 'Unknown'),
-                published_at=art.get('publishedAt', ''),
-            ))
-        store.set_global_headlines(global_headlines)
-    except Exception as e:
-        logger.error(f"Failed to fetch global headlines: {e}")
+    # Also refresh global headlines via NewsAPI (+1 request, only if NewsAPI key set)
+    if region_name == 'AMERICAS' and Config.NEWSAPI_KEY:
+        try:
+            global_articles = fetch_global_headlines()
+            global_headlines = []
+            for art in global_articles[:30]:
+                global_headlines.append(NewsArticle(
+                    title=art.get('title', ''),
+                    description=art.get('description', ''),
+                    url=art.get('url', ''),
+                    source=art.get('source', 'Unknown'),
+                    published_at=art.get('publishedAt', ''),
+                ))
+            store.set_global_headlines(global_headlines)
+        except Exception as e:
+            logger.error(f"Failed to fetch global headlines: {e}")
 
     normalize_scores_absolute(scored)
     for code, risk in scored.items():
@@ -227,15 +279,14 @@ def refresh_newsapi_region():
     store.set_last_refresh(datetime.utcnow())
     elapsed = (datetime.utcnow() - start).total_seconds()
     logger.info(
-        f"NewsAPI refresh complete: {region_name} "
-        f"({len(scored)} countries) in {elapsed:.1f}s. "
-        f"~{len(region_codes) + 1} API requests used."
+        f"News refresh complete: {region_name} via {provider} "
+        f"({len(scored)} countries) in {elapsed:.1f}s."
     )
 
     save_scores(store)
 
 
 def refresh_all_scores():
-    """Initial startup: GDELT all priority countries, then one NewsAPI region."""
+    """Initial startup: GDELT all priority countries, then one news region."""
     refresh_gdelt_scores()
-    refresh_newsapi_region()
+    refresh_news_region()

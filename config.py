@@ -5,23 +5,34 @@ load_dotenv()
 
 
 class Config:
+    # --- API Keys (set as env vars on Render) ---
     NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY', '')
+    NEWSDATA_KEY = os.environ.get('NEWSDATA_KEY', '')
+    GNEWS_KEY = os.environ.get('GNEWS_KEY', '')
+
     GDELT_BASE_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
     NEWSAPI_BASE_URL = 'https://newsapi.org/v2'
     GDELT_REFRESH_MINUTES = 15
-    NEWSAPI_ROTATION_MINUTES = 150  # 2.5 hours between NewsAPI cycles
-    REFRESH_INTERVAL_MINUTES = 15   # kept for backward compat
+    NEWS_ROTATION_MINUTES = 120   # 2 hours between news provider cycles
+    REFRESH_INTERVAL_MINUTES = 15
     SCORE_CACHE_TTL_MINUTES = 30
     HOTSPOT_THRESHOLD = 70
     GDELT_TIMESPAN = '24h'
-    NEWSAPI_PAGE_SIZE = 20
 
     # Persistent storage — JSON files survive process restarts on Render
     DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data'))
     SCORES_FILE = os.path.join(DATA_DIR, 'scores.json')
     HISTORY_FILE = os.path.join(DATA_DIR, 'history.json')
 
-    # Regional rotation for NewsAPI (10 countries each, ~11 requests per cycle)
+    # --- Multi-provider regional assignment ---
+    # Each region is assigned a news API provider to spread request budget.
+    #
+    # NewsAPI.org  (100 req/day): AMERICAS (10 countries, ~11 req/cycle)
+    # NewsData.io  (200 req/day): EUROPE + MENA  (20 countries, ~20 req/cycle)
+    # GNews API    (100 req/day): AFRICA + ASIA_PAC (20 countries, ~20 req/cycle)
+    #
+    # GDELT (unlimited) runs for ALL 50 countries every 15 min — no key needed.
+
     REGIONS = {
         'AMERICAS': ['US', 'BR', 'MX', 'CO', 'VE', 'CU', 'CA', 'AR', 'CL', 'PE'],
         'EUROPE':   ['GB', 'FR', 'DE', 'TR', 'UA', 'RU', 'GE', 'BY', 'PL', 'IT'],
@@ -30,3 +41,12 @@ class Config:
         'ASIA_PAC': ['CN', 'IN', 'PK', 'KP', 'TW', 'JP', 'KR', 'TH', 'PH', 'MM'],
     }
     REGION_ORDER = ['AMERICAS', 'EUROPE', 'MENA', 'AFRICA', 'ASIA_PAC']
+
+    # Maps each region to its news provider
+    REGION_PROVIDER = {
+        'AMERICAS': 'newsapi',      # NewsAPI.org
+        'EUROPE':   'newsdata',     # NewsData.io
+        'MENA':     'newsdata',     # NewsData.io
+        'AFRICA':   'gnews',        # GNews API
+        'ASIA_PAC': 'gnews',        # GNews API
+    }

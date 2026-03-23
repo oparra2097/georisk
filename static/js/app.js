@@ -46,8 +46,17 @@ async function pollForScores() {
 async function updateStatusBar() {
     const status = await ApiClient.getStatus();
     if (status.last_refresh) {
-        const date = new Date(status.last_refresh);
-        document.getElementById('last-update').textContent = date.toLocaleTimeString();
+        const date = new Date(status.last_refresh + 'Z');  // ensure parsed as UTC
+        const estStr = date.toLocaleString('en-US', {
+            timeZone: 'America/New_York',
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true,
+            month: 'short',
+            day: 'numeric',
+        });
+        document.getElementById('last-update').textContent = estStr + ' EST';
     } else {
         document.getElementById('last-update').textContent = 'Refreshing...';
     }
