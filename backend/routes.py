@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, send_file, request
 from backend.cache.store import store
 from backend.data_sources.market_data import get_market_data
 from backend.data_sources.imf_cofer import get_cofer_data
+from backend.data_sources.substack_feed import get_substack_posts
 from backend.cache.persistence import load_history
 from config import Config
 
@@ -228,6 +229,13 @@ def _write_reserves_sheet(ws, years, countries, field):
         ws.column_dimensions[col_letter].width = 12
 
     ws.freeze_panes = 'C2'
+
+
+@api_bp.route('/substack')
+def get_substack():
+    """Return Substack posts from RSS feed (cached 1 hour)."""
+    posts = get_substack_posts()
+    return jsonify({'posts': posts})
 
 
 @api_bp.route('/history')

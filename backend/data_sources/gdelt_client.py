@@ -1,13 +1,12 @@
 """
-GDELT DOC 2.0 API client.
+GDELT DOC 2.0 API client — optimized for Render free tier.
 
-GDELT provides two key data signals:
-1. Article volume per theme (how many articles mention conflict, protests, etc.)
-2. Media tone (how negative/positive is the coverage)
+Two API calls per country (not 8):
+1. artlist — articles for NLP keyword analysis + source breadth
+2. timelinetone — average media tone
 
-The artlist mode returns article metadata but NO tone.
-The timelinetone mode returns tone data over time.
-We use both.
+Theme volumes are derived from keyword analysis of article titles
+instead of separate GDELT theme queries (saves 6 API calls per country).
 """
 
 import requests
@@ -39,27 +38,6 @@ COUNTRY_SEARCH_NAMES = {
     'MK': 'North Macedonia',
 }
 
-INDICATOR_THEMES = {
-    'political_stability': [
-        'LEADER', 'ELECTION', 'CORRUPTION'
-    ],
-    'military_conflict': [
-        'MILITARY', 'KILL', 'WOUND'
-    ],
-    'economic_sanctions': [
-        'ECON_SANCTIONS', 'EMBARGO'
-    ],
-    'protests_civil_unrest': [
-        'PROTEST', 'RIOT'
-    ],
-    'terrorism': [
-        'TERROR', 'HOSTAGE'
-    ],
-    'diplomatic_tensions': [
-        'THREAT', 'DEMAND', 'REJECT'
-    ]
-}
-
 
 def _get_search_name(country_alpha2):
     """Get the best search term for a country."""
@@ -68,7 +46,7 @@ def _get_search_name(country_alpha2):
     return iso_alpha2_to_name(country_alpha2)
 
 
-def _gdelt_request(params, timeout=12):
+def _gdelt_request(params, timeout=15):
     """Make a GDELT API request with retry."""
     for attempt in range(2):
         try:
@@ -78,7 +56,7 @@ def _gdelt_request(params, timeout=12):
                 if text and text.startswith('{'):
                     return resp.json()
             elif resp.status_code == 429:
-                time.sleep(1)
+                time.sleep(2)
                 continue
         except requests.exceptions.Timeout:
             logger.debug(f"GDELT timeout (attempt {attempt+1})")
@@ -87,7 +65,7 @@ def _gdelt_request(params, timeout=12):
     return None
 
 
-def fetch_country_articles(country_alpha2, timespan='24h', max_records=75):
+def fetch_country_articles(country_alpha2, timespan='24h', max_records=100):
     """Fetch recent articles about a country from GDELT."""
     search_name = _get_search_name(country_alpha2)
     params = {
@@ -129,80 +107,20 @@ def fetch_country_tone(country_alpha2, timespan='24h'):
     return 0.0
 
 
-def fetch_theme_volume(country_alpha2, indicator_name, timespan='24h'):
-    """Fetch article volume for specific themes related to an indicator."""
-    search_name = _get_search_name(country_alpha2)
-    themes = INDICATOR_THEMES.get(indicator_name, [])
-    if not themes:
-        return 0
-
-    theme_query = ' OR '.join(themes)
-    params = {
-        'query': f'{search_name} ({theme_query})',
-        'mode': 'artlist',
-        'maxrecords': 250,
-        'timespan': timespan,
-        'format': 'json'
-    }
-    data = _gdelt_request(params)
-    if data:
-        articles = data.get('articles', [])
-        return len(articles) if articles else 0
-    return 0
-
-
-def fetch_country_volume(country_alpha2, timespan='24h'):
-    """Fetch total article volume for a country (used for source breadth)."""
-    search_name = _get_search_name(country_alpha2)
-    params = {
-        'query': search_name,
-        'mode': 'artlist',
-        'maxrecords': 250,
-        'timespan': timespan,
-        'format': 'json'
-    }
-    data = _gdelt_request(params)
-    if data:
-        articles = data.get('articles', [])
-        return len(articles) if articles else 0
-    return 0
-
-
 def fetch_country_data(country_alpha2, timespan='24h'):
     """
-    Fetch all GDELT data for a country in parallel:
-    1. Articles (for headlines and NLP analysis)
-    2. Tone (separate API call since artlist doesn't include tone)
-    3. Theme volumes per indicator (6 calls)
+    Fetch GDELT data for a country — only 2 API calls:
+    1. Articles (for headlines, NLP analysis, and source breadth)
+    2. Tone (separate call since artlist doesn't include tone)
 
-    All 8 HTTP calls run concurrently via ThreadPoolExecutor.
+    Theme volumes are NO LONGER fetched here — they're derived from
+    keyword analysis of article titles in the scoring engine.
     """
-    from concurrent.futures import ThreadPoolExecutor
+    articles = fetch_country_articles(country_alpha2, timespan)
+    tone = fetch_country_tone(country_alpha2, timespan)
 
-    result = {
-        'articles': [],
-        'article_count': 0,
-        'avg_tone': 0.0,
-        'theme_volumes': {}
+    return {
+        'articles': articles,
+        'article_count': len(articles),
+        'avg_tone': tone,
     }
-
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        # Submit all calls at once
-        art_future = executor.submit(fetch_country_articles, country_alpha2, timespan)
-        tone_future = executor.submit(fetch_country_tone, country_alpha2, timespan)
-
-        theme_futures = {}
-        for indicator in INDICATOR_THEMES:
-            theme_futures[indicator] = executor.submit(
-                fetch_theme_volume, country_alpha2, indicator, timespan
-            )
-
-        # Collect results
-        result['articles'] = art_future.result()
-        result['article_count'] = len(result['articles'])
-        result['avg_tone'] = tone_future.result()
-
-        for indicator, future in theme_futures.items():
-            result['theme_volumes'][indicator] = future.result()
-
-    return result

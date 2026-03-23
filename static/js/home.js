@@ -4,6 +4,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     fetchMarkets();
+    fetchLatestPost();
     // Auto-refresh every 5 minutes
     setInterval(fetchMarkets, 5 * 60 * 1000);
 });
@@ -125,6 +126,42 @@ function buildSparklineSVG(data, dir) {
             <polyline points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
         </svg>
     `;
+}
+
+
+// ===== Latest Substack Post =====
+
+async function fetchLatestPost() {
+    try {
+        const resp = await fetch('/api/substack');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.posts || data.posts.length === 0) return;
+
+        const p = data.posts[0];
+        const section = document.getElementById('latest-research-section');
+        const container = document.getElementById('latest-post');
+        if (!section || !container) return;
+
+        const img = p.image
+            ? `<img class="latest-post-image" src="${p.image}" alt="" loading="lazy">`
+            : '';
+
+        container.innerHTML = `
+            <a href="${p.url}" target="_blank" rel="noopener" class="latest-post-card">
+                ${img}
+                <div class="latest-post-body">
+                    <div class="latest-post-date">${p.published_at}</div>
+                    <div class="latest-post-title">${p.title}</div>
+                    <div class="latest-post-desc">${p.description}</div>
+                    <span class="latest-post-read">Read on Substack &rarr;</span>
+                </div>
+            </a>
+        `;
+        section.style.display = '';
+    } catch (err) {
+        // Silently fail — section stays hidden
+    }
 }
 
 

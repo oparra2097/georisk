@@ -3,8 +3,13 @@
 
 {% block extra_css %}
 <style>
-    .substack-section {
-        margin-top: 32px;
+    .substack-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 28px;
     }
     .substack-link {
         display: inline-flex;
@@ -18,47 +23,98 @@
         font-size: 14px;
         text-decoration: none;
         transition: opacity 0.2s;
-        margin-bottom: 28px;
     }
     .substack-link:hover {
         opacity: 0.85;
         text-decoration: none;
         color: #fff;
     }
-    .substack-embed {
+    .posts-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .post-card {
+        display: flex;
+        gap: 20px;
+        padding: 20px;
         background: var(--bg-secondary);
         border: 1px solid var(--border);
         border-radius: 10px;
-        overflow: hidden;
+        text-decoration: none;
+        transition: border-color 0.15s;
     }
-    .substack-embed iframe {
-        width: 100%;
-        min-height: 500px;
-        border: none;
-        background: #fff;
-        border-radius: 0 0 10px 10px;
-    }
-    .substack-embed-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--border);
-    }
-    .substack-embed-label {
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: var(--text-muted);
-    }
-    .substack-embed-open {
-        font-size: 12px;
-        color: var(--text-muted);
+    .post-card:hover {
+        border-color: var(--accent);
         text-decoration: none;
     }
-    .substack-embed-open:hover {
+    .post-image {
+        width: 160px;
+        height: 110px;
+        object-fit: cover;
+        border-radius: 6px;
+        flex-shrink: 0;
+        background: var(--bg-tertiary);
+    }
+    .post-body {
+        flex: 1;
+        min-width: 0;
+    }
+    .post-date {
+        font-size: 11px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+    }
+    .post-title {
+        font-size: 17px;
+        font-weight: 700;
         color: var(--text-primary);
+        margin-bottom: 8px;
+        line-height: 1.35;
+    }
+    .post-desc {
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.55;
+    }
+    .post-read {
+        display: inline-block;
+        margin-top: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+    }
+    .posts-loading {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-muted);
+        font-size: 13px;
+    }
+    .posts-empty {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-muted);
+        font-size: 13px;
+    }
+    .posts-empty a {
+        color: var(--accent);
+    }
+
+    @media (max-width: 600px) {
+        .post-card {
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+        }
+        .post-image {
+            width: 100%;
+            height: 160px;
+        }
+        .post-title {
+            font-size: 15px;
+        }
     }
 </style>
 {% endblock %}
@@ -69,22 +125,54 @@
     <div class="page-body">
         <p class="page-intro">Macro research and analysis on global themes, central bank policy, geopolitical risk, and market dynamics.</p>
 
-        <a href="https://substack.com/@theparrable" target="_blank" rel="noopener" class="substack-link">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/>
-            </svg>
-            Read on Substack
-        </a>
+        <div class="substack-header">
+            <a href="https://theparrable.substack.com" target="_blank" rel="noopener" class="substack-link">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/>
+                </svg>
+                Subscribe on Substack
+            </a>
+        </div>
 
-        <div class="substack-section">
-            <div class="substack-embed">
-                <div class="substack-embed-header">
-                    <span class="substack-embed-label">Latest Posts</span>
-                    <a href="https://substack.com/@theparrable" target="_blank" rel="noopener" class="substack-embed-open">Open in Substack &rarr;</a>
-                </div>
-                <iframe src="https://substack.com/@theparrable" loading="lazy" title="Parra Macro on Substack"></iframe>
-            </div>
+        <div class="posts-grid" id="posts-grid">
+            <div class="posts-loading">Loading posts...</div>
         </div>
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    fetch('/api/substack')
+        .then(r => r.json())
+        .then(data => {
+            const grid = document.getElementById('posts-grid');
+            if (!data.posts || data.posts.length === 0) {
+                grid.innerHTML = '<div class="posts-empty">No posts yet. Check back soon.</div>';
+                return;
+            }
+            grid.innerHTML = data.posts.map(p => {
+                const img = p.image
+                    ? `<img class="post-image" src="${p.image}" alt="" loading="lazy">`
+                    : '';
+                return `
+                    <a href="${p.url}" target="_blank" rel="noopener" class="post-card">
+                        ${img}
+                        <div class="post-body">
+                            <div class="post-date">${p.published_at}</div>
+                            <div class="post-title">${p.title}</div>
+                            <div class="post-desc">${p.description}</div>
+                            <span class="post-read">Read on Substack &rarr;</span>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+        })
+        .catch(() => {
+            document.getElementById('posts-grid').innerHTML =
+                '<div class="posts-empty">Could not load posts. <a href="https://theparrable.substack.com" target="_blank">Visit Substack directly</a></div>';
+        });
+});
+</script>
 {% endblock %}
