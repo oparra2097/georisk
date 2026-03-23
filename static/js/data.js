@@ -1,89 +1,113 @@
-/* ===== Data Page: COFER Chart + Table ===== */
+/* ===== Data Page: Central Bank Reserves ===== */
 
 (function () {
     'use strict';
 
-    let coferData = null;
-    let coferChart = null;
-    let currentView = 'share'; // 'share' or 'amount'
+    const COLORS = [
+        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899',
+        '#8b5cf6', '#f97316', '#06b6d4', '#84cc16', '#e11d48',
+        '#6366f1', '#14b8a6', '#f43f5e', '#a855f7', '#22c55e',
+        '#eab308', '#0ea5e9', '#d946ef', '#64748b', '#fb923c',
+    ];
+
+    let rawData = null;
+    let chart = null;
+    let currentRegion = 'World';
+    let currentType = 'total'; // 'total', 'fx', 'gold'
 
     // ── Bootstrap ──────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
-        fetchCOFER();
-        document.getElementById('cofer-view').addEventListener('change', (e) => {
-            currentView = e.target.value;
-            if (coferData) render(coferData);
+        fetchData();
+
+        document.getElementById('region-filter').addEventListener('change', (e) => {
+            currentRegion = e.target.value;
+            if (rawData) render();
+        });
+
+        document.getElementById('reserve-type').addEventListener('change', (e) => {
+            currentType = e.target.value;
+            if (rawData) render();
         });
     });
 
     // ── Fetch ──────────────────────────────────────────────
-    async function fetchCOFER() {
+    async function fetchData() {
         try {
             const resp = await fetch('/api/cofer');
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            coferData = await resp.json();
-            document.getElementById('cofer-loading').style.display = 'none';
-            render(coferData);
+            rawData = await resp.json();
+            document.getElementById('reserves-loading').style.display = 'none';
+
+            // Populate region dropdown
+            const regionSelect = document.getElementById('region-filter');
+            const regions = rawData.regions || [];
+            regions.forEach(r => {
+                if (r === 'World') return; // already default option
+                const opt = document.createElement('option');
+                opt.value = r;
+                opt.textContent = r;
+                regionSelect.appendChild(opt);
+            });
+
+            render();
         } catch (err) {
-            console.error('COFER fetch failed:', err);
-            document.getElementById('cofer-loading').innerHTML =
-                '<p style="color:var(--text-muted)">Failed to load COFER data. Try refreshing.</p>';
+            console.error('Reserves fetch failed:', err);
+            document.getElementById('reserves-loading').innerHTML =
+                '<p style="color:var(--text-muted)">Failed to load reserves data. Try refreshing.</p>';
         }
     }
 
-    // ── Render both chart + table ─────────────────────────
-    function render(data) {
-        const quarters = data.quarters || [];
-        const currencies = data.currencies || [];
+    // ── Filter + Render ───────────────────────────────────
+    function render() {
+        const years = rawData.years || [];
+        let countries = rawData.countries || [];
+        const regionMembers = rawData.region_members || {};
 
-        // Filter to current view type
-        const series = currencies.filter(c => c.type === currentView);
+        // Filter by region
+        if (currentRegion === 'World') {
+            countries = countries.slice(0, 20); // top 20 by reserves
+        } else {
+            const members = regionMembers[currentRegion] || [];
+            countries = countries.filter(c => members.includes(c.iso3));
+        }
 
-        // If no series match the current view, try showing all
-        const displaySeries = series.length > 0 ? series : currencies;
-
-        renderChart(quarters, displaySeries);
-        renderTable(quarters, displaySeries);
-        renderMeta(data.meta || {}, quarters.length, displaySeries.length);
+        renderChart(years, countries);
+        renderTable(years, countries);
+        renderMeta(rawData.meta || {}, countries.length);
     }
 
-    // ── Chart (stacked area) ──────────────────────────────
-    function renderChart(quarters, series) {
-        const ctx = document.getElementById('cofer-chart').getContext('2d');
+    // ── Chart ─────────────────────────────────────────────
+    function renderChart(years, countries) {
+        const ctx = document.getElementById('reserves-chart').getContext('2d');
 
-        // Format quarter labels: "1999-Q1" → "Q1 '99"
-        const labels = quarters.map(q => {
-            const parts = q.split('-');
-            if (parts.length === 1 && parts[0].length === 4) return parts[0]; // year only
-            const year = parts[0].slice(-2);
-            const qtr = parts[1] || '';
-            return `${qtr} '${year}`;
+        const datasets = countries.map((c, i) => {
+            let values;
+            if (currentType === 'fx') values = c.fx_reserves;
+            else if (currentType === 'gold') values = c.gold_reserves;
+            else values = c.total_reserves;
+
+            return {
+                label: c.name,
+                data: values.map(v => v != null ? v : null),
+                borderColor: COLORS[i % COLORS.length],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 0,
+                pointHitRadius: 8,
+                tension: 0.3,
+            };
         });
 
-        const datasets = series.map(c => ({
-            label: c.label,
-            data: c.values.map(v => v != null ? v : null),
-            backgroundColor: hexToRgba(c.color, 0.7),
-            borderColor: c.color,
-            borderWidth: 1,
-            fill: true,
-            pointRadius: 0,
-            pointHitRadius: 6,
-            tension: 0.3,
-        }));
+        if (chart) chart.destroy();
 
-        if (coferChart) coferChart.destroy();
-
-        coferChart = new Chart(ctx, {
+        chart = new Chart(ctx, {
             type: 'line',
-            data: { labels, datasets },
+            data: { labels: years, datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
                         position: 'top',
@@ -91,9 +115,9 @@
                             color: '#9ca3af',
                             font: { size: 11 },
                             boxWidth: 12,
-                            padding: 12,
+                            padding: 10,
                             usePointStyle: true,
-                            pointStyle: 'rectRounded',
+                            pointStyle: 'line',
                         }
                     },
                     tooltip: {
@@ -107,9 +131,6 @@
                             label: (ctx) => {
                                 const val = ctx.parsed.y;
                                 if (val == null) return `${ctx.dataset.label}: N/A`;
-                                if (currentView === 'share') {
-                                    return `${ctx.dataset.label}: ${val.toFixed(2)}%`;
-                                }
                                 return `${ctx.dataset.label}: $${val.toFixed(1)}B`;
                             }
                         }
@@ -122,19 +143,15 @@
                             font: { size: 10 },
                             maxRotation: 0,
                             autoSkip: true,
-                            maxTicksLimit: 20,
+                            maxTicksLimit: 15,
                         },
                         grid: { color: 'rgba(55,65,81,0.3)' }
                     },
                     y: {
-                        stacked: true,
                         ticks: {
                             color: '#6b7280',
                             font: { size: 10 },
-                            callback: (val) => {
-                                if (currentView === 'share') return val + '%';
-                                return '$' + val.toLocaleString() + 'B';
-                            }
+                            callback: (val) => '$' + val.toLocaleString() + 'B',
                         },
                         grid: { color: 'rgba(55,65,81,0.3)' },
                         beginAtZero: true,
@@ -144,55 +161,51 @@
         });
     }
 
-    // ── Data Table ─────────────────────────────────────────
-    function renderTable(quarters, series) {
-        const thead = document.getElementById('cofer-thead');
-        const tbody = document.getElementById('cofer-tbody');
+    // ── Table ─────────────────────────────────────────────
+    function renderTable(years, countries) {
+        const thead = document.getElementById('reserves-thead');
+        const tbody = document.getElementById('reserves-tbody');
 
-        // Header
-        let headerHTML = '<tr><th>Quarter</th>';
-        series.forEach(c => {
-            headerHTML += `<th>${c.label}</th>`;
-        });
-        headerHTML += '</tr>';
-        thead.innerHTML = headerHTML;
-
-        // Rows — show most recent first
-        let rowsHTML = '';
-        for (let i = quarters.length - 1; i >= 0; i--) {
-            rowsHTML += `<tr><td>${quarters[i]}</td>`;
-            series.forEach(c => {
-                const val = c.values[i];
-                if (val == null) {
-                    rowsHTML += '<td>—</td>';
-                } else if (currentView === 'share') {
-                    rowsHTML += `<td>${val.toFixed(2)}%</td>`;
-                } else {
-                    rowsHTML += `<td>$${val.toFixed(1)}B</td>`;
-                }
-            });
-            rowsHTML += '</tr>';
+        // Header: Country + years (most recent first)
+        let hdr = '<tr><th>Country</th>';
+        for (let i = years.length - 1; i >= 0; i--) {
+            hdr += `<th>${years[i]}</th>`;
         }
-        tbody.innerHTML = rowsHTML;
+        hdr += '</tr>';
+        thead.innerHTML = hdr;
+
+        // Rows
+        let rows = '';
+        for (const c of countries) {
+            let values;
+            if (currentType === 'fx') values = c.fx_reserves;
+            else if (currentType === 'gold') values = c.gold_reserves;
+            else values = c.total_reserves;
+
+            rows += `<tr><td>${c.name}</td>`;
+            for (let i = years.length - 1; i >= 0; i--) {
+                const v = values[i];
+                if (v == null) {
+                    rows += '<td>—</td>';
+                } else {
+                    rows += `<td>$${v.toFixed(1)}B</td>`;
+                }
+            }
+            rows += '</tr>';
+        }
+        tbody.innerHTML = rows;
     }
 
-    // ── Meta ───────────────────────────────────────────────
-    function renderMeta(meta, qCount, sCount) {
-        const el = document.getElementById('cofer-meta');
+    // ── Meta ──────────────────────────────────────────────
+    function renderMeta(meta, shown) {
+        const el = document.getElementById('reserves-meta');
         const parts = [];
         if (meta.source) parts.push(meta.source);
         if (meta.frequency) parts.push(meta.frequency);
-        parts.push(`${qCount} quarters`);
-        parts.push(`${sCount} series`);
+        if (meta.year_range) parts.push(meta.year_range);
+        parts.push(`${shown} countries shown`);
+        if (meta.country_count) parts.push(`${meta.country_count} total`);
         el.textContent = parts.join(' · ');
-    }
-
-    // ── Util ───────────────────────────────────────────────
-    function hexToRgba(hex, alpha) {
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        return `rgba(${r},${g},${b},${alpha})`;
     }
 
 })();

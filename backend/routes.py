@@ -152,9 +152,81 @@ def get_markets():
 
 @api_bp.route('/cofer')
 def get_cofer():
-    """Return IMF COFER data (cached 24 hours)."""
+    """Return central bank reserves data (cached 24 hours)."""
     data = get_cofer_data()
     return jsonify(data)
+
+
+@api_bp.route('/cofer/export')
+def export_reserves_excel():
+    """Generate Excel file with all reserves data."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    data = get_cofer_data()
+    years = data.get('years', [])
+    countries = data.get('countries', [])
+
+    wb = Workbook()
+
+    # Sheet 1: Total Reserves
+    ws1 = wb.active
+    ws1.title = 'Total Reserves'
+    _write_reserves_sheet(ws1, years, countries, 'total_reserves')
+
+    # Sheet 2: FX Reserves
+    ws2 = wb.create_sheet('FX Reserves')
+    _write_reserves_sheet(ws2, years, countries, 'fx_reserves')
+
+    # Sheet 3: Gold Reserves
+    ws3 = wb.create_sheet('Gold Reserves')
+    _write_reserves_sheet(ws3, years, countries, 'gold_reserves')
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'central_bank_reserves_{today}.xlsx'
+    )
+
+
+def _write_reserves_sheet(ws, years, countries, field):
+    """Write a reserves sheet with header + data rows."""
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+
+    # Header
+    headers = ['Country', 'ISO3'] + years
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+
+    # Data
+    for row_idx, c in enumerate(countries, 2):
+        ws.cell(row=row_idx, column=1, value=c['name'])
+        ws.cell(row=row_idx, column=2, value=c['iso3'])
+        values = c.get(field, [])
+        for i, val in enumerate(values):
+            if val is not None:
+                ws.cell(row=row_idx, column=3 + i, value=val)
+
+    # Auto-width first two columns
+    ws.column_dimensions['A'].width = 22
+    ws.column_dimensions['B'].width = 8
+    for i in range(len(years)):
+        col_letter = ws.cell(row=1, column=3 + i).column_letter
+        ws.column_dimensions[col_letter].width = 12
+
+    ws.freeze_panes = 'C2'
 
 
 @api_bp.route('/status')

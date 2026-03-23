@@ -1,8 +1,11 @@
 """
-IMF COFER (Currency Composition of Official Foreign Exchange Reserves) client.
+Central Bank Reserves data client.
 
-Fetches quarterly data from the IMF SDMX JSON API.
-Free, no API key required. Data updated quarterly.
+Uses World Bank API (primary) - Total reserves by country, annual, free, fast, reliable.
+  - FI.RES.TOTL.CD = Total reserves including gold (current US$)
+  - FI.RES.XGLD.CD = Foreign exchange reserves excluding gold (current US$)
+  - Gold reserves = Total - FX
+
 Thread-safe cache with 24-hour TTL.
 """
 
@@ -13,28 +16,51 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-IMF_BASE = 'https://dataservices.imf.org/REST/SDMX_JSON.svc'
-COFER_KEY = 'CompactData/COFER/Q..'
-
-# Indicator codes we care about (currency shares and totals)
-# These are discovered from the COFER codelist
-CURRENCY_INDICATORS = {
-    'USD_Share': {'label': 'US Dollar', 'color': '#3b82f6'},
-    'EUR_Share': {'label': 'Euro', 'color': '#10b981'},
-    'GBP_Share': {'label': 'British Pound', 'color': '#f59e0b'},
-    'JPY_Share': {'label': 'Japanese Yen', 'color': '#ef4444'},
-    'CNY_Share': {'label': 'Chinese Renminbi', 'color': '#ec4899'},
-    'AUD_Share': {'label': 'Australian Dollar', 'color': '#8b5cf6'},
-    'CAD_Share': {'label': 'Canadian Dollar', 'color': '#f97316'},
-    'CHF_Share': {'label': 'Swiss Franc', 'color': '#6b7280'},
-    'Other_Share': {'label': 'Other', 'color': '#374151'},
-}
-
 CACHE_TTL = 86400  # 24 hours
 
+# World Bank indicator codes
+WB_INDICATORS = {
+    'FI.RES.TOTL.CD': {'label': 'Total Reserves (incl. Gold)', 'color': '#3b82f6'},
+    'FI.RES.XGLD.CD': {'label': 'Foreign Exchange Reserves', 'color': '#10b981'},
+}
 
-class COFERCache:
-    """Thread-safe cache for COFER data."""
+# Regions for filtering
+WB_REGIONS = {
+    'World': [],  # means "top 20"
+    'G7': ['USA', 'JPN', 'DEU', 'GBR', 'FRA', 'ITA', 'CAN'],
+    'BRICS': ['CHN', 'IND', 'BRA', 'RUS', 'ZAF'],
+    'Asia': ['CHN', 'JPN', 'IND', 'KOR', 'IDN', 'THA', 'MYS', 'PHL', 'SGP'],
+    'Europe': ['DEU', 'GBR', 'FRA', 'ITA', 'CHE', 'POL', 'NOR', 'SWE', 'CZE', 'ROU'],
+    'Americas': ['USA', 'BRA', 'MEX', 'CAN', 'COL', 'CHL', 'PER', 'ARG'],
+    'MENA': ['SAU', 'ARE', 'ISR', 'EGY', 'QAT', 'KWT', 'DZA', 'IRQ'],
+    'Africa': ['ZAF', 'NGA', 'EGY', 'KEN', 'GHA', 'TZA', 'ETH', 'MAR'],
+}
+
+COUNTRY_NAMES = {
+    'CHN': 'China', 'JPN': 'Japan', 'CHE': 'Switzerland', 'USA': 'United States',
+    'IND': 'India', 'RUS': 'Russia', 'KOR': 'South Korea',
+    'SAU': 'Saudi Arabia', 'HKG': 'Hong Kong', 'BRA': 'Brazil', 'SGP': 'Singapore',
+    'DEU': 'Germany', 'THA': 'Thailand', 'FRA': 'France', 'GBR': 'United Kingdom',
+    'MEX': 'Mexico', 'ITA': 'Italy', 'IDN': 'Indonesia', 'CZE': 'Czech Republic',
+    'ISR': 'Israel', 'POL': 'Poland', 'CAN': 'Canada', 'MYS': 'Malaysia',
+    'NOR': 'Norway', 'AUS': 'Australia', 'PHL': 'Philippines', 'COL': 'Colombia',
+    'ARE': 'UAE', 'PER': 'Peru', 'CHL': 'Chile', 'EGY': 'Egypt',
+    'QAT': 'Qatar', 'KWT': 'Kuwait', 'DZA': 'Algeria', 'IRQ': 'Iraq',
+    'ZAF': 'South Africa', 'NGA': 'Nigeria', 'KEN': 'Kenya', 'GHA': 'Ghana',
+    'TZA': 'Tanzania', 'ETH': 'Ethiopia', 'MAR': 'Morocco', 'SWE': 'Sweden',
+    'ROU': 'Romania', 'ARG': 'Argentina',
+}
+
+COUNTRY_COLORS = [
+    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899',
+    '#8b5cf6', '#f97316', '#06b6d4', '#84cc16', '#e11d48',
+    '#6366f1', '#14b8a6', '#f43f5e', '#a855f7', '#22c55e',
+    '#eab308', '#0ea5e9', '#d946ef', '#64748b', '#fb923c',
+]
+
+
+class ReservesCache:
+    """Thread-safe cache for reserves data."""
 
     def __init__(self):
         self._lock = threading.RLock()
@@ -45,162 +71,165 @@ class COFERCache:
         with self._lock:
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
-        data = _fetch_cofer()
+        data = _fetch_reserves()
         if data:
             with self._lock:
                 self._data = data
                 self._last_fetch = time.time()
             return data
-        # Return cached even if stale, or empty
         with self._lock:
-            return self._data or {'quarters': [], 'currencies': [], 'meta': {}}
+            return self._data or _empty_result()
+
+    def clear(self):
+        with self._lock:
+            self._data = None
+            self._last_fetch = 0
 
 
-_cache = COFERCache()
+_cache = ReservesCache()
 
 
-def _fetch_cofer():
-    """Fetch COFER data from IMF SDMX API and parse into clean format."""
-    try:
-        url = f'{IMF_BASE}/{COFER_KEY}'
-        params = {'startPeriod': '1999'}
-        resp = requests.get(url, params=params, timeout=60)
+def _empty_result():
+    return {
+        'years': [],
+        'countries': [],
+        'regions': list(WB_REGIONS.keys()),
+        'region_members': WB_REGIONS,
+        'meta': {'source': 'World Bank Open Data', 'error': 'No data available'}
+    }
 
+
+def _fetch_wb_indicator(indicator_code):
+    """Fetch one indicator for all countries from World Bank API."""
+    records_all = []
+    page = 1
+    total_pages = 1
+
+    while page <= total_pages:
+        url = (
+            f'https://api.worldbank.org/v2/country/all/indicator/{indicator_code}'
+            f'?format=json&per_page=1000&page={page}&date=2000:2025&source=2'
+        )
+        resp = requests.get(url, timeout=60)
         if resp.status_code != 200:
-            logger.error(f"IMF COFER API returned {resp.status_code}")
-            return None
+            logger.error(f"World Bank API {resp.status_code} for {indicator_code} page {page}")
+            break
 
         data = resp.json()
-        dataset = data.get('CompactData', {}).get('DataSet', {})
-        series_list = dataset.get('Series', [])
+        if not isinstance(data, list) or len(data) < 2:
+            break
 
-        if not series_list:
-            logger.warning("IMF COFER: no series returned")
-            return None
+        meta = data[0]
+        records = data[1] or []
+        total_pages = meta.get('pages', 1)
+        records_all.extend(records)
+        page += 1
 
-        # Parse series into a dict keyed by indicator + ref_area
-        # We want world-level aggregates (REF_AREA = 'W00' or '1C_901')
-        parsed = {}
-        for s in series_list:
-            indicator = s.get('@INDICATOR', '')
-            ref_area = s.get('@REF_AREA', '')
+    return records_all
 
-            obs = s.get('Obs', [])
-            if isinstance(obs, dict):
-                obs = [obs]
 
-            for ob in obs:
-                period = ob.get('@TIME_PERIOD', '')
-                value = ob.get('@OBS_VALUE', '')
-                if period and value:
-                    try:
-                        val = float(value)
-                    except (ValueError, TypeError):
-                        continue
+def _fetch_reserves():
+    """Fetch reserves data from World Bank API for all countries."""
+    try:
+        all_country_data = {}
+        years_set = set()
 
-                    key = f"{ref_area}:{indicator}"
-                    if key not in parsed:
-                        parsed[key] = {}
-                    parsed[key][period] = val
+        for indicator_code in WB_INDICATORS:
+            records = _fetch_wb_indicator(indicator_code)
 
-        # Build time series: find share indicators for world aggregate
-        # Try different area codes the IMF uses for world totals
-        world_areas = ['W00', '1C_901', '901', 'W0']
+            for rec in records:
+                iso3 = rec.get('countryiso3code', '')
+                year = rec.get('date', '')
+                value = rec.get('value')
 
-        share_series = {}
-        amount_series = {}
-
-        for area_code in world_areas:
-            for key, ts in parsed.items():
-                if not key.startswith(f'{area_code}:'):
+                if not iso3 or not year or value is None:
                     continue
-                indicator = key.split(':')[1]
 
-                # Detect share vs amount indicators
-                ind_lower = indicator.lower()
-                if 'share' in ind_lower or 'pct' in ind_lower or 'shr' in ind_lower:
-                    share_series[indicator] = ts
-                elif 'usd' in ind_lower or 'amt' in ind_lower or 'val' in ind_lower:
-                    amount_series[indicator] = ts
+                # Skip World Bank aggregate regions (their IDs are > 3 chars)
+                country_id = rec.get('country', {}).get('id', '')
+                if len(country_id) > 3:
+                    continue
 
-            if share_series or amount_series:
-                break
+                years_set.add(year)
 
-        # If we couldn't find specific share/amount categories,
-        # just return all series for the first world area found
-        if not share_series and not amount_series:
-            for area_code in world_areas:
-                area_series = {k: v for k, v in parsed.items() if k.startswith(f'{area_code}:')}
-                if area_series:
-                    for key, ts in area_series.items():
-                        indicator = key.split(':')[1]
-                        share_series[indicator] = ts
-                    break
+                if iso3 not in all_country_data:
+                    all_country_data[iso3] = {
+                        'iso3': iso3,
+                        'name': rec.get('country', {}).get('value', iso3),
+                        'data': {}
+                    }
 
-        # If still nothing, take all series
-        if not share_series:
-            share_series = {k.split(':')[-1]: v for k, v in list(parsed.items())[:20]}
+                if year not in all_country_data[iso3]['data']:
+                    all_country_data[iso3]['data'][year] = {}
 
-        # Collect all quarters across all series
-        all_quarters = set()
-        for ts in share_series.values():
-            all_quarters.update(ts.keys())
-        for ts in amount_series.values():
-            all_quarters.update(ts.keys())
+                all_country_data[iso3]['data'][year][indicator_code] = value
 
-        quarters = sorted(all_quarters)
+        years = sorted(years_set)
 
-        # Build output
-        currencies = []
-        for ind_code, ts in share_series.items():
-            meta = CURRENCY_INDICATORS.get(ind_code, {
-                'label': ind_code.replace('_', ' '),
-                'color': '#6b7280'
+        # Build country series
+        countries = []
+        for iso3, cdata in all_country_data.items():
+            total_values = []
+            fx_values = []
+            gold_values = []
+
+            for year in years:
+                yr_data = cdata['data'].get(year, {})
+                total = yr_data.get('FI.RES.TOTL.CD')
+                fx = yr_data.get('FI.RES.XGLD.CD')
+
+                total_b = round(total / 1e9, 2) if total else None
+                fx_b = round(fx / 1e9, 2) if fx else None
+                gold_b = round((total - fx) / 1e9, 2) if (total and fx) else None
+
+                total_values.append(total_b)
+                fx_values.append(fx_b)
+                gold_values.append(gold_b)
+
+            display_name = COUNTRY_NAMES.get(iso3, cdata['name'])
+
+            countries.append({
+                'iso3': iso3,
+                'name': display_name,
+                'total_reserves': total_values,
+                'fx_reserves': fx_values,
+                'gold_reserves': gold_values,
             })
-            values = [ts.get(q) for q in quarters]
-            currencies.append({
-                'code': ind_code,
-                'label': meta['label'],
-                'color': meta['color'],
-                'type': 'share',
-                'values': values,
-            })
 
-        for ind_code, ts in amount_series.items():
-            values = [ts.get(q) for q in quarters]
-            currencies.append({
-                'code': ind_code,
-                'label': ind_code.replace('_', ' '),
-                'color': '#6b7280',
-                'type': 'amount',
-                'values': values,
-            })
+        # Sort by latest total reserves descending
+        def latest_val(c):
+            for v in reversed(c['total_reserves']):
+                if v is not None:
+                    return v
+            return 0
+        countries.sort(key=latest_val, reverse=True)
 
         result = {
-            'quarters': quarters,
-            'currencies': currencies,
+            'years': years,
+            'countries': countries,
+            'regions': list(WB_REGIONS.keys()),
+            'region_members': WB_REGIONS,
             'meta': {
-                'source': 'IMF COFER (Currency Composition of Official Foreign Exchange Reserves)',
-                'frequency': 'Quarterly',
-                'series_count': len(series_list),
-                'indicators_found': len(share_series) + len(amount_series),
+                'source': 'World Bank Open Data (International Financial Statistics)',
+                'frequency': 'Annual',
+                'country_count': len(countries),
+                'year_range': f'{years[0]}-{years[-1]}' if years else '',
             }
         }
 
         logger.info(
-            f"IMF COFER loaded: {len(quarters)} quarters, "
-            f"{len(currencies)} indicators, {len(series_list)} raw series"
+            f"Reserves data loaded: {len(years)} years, {len(countries)} countries"
         )
         return result
 
     except requests.exceptions.Timeout:
-        logger.error("IMF COFER API timeout")
+        logger.error("World Bank API timeout")
         return None
     except Exception as e:
-        logger.error(f"IMF COFER fetch failed: {e}")
+        logger.error(f"Reserves data fetch failed: {e}")
         return None
 
 
 def get_cofer_data():
-    """Public API: returns cached COFER data."""
+    """Public API: returns cached reserves data."""
     return _cache.get()

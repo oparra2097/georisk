@@ -37,12 +37,15 @@ def score_single_country(country_alpha2, use_newsapi=False):
 
     gdelt_data = fetch_country_data(country_alpha2)
 
+    # GDELT articles only have title (no description/body field).
+    # Use title for both fields so keyword analyzer can match on it.
     gdelt_articles = gdelt_data.get('articles', [])
     gdelt_article_dicts = []
     for art in gdelt_articles:
+        title = art.get('title', '')
         gdelt_article_dicts.append({
-            'title': art.get('title', ''),
-            'description': art.get('seendate', '')
+            'title': title,
+            'description': title  # duplicate — GDELT has no description
         })
 
     # Get NewsAPI articles (either fresh or from cache)
@@ -79,6 +82,13 @@ def score_single_country(country_alpha2, use_newsapi=False):
 
     composite = calculate_composite_score(indicators)
 
+    # Maintain trend history (last 10 scores)
+    existing = store.get_country(country_alpha2)
+    trend = []
+    if existing and existing.trend:
+        trend = list(existing.trend[-9:])
+    trend.append(composite)
+
     risk = CountryRisk(
         country_code=country_alpha2,
         country_name=country_name,
@@ -88,7 +98,7 @@ def score_single_country(country_alpha2, use_newsapi=False):
         gdelt_event_count=gdelt_data.get('article_count', 0),
         avg_tone=avg_tone,
         updated_at=datetime.utcnow(),
-        trend=[]
+        trend=trend
     )
 
     headlines = []

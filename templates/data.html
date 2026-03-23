@@ -7,37 +7,48 @@
 
 {% block content %}
 <div class="data-page">
-    <!-- COFER Section -->
     <section class="data-section">
         <div class="data-section-header">
             <div>
-                <h1 class="data-title">Central Bank FX Reserves</h1>
-                <p class="data-source">IMF COFER &mdash; Currency Composition of Official Foreign Exchange Reserves</p>
+                <h1 class="data-title">Central Bank Reserves</h1>
+                <p class="data-source">World Bank &mdash; International Financial Statistics</p>
             </div>
             <div class="data-controls">
-                <select id="cofer-view" class="data-select">
-                    <option value="share">% Share</option>
-                    <option value="amount">$ Billions</option>
+                <select id="region-filter" class="data-select">
+                    <option value="World">Top 20</option>
                 </select>
+                <select id="reserve-type" class="data-select">
+                    <option value="total">Total Reserves</option>
+                    <option value="fx">FX Reserves</option>
+                    <option value="gold">Gold Reserves</option>
+                </select>
+                <a href="/api/cofer/export" class="export-btn-data" title="Download Excel">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Excel
+                </a>
             </div>
         </div>
 
-        <div class="chart-container" id="cofer-chart-container">
-            <canvas id="cofer-chart"></canvas>
-            <div class="chart-loading" id="cofer-loading">
+        <div class="chart-container" id="reserves-chart-container">
+            <canvas id="reserves-chart"></canvas>
+            <div class="chart-loading" id="reserves-loading">
                 <div class="spinner"></div>
-                <p>Loading COFER data from IMF...</p>
+                <p>Loading reserves data...</p>
             </div>
         </div>
 
-        <div class="data-table-container" id="cofer-table-container">
-            <table class="data-table" id="cofer-table">
-                <thead id="cofer-thead"></thead>
-                <tbody id="cofer-tbody"></tbody>
+        <div class="data-table-container" id="reserves-table-container">
+            <table class="data-table" id="reserves-table">
+                <thead id="reserves-thead"></thead>
+                <tbody id="reserves-tbody"></tbody>
             </table>
         </div>
 
-        <div class="data-meta" id="cofer-meta"></div>
+        <div class="data-meta" id="reserves-meta"></div>
     </section>
 </div>
 {% endblock %}

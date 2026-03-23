@@ -50,6 +50,24 @@
     border-color: var(--accent);
 }
 
+.export-btn-data {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+.export-btn-data:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+}
+
 
 /* ===== Chart ===== */
 
@@ -80,7 +98,7 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 8px;
-    overflow: hidden;
+    overflow-x: auto;
     max-height: 400px;
     overflow-y: auto;
 }
