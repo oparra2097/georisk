@@ -13,6 +13,7 @@ from backend.scoring.indicator_calculators import (
     calculate_indicator_score, get_baseline
 )
 from backend.scoring.normalizer import calculate_composite_score, normalize_scores_absolute
+from backend.cache.persistence import save_scores, save_daily_snapshot
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -183,6 +184,10 @@ def refresh_gdelt_scores():
     elapsed = (datetime.utcnow() - start).total_seconds()
     logger.info(f"GDELT refresh complete. {len(scored)} countries in {elapsed:.1f}s")
 
+    # Persist to disk after each GDELT cycle
+    save_scores(store)
+    save_daily_snapshot(store)
+
 
 def refresh_newsapi_region():
     """
@@ -229,6 +234,9 @@ def refresh_newsapi_region():
         f"({len(scored)} countries) in {elapsed:.1f}s. "
         f"~{len(region_codes) + 1} API requests used."
     )
+
+    # Persist after NewsAPI updates
+    save_scores(store)
 
 
 def refresh_all_scores():

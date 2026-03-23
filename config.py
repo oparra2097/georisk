@@ -16,6 +16,11 @@ class Config:
     GDELT_TIMESPAN = '24h'
     NEWSAPI_PAGE_SIZE = 20
 
+    # Persistent storage — JSON files survive process restarts on Render
+    DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data'))
+    SCORES_FILE = os.path.join(DATA_DIR, 'scores.json')
+    HISTORY_FILE = os.path.join(DATA_DIR, 'history.json')
+
     # Regional rotation for NewsAPI (10 countries each, ~11 requests per cycle)
     REGIONS = {
         'AMERICAS': ['US', 'BR', 'MX', 'CO', 'VE', 'CU', 'CA', 'AR', 'CL', 'PE'],

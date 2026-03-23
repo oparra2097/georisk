@@ -1,9 +1,10 @@
 from io import BytesIO
 from datetime import datetime
-from flask import Blueprint, jsonify, send_file
+from flask import Blueprint, jsonify, send_file, request
 from backend.cache.store import store
 from backend.data_sources.market_data import get_market_data
 from backend.data_sources.imf_cofer import get_cofer_data
+from backend.cache.persistence import load_history
 from config import Config
 
 api_bp = Blueprint('api', __name__)
@@ -229,13 +230,60 @@ def _write_reserves_sheet(ws, years, countries, field):
     ws.freeze_panes = 'C2'
 
 
+@api_bp.route('/history')
+def get_history():
+    """Return daily historical snapshots of country scores.
+    Optional query params: country=US, days=30
+    """
+    history = load_history()
+    country_filter = request.args.get('country', '').upper()
+    days_limit = int(request.args.get('days', 90))
+
+    # Sort dates and limit
+    sorted_dates = sorted(history.keys())[-days_limit:]
+
+    if country_filter:
+        # Return single country time series
+        series = []
+        for d in sorted_dates:
+            snap = history.get(d, {})
+            entry = snap.get(country_filter)
+            if entry:
+                series.append({'date': d, **entry})
+        return jsonify({'country': country_filter, 'series': series})
+    else:
+        # Return all dates (just composite scores to keep response small)
+        result = {}
+        for d in sorted_dates:
+            snap = history.get(d, {})
+            result[d] = {code: data.get('composite', 0) for code, data in snap.items()}
+        return jsonify({'dates': sorted_dates, 'snapshots': result})
+
+
 @api_bp.route('/status')
 def get_status():
     """Return system health info."""
+    import os
     last_refresh = store.get_last_refresh()
+    scores_file_exists = os.path.exists(Config.SCORES_FILE)
+    history_file_exists = os.path.exists(Config.HISTORY_FILE)
+
+    history_days = 0
+    if history_file_exists:
+        try:
+            history = load_history()
+            history_days = len(history)
+        except Exception:
+            pass
+
     return jsonify({
         'status': 'ok',
         'last_refresh': last_refresh.isoformat() if last_refresh else None,
         'countries_tracked': store.country_count(),
-        'hotspot_count': len(store.get_hotspots(Config.HOTSPOT_THRESHOLD))
+        'hotspot_count': len(store.get_hotspots(Config.HOTSPOT_THRESHOLD)),
+        'persistence': {
+            'scores_file': scores_file_exists,
+            'history_file': history_file_exists,
+            'history_days': history_days,
+        }
     })
