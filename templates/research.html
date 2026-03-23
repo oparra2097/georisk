@@ -1,18 +1,89 @@
 {% extends "base.html" %}
 {% block title %}Research - Parra Macro{% endblock %}
 
+{% block extra_css %}
+<style>
+    .substack-section {
+        margin-top: 32px;
+    }
+    .substack-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        background: #ff6719;
+        color: #fff;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        text-decoration: none;
+        transition: opacity 0.2s;
+        margin-bottom: 28px;
+    }
+    .substack-link:hover {
+        opacity: 0.85;
+        text-decoration: none;
+        color: #fff;
+    }
+    .substack-embed {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .substack-embed iframe {
+        width: 100%;
+        min-height: 500px;
+        border: none;
+        background: #fff;
+        border-radius: 0 0 10px 10px;
+    }
+    .substack-embed-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--border);
+    }
+    .substack-embed-label {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted);
+    }
+    .substack-embed-open {
+        font-size: 12px;
+        color: var(--text-muted);
+        text-decoration: none;
+    }
+    .substack-embed-open:hover {
+        color: var(--text-primary);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <section class="page-section">
     <h1 class="page-title">Research</h1>
     <div class="page-body">
         <p class="page-intro">Macro research and analysis on global themes, central bank policy, geopolitical risk, and market dynamics.</p>
 
-        <div class="research-placeholder">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
-                <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+        <a href="https://substack.com/@theparrable" target="_blank" rel="noopener" class="substack-link">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/>
             </svg>
-            <p>Research posts coming soon.</p>
+            Read on Substack
+        </a>
+
+        <div class="substack-section">
+            <div class="substack-embed">
+                <div class="substack-embed-header">
+                    <span class="substack-embed-label">Latest Posts</span>
+                    <a href="https://substack.com/@theparrable" target="_blank" rel="noopener" class="substack-embed-open">Open in Substack &rarr;</a>
+                </div>
+                <iframe src="https://substack.com/@theparrable" loading="lazy" title="Parra Macro on Substack"></iframe>
+            </div>
         </div>
     </div>
 </section>
