@@ -3,14 +3,16 @@ World Bank data source for base risk scores.
 
 Two components:
 A. Governance (WGI) — 6 Worldwide Governance Indicators
-B. Macro Fundamentals — GDP growth, CPI, current account, debt, reserves
+B. Macro Fundamentals — GDP growth, CPI, current account, debt, reserves, GDP PPP
 
-Fetched once on startup, cached to data/wgi_cache.json for 30 days.
+Fetched once on startup for ALL countries, cached to data/wgi_cache.json for 30 days.
+Uses World Bank "all" endpoint so one API call covers every country.
 """
 
 import os
 import json
 import logging
+import math
 import threading
 import requests
 from datetime import datetime, timedelta
@@ -41,19 +43,33 @@ MACRO_INDICATORS = {
     'NY.GDP.MKTP.PP.CD': 'GDP PPP (current intl $)',
 }
 
-# ISO alpha-2 → alpha-3 mapping for World Bank API
-_ISO2_TO_ISO3 = {
-    'US': 'USA', 'BR': 'BRA', 'MX': 'MEX', 'CO': 'COL', 'VE': 'VEN',
-    'CU': 'CUB', 'CA': 'CAN', 'AR': 'ARG', 'CL': 'CHL', 'PE': 'PER',
-    'GB': 'GBR', 'FR': 'FRA', 'DE': 'DEU', 'TR': 'TUR', 'UA': 'UKR',
-    'RU': 'RUS', 'GE': 'GEO', 'BY': 'BLR', 'PL': 'POL', 'IT': 'ITA',
-    'IL': 'ISR', 'PS': 'PSE', 'IR': 'IRN', 'IQ': 'IRQ', 'SY': 'SYR',
-    'SA': 'SAU', 'YE': 'YEM', 'LY': 'LBY', 'EG': 'EGY', 'LB': 'LBN',
-    'NG': 'NGA', 'CD': 'COD', 'SD': 'SDN', 'SS': 'SSD', 'SO': 'SOM',
-    'ET': 'ETH', 'ML': 'MLI', 'BF': 'BFA', 'KE': 'KEN', 'ZA': 'ZAF',
-    'CN': 'CHN', 'IN': 'IND', 'PK': 'PAK', 'KP': 'PRK', 'TW': 'TWN',
-    'JP': 'JPN', 'KR': 'KOR', 'TH': 'THA', 'PH': 'PHL', 'MM': 'MMR',
-}
+# Dynamically loaded from country_codes.json
+_ISO2_TO_ISO3 = {}
+_ISO3_TO_ISO2 = {}
+_iso_loaded = False
+
+
+def _load_iso_mapping():
+    """Load ISO alpha-2 → alpha-3 mapping from the project's country_codes.json."""
+    global _ISO2_TO_ISO3, _ISO3_TO_ISO2, _iso_loaded
+    if _iso_loaded:
+        return
+    try:
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        codes_path = os.path.join(base_dir, 'static', 'data', 'country_codes.json')
+        with open(codes_path, 'r') as f:
+            countries = json.load(f)
+        for c in countries:
+            a2 = c.get('alpha-2', '')
+            a3 = c.get('alpha-3', '')
+            if a2 and a3:
+                _ISO2_TO_ISO3[a2] = a3
+                _ISO3_TO_ISO2[a3] = a2
+        _iso_loaded = True
+        logger.info(f"Loaded ISO mapping for {len(_ISO2_TO_ISO3)} countries")
+    except Exception as e:
+        logger.error(f"Failed to load ISO mapping: {e}")
+
 
 _cache = {
     'base_scores': {},  # {country_alpha2: {base_score, governance_score, macro_score, ...}}
@@ -168,7 +184,6 @@ def _gdp_ppp_to_risk(value):
     """log(GDP PPP) → risk. Larger economies = lower risk (more resilient).
     Uses log scale: <$10B = very small, >$1T = major economy.
     """
-    import math
     if value is None or value <= 0:
         return 60.0
     log_gdp = math.log10(value)
@@ -199,27 +214,24 @@ _MACRO_CONVERTERS = {
 }
 
 
-def _fetch_wb_indicator(indicator_code, country_codes_iso2):
-    """Fetch a single indicator for all countries from World Bank API."""
-    # Convert to ISO3 and join with semicolons
-    iso3_codes = []
-    iso2_to_iso3_map = {}
-    for c2 in country_codes_iso2:
-        c3 = _ISO2_TO_ISO3.get(c2, c2)
-        iso3_codes.append(c3.lower())
-        iso2_to_iso3_map[c3] = c2
+def _fetch_wb_indicator_all(indicator_code):
+    """
+    Fetch a single indicator for ALL countries from World Bank API.
+    Uses the 'all' endpoint — one call per indicator, returns every country.
+    Returns {iso2: value}.
+    """
+    _load_iso_mapping()
 
-    codes_str = ';'.join(iso3_codes)
-    url = f'{WB_API}/country/{codes_str}/indicator/{indicator_code}'
+    url = f'{WB_API}/country/all/indicator/{indicator_code}'
     params = {
         'format': 'json',
-        'mrv': 1,        # most recent value
-        'per_page': 200,
+        'mrv': 1,         # most recent value
+        'per_page': 500,  # enough for all countries
         'date': '2015:2024',
     }
 
     try:
-        resp = requests.get(url, params=params, timeout=30)
+        resp = requests.get(url, params=params, timeout=45)
         if resp.status_code != 200:
             logger.warning(f"WB API {resp.status_code} for {indicator_code}")
             return {}
@@ -232,11 +244,11 @@ def _fetch_wb_indicator(indicator_code, country_codes_iso2):
         for entry in data[1]:
             if entry.get('value') is not None:
                 iso3 = entry.get('countryiso3code', '')
-                iso2 = iso2_to_iso3_map.get(iso3)
+                iso2 = _ISO3_TO_ISO2.get(iso3)
                 if not iso2:
-                    # Try reverse lookup from country id
+                    # Try country id field
                     cid = entry.get('country', {}).get('id', '')
-                    iso2 = iso2_to_iso3_map.get(cid, cid)
+                    iso2 = _ISO3_TO_ISO2.get(cid)
                 if iso2:
                     results[iso2] = entry['value']
 
@@ -282,12 +294,13 @@ def _save_cache(base_scores):
         logger.error(f"Failed to save WGI cache: {e}")
 
 
-def fetch_base_scores(country_codes_iso2):
+def fetch_base_scores(country_codes_iso2=None):
     """
     Fetch and compute base risk scores for all countries.
     Returns {country_alpha2: {'base_score': float, 'governance_score': float, 'macro_score': float, ...}}
 
     Uses disk cache (30 days) then memory cache.
+    If country_codes_iso2 is None, fetches for ALL countries.
     """
     with _lock:
         if _cache['base_scores'] and _cache['fetched_at']:
@@ -303,36 +316,53 @@ def fetch_base_scores(country_codes_iso2):
             _cache['fetched_at'] = disk_time
         return disk_scores
 
-    # Fresh fetch
-    logger.info(f"Fetching World Bank data for {len(country_codes_iso2)} countries...")
+    # Fresh fetch — use "all" endpoint (one call per indicator for every country)
+    _load_iso_mapping()
+    logger.info("Fetching World Bank data for ALL countries (12 API calls)...")
 
-    # Fetch governance indicators
-    wgi_data = {}  # {country: {indicator: value}}
+    # Fetch governance indicators for all countries
+    wgi_data = {}  # {iso2: {indicator: value}}
     for ind_code in WGI_INDICATORS:
-        values = _fetch_wb_indicator(ind_code, country_codes_iso2)
+        values = _fetch_wb_indicator_all(ind_code)
         for country, value in values.items():
             if country not in wgi_data:
                 wgi_data[country] = {}
             wgi_data[country][ind_code] = value
+        logger.debug(f"  WGI {ind_code}: {len(values)} countries")
 
-    # Fetch macro indicators
+    # Fetch macro indicators for all countries
     macro_data = {}
     for ind_code in MACRO_INDICATORS:
-        values = _fetch_wb_indicator(ind_code, country_codes_iso2)
+        values = _fetch_wb_indicator_all(ind_code)
         for country, value in values.items():
             if country not in macro_data:
                 macro_data[country] = {}
             macro_data[country][ind_code] = value
+        logger.debug(f"  Macro {ind_code}: {len(values)} countries")
+
+    # Determine which countries to compute scores for
+    if country_codes_iso2 is None:
+        # All countries that have any data
+        all_countries = set(list(wgi_data.keys()) + list(macro_data.keys()))
+    else:
+        all_countries = set(country_codes_iso2)
+        # Also include any country with data
+        all_countries.update(wgi_data.keys())
+        all_countries.update(macro_data.keys())
 
     # Compute scores
     base_scores = {}
-    for country in country_codes_iso2:
+    for country in all_countries:
+        # Skip non-standard codes (WB sometimes returns aggregate codes like XK, 1W, etc.)
+        if len(country) != 2:
+            continue
+
         # Governance score (average of 6 WGI indicators → 0-100)
         gov_values = wgi_data.get(country, {})
         gov_risks = [_wgi_to_risk(gov_values.get(ind)) for ind in WGI_INDICATORS]
         governance_score = sum(gov_risks) / len(gov_risks)
 
-        # Macro score (average of 5 macro indicators → 0-100)
+        # Macro score (average of 6 macro indicators → 0-100)
         mac_values = macro_data.get(country, {})
         macro_risks = []
         for ind_code, converter in _MACRO_CONVERTERS.items():

@@ -6,20 +6,25 @@ Composite = Base Score (40%) + News Score (60%)
 Tier 1 — Base Score (low-frequency):
   World Bank WGI governance indicators + macro fundamentals.
   Cached 30 days, provides a structural risk floor.
+  Fetched for ALL ~187 countries.
 
 Tier 2 — News Score (high-frequency):
   GDELT 72-hour rolling window + multi-provider news APIs.
   EMA blended: new_score = α * fresh + (1-α) * previous.
   Scores accumulate — crises ramp up fast, decay slowly.
 
-Provider assignment:
+Coverage tiers:
+  ALL countries   → World Bank base score + GDELT (both unlimited/free)
+  50 priority     → Also get paid news API articles for richer signal
+
+Provider assignment (priority countries only):
   AMERICAS  → NewsAPI.org  (100 req/day)
   EUROPE    → NewsData.io  (200 req/day)
   MENA      → NewsData.io  (200 req/day)
   AFRICA    → GNews API    (100 req/day)
   ASIA_PAC  → GNews API    (100 req/day)
 
-GDELT (unlimited, no key) runs for all 50 countries every 15 min.
+GDELT (unlimited, no key) runs for ALL countries every 15 min.
 News providers rotate through regions every 2 hours.
 """
 
@@ -51,10 +56,13 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
-# Only score the 50 priority countries (5 regions x 10 countries)
+# 50 priority countries get paid news API coverage
 PRIORITY_COUNTRIES = []
 for _region_codes in Config.REGIONS.values():
     PRIORITY_COUNTRIES.extend(_region_codes)
+
+# ALL countries get GDELT + World Bank coverage
+ALL_COUNTRIES = country_codes.get_all_country_codes()
 
 INDICATORS = [
     'political_stability', 'military_conflict', 'economic_sanctions',
@@ -68,12 +76,14 @@ _PROVIDER_FETCHERS = {
     'gnews': gnews_fetch,
 }
 
-# Build country → provider mapping from config
+# Build country → provider mapping from config (priority countries only)
 _COUNTRY_PROVIDER = {}
 for _region, _codes in Config.REGIONS.items():
     _provider = Config.REGION_PROVIDER.get(_region, 'newsapi')
     for _code in _codes:
         _COUNTRY_PROVIDER[_code] = _provider
+
+_PRIORITY_SET = set(PRIORITY_COUNTRIES)
 
 
 def _fetch_news_for_country(country_alpha2):
@@ -167,13 +177,14 @@ def score_single_country(country_alpha2, use_news=False):
             'description': title
         })
 
-    # Get news articles (fresh from provider or from cache)
+    # Get news articles (only for priority countries with paid API access)
     news_articles = []
-    if use_news:
-        news_articles = _fetch_news_for_country(country_alpha2)
-        store.set_newsapi_articles(country_alpha2, news_articles)
-    else:
-        news_articles = store.get_newsapi_articles(country_alpha2)
+    if country_alpha2 in _PRIORITY_SET:
+        if use_news:
+            news_articles = _fetch_news_for_country(country_alpha2)
+            store.set_newsapi_articles(country_alpha2, news_articles)
+        else:
+            news_articles = store.get_newsapi_articles(country_alpha2)
 
     all_articles = gdelt_article_dicts + news_articles
     analysis = analyze_articles(all_articles)
@@ -277,10 +288,10 @@ def _score_country_safe(code, use_news=False):
         return (code, risk, [])
 
 
-def _score_batch(codes, scored_dict, use_news=False):
-    """Score a batch of countries in parallel (5 at a time)."""
+def _score_batch(codes, scored_dict, use_news=False, max_workers=5):
+    """Score a batch of countries in parallel."""
     try:
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(_score_country_safe, c, use_news): c
                 for c in codes
@@ -298,17 +309,94 @@ def _score_batch(codes, scored_dict, use_news=False):
         logger.warning(f"Executor error (likely shutdown): {e}")
 
 
+def _base_only_score(country_alpha2):
+    """
+    Create a score using only the World Bank base score (no GDELT).
+    Used to fill the map immediately before GDELT data arrives.
+    """
+    country_name = country_codes.iso_alpha2_to_name(country_alpha2)
+    base_data = get_base_score(country_alpha2)
+
+    if not base_data:
+        return None
+
+    base_score = base_data.get('base_score', 50.0)
+
+    # For base-only countries, news_score starts at 0
+    # and composite is purely base score until GDELT data arrives
+    existing = store.get_country(country_alpha2)
+    if existing:
+        news_score = existing.news_score
+        indicators = existing.indicators
+    else:
+        news_score = 0.0
+        indicators = IndicatorScore()
+
+    composite = calculate_composite(base_score, news_score)
+
+    trend = []
+    if existing and existing.trend:
+        trend = list(existing.trend[-9:])
+    trend.append(composite)
+
+    return CountryRisk(
+        country_code=country_alpha2,
+        country_name=country_name,
+        composite_score=composite,
+        base_score=base_score,
+        news_score=news_score,
+        indicators=indicators,
+        headline_count=existing.headline_count if existing else 0,
+        gdelt_event_count=existing.gdelt_event_count if existing else 0,
+        avg_tone=existing.avg_tone if existing else 0.0,
+        updated_at=datetime.utcnow(),
+        trend=trend
+    )
+
+
+def seed_base_only_scores():
+    """
+    Populate the store with base-only scores for all countries that have
+    World Bank data but haven't been GDELT-scored yet.
+    This fills the map immediately on startup.
+    """
+    base_scores = fetch_base_scores()
+    seeded = 0
+    for country_code in base_scores:
+        if not store.get_country(country_code):
+            risk = _base_only_score(country_code)
+            if risk:
+                store.update_country(country_code, risk)
+                seeded += 1
+    logger.info(f"Seeded {seeded} countries with base-only scores "
+                f"(total in store: {store.country_count()})")
+    return seeded
+
+
 def refresh_gdelt_scores():
     """
-    GDELT-only refresh (every 15 min).
-    Scores all 50 priority countries using GDELT 72h window.
+    GDELT refresh (every 15 min).
+    Scores ALL countries using GDELT 72h window in batches.
     EMA blends with previous indicators — scores accumulate.
+
+    - Priority 50 first (5 workers)
+    - Remaining ~137 countries (3 workers, gentler pace)
     """
     logger.info("Starting GDELT refresh cycle...")
     start = datetime.utcnow()
     scored = {}
 
-    _score_batch(PRIORITY_COUNTRIES, scored, use_news=False)
+    # Batch 1: Priority countries (higher parallelism)
+    logger.info(f"  GDELT batch 1: {len(PRIORITY_COUNTRIES)} priority countries...")
+    _score_batch(PRIORITY_COUNTRIES, scored, use_news=False, max_workers=5)
+
+    # Batch 2: Remaining countries (lower parallelism to be gentle on Render)
+    remaining = [c for c in ALL_COUNTRIES if c not in _PRIORITY_SET]
+    if remaining:
+        logger.info(f"  GDELT batch 2: {len(remaining)} remaining countries...")
+        for i in range(0, len(remaining), 30):
+            batch = remaining[i:i+30]
+            _score_batch(batch, scored, use_news=False, max_workers=3)
 
     store.set_last_refresh(datetime.utcnow())
     elapsed = (datetime.utcnow() - start).total_seconds()
@@ -333,6 +421,7 @@ def refresh_news_region():
     """
     Multi-provider news refresh (every ~2 hours).
     Rotates through 5 regions. Each region uses its assigned provider.
+    Only applies to the 50 priority countries.
     """
     region_index = store.get_next_region_index()
     region_name = Config.REGION_ORDER[region_index]
@@ -375,16 +464,20 @@ def refresh_news_region():
 
 def refresh_all_scores():
     """
-    Initial startup: fetch World Bank base scores, then GDELT + one news region.
+    Initial startup: fetch World Bank base scores for ALL countries,
+    seed store with base-only scores, then run GDELT + one news region.
     """
-    # Fetch base scores from World Bank (WGI + macro)
-    logger.info("Fetching World Bank base scores for all priority countries...")
+    # Step 1: Fetch base scores from World Bank for ALL countries
+    logger.info("Fetching World Bank base scores for ALL countries...")
     try:
-        base_scores = fetch_base_scores(PRIORITY_COUNTRIES)
+        base_scores = fetch_base_scores()
         logger.info(f"Base scores loaded for {len(base_scores)} countries.")
     except Exception as e:
         logger.error(f"Failed to fetch base scores: {e}")
 
-    # Then run GDELT + news
+    # Step 2: Seed store with base-only scores (map fills immediately)
+    seed_base_only_scores()
+
+    # Step 3: Run GDELT for all countries + news for one region
     refresh_gdelt_scores()
     refresh_news_region()
