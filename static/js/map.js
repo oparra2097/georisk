@@ -71,6 +71,9 @@ const MapModule = {
                 const num = c['country-code'];
                 const alpha2 = c['alpha-2'];
                 if (num && alpha2 && num !== '-99') {
+                    // Store both zero-padded ("032") and stripped ("32") keys
+                    // world-atlas TopoJSON uses zero-padded string IDs
+                    this.countryCodeMap[num] = alpha2;
                     this.countryCodeMap[String(parseInt(num))] = alpha2;
                 }
             });
