@@ -2,11 +2,14 @@
 JSON-based persistent storage for GeoRisk scores.
 
 Saves two files:
-1. scores.json  — Latest scores, NewsAPI cache, region index (hot state)
+1. scores.json  — Latest scores, news cache, region index, EMA state (hot state)
 2. history.json — Daily snapshots of composite scores per country (cold state)
 
 On startup, loads from these files so data survives process restarts
 and Render redeploys (if using a persistent disk / volume).
+
+EMA-blended indicator scores are persisted so scores accumulate
+across restarts — crises don't reset when the process restarts.
 
 Saves automatically after each refresh cycle. Thread-safe.
 """
@@ -31,8 +34,9 @@ def _ensure_data_dir():
 
 def save_scores(store):
     """
-    Persist current scores + NewsAPI cache + region index to JSON.
-    Called after each GDELT/NewsAPI refresh cycle.
+    Persist current scores + news cache + region index to JSON.
+    Called after each GDELT/news refresh cycle.
+    Includes base_score and news_score for the two-tier architecture.
     """
     with _save_lock:
         try:
@@ -45,6 +49,8 @@ def save_scores(store):
                     'country_code': risk.country_code,
                     'country_name': risk.country_name,
                     'composite_score': risk.composite_score,
+                    'base_score': risk.base_score,
+                    'news_score': risk.news_score,
                     'indicators': {
                         'political_stability': risk.indicators.political_stability,
                         'military_conflict': risk.indicators.military_conflict,
@@ -60,7 +66,7 @@ def save_scores(store):
                     'trend': risk.trend,
                 }
 
-            # Also save NewsAPI cache and region index
+            # Also save news cache and region index
             newsapi_cache = {}
             for code in all_scores:
                 articles = store.get_newsapi_articles(code)
@@ -93,6 +99,9 @@ def load_scores(store):
     """
     Load persisted scores into the store on startup.
     Returns True if data was loaded, False if starting fresh.
+
+    Restores EMA-blended indicators, base_score, and news_score
+    so scores continue accumulating across restarts.
     """
     if not os.path.exists(Config.SCORES_FILE):
         logger.info("No persisted scores found, starting fresh.")
@@ -131,6 +140,8 @@ def load_scores(store):
                 country_code=data.get('country_code', code),
                 country_name=data.get('country_name', code),
                 composite_score=data.get('composite_score', 0),
+                base_score=data.get('base_score', 0),
+                news_score=data.get('news_score', 0),
                 indicators=indicators,
                 headline_count=data.get('headline_count', 0),
                 gdelt_event_count=data.get('gdelt_event_count', 0),
@@ -141,7 +152,7 @@ def load_scores(store):
             store.update_country(code, risk)
             loaded += 1
 
-        # Restore NewsAPI cache
+        # Restore news cache
         for code, articles in newsapi_cache.items():
             store.set_newsapi_articles(code, articles)
 
@@ -158,7 +169,7 @@ def load_scores(store):
 
         logger.info(
             f"Loaded {loaded} persisted scores (saved {saved_at}). "
-            f"NewsAPI cache: {len(newsapi_cache)} countries. "
+            f"News cache: {len(newsapi_cache)} countries. "
             f"Region index: {region_index}."
         )
         return True
@@ -170,7 +181,7 @@ def load_scores(store):
 
 def save_daily_snapshot(store):
     """
-    Save one snapshot per day: date -> {country: composite_score}.
+    Save one snapshot per day: date -> {country: composite_score + base + news}.
     Keeps up to 90 days of history for trend analysis.
     """
     with _save_lock:
@@ -191,6 +202,8 @@ def save_daily_snapshot(store):
             for code, risk in all_scores.items():
                 snapshot[code] = {
                     'composite': round(risk.composite_score, 1),
+                    'base_score': round(risk.base_score, 1),
+                    'news_score': round(risk.news_score, 1),
                     'indicators': {
                         'political_stability': round(risk.indicators.political_stability, 1),
                         'military_conflict': round(risk.indicators.military_conflict, 1),

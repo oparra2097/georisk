@@ -13,6 +13,7 @@ import requests
 import logging
 import time
 from backend.data_sources.country_codes import iso_alpha2_to_name
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,9 @@ def _gdelt_request(params, timeout=15):
     return None
 
 
-def fetch_country_articles(country_alpha2, timespan='24h', max_records=100):
+def fetch_country_articles(country_alpha2, timespan=None, max_records=100):
+    if timespan is None:
+        timespan = Config.GDELT_TIMESPAN
     """Fetch recent articles about a country from GDELT."""
     search_name = _get_search_name(country_alpha2)
     params = {
@@ -82,7 +85,9 @@ def fetch_country_articles(country_alpha2, timespan='24h', max_records=100):
     return []
 
 
-def fetch_country_tone(country_alpha2, timespan='24h'):
+def fetch_country_tone(country_alpha2, timespan=None):
+    if timespan is None:
+        timespan = Config.GDELT_TIMESPAN
     """
     Fetch average tone for a country using timelinetone mode.
     Returns a float from roughly -10 (very negative) to +10 (positive).
@@ -107,7 +112,9 @@ def fetch_country_tone(country_alpha2, timespan='24h'):
     return 0.0
 
 
-def fetch_country_data(country_alpha2, timespan='24h'):
+def fetch_country_data(country_alpha2, timespan=None):
+    if timespan is None:
+        timespan = Config.GDELT_TIMESPAN
     """
     Fetch GDELT data for a country — only 2 API calls:
     1. Articles (for headlines, NLP analysis, and source breadth)

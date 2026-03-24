@@ -21,6 +21,8 @@ class CountryRisk:
     country_code: str
     country_name: str
     composite_score: float = 0.0
+    base_score: float = 0.0        # WGI + macro fundamentals (low-frequency)
+    news_score: float = 0.0        # EMA'd news signal (high-frequency)
     indicators: IndicatorScore = field(default_factory=IndicatorScore)
     headline_count: int = 0
     gdelt_event_count: int = 0
@@ -33,6 +35,8 @@ class CountryRisk:
             'country_code': self.country_code,
             'country_name': self.country_name,
             'composite': round(self.composite_score, 1),
+            'base_score': round(self.base_score, 1),
+            'news_score': round(self.news_score, 1),
             'indicators': self.indicators.to_dict(),
             'headline_count': self.headline_count,
             'gdelt_event_count': self.gdelt_event_count,

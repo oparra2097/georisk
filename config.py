@@ -17,7 +17,13 @@ class Config:
     REFRESH_INTERVAL_MINUTES = 15
     SCORE_CACHE_TTL_MINUTES = 30
     HOTSPOT_THRESHOLD = 70
-    GDELT_TIMESPAN = '24h'
+    GDELT_TIMESPAN = '72h'         # 3-day rolling window
+
+    # --- Two-tier scoring ---
+    BASE_SCORE_WEIGHT = 0.40       # World Bank WGI + macro fundamentals
+    NEWS_SCORE_WEIGHT = 0.60       # High-frequency news signal
+    EMA_ALPHA = 0.3                # Blending: 30% new data, 70% existing
+    WGI_CACHE_DAYS = 30            # Refresh base data monthly
 
     # Persistent storage — JSON files survive process restarts on Render
     DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data'))

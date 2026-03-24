@@ -1,7 +1,12 @@
 """
-Composite score calculation with absolute scoring.
+Two-tier composite scoring.
 
-No percentile normalization - scores are absolute:
+Composite = Base Score (40%) + News Score (60%)
+
+Base Score: World Bank WGI governance + macro fundamentals (0-100)
+News Score: Weighted average of 6 EMA-blended indicator scores (0-100)
+
+Score interpretation (absolute):
   0-20  = Very Low Risk
   20-40 = Low Risk
   40-60 = Moderate Risk
@@ -13,6 +18,7 @@ other countries are doing. Switzerland stays low, Syria stays high.
 """
 
 from backend.models import IndicatorScore
+from config import Config
 
 INDICATOR_WEIGHTS = {
     'political_stability': 0.20,
@@ -24,11 +30,10 @@ INDICATOR_WEIGHTS = {
 }
 
 
-def calculate_composite_score(indicators: IndicatorScore) -> float:
+def calculate_news_score(indicators: IndicatorScore) -> float:
     """
-    Weighted average of all 6 indicator scores.
+    Weighted average of all 6 indicator scores → news score (0-100).
     Military conflict gets highest weight (0.25) as the most impactful factor.
-    Result is absolute 0-100.
     """
     score = (
         indicators.political_stability * INDICATOR_WEIGHTS['political_stability'] +
@@ -41,11 +46,30 @@ def calculate_composite_score(indicators: IndicatorScore) -> float:
     return round(max(0.0, min(100.0, score)), 1)
 
 
+def calculate_composite(base_score: float, news_score: float) -> float:
+    """
+    Two-tier composite: base_score * 0.4 + news_score * 0.6
+
+    Base score provides a structural floor (governance + macro fundamentals).
+    News score provides high-frequency adjustment (GDELT + news APIs).
+    """
+    composite = (
+        base_score * Config.BASE_SCORE_WEIGHT +
+        news_score * Config.NEWS_SCORE_WEIGHT
+    )
+    return round(max(0.0, min(100.0, composite)), 1)
+
+
+# Legacy compatibility — kept for any code that still calls this
+def calculate_composite_score(indicators: IndicatorScore) -> float:
+    """Legacy: weighted average of indicators. Use calculate_news_score instead."""
+    return calculate_news_score(indicators)
+
+
 def normalize_scores_absolute(scores_dict):
     """
     With absolute scoring, no normalization is needed.
-    We just ensure all scores are properly clamped to 0-100.
-    This function exists for compatibility with the engine.
+    Just ensures all scores are properly clamped to 0-100.
     """
     for country_risk in scores_dict.values():
         country_risk.composite_score = round(

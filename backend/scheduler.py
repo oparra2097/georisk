@@ -2,10 +2,28 @@ import logging
 import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from backend.scoring.engine import refresh_gdelt_scores, refresh_news_region, refresh_all_scores
+from backend.data_sources.world_bank_wgi import fetch_base_scores
 from backend.cache.persistence import load_scores
 from backend.cache.store import store
+from config import Config
 
 logger = logging.getLogger(__name__)
+
+# All 50 priority countries
+_PRIORITY_COUNTRIES = []
+for _codes in Config.REGIONS.values():
+    _PRIORITY_COUNTRIES.extend(_codes)
+
+
+def _startup_with_persisted():
+    """Load WGI base scores, then refresh GDELT (news scores EMA-blend with persisted state)."""
+    try:
+        logger.info("Loading World Bank base scores (startup with persisted data)...")
+        fetch_base_scores(_PRIORITY_COUNTRIES)
+        logger.info("Base scores loaded. Starting GDELT refresh...")
+    except Exception as e:
+        logger.error(f"Failed to load base scores on startup: {e}")
+    refresh_gdelt_scores()
 
 
 def init_scheduler(app):
@@ -16,8 +34,8 @@ def init_scheduler(app):
     # Load persisted scores from disk (survives restarts/redeploys)
     had_data = load_scores(store)
     if had_data:
-        logger.info("Restored persisted scores — skipping full initial refresh, "
-                     "will update on next scheduled cycle.")
+        logger.info("Restored persisted scores — EMA state preserved. "
+                     "Will load base scores and refresh on next cycle.")
 
     scheduler = BackgroundScheduler()
 
@@ -50,10 +68,12 @@ def init_scheduler(app):
     )
 
     if not had_data:
+        # No persisted data: full startup (WGI + GDELT + first news region)
         thread = threading.Thread(target=refresh_all_scores, daemon=True)
         thread.start()
-        logger.info("No persisted data found. Initial refresh started in background.")
+        logger.info("No persisted data found. Full initial refresh started in background.")
     else:
-        thread = threading.Thread(target=refresh_gdelt_scores, daemon=True)
+        # Persisted data: load base scores then GDELT refresh (EMA blends with persisted state)
+        thread = threading.Thread(target=_startup_with_persisted, daemon=True)
         thread.start()
-        logger.info("Persisted data loaded. Background GDELT refresh started.")
+        logger.info("Persisted data loaded. Background WGI + GDELT refresh started.")
