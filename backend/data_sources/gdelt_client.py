@@ -1,5 +1,5 @@
 """
-GDELT DOC 2.0 API client — rate-limit aware.
+GDELT DOC 2.0 API client — rate-limit aware, single-threaded.
 
 Two API calls per country:
 1. artlist — articles for NLP keyword analysis + source breadth
@@ -10,7 +10,7 @@ instead of separate GDELT theme queries (saves 6 API calls per country).
 
 GDELT rate limits: ~1 request per second sustained.
 With 187 countries × 2 calls = 374 requests per refresh.
-At 1 req/s that's ~6 minutes. With 2 workers: ~3 minutes.
+At 1.5s interval (single-threaded): ~9.5 minutes per full cycle.
 """
 
 import requests
@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 
 GDELT_DOC_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
 
-# Global rate limiter — max ~2 requests/sec to GDELT
+# Global rate limiter — max ~0.67 requests/sec to GDELT
 _rate_lock = threading.Lock()
 _last_request_time = 0.0
-_MIN_REQUEST_INTERVAL = 0.6  # seconds between requests (≈1.7 req/s)
+_MIN_REQUEST_INTERVAL = 1.5  # seconds between requests (≈0.67 req/s)
 
 # Short names for countries that have problematic full names in GDELT
 COUNTRY_SEARCH_NAMES = {
@@ -70,7 +70,8 @@ def _rate_limit():
 
 def _gdelt_request(params, timeout=15):
     """Make a GDELT API request with exponential backoff on 429s."""
-    for attempt in range(4):
+    max_attempts = 5
+    for attempt in range(max_attempts):
         _rate_limit()
         try:
             resp = requests.get(GDELT_DOC_URL, params=params, timeout=timeout)
@@ -81,20 +82,20 @@ def _gdelt_request(params, timeout=15):
                 # Empty or non-JSON response
                 return None
             elif resp.status_code == 429:
-                wait = 2 ** attempt + 1  # 2s, 3s, 5s, 9s
-                logger.debug(f"GDELT 429, waiting {wait}s (attempt {attempt+1}/4)")
+                wait = 3 ** attempt + 2  # 3s, 5s, 11s, 29s, 83s
+                logger.debug(f"GDELT 429, waiting {wait}s (attempt {attempt+1}/{max_attempts})")
                 time.sleep(wait)
                 continue
             else:
                 logger.debug(f"GDELT {resp.status_code} for {params.get('query', '?')}")
                 return None
         except requests.exceptions.Timeout:
-            logger.debug(f"GDELT timeout (attempt {attempt+1}/4)")
-            time.sleep(1)
+            logger.debug(f"GDELT timeout (attempt {attempt+1}/{max_attempts})")
+            time.sleep(2)
         except Exception as e:
             logger.debug(f"GDELT request error: {e}")
             return None
-    logger.warning(f"GDELT failed after 4 attempts: {params.get('query', '?')} ({params.get('mode', '?')})")
+    logger.warning(f"GDELT failed after {max_attempts} attempts: {params.get('query', '?')} ({params.get('mode', '?')})")
     return None
 
 

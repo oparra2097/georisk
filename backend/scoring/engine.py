@@ -29,6 +29,7 @@ News providers rotate through regions every 2 hours.
 """
 
 import logging
+import threading
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from backend.models import IndicatorScore, CountryRisk, NewsArticle
@@ -84,6 +85,9 @@ for _region, _codes in Config.REGIONS.items():
         _COUNTRY_PROVIDER[_code] = _provider
 
 _PRIORITY_SET = set(PRIORITY_COUNTRIES)
+
+# Job-level lock — prevents GDELT refresh and news refresh from running simultaneously
+_refresh_lock = threading.Lock()
 
 
 def _fetch_news_for_country(country_alpha2):
@@ -376,45 +380,50 @@ def seed_base_only_scores():
 def refresh_gdelt_scores():
     """
     GDELT refresh (every 15 min).
-    Scores ALL countries using GDELT 72h window in batches.
-    EMA blends with previous indicators — scores accumulate.
+    Scores ALL countries using GDELT 72h window — single-threaded to
+    respect GDELT's ~1 req/s rate limit. Serialized execution avoids
+    the burst patterns that cause 429 errors.
 
-    - Priority 50 first (5 workers)
-    - Remaining ~137 countries (3 workers, gentler pace)
+    Uses _refresh_lock to prevent overlap with news region refresh.
     """
-    logger.info("Starting GDELT refresh cycle...")
-    start = datetime.utcnow()
-    scored = {}
+    if not _refresh_lock.acquire(blocking=False):
+        logger.info("GDELT refresh already running, skipping this cycle")
+        return
 
-    # Batch 1: Priority countries (higher parallelism)
-    logger.info(f"  GDELT batch 1: {len(PRIORITY_COUNTRIES)} priority countries...")
-    _score_batch(PRIORITY_COUNTRIES, scored, use_news=False, max_workers=5)
+    try:
+        logger.info("Starting GDELT refresh cycle...")
+        start = datetime.utcnow()
+        scored = {}
 
-    # Batch 2: Remaining countries (lower parallelism to be gentle on Render)
-    remaining = [c for c in ALL_COUNTRIES if c not in _PRIORITY_SET]
-    if remaining:
-        logger.info(f"  GDELT batch 2: {len(remaining)} remaining countries...")
-        for i in range(0, len(remaining), 30):
-            batch = remaining[i:i+30]
-            _score_batch(batch, scored, use_news=False, max_workers=3)
+        # Batch 1: Priority countries (single worker — serialized)
+        logger.info(f"  GDELT batch 1: {len(PRIORITY_COUNTRIES)} priority countries...")
+        _score_batch(PRIORITY_COUNTRIES, scored, use_news=False, max_workers=1)
 
-    store.set_last_refresh(datetime.utcnow())
-    elapsed = (datetime.utcnow() - start).total_seconds()
-    logger.info(f"GDELT refresh complete. {len(scored)} countries in {elapsed:.1f}s")
+        # Batch 2: Remaining countries (single worker — serialized)
+        remaining = [c for c in ALL_COUNTRIES if c not in _PRIORITY_SET]
+        if remaining:
+            logger.info(f"  GDELT batch 2: {len(remaining)} remaining countries...")
+            _score_batch(remaining, scored, use_news=False, max_workers=1)
 
-    # Log score ranges for monitoring
-    if scored:
-        composites = [r.composite_score for r in scored.values()]
-        bases = [r.base_score for r in scored.values()]
-        news = [r.news_score for r in scored.values()]
-        logger.info(
-            f"Score ranges — composite: {min(composites):.1f}-{max(composites):.1f}, "
-            f"base: {min(bases):.1f}-{max(bases):.1f}, "
-            f"news: {min(news):.1f}-{max(news):.1f}"
-        )
+        store.set_last_refresh(datetime.utcnow())
+        elapsed = (datetime.utcnow() - start).total_seconds()
+        logger.info(f"GDELT refresh complete. {len(scored)} countries in {elapsed:.1f}s")
 
-    save_scores(store)
-    save_daily_snapshot(store)
+        # Log score ranges for monitoring
+        if scored:
+            composites = [r.composite_score for r in scored.values()]
+            bases = [r.base_score for r in scored.values()]
+            news = [r.news_score for r in scored.values()]
+            logger.info(
+                f"Score ranges — composite: {min(composites):.1f}-{max(composites):.1f}, "
+                f"base: {min(bases):.1f}-{max(bases):.1f}, "
+                f"news: {min(news):.1f}-{max(news):.1f}"
+            )
+
+        save_scores(store)
+        save_daily_snapshot(store)
+    finally:
+        _refresh_lock.release()
 
 
 def refresh_news_region():
@@ -422,44 +431,53 @@ def refresh_news_region():
     Multi-provider news refresh (every ~2 hours).
     Rotates through 5 regions. Each region uses its assigned provider.
     Only applies to the 50 priority countries.
+
+    Uses _refresh_lock to prevent overlap with GDELT refresh.
     """
-    region_index = store.get_next_region_index()
-    region_name = Config.REGION_ORDER[region_index]
-    region_codes = Config.REGIONS[region_name]
-    provider = Config.REGION_PROVIDER.get(region_name, 'newsapi')
+    if not _refresh_lock.acquire(blocking=False):
+        logger.info("GDELT refresh running, deferring news cycle")
+        return
 
-    logger.info(f"News refresh: {region_name} via {provider} "
-                f"({len(region_codes)} countries)...")
-    start = datetime.utcnow()
-    scored = {}
+    try:
+        region_index = store.get_next_region_index()
+        region_name = Config.REGION_ORDER[region_index]
+        region_codes = Config.REGIONS[region_name]
+        provider = Config.REGION_PROVIDER.get(region_name, 'newsapi')
 
-    _score_batch(region_codes, scored, use_news=True)
+        logger.info(f"News refresh: {region_name} via {provider} "
+                    f"({len(region_codes)} countries)...")
+        start = datetime.utcnow()
+        scored = {}
 
-    # Also refresh global headlines via NewsAPI (+1 request, only if NewsAPI key set)
-    if region_name == 'AMERICAS' and Config.NEWSAPI_KEY:
-        try:
-            global_articles = fetch_global_headlines()
-            global_headlines = []
-            for art in global_articles[:30]:
-                global_headlines.append(NewsArticle(
-                    title=art.get('title', ''),
-                    description=art.get('description', ''),
-                    url=art.get('url', ''),
-                    source=art.get('source', 'Unknown'),
-                    published_at=art.get('publishedAt', ''),
-                ))
-            store.set_global_headlines(global_headlines)
-        except Exception as e:
-            logger.error(f"Failed to fetch global headlines: {e}")
+        _score_batch(region_codes, scored, use_news=True, max_workers=1)
 
-    store.set_last_refresh(datetime.utcnow())
-    elapsed = (datetime.utcnow() - start).total_seconds()
-    logger.info(
-        f"News refresh complete: {region_name} via {provider} "
-        f"({len(scored)} countries) in {elapsed:.1f}s."
-    )
+        # Also refresh global headlines via NewsAPI (+1 request, only if NewsAPI key set)
+        if region_name == 'AMERICAS' and Config.NEWSAPI_KEY:
+            try:
+                global_articles = fetch_global_headlines()
+                global_headlines = []
+                for art in global_articles[:30]:
+                    global_headlines.append(NewsArticle(
+                        title=art.get('title', ''),
+                        description=art.get('description', ''),
+                        url=art.get('url', ''),
+                        source=art.get('source', 'Unknown'),
+                        published_at=art.get('publishedAt', ''),
+                    ))
+                store.set_global_headlines(global_headlines)
+            except Exception as e:
+                logger.error(f"Failed to fetch global headlines: {e}")
 
-    save_scores(store)
+        store.set_last_refresh(datetime.utcnow())
+        elapsed = (datetime.utcnow() - start).total_seconds()
+        logger.info(
+            f"News refresh complete: {region_name} via {provider} "
+            f"({len(scored)} countries) in {elapsed:.1f}s."
+        )
+
+        save_scores(store)
+    finally:
+        _refresh_lock.release()
 
 
 def refresh_all_scores():

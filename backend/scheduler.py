@@ -41,14 +41,15 @@ def init_scheduler(app):
     scheduler = BackgroundScheduler()
 
     # Job 1: GDELT refresh every 15 min (unlimited, no API key)
-    # Scores ALL countries (priority + remaining)
+    # Scores ALL countries (priority + remaining) — single-threaded
     scheduler.add_job(
         func=refresh_gdelt_scores,
         trigger='interval',
         minutes=gdelt_interval,
         id='refresh_gdelt',
         replace_existing=True,
-        misfire_grace_time=300
+        misfire_grace_time=300,
+        max_instances=1
     )
 
     # Job 2: Multi-provider news rotation every 2 hours
@@ -59,7 +60,8 @@ def init_scheduler(app):
         minutes=news_interval,
         id='refresh_news',
         replace_existing=True,
-        misfire_grace_time=600
+        misfire_grace_time=600,
+        max_instances=1
     )
 
     scheduler.start()
