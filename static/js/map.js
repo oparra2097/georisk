@@ -1,3 +1,9 @@
+const SCORE_LABELS = {
+    composite: 'GeoRisk Index',
+    base_score: 'Base Model',
+    news_score: 'News Signal'
+};
+
 const MapModule = {
     svg: null,
     g: null,  // group for zoomable content
@@ -8,6 +14,7 @@ const MapModule = {
     scores: {},
     tooltip: null,
     zoom: null,
+    activeScoreField: 'composite',
 
     async init(containerId) {
         this.tooltip = document.getElementById('map-tooltip');
@@ -107,6 +114,38 @@ const MapModule = {
         }
     },
 
+    getScoreValue(scoreData) {
+        if (!scoreData) return undefined;
+        return scoreData[this.activeScoreField];
+    },
+
+    setScoreField(field) {
+        this.activeScoreField = field;
+
+        // Update button active states
+        document.querySelectorAll('.score-filter-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.score === field);
+        });
+
+        // Re-color the map with smooth transition
+        this.g.selectAll('path.country')
+            .transition()
+            .duration(600)
+            .attr('fill', d => {
+                const alpha2 = this.countryCodeMap[String(d.id)];
+                const scoreData = this.scores[alpha2];
+                const value = this.getScoreValue(scoreData);
+                if (value === undefined) return '#1f2937';
+                return this.colorScale(value);
+            });
+
+        // Re-evaluate hotspots based on selected score type
+        this.highlightHotspots();
+
+        // Update legend label
+        this.renderLegend();
+    },
+
     async updateScores() {
         this.scores = await ApiClient.getScores();
 
@@ -116,8 +155,9 @@ const MapModule = {
             .attr('fill', d => {
                 const alpha2 = this.countryCodeMap[String(d.id)];
                 const scoreData = this.scores[alpha2];
-                if (!scoreData || scoreData.composite === undefined) return '#1f2937';
-                return this.colorScale(scoreData.composite);
+                const value = this.getScoreValue(scoreData);
+                if (value === undefined) return '#1f2937';
+                return this.colorScale(value);
             });
 
         this.highlightHotspots();
@@ -132,7 +172,8 @@ const MapModule = {
             .classed('hotspot', d => {
                 const alpha2 = this.countryCodeMap[String(d.id)];
                 const scoreData = this.scores[alpha2];
-                return scoreData && scoreData.composite > 70;
+                const value = this.getScoreValue(scoreData);
+                return value !== undefined && value > 70;
             });
     },
 
@@ -145,7 +186,7 @@ const MapModule = {
 
         if (scoreData) {
             name = scoreData.country_name || alpha2;
-            const score = scoreData.composite;
+            const score = this.getScoreValue(scoreData);
             const color = Utils.riskColor(score);
             const label = Utils.riskLabel(score);
             const base = scoreData.base_score || 0;
@@ -153,17 +194,26 @@ const MapModule = {
             const articles = scoreData.headline_count || 0;
             const baseColor = Utils.riskColor(base);
             const newsColor = Utils.riskColor(news);
+            const isBaseActive = this.activeScoreField === 'base_score';
+            const isNewsActive = this.activeScoreField === 'news_score';
+            const scoreLabel = SCORE_LABELS[this.activeScoreField];
+
+            // Show "No news data" hint when viewing News Signal with zero articles
+            const newsDisplay = (isNewsActive && news === 0 && articles === 0)
+                ? '<span class="tier-value" style="color: #6b7280">N/A</span>'
+                : `<span class="tier-value" style="color: ${newsColor}">${news}</span>`;
+
             scoreHtml = `
                 <div class="tooltip-score" style="color: ${color}">${score}</div>
-                <span class="tooltip-label">${label} Risk</span>
+                <span class="tooltip-label">${scoreLabel} — ${label} Risk</span>
                 <div class="tooltip-breakdown">
-                    <div class="tooltip-tier">
+                    <div class="tooltip-tier ${isBaseActive ? 'tier-active' : ''}">
                         <span class="tier-label">Base</span>
                         <span class="tier-value" style="color: ${baseColor}">${base}</span>
                     </div>
-                    <div class="tooltip-tier">
+                    <div class="tooltip-tier ${isNewsActive ? 'tier-active' : ''}">
                         <span class="tier-label">News</span>
-                        <span class="tier-value" style="color: ${newsColor}">${news}</span>
+                        ${newsDisplay}
                     </div>
                     <div class="tooltip-tier">
                         <span class="tier-label">Articles</span>
@@ -201,6 +251,7 @@ const MapModule = {
 
     renderLegend() {
         const legend = document.getElementById('map-legend');
+        const title = SCORE_LABELS[this.activeScoreField] || 'GeoRisk Index';
         legend.innerHTML = `
             <span>Low Risk</span>
             <div>
@@ -212,6 +263,7 @@ const MapModule = {
                     <span>75</span>
                     <span>100</span>
                 </div>
+                <div class="legend-title">${title}</div>
             </div>
             <span>Critical</span>
         `;

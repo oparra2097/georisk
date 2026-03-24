@@ -132,10 +132,75 @@
     fill: #1f2937;
 }
 
+/* ===== Score Filter Toggle ===== */
+
+#score-filter {
+    position: absolute;
+    top: 16px;
+    left: 24px;
+    display: flex;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 6px;
+    padding: 3px;
+    z-index: 50;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    gap: 2px;
+}
+
+.score-filter-btn {
+    background: transparent;
+    color: #6b7280;
+    border: none;
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+}
+
+.score-filter-btn:hover {
+    color: #9ca3af;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.score-filter-btn.active {
+    background: #1e3a5f;
+    color: #3b82f6;
+    font-weight: 600;
+}
+
+.tier-active {
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+.legend-title {
+    text-align: center;
+    font-size: 9px;
+    color: #3b82f6;
+    margin-top: 2px;
+    letter-spacing: 0.5px;
+}
 
 /* ===== Responsive: Map ===== */
 
 @media (max-width: 768px) {
+    #score-filter {
+        top: 10px;
+        left: 10px;
+        padding: 2px;
+    }
+
+    .score-filter-btn {
+        padding: 5px 10px;
+        font-size: 10px;
+    }
+
     #map-legend {
         bottom: 10px;
         left: 10px;
@@ -170,6 +235,16 @@
 }
 
 @media (max-width: 480px) {
+    #score-filter {
+        top: 6px;
+        left: 6px;
+    }
+
+    .score-filter-btn {
+        padding: 4px 8px;
+        font-size: 9px;
+    }
+
     #map-legend {
         bottom: 6px;
         left: 6px;

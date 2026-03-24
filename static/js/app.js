@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Start polling for scores (data loads in background on server)
     pollForScores();
 
+    // Score filter toggle
+    document.querySelectorAll('.score-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => MapModule.setScoreField(btn.dataset.score));
+    });
+
     // Panel close handlers
     document.getElementById('panel-close').addEventListener('click', () => PanelModule.close());
     document.querySelector('.panel-backdrop').addEventListener('click', () => PanelModule.close());
