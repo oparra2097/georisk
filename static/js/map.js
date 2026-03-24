@@ -145,9 +145,28 @@ const MapModule = {
             const score = scoreData.composite;
             const color = Utils.riskColor(score);
             const label = Utils.riskLabel(score);
+            const base = scoreData.base_score || 0;
+            const news = scoreData.news_score || 0;
+            const articles = scoreData.headline_count || 0;
+            const baseColor = Utils.riskColor(base);
+            const newsColor = Utils.riskColor(news);
             scoreHtml = `
                 <div class="tooltip-score" style="color: ${color}">${score}</div>
                 <span class="tooltip-label">${label} Risk</span>
+                <div class="tooltip-breakdown">
+                    <div class="tooltip-tier">
+                        <span class="tier-label">Base</span>
+                        <span class="tier-value" style="color: ${baseColor}">${base}</span>
+                    </div>
+                    <div class="tooltip-tier">
+                        <span class="tier-label">News</span>
+                        <span class="tier-value" style="color: ${newsColor}">${news}</span>
+                    </div>
+                    <div class="tooltip-tier">
+                        <span class="tier-label">Articles</span>
+                        <span class="tier-value">${articles}</span>
+                    </div>
+                </div>
             `;
         }
 

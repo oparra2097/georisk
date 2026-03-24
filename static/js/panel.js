@@ -15,6 +15,26 @@ const PanelModule = {
         badge.style.color = Utils.riskColor(score);
         badge.style.background = Utils.riskBg(score);
 
+        // Two-tier score breakdown
+        const baseScore = detail.base_score || 0;
+        const newsScore = detail.news_score || 0;
+        const articles = detail.headline_count || 0;
+        const tone = detail.avg_tone || 0;
+
+        const baseEl = document.getElementById('panel-base-score');
+        baseEl.textContent = baseScore;
+        baseEl.style.color = Utils.riskColor(baseScore);
+
+        const newsEl = document.getElementById('panel-news-score');
+        newsEl.textContent = newsScore;
+        newsEl.style.color = Utils.riskColor(newsScore);
+
+        document.getElementById('panel-article-count').textContent = articles;
+
+        const toneEl = document.getElementById('panel-avg-tone');
+        toneEl.textContent = tone.toFixed(1);
+        toneEl.style.color = tone < -3 ? '#ef4444' : tone < -1 ? '#f59e0b' : '#10b981';
+
         this.renderRadarChart(detail.indicators || {});
         this.renderIndicatorBars(detail.indicators || {});
         this.renderHeadlines(headlines.articles || []);
