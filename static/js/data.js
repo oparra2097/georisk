@@ -188,10 +188,10 @@
         expanded[dataset] = !expanded[dataset];
 
         if (expanded[dataset]) {
-            submenu.style.display = '';
+            submenu.classList.add('open');
             if (btn) btn.classList.add('expanded');
         } else {
-            submenu.style.display = 'none';
+            submenu.classList.remove('open');
             if (btn) btn.classList.remove('expanded');
         }
     }
@@ -199,7 +199,7 @@
     function collapseSubmenu(dataset) {
         const submenu = document.getElementById('submenu-' + dataset);
         const btn = document.querySelector('.sidebar-item[data-dataset="' + dataset + '"]');
-        if (submenu) submenu.style.display = 'none';
+        if (submenu) submenu.classList.remove('open');
         if (btn) btn.classList.remove('expanded');
         expanded[dataset] = false;
     }

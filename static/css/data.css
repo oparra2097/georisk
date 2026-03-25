@@ -83,6 +83,10 @@
     padding: 2px 0;
 }
 
+.sidebar-submenu.open {
+    display: block;
+}
+
 .sidebar-subitem {
     display: block;
     width: 100%;
