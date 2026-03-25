@@ -13,7 +13,11 @@ import threading
 import time
 import logging
 import requests
+import urllib3
 from datetime import datetime
+
+# BLS API has recurring SSL certificate issues; suppress warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +97,7 @@ def _fetch_bls_cpi():
         payload['registrationkey'] = api_key
 
     try:
-        resp = requests.post(BLS_API_URL, json=payload, headers=headers, timeout=30)
+        resp = requests.post(BLS_API_URL, json=payload, headers=headers, timeout=30, verify=False)
         resp.raise_for_status()
         result = resp.json()
 
@@ -119,6 +123,10 @@ def _fetch_bls_cpi():
 
                 # Only monthly data (skip annual averages M13)
                 if period not in PERIOD_MAP:
+                    continue
+
+                # BLS uses "-" for unavailable data
+                if value == '-' or value == '':
                     continue
 
                 month = PERIOD_MAP[period]

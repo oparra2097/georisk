@@ -1,7 +1,7 @@
 """
 ONS Consumer Price Index data client.
 
-Uses ONS CSV generator endpoint to fetch UK CPI data by category.
+Uses ONS JSON data endpoint to fetch UK CPI data by category.
 No authentication needed. Thread-safe cache with 24-hour TTL.
 """
 
@@ -9,28 +9,26 @@ import threading
 import time
 import logging
 import requests
-import csv
-import io
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 CACHE_TTL = 86400  # 24 hours
 
-ONS_CSV_BASE = 'https://www.ons.gov.uk/generator?format=csv&uri=/economy/inflationandpriceindices/timeseries/{series_id}/mm23'
+ONS_DATA_BASE = 'https://www.ons.gov.uk/economy/inflationandpriceindices/timeseries/{series_id}/mm23/data'
 
 # Series IDs for UK CPI categories (annual rates)
 ONS_SERIES = {
-    'all_items': {'id': 'D7G7', 'label': 'All Items (CPI)',          'color': '#3b82f6'},
-    'core':      {'id': 'DKO8', 'label': 'Core (ex Food & Energy)',  'color': '#10b981'},
-    'food':      {'id': 'D7GK', 'label': 'Food',                     'color': '#f59e0b'},
-    'energy':    {'id': 'DKL6', 'label': 'Energy',                    'color': '#ef4444'},
-    'housing':   {'id': 'D7GQ', 'label': 'Housing/Rents',             'color': '#8b5cf6'},
+    'all_items': {'id': 'd7g7', 'label': 'All Items (CPI)',          'color': '#3b82f6'},
+    'core':      {'id': 'dko8', 'label': 'Core (ex Food & Energy)',  'color': '#10b981'},
+    'food':      {'id': 'd7gk', 'label': 'Food',                     'color': '#f59e0b'},
+    'energy':    {'id': 'dkl6', 'label': 'Energy',                    'color': '#ef4444'},
+    'housing':   {'id': 'd7gq', 'label': 'Housing/Rents',             'color': '#8b5cf6'},
 }
 
 MONTH_MAP = {
-    'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
-    'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12,
+    'January': 1, 'February': 2, 'March': 3, 'April': 4, 'May': 5, 'June': 6,
+    'July': 7, 'August': 8, 'September': 9, 'October': 10, 'November': 11, 'December': 12,
 }
 
 
@@ -73,30 +71,22 @@ def _empty_result():
     }
 
 
-def _parse_ons_csv(csv_text):
-    """Parse ONS CSV format.
+def _parse_ons_json(data):
+    """Parse ONS JSON data endpoint response.
 
-    ONS CSV has metadata header rows followed by data rows
-    with format: 'YYYY MON', value (e.g. '2024 JAN', '3.4').
+    The 'months' array contains entries like:
+    {'date': '2024 JAN', 'value': '4.0', 'year': '2024', 'month': 'January', ...}
     """
     points = []
-    reader = csv.reader(io.StringIO(csv_text))
+    months = data.get('months', [])
+    cutoff_year = datetime.utcnow().year - 20
 
-    for row in reader:
-        if len(row) < 2:
-            continue
-        date_str = row[0].strip()
-        val_str = row[1].strip()
+    for entry in months:
+        month_name = entry.get('month', '')
+        year_str = entry.get('year', '')
+        val_str = entry.get('value', '')
 
-        # Try to parse 'YYYY MON' format
-        parts = date_str.split()
-        if len(parts) != 2:
-            continue
-
-        year_str, month_str = parts
-        month_str = month_str.upper()
-
-        if month_str not in MONTH_MAP:
+        if month_name not in MONTH_MAP:
             continue
 
         try:
@@ -105,15 +95,14 @@ def _parse_ons_csv(csv_text):
         except (ValueError, TypeError):
             continue
 
-        # Only include last 20 years
-        if year < datetime.utcnow().year - 20:
+        if year < cutoff_year:
             continue
 
-        month = MONTH_MAP[month_str]
+        month = MONTH_MAP[month_name]
         points.append({
             'year': year,
             'month': month,
-            'value': value,  # Already a YoY annual rate from ONS
+            'value': value,
             'date': f'{year}-{str(month).zfill(2)}',
         })
 
@@ -122,22 +111,22 @@ def _parse_ons_csv(csv_text):
 
 
 def _fetch_ons_cpi():
-    """Fetch CPI data from ONS CSV generator for all series."""
+    """Fetch CPI data from ONS JSON data endpoint for all series."""
     try:
         series_data = {}
 
         for key, series_info in ONS_SERIES.items():
-            url = ONS_CSV_BASE.format(series_id=series_info['id'])
+            url = ONS_DATA_BASE.format(series_id=series_info['id'])
 
             resp = requests.get(url, timeout=30, headers={
-                'User-Agent': 'ParraMacro/1.0'
+                'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'
             })
 
             if resp.status_code != 200:
-                logger.warning(f"ONS CSV {resp.status_code} for {key} ({series_info['id']})")
+                logger.warning(f"ONS {resp.status_code} for {key} ({series_info['id']})")
                 continue
 
-            points = _parse_ons_csv(resp.text)
+            points = _parse_ons_json(resp.json())
             if points:
                 series_data[key] = points
                 logger.info(f"ONS {key}: {len(points)} monthly data points")
