@@ -38,6 +38,9 @@ BLS_SERIES = {
 PERIOD_MAP = {f'M{str(i).zfill(2)}': i for i in range(1, 13)}
 
 
+RETRY_BACKOFF = 3600  # Wait 1 hour before retrying after a failure
+
+
 class BlsCpiCache:
     """Thread-safe cache for BLS CPI data."""
 
@@ -45,24 +48,31 @@ class BlsCpiCache:
         self._lock = threading.RLock()
         self._data = None
         self._last_fetch = 0
+        self._last_fail = 0
 
     def get(self):
         with self._lock:
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
+            # Don't retry if we recently failed (avoid burning BLS quota)
+            if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
+                return self._data or _empty_result()
         data = _fetch_bls_cpi()
         if data:
             with self._lock:
                 self._data = data
                 self._last_fetch = time.time()
+                self._last_fail = 0
             return data
         with self._lock:
+            self._last_fail = time.time()
             return self._data or _empty_result()
 
     def clear(self):
         with self._lock:
             self._data = None
             self._last_fetch = 0
+            self._last_fail = 0
 
 
 _cache = BlsCpiCache()

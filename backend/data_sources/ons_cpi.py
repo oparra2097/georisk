@@ -32,6 +32,9 @@ MONTH_MAP = {
 }
 
 
+RETRY_BACKOFF = 3600  # Wait 1 hour before retrying after a failure
+
+
 class OnsCpiCache:
     """Thread-safe cache for ONS CPI data."""
 
@@ -39,24 +42,30 @@ class OnsCpiCache:
         self._lock = threading.RLock()
         self._data = None
         self._last_fetch = 0
+        self._last_fail = 0
 
     def get(self):
         with self._lock:
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
+            if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
+                return self._data or _empty_result()
         data = _fetch_ons_cpi()
         if data:
             with self._lock:
                 self._data = data
                 self._last_fetch = time.time()
+                self._last_fail = 0
             return data
         with self._lock:
+            self._last_fail = time.time()
             return self._data or _empty_result()
 
     def clear(self):
         with self._lock:
             self._data = None
             self._last_fetch = 0
+            self._last_fail = 0
 
 
 _cache = OnsCpiCache()
