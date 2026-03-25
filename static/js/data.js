@@ -47,11 +47,30 @@
     let activeUsComponent = 'overview';
     let activeUkComponent = 'overview';
 
+    // Forecast state
+    let forecastData = null;
+    let fcOilChart = null;
+    let fcAgChart = null;
+    let fcMetalsChart = null;
+    let fcCommodityChart = null;
+    let activeForecastGroup = null;
+    let activeForecastCommodity = null;
+    let fcOilScenario = 'Weighted Avg';
+    let fcAgScenario = 'Weighted Avg';
+    let fcMetalsScenario = 'Weighted Avg';
+
+    // Map group keys to group names in API data
+    const FORECAST_GROUP_MAP = {
+        forecast_oil: 'Oil & Gas',
+        forecast_ag: 'Agriculture',
+        forecast_metals: 'Metals',
+    };
+
     // Track which datasets have been fetched (lazy loading)
-    const fetched = { cofer: false, us_cpi: false, uk_cpi: false, us_components: false, uk_components: false };
+    const fetched = { cofer: false, us_cpi: false, uk_cpi: false, us_components: false, uk_components: false, forecasts: false };
 
     // Track which submenus are expanded
-    const expanded = { us_cpi: false, uk_cpi: false };
+    const expanded = { us_cpi: false, uk_cpi: false, forecast_oil: false, forecast_ag: false, forecast_metals: false };
 
     // ── Bootstrap ────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
@@ -102,6 +121,11 @@
         bindCpiControl('uk-comp-freq', (v) => { ukCompFreq = v; }, () => ukCpiComponents && renderUkComponent());
         bindCpiControl('uk-comp-view', (v) => { ukCompView = v; }, () => ukCpiComponents && renderUkComponent());
 
+        // Forecast group scenario controls
+        bindCpiControl('fc-oil-scenario', (v) => { fcOilScenario = v; }, () => forecastData && renderForecastGroup('forecast_oil'));
+        bindCpiControl('fc-ag-scenario', (v) => { fcAgScenario = v; }, () => forecastData && renderForecastGroup('forecast_ag'));
+        bindCpiControl('fc-metals-scenario', (v) => { fcMetalsScenario = v; }, () => forecastData && renderForecastGroup('forecast_metals'));
+
         // Load default dataset
         loadDataset('cofer');
     });
@@ -120,27 +144,48 @@
 
     function onSidebarItemClick(btn) {
         const dataset = btn.dataset.dataset;
+        const isForecastGroup = dataset in FORECAST_GROUP_MAP;
+        const hasSubmenu = dataset === 'us_cpi' || dataset === 'uk_cpi' || isForecastGroup;
 
         // Highlight parent items
         document.querySelectorAll('.sidebar-item').forEach(b => {
             b.classList.toggle('active', b.dataset.dataset === dataset);
         });
 
-        // For CPI items, toggle submenu expand/collapse
-        if (dataset === 'us_cpi' || dataset === 'uk_cpi') {
+        // For items with submenus, toggle expand/collapse
+        if (hasSubmenu) {
             toggleSubmenu(dataset);
 
-            // If clicking a CPI parent, determine which panel to show
-            const activeComp = dataset === 'us_cpi' ? activeUsComponent : activeUkComponent;
-            if (activeComp === 'overview') {
-                showPanel('panel-' + dataset);
-            } else {
-                showPanel('panel-' + dataset + '_component');
+            if (dataset === 'us_cpi' || dataset === 'uk_cpi') {
+                const activeComp = dataset === 'us_cpi' ? activeUsComponent : activeUkComponent;
+                if (activeComp === 'overview') {
+                    showPanel('panel-' + dataset);
+                } else {
+                    showPanel('panel-' + dataset + '_component');
+                }
+            } else if (isForecastGroup) {
+                // Forecast group: show group overview or individual commodity
+                if (activeForecastCommodity && activeForecastGroup === dataset) {
+                    showPanel('panel-forecast_commodity');
+                } else {
+                    activeForecastGroup = dataset;
+                    activeForecastCommodity = null;
+                    showPanel('panel-' + dataset);
+                }
             }
+
+            // Collapse non-active submenus
+            const allSubmenus = ['us_cpi', 'uk_cpi', 'forecast_oil', 'forecast_ag', 'forecast_metals'];
+            allSubmenus.forEach(k => {
+                if (k !== dataset) collapseSubmenu(k);
+            });
         } else {
             // Collapse all submenus
             collapseSubmenu('us_cpi');
             collapseSubmenu('uk_cpi');
+            collapseSubmenu('forecast_oil');
+            collapseSubmenu('forecast_ag');
+            collapseSubmenu('forecast_metals');
             showPanel('panel-' + dataset);
         }
 
@@ -151,23 +196,42 @@
     function onSubitemClick(btn) {
         const dataset = btn.dataset.dataset;
         const component = btn.dataset.component;
+        const commodity = btn.dataset.commodity;
 
         // Update sub-item active state within this submenu
         const submenu = document.getElementById('submenu-' + dataset);
         if (submenu) {
             submenu.querySelectorAll('.sidebar-subitem').forEach(b => {
-                b.classList.toggle('active', b.dataset.component === component);
+                if (commodity !== undefined) {
+                    b.classList.toggle('active', b.dataset.commodity === commodity);
+                } else {
+                    b.classList.toggle('active', b.dataset.component === component);
+                }
             });
         }
 
+        // Forecast sub-items
+        if (dataset in FORECAST_GROUP_MAP) {
+            activeForecastGroup = dataset;
+            if (commodity === 'overview') {
+                activeForecastCommodity = null;
+                showPanel('panel-' + dataset);
+                loadDataset(dataset);
+            } else {
+                activeForecastCommodity = commodity;
+                showPanel('panel-forecast_commodity');
+                loadDataset(dataset);
+            }
+            return;
+        }
+
+        // CPI sub-items
         if (component === 'overview') {
-            // Show overview panel
             if (dataset === 'us_cpi') activeUsComponent = 'overview';
             else activeUkComponent = 'overview';
             showPanel('panel-' + dataset);
             loadDataset(dataset);
         } else {
-            // Show component panel
             if (dataset === 'us_cpi') {
                 activeUsComponent = component;
                 showPanel('panel-us_cpi_component');
@@ -213,6 +277,22 @@
     }
 
     function loadDataset(dataset) {
+        // Forecast groups all share one fetch
+        if (dataset in FORECAST_GROUP_MAP) {
+            if (!fetched.forecasts) {
+                fetched.forecasts = true;
+                fetchForecasts();
+            } else if (forecastData) {
+                // Data already loaded — just render
+                if (activeForecastCommodity) {
+                    renderForecastCommodity();
+                } else {
+                    renderForecastGroup(dataset);
+                }
+            }
+            return;
+        }
+
         if (fetched[dataset]) return;
         fetched[dataset] = true;
 
@@ -911,6 +991,300 @@
 
         if (meta.year_range) parts.push(meta.year_range);
         el.textContent = parts.join(' \u00b7 ');
+    }
+
+    // ══════════════════════════════════════════════════════
+    // COMMODITIES FORECASTS
+    // ══════════════════════════════════════════════════════
+
+    async function fetchForecasts() {
+        try {
+            const resp = await fetch('/api/forecasts');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            forecastData = await resp.json();
+
+            // Hide all forecast loading spinners
+            ['fc-oil-loading', 'fc-ag-loading', 'fc-metals-loading', 'fc-commodity-loading'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+
+            // Render the active forecast view
+            if (activeForecastCommodity) {
+                renderForecastCommodity();
+            } else if (activeForecastGroup) {
+                renderForecastGroup(activeForecastGroup);
+            }
+        } catch (err) {
+            console.error('Forecast fetch failed:', err);
+            ['fc-oil-loading', 'fc-ag-loading', 'fc-metals-loading', 'fc-commodity-loading'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<p style="color:var(--text-muted)">Failed to load forecast data.</p>';
+            });
+        }
+    }
+
+    function getGroupScenario(groupKey) {
+        if (groupKey === 'forecast_oil') return fcOilScenario;
+        if (groupKey === 'forecast_ag') return fcAgScenario;
+        if (groupKey === 'forecast_metals') return fcMetalsScenario;
+        return 'Weighted Avg';
+    }
+
+    function getGroupChartRef(groupKey) {
+        if (groupKey === 'forecast_oil') return fcOilChart;
+        if (groupKey === 'forecast_ag') return fcAgChart;
+        if (groupKey === 'forecast_metals') return fcMetalsChart;
+        return null;
+    }
+
+    function setGroupChartRef(groupKey, chart) {
+        if (groupKey === 'forecast_oil') fcOilChart = chart;
+        else if (groupKey === 'forecast_ag') fcAgChart = chart;
+        else if (groupKey === 'forecast_metals') fcMetalsChart = chart;
+    }
+
+    function renderForecastGroup(groupKey) {
+        if (!forecastData) return;
+        const groupName = FORECAST_GROUP_MAP[groupKey];
+        const group = (forecastData.groups || {})[groupName];
+        if (!group) return;
+
+        const scenario = getGroupScenario(groupKey);
+        const prefix = groupKey.replace('forecast_', 'fc-');
+        const commodities = group.commodities || {};
+        const groupColors = group.colors || {};
+        const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+        // ── Chart ──
+        const canvasEl = document.getElementById(prefix + '-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        const existingChart = getGroupChartRef(groupKey);
+        if (existingChart) existingChart.destroy();
+
+        const datasets = Object.entries(commodities).map(([name, info]) => {
+            const scenData = (info.scenarios || {})[scenario] || {};
+            const color = groupColors[name] || COLORS[0];
+            return {
+                label: name,
+                data: quarters.map(q => scenData[q] != null ? scenData[q] : null),
+                borderColor: color,
+                backgroundColor: color + '1A',
+                borderWidth: 2.5,
+                fill: false,
+                pointRadius: 5,
+                pointBackgroundColor: color,
+                pointBorderColor: color,
+                tension: 0.3,
+            };
+        });
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: quarters, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'circle' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        callbacks: {
+                            label: (ctx) => {
+                                const val = ctx.parsed.y;
+                                if (val == null) return ctx.dataset.label + ': N/A';
+                                const name = ctx.dataset.label;
+                                const info = commodities[name];
+                                const unit = info ? info.unit : '';
+                                return name + ': ' + val.toFixed(2) + ' ' + unit;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#6b7280', font: { size: 12, weight: 'bold' } },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
+                    },
+                    y: {
+                        ticks: { color: '#6b7280', font: { size: 10 } },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
+                    }
+                }
+            }
+        });
+
+        setGroupChartRef(groupKey, chart);
+
+        // ── Table ──
+        const thead = document.getElementById(prefix + '-thead');
+        const tbody = document.getElementById(prefix + '-tbody');
+        if (thead && tbody) {
+            thead.innerHTML = '<tr><th>Commodity</th><th>Unit</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>FY Avg</th></tr>';
+
+            let rows = '';
+            Object.entries(commodities).forEach(([name, info]) => {
+                const scenData = (info.scenarios || {})[scenario] || {};
+                rows += '<tr><td>' + name + '</td>';
+                rows += '<td>' + (info.unit || '') + '</td>';
+                quarters.forEach(q => {
+                    const v = scenData[q];
+                    rows += v != null ? '<td>' + v.toFixed(2) + '</td>' : '<td>\u2014</td>';
+                });
+                const fy = scenData['FY'];
+                rows += fy != null ? '<td>' + fy.toFixed(2) + '</td>' : '<td>\u2014</td>';
+                rows += '</tr>';
+            });
+            tbody.innerHTML = rows;
+        }
+
+        // ── Meta ──
+        const metaEl = document.getElementById(prefix + '-meta');
+        if (metaEl) {
+            const meta = forecastData.meta || {};
+            const weights = forecastData.scenario_weights || {};
+            const parts = [];
+            if (meta.source) parts.push(meta.source);
+            parts.push(scenario);
+            if (weights[scenario]) parts.push('Weight: ' + (weights[scenario] * 100).toFixed(0) + '%');
+            if (meta.method) parts.push(meta.method);
+            if (meta.last_updated) parts.push('Updated: ' + meta.last_updated.split('T')[0]);
+            metaEl.textContent = parts.join(' \u00b7 ');
+        }
+    }
+
+    function renderForecastCommodity() {
+        if (!forecastData || !activeForecastCommodity || !activeForecastGroup) return;
+
+        const groupName = FORECAST_GROUP_MAP[activeForecastGroup];
+        const group = (forecastData.groups || {})[groupName];
+        if (!group) return;
+
+        const info = (group.commodities || {})[activeForecastCommodity];
+        if (!info) return;
+
+        const scenarios = info.scenarios || {};
+        const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const scenarioColors = forecastData.scenario_colors || {};
+        const scenarioLabels = forecastData.scenario_labels || {};
+        const scenarioOrder = ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
+
+        // Update title
+        const titleEl = document.getElementById('fc-commodity-title');
+        if (titleEl) titleEl.textContent = activeForecastCommodity + ' \u2014 Scenario Forecast';
+
+        const sourceEl = document.getElementById('fc-commodity-source');
+        if (sourceEl) sourceEl.textContent = 'ParraMacro \u2014 ' + (info.unit || '') + ' \u00b7 2026';
+
+        // ── Chart ──
+        const canvasEl = document.getElementById('fc-commodity-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        if (fcCommodityChart) fcCommodityChart.destroy();
+
+        const datasets = scenarioOrder
+            .filter(sc => scenarios[sc] && sc !== 'Actual')
+            .map(sc => {
+                const scenData = scenarios[sc];
+                const color = scenarioColors[sc] || '#9ca3af';
+                const isDashed = sc === 'Weighted Avg';
+                return {
+                    label: sc,
+                    data: quarters.map(q => scenData[q] != null ? scenData[q] : null),
+                    borderColor: color,
+                    backgroundColor: sc === 'Base Case' ? color + '1A' : 'transparent',
+                    borderWidth: sc === 'Weighted Avg' ? 3 : 2,
+                    borderDash: isDashed ? [6, 3] : [],
+                    fill: sc === 'Base Case',
+                    pointRadius: 5,
+                    pointBackgroundColor: color,
+                    pointBorderColor: color,
+                    tension: 0.3,
+                };
+            });
+
+        fcCommodityChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: quarters, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'circle' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        callbacks: {
+                            label: (ctx) => {
+                                const val = ctx.parsed.y;
+                                if (val == null) return ctx.dataset.label + ': N/A';
+                                return ctx.dataset.label + ': ' + val.toFixed(2) + ' ' + (info.unit || '');
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#6b7280', font: { size: 12, weight: 'bold' } },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
+                    },
+                    y: {
+                        ticks: { color: '#6b7280', font: { size: 10 } },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
+                    }
+                }
+            }
+        });
+
+        // ── Table ──
+        const thead = document.getElementById('fc-commodity-thead');
+        const tbody = document.getElementById('fc-commodity-tbody');
+        if (thead && tbody) {
+            thead.innerHTML = '<tr><th>Scenario</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>FY Avg</th></tr>';
+
+            let rows = '';
+            scenarioOrder.forEach(sc => {
+                const scenData = scenarios[sc];
+                if (!scenData) return;
+                const color = scenarioColors[sc] || '#9ca3af';
+                rows += '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:6px;"></span>' + sc + '</td>';
+                quarters.forEach(q => {
+                    const v = scenData[q];
+                    rows += v != null ? '<td>' + v.toFixed(2) + '</td>' : '<td>\u2014</td>';
+                });
+                const fy = scenData['FY'];
+                rows += fy != null ? '<td>' + fy.toFixed(2) + '</td>' : '<td>\u2014</td>';
+                rows += '</tr>';
+            });
+            tbody.innerHTML = rows;
+        }
+
+        // ── Meta: Scenario narratives ──
+        const metaEl = document.getElementById('fc-commodity-meta');
+        if (metaEl) {
+            const weights = forecastData.scenario_weights || {};
+            const parts = [];
+            ['Base Case', 'Severe Case', 'Worst Case'].forEach(sc => {
+                const w = weights[sc] ? (weights[sc] * 100).toFixed(0) + '%' : '';
+                const label = scenarioLabels[sc] || '';
+                if (label) parts.push(sc + ' (' + w + '): ' + label);
+            });
+            metaEl.textContent = parts.join(' \u00b7 ');
+        }
     }
 
 })();

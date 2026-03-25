@@ -69,7 +69,53 @@
             <div class="data-sidebar-section">
                 <h3 class="sidebar-heading">Forecasts</h3>
                 <nav class="sidebar-nav">
-                    <div class="sidebar-placeholder">Coming soon</div>
+                    <!-- Oil & Gas with expandable sub-menu -->
+                    <button class="sidebar-item sidebar-item-parent" data-dataset="forecast_oil">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L6 7v6a6 6 0 0012 0V7z"/>
+                        </svg>
+                        Oil &amp; Gas
+                        <span class="sidebar-expand-icon">&#9656;</span>
+                    </button>
+                    <div class="sidebar-submenu" id="submenu-forecast_oil">
+                        <button class="sidebar-subitem active" data-dataset="forecast_oil" data-commodity="overview">Overview</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_oil" data-commodity="WTI Crude">WTI Crude</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_oil" data-commodity="Brent Crude">Brent Crude</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_oil" data-commodity="Natural Gas (HH)">Natural Gas (HH)</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_oil" data-commodity="TTF Gas">TTF Gas</button>
+                    </div>
+
+                    <!-- Agriculture with expandable sub-menu -->
+                    <button class="sidebar-item sidebar-item-parent" data-dataset="forecast_ag">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        Agriculture
+                        <span class="sidebar-expand-icon">&#9656;</span>
+                    </button>
+                    <div class="sidebar-submenu" id="submenu-forecast_ag">
+                        <button class="sidebar-subitem active" data-dataset="forecast_ag" data-commodity="overview">Overview</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_ag" data-commodity="Cocoa">Cocoa</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_ag" data-commodity="Wheat">Wheat</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_ag" data-commodity="Soybeans">Soybeans</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_ag" data-commodity="Coffee">Coffee</button>
+                    </div>
+
+                    <!-- Metals with expandable sub-menu -->
+                    <button class="sidebar-item sidebar-item-parent" data-dataset="forecast_metals">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                            <polyline points="2 17 12 22 22 17"/>
+                            <polyline points="2 12 12 17 22 12"/>
+                        </svg>
+                        Metals
+                        <span class="sidebar-expand-icon">&#9656;</span>
+                    </button>
+                    <div class="sidebar-submenu" id="submenu-forecast_metals">
+                        <button class="sidebar-subitem active" data-dataset="forecast_metals" data-commodity="overview">Overview</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_metals" data-commodity="Copper">Copper</button>
+                        <button class="sidebar-subitem" data-dataset="forecast_metals" data-commodity="Gold">Gold</button>
+                    </div>
                 </nav>
             </div>
         </aside>
@@ -295,6 +341,126 @@
                 </div>
 
                 <div class="data-meta" id="uk-comp-meta"></div>
+            </section>
+
+            <!-- Forecast Group: Oil & Gas (hidden initially) -->
+            <section class="dataset-panel" id="panel-forecast_oil" style="display:none;">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title">Oil &amp; Gas Forecast</h1>
+                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts (2026)</p>
+                    </div>
+                    <div class="data-controls">
+                        <select id="fc-oil-scenario" class="data-select">
+                            <option value="Weighted Avg" selected>Weighted Avg</option>
+                            <option value="Base Case">Base Case</option>
+                            <option value="Severe Case">Severe Case</option>
+                            <option value="Worst Case">Worst Case</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="chart-container" id="fc-oil-chart-container">
+                    <canvas id="fc-oil-chart"></canvas>
+                    <div class="chart-loading" id="fc-oil-loading">
+                        <div class="spinner"></div>
+                        <p>Loading forecast data...</p>
+                    </div>
+                </div>
+                <div class="data-table-container" id="fc-oil-table-container">
+                    <table class="data-table" id="fc-oil-table">
+                        <thead id="fc-oil-thead"></thead>
+                        <tbody id="fc-oil-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="data-meta" id="fc-oil-meta"></div>
+            </section>
+
+            <!-- Forecast Group: Agriculture (hidden initially) -->
+            <section class="dataset-panel" id="panel-forecast_ag" style="display:none;">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title">Agriculture Forecast</h1>
+                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts (2026)</p>
+                    </div>
+                    <div class="data-controls">
+                        <select id="fc-ag-scenario" class="data-select">
+                            <option value="Weighted Avg" selected>Weighted Avg</option>
+                            <option value="Base Case">Base Case</option>
+                            <option value="Severe Case">Severe Case</option>
+                            <option value="Worst Case">Worst Case</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="chart-container" id="fc-ag-chart-container">
+                    <canvas id="fc-ag-chart"></canvas>
+                    <div class="chart-loading" id="fc-ag-loading">
+                        <div class="spinner"></div>
+                        <p>Loading forecast data...</p>
+                    </div>
+                </div>
+                <div class="data-table-container" id="fc-ag-table-container">
+                    <table class="data-table" id="fc-ag-table">
+                        <thead id="fc-ag-thead"></thead>
+                        <tbody id="fc-ag-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="data-meta" id="fc-ag-meta"></div>
+            </section>
+
+            <!-- Forecast Group: Metals (hidden initially) -->
+            <section class="dataset-panel" id="panel-forecast_metals" style="display:none;">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title">Metals Forecast</h1>
+                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts (2026)</p>
+                    </div>
+                    <div class="data-controls">
+                        <select id="fc-metals-scenario" class="data-select">
+                            <option value="Weighted Avg" selected>Weighted Avg</option>
+                            <option value="Base Case">Base Case</option>
+                            <option value="Severe Case">Severe Case</option>
+                            <option value="Worst Case">Worst Case</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="chart-container" id="fc-metals-chart-container">
+                    <canvas id="fc-metals-chart"></canvas>
+                    <div class="chart-loading" id="fc-metals-loading">
+                        <div class="spinner"></div>
+                        <p>Loading forecast data...</p>
+                    </div>
+                </div>
+                <div class="data-table-container" id="fc-metals-table-container">
+                    <table class="data-table" id="fc-metals-table">
+                        <thead id="fc-metals-thead"></thead>
+                        <tbody id="fc-metals-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="data-meta" id="fc-metals-meta"></div>
+            </section>
+
+            <!-- Forecast Individual Commodity (hidden initially) -->
+            <section class="dataset-panel" id="panel-forecast_commodity" style="display:none;">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title" id="fc-commodity-title">Commodity Forecast</h1>
+                        <p class="data-source" id="fc-commodity-source">ParraMacro &mdash; Scenario-Based Forecast (2026)</p>
+                    </div>
+                </div>
+                <div class="chart-container" id="fc-commodity-chart-container">
+                    <canvas id="fc-commodity-chart"></canvas>
+                    <div class="chart-loading" id="fc-commodity-loading">
+                        <div class="spinner"></div>
+                        <p>Loading forecast data...</p>
+                    </div>
+                </div>
+                <div class="data-table-container" id="fc-commodity-table-container">
+                    <table class="data-table" id="fc-commodity-table">
+                        <thead id="fc-commodity-thead"></thead>
+                        <tbody id="fc-commodity-tbody"></tbody>
+                    </table>
+                </div>
+                <div class="data-meta" id="fc-commodity-meta"></div>
             </section>
         </div>
     </div>
