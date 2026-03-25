@@ -1,7 +1,7 @@
 """
 GeoRisk v2 scoring engine — two-tier architecture with EMA accumulation.
 
-Composite = Base Score (40%) + News Score (60%)
+Composite = Base Score (30%) + News Score (70%)
 
 Tier 1 — Base Score (low-frequency):
   World Bank WGI governance indicators + macro fundamentals.
@@ -158,7 +158,7 @@ def score_single_country(country_alpha2, use_news=False):
     2. Compute fresh news indicators from GDELT + news APIs
     3. EMA blend fresh indicators with previous indicators
     4. Compute news_score as weighted average of blended indicators
-    5. Composite = base_score * 0.4 + news_score * 0.6
+    5. Composite = base_score * 0.3 + news_score * 0.7
     """
     country_name = country_codes.iso_alpha2_to_name(country_alpha2)
 

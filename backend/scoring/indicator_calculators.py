@@ -37,28 +37,28 @@ FACTOR_WEIGHTS = {
 
 # ─── BASELINE VOLUMES PER INDICATOR ─────────────────────────────────
 # These are "normal" keyword-matched article counts per indicator
-# from 100 GDELT articles. Used for spike detection.
+# from 75 GDELT articles. Lowered for earlier spike detection.
 
 BASELINE_VOLUMES = {
-    'political_stability': 8,
-    'military_conflict': 5,
-    'economic_sanctions': 2,
-    'protests_civil_unrest': 4,
-    'terrorism': 2,
-    'diplomatic_tensions': 4
+    'political_stability': 5,
+    'military_conflict': 3,
+    'economic_sanctions': 1,
+    'protests_civil_unrest': 2,
+    'terrorism': 1,
+    'diplomatic_tensions': 2
 }
 
 # ─── ABSOLUTE SCALING THRESHOLDS ────────────────────────────────────
-# Calibrated for keyword-matched article counts from 100 GDELT articles.
-# Even 5 keyword-matched articles is significant.
+# Calibrated for keyword-matched article counts from 75 GDELT articles.
+# Tuned for high sensitivity — even 2-3 keyword-matched articles is significant.
 
 VOLUME_THRESHOLDS = {
-    'political_stability':   {'low': 2, 'moderate': 6,  'high': 15,  'critical': 35},
-    'military_conflict':     {'low': 1, 'moderate': 4,  'high': 12,  'critical': 30},
-    'economic_sanctions':    {'low': 1, 'moderate': 3,  'high': 8,   'critical': 20},
-    'protests_civil_unrest': {'low': 1, 'moderate': 4,  'high': 12,  'critical': 28},
-    'terrorism':             {'low': 1, 'moderate': 3,  'high': 8,   'critical': 18},
-    'diplomatic_tensions':   {'low': 1, 'moderate': 4,  'high': 10,  'critical': 25}
+    'political_stability':   {'low': 1, 'moderate': 3,  'high': 8,   'critical': 20},
+    'military_conflict':     {'low': 1, 'moderate': 2,  'high': 7,   'critical': 18},
+    'economic_sanctions':    {'low': 1, 'moderate': 2,  'high': 5,   'critical': 12},
+    'protests_civil_unrest': {'low': 1, 'moderate': 2,  'high': 7,   'critical': 16},
+    'terrorism':             {'low': 1, 'moderate': 2,  'high': 5,   'critical': 10},
+    'diplomatic_tensions':   {'low': 1, 'moderate': 2,  'high': 6,   'critical': 15}
 }
 
 
@@ -134,20 +134,20 @@ def _spike_score(current_volume, baseline_volume):
 def _source_breadth_score(total_articles):
     """
     Score based on how many articles cover this indicator.
-    More coverage = more significant.
+    More coverage = more significant. Tuned for higher sensitivity.
     """
     if total_articles <= 0:
         return 0.0
-    elif total_articles <= 2:
-        return total_articles * 12.0
-    elif total_articles <= 6:
-        return 24.0 + (total_articles - 2) / 4.0 * 21.0
-    elif total_articles <= 15:
-        return 45.0 + (total_articles - 6) / 9.0 * 25.0
-    elif total_articles <= 30:
-        return 70.0 + (total_articles - 15) / 15.0 * 20.0
+    elif total_articles <= 1:
+        return 18.0
+    elif total_articles <= 3:
+        return 18.0 + (total_articles - 1) / 2.0 * 22.0
+    elif total_articles <= 8:
+        return 40.0 + (total_articles - 3) / 5.0 * 30.0
+    elif total_articles <= 18:
+        return 70.0 + (total_articles - 8) / 10.0 * 20.0
     else:
-        return min(100.0, 90.0 + math.log2(total_articles / 30.0) * 5.0)
+        return min(100.0, 90.0 + math.log2(total_articles / 18.0) * 5.0)
 
 
 def calculate_indicator_score(indicator_name, keyword_theme_volume, gdelt_baseline,

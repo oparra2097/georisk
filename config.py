@@ -20,9 +20,9 @@ class Config:
     GDELT_TIMESPAN = '72h'         # 3-day rolling window
 
     # --- Two-tier scoring ---
-    BASE_SCORE_WEIGHT = 0.40       # World Bank WGI + macro fundamentals
-    NEWS_SCORE_WEIGHT = 0.60       # High-frequency news signal
-    EMA_ALPHA = 0.3                # Blending: 30% new data, 70% existing
+    BASE_SCORE_WEIGHT = 0.30       # World Bank WGI + macro fundamentals
+    NEWS_SCORE_WEIGHT = 0.70       # High-frequency news signal
+    EMA_ALPHA = 0.5                # Blending: 50% new data, 50% existing
     WGI_CACHE_DAYS = 30            # Refresh base data monthly
 
     # Persistent storage — JSON files survive process restarts on Render

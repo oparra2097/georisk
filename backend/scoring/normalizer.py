@@ -1,7 +1,7 @@
 """
 Two-tier composite scoring.
 
-Composite = Base Score (40%) + News Score (60%)
+Composite = Base Score (30%) + News Score (70%)
 
 Base Score: World Bank WGI governance + macro fundamentals (0-100)
 News Score: Weighted average of 6 EMA-blended indicator scores (0-100)
@@ -48,7 +48,7 @@ def calculate_news_score(indicators: IndicatorScore) -> float:
 
 def calculate_composite(base_score: float, news_score: float) -> float:
     """
-    Two-tier composite: base_score * 0.4 + news_score * 0.6
+    Two-tier composite: base_score * 0.3 + news_score * 0.7
 
     Base score provides a structural floor (governance + macro fundamentals).
     News score provides high-frequency adjustment (GDELT + news APIs).
