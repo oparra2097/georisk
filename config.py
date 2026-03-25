@@ -9,6 +9,7 @@ class Config:
     NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY', '')
     NEWSDATA_KEY = os.environ.get('NEWSDATA_KEY', '')
     GNEWS_KEY = os.environ.get('GNEWS_KEY', '')
+    BLS_API_KEY = os.environ.get('BLS_API_KEY', '')
 
     GDELT_BASE_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
     NEWSAPI_BASE_URL = 'https://newsapi.org/v2'

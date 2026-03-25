@@ -1,12 +1,35 @@
 /**
- * Home page - Market data fetching, ticker rendering, sparklines
+ * Home page - Market data fetching, ticker rendering, sparklines, expandable charts
  */
+
+let marketChart = null;
+let activeSymbol = null;
+let activePeriod = '1mo';
+let marketsCache = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     fetchMarkets();
     fetchLatestPost();
     // Auto-refresh every 5 minutes
     setInterval(fetchMarkets, 5 * 60 * 1000);
+
+    // Close button
+    const closeBtn = document.getElementById('chart-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', closeChartPanel);
+
+    // Timeframe buttons
+    const tfContainer = document.getElementById('chart-timeframes');
+    if (tfContainer) {
+        tfContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.tf-btn');
+            if (!btn || !activeSymbol) return;
+
+            activePeriod = btn.dataset.period;
+            document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            fetchAndRenderHistory(activeSymbol, activePeriod);
+        });
+    }
 });
 
 
@@ -16,6 +39,7 @@ async function fetchMarkets() {
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
         if (data.markets) {
+            marketsCache = data.markets;
             renderTicker(data.markets);
             renderMarketGrid(data.markets);
         }
@@ -65,7 +89,10 @@ function renderMarketGrid(markets) {
     markets.forEach(m => {
         const card = document.createElement('div');
         card.className = 'market-card';
+        card.dataset.symbol = m.symbol;
         card.innerHTML = marketCardHTML(m);
+        card.addEventListener('click', () => onMarketCardClick(m));
+        card.style.cursor = 'pointer';
         grid.appendChild(card);
     });
 }
@@ -129,6 +156,163 @@ function buildSparklineSVG(data, dir) {
 }
 
 
+// ===== Expandable Chart =====
+
+function onMarketCardClick(market) {
+    const panel = document.getElementById('market-chart-panel');
+    if (!panel) return;
+
+    // Toggle off if same card clicked
+    if (activeSymbol === market.symbol) {
+        closeChartPanel();
+        return;
+    }
+
+    activeSymbol = market.symbol;
+    activePeriod = '1mo';
+
+    // Highlight active card
+    document.querySelectorAll('.market-card').forEach(c => {
+        c.classList.toggle('market-card-active', c.dataset.symbol === market.symbol);
+    });
+
+    // Update header info
+    document.getElementById('chart-symbol-name').textContent = market.name;
+    updateChartPrice(market);
+
+    // Reset timeframe buttons
+    document.querySelectorAll('.tf-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.period === activePeriod);
+    });
+
+    // Show panel and fetch data
+    panel.style.display = '';
+    fetchAndRenderHistory(market.symbol, activePeriod);
+}
+
+
+function updateChartPrice(market) {
+    const priceEl = document.getElementById('chart-price');
+    const changeEl = document.getElementById('chart-change');
+    if (priceEl) priceEl.textContent = market.price !== null ? formatPrice(market.price, market.type) : '--';
+    if (changeEl) {
+        const dir = (market.change_pct || 0) >= 0 ? 'up' : 'down';
+        const sign = dir === 'up' ? '+' : '';
+        const pct = market.change_pct !== null ? `${sign}${market.change_pct.toFixed(2)}%` : '';
+        changeEl.textContent = pct;
+        changeEl.className = 'market-chart-change ' + dir;
+    }
+}
+
+
+function closeChartPanel() {
+    const panel = document.getElementById('market-chart-panel');
+    if (panel) panel.style.display = 'none';
+    activeSymbol = null;
+    document.querySelectorAll('.market-card').forEach(c => c.classList.remove('market-card-active'));
+    if (marketChart) {
+        marketChart.destroy();
+        marketChart = null;
+    }
+}
+
+
+async function fetchAndRenderHistory(symbol, period) {
+    const loading = document.getElementById('market-chart-loading');
+    const canvas = document.getElementById('market-history-chart');
+    if (loading) loading.style.display = '';
+
+    try {
+        const resp = await fetch(`/api/markets/history?symbol=${encodeURIComponent(symbol)}&period=${period}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        if (loading) loading.style.display = 'none';
+        renderHistoryChart(data);
+    } catch (err) {
+        console.error('Failed to fetch market history:', err);
+        if (loading) loading.style.display = 'none';
+    }
+}
+
+
+function renderHistoryChart(data) {
+    const ctx = document.getElementById('market-history-chart');
+    if (!ctx) return;
+
+    if (marketChart) marketChart.destroy();
+
+    const closes = data.closes || [];
+    const dates = data.dates || [];
+
+    // Determine color based on first vs last value
+    const first = closes.find(v => v !== null);
+    const last = [...closes].reverse().find(v => v !== null);
+    const isUp = last >= first;
+    const lineColor = isUp ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
+    const fillColor = isUp ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+
+    marketChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                data: closes,
+                borderColor: lineColor,
+                backgroundColor: fillColor,
+                borderWidth: 2,
+                fill: true,
+                pointRadius: 0,
+                pointHitRadius: 8,
+                tension: 0.2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(0,0,0,0.9)',
+                    titleColor: '#fff',
+                    bodyColor: '#d1d5db',
+                    callbacks: {
+                        label: (ctx) => {
+                            const val = ctx.parsed.y;
+                            if (val == null) return 'N/A';
+                            if (data.type === 'bond' || data.type === 'spread') return val.toFixed(3) + '%';
+                            if (data.type === 'fx') return val.toFixed(4);
+                            if (data.type === 'commodity') return '$' + val.toFixed(2);
+                            return val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        color: '#6b7280',
+                        font: { size: 10 },
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 10,
+                    },
+                    grid: { color: 'rgba(55,65,81,0.3)' }
+                },
+                y: {
+                    ticks: {
+                        color: '#6b7280',
+                        font: { size: 10 },
+                    },
+                    grid: { color: 'rgba(55,65,81,0.3)' }
+                }
+            }
+        }
+    });
+}
+
+
 // ===== Latest Substack Post =====
 
 async function fetchLatestPost() {
@@ -176,6 +360,8 @@ function formatPrice(price, type) {
         case 'commodity':
             return '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         case 'bond':
+            return price.toFixed(3) + '%';
+        case 'spread':
             return price.toFixed(3) + '%';
         case 'fx':
             return price.toFixed(4);

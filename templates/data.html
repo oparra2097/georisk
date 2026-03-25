@@ -7,49 +7,157 @@
 
 {% block content %}
 <div class="data-page">
-    <section class="data-section">
-        <div class="data-section-header">
-            <div>
-                <h1 class="data-title">Central Bank Reserves</h1>
-                <p class="data-source">World Bank &mdash; International Financial Statistics</p>
+    <div class="data-layout">
+        <!-- Left Sidebar Navigation -->
+        <aside class="data-sidebar">
+            <div class="data-sidebar-section">
+                <h3 class="sidebar-heading">Historical Data</h3>
+                <nav class="sidebar-nav">
+                    <button class="sidebar-item active" data-dataset="cofer">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                            <path d="M16 7V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v3"/>
+                        </svg>
+                        COFER Reserves
+                    </button>
+                    <button class="sidebar-item" data-dataset="us_cpi">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                        US CPI (BLS)
+                    </button>
+                    <button class="sidebar-item" data-dataset="uk_cpi">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                        UK CPI (ONS)
+                    </button>
+                </nav>
             </div>
-            <div class="data-controls">
-                <select id="region-filter" class="data-select">
-                    <option value="World">Top 20</option>
-                </select>
-                <select id="reserve-type" class="data-select">
-                    <option value="total">Total Reserves</option>
-                    <option value="fx">FX Reserves</option>
-                    <option value="gold">Gold Reserves</option>
-                </select>
-                <a href="/api/cofer/export" class="export-btn-data" title="Download Excel">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Excel
-                </a>
+            <div class="data-sidebar-section">
+                <h3 class="sidebar-heading">Forecasts</h3>
+                <nav class="sidebar-nav">
+                    <div class="sidebar-placeholder">Coming soon</div>
+                </nav>
             </div>
-        </div>
+        </aside>
 
-        <div class="chart-container" id="reserves-chart-container">
-            <canvas id="reserves-chart"></canvas>
-            <div class="chart-loading" id="reserves-loading">
-                <div class="spinner"></div>
-                <p>Loading reserves data...</p>
-            </div>
-        </div>
+        <!-- Main Content Area -->
+        <div class="data-content">
+            <!-- COFER Dataset (default visible) -->
+            <section class="dataset-panel" id="panel-cofer">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title">Central Bank Reserves</h1>
+                        <p class="data-source">World Bank &mdash; International Financial Statistics</p>
+                    </div>
+                    <div class="data-controls">
+                        <select id="region-filter" class="data-select">
+                            <option value="World">Top 20</option>
+                        </select>
+                        <select id="reserve-type" class="data-select">
+                            <option value="total">Total Reserves</option>
+                            <option value="fx">FX Reserves</option>
+                            <option value="gold">Gold Reserves</option>
+                        </select>
+                        <a href="/api/cofer/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
+                    </div>
+                </div>
 
-        <div class="data-table-container" id="reserves-table-container">
-            <table class="data-table" id="reserves-table">
-                <thead id="reserves-thead"></thead>
-                <tbody id="reserves-tbody"></tbody>
-            </table>
-        </div>
+                <div class="chart-container" id="reserves-chart-container">
+                    <canvas id="reserves-chart"></canvas>
+                    <div class="chart-loading" id="reserves-loading">
+                        <div class="spinner"></div>
+                        <p>Loading reserves data...</p>
+                    </div>
+                </div>
 
-        <div class="data-meta" id="reserves-meta"></div>
-    </section>
+                <div class="data-table-container" id="reserves-table-container">
+                    <table class="data-table" id="reserves-table">
+                        <thead id="reserves-thead"></thead>
+                        <tbody id="reserves-tbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="data-meta" id="reserves-meta"></div>
+            </section>
+
+            <!-- US CPI Dataset (hidden initially) -->
+            <section class="dataset-panel" id="panel-us_cpi" style="display:none;">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title">US Consumer Price Index</h1>
+                        <p class="data-source">Bureau of Labor Statistics &mdash; CPI-U, Seasonally Adjusted</p>
+                    </div>
+                    <div class="data-controls">
+                        <select id="us-cpi-range" class="data-select">
+                            <option value="5">Last 5 Years</option>
+                            <option value="10" selected>Last 10 Years</option>
+                            <option value="all">All Available</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="us-cpi-chart-container">
+                    <canvas id="us-cpi-chart"></canvas>
+                    <div class="chart-loading" id="us-cpi-loading">
+                        <div class="spinner"></div>
+                        <p>Loading US CPI data...</p>
+                    </div>
+                </div>
+
+                <div class="data-table-container" id="us-cpi-table-container">
+                    <table class="data-table" id="us-cpi-table">
+                        <thead id="us-cpi-thead"></thead>
+                        <tbody id="us-cpi-tbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="data-meta" id="us-cpi-meta"></div>
+            </section>
+
+            <!-- UK CPI Dataset (hidden initially) -->
+            <section class="dataset-panel" id="panel-uk_cpi" style="display:none;">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title">UK Consumer Price Index</h1>
+                        <p class="data-source">Office for National Statistics &mdash; MM23</p>
+                    </div>
+                    <div class="data-controls">
+                        <select id="uk-cpi-range" class="data-select">
+                            <option value="5">Last 5 Years</option>
+                            <option value="10" selected>Last 10 Years</option>
+                            <option value="all">All Available</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="uk-cpi-chart-container">
+                    <canvas id="uk-cpi-chart"></canvas>
+                    <div class="chart-loading" id="uk-cpi-loading">
+                        <div class="spinner"></div>
+                        <p>Loading UK CPI data...</p>
+                    </div>
+                </div>
+
+                <div class="data-table-container" id="uk-cpi-table-container">
+                    <table class="data-table" id="uk-cpi-table">
+                        <thead id="uk-cpi-thead"></thead>
+                        <tbody id="uk-cpi-tbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="data-meta" id="uk-cpi-meta"></div>
+            </section>
+        </div>
+    </div>
 </div>
 {% endblock %}
 

@@ -2,8 +2,10 @@ from io import BytesIO
 from datetime import datetime
 from flask import Blueprint, jsonify, send_file, request
 from backend.cache.store import store
-from backend.data_sources.market_data import get_market_data
+from backend.data_sources.market_data import get_market_data, get_market_history
 from backend.data_sources.imf_cofer import get_cofer_data
+from backend.data_sources.bls_cpi import get_bls_cpi_data
+from backend.data_sources.ons_cpi import get_ons_cpi_data
 from backend.data_sources.substack_feed import get_substack_posts
 from backend.cache.persistence import load_history
 from config import Config
@@ -152,10 +154,44 @@ def get_markets():
     return jsonify(data)
 
 
+@api_bp.route('/markets/history')
+def get_markets_history():
+    """Return historical price data for a symbol and time period."""
+    symbol = request.args.get('symbol', '')
+    period = request.args.get('period', '1mo')
+
+    if not symbol:
+        return jsonify({'error': 'symbol parameter required'}), 400
+
+    valid_periods = ['1d', '5d', '1mo', '1y', '5y', '10y']
+    if period not in valid_periods:
+        return jsonify({'error': f'Invalid period. Use: {", ".join(valid_periods)}'}), 400
+
+    data = get_market_history(symbol, period)
+    if data is None:
+        return jsonify({'error': 'No data available'}), 404
+
+    return jsonify(data)
+
+
 @api_bp.route('/cofer')
 def get_cofer():
     """Return central bank reserves data (cached 24 hours)."""
     data = get_cofer_data()
+    return jsonify(data)
+
+
+@api_bp.route('/cpi/us')
+def get_us_cpi():
+    """Return US CPI data from BLS (cached 24 hours)."""
+    data = get_bls_cpi_data()
+    return jsonify(data)
+
+
+@api_bp.route('/cpi/uk')
+def get_uk_cpi():
+    """Return UK CPI data from ONS (cached 24 hours)."""
+    data = get_ons_cpi_data()
     return jsonify(data)
 
 

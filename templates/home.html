@@ -22,6 +22,32 @@
     <div class="market-grid" id="market-grid">
         <div class="market-loading"><div class="spinner"></div></div>
     </div>
+
+    <!-- Expandable Market Chart -->
+    <div class="market-chart-panel" id="market-chart-panel" style="display:none;">
+        <div class="market-chart-header">
+            <div class="market-chart-title">
+                <span id="chart-symbol-name"></span>
+                <span class="market-chart-price" id="chart-price"></span>
+                <span class="market-chart-change" id="chart-change"></span>
+            </div>
+            <div class="market-chart-timeframes" id="chart-timeframes">
+                <button class="tf-btn" data-period="1d">1D</button>
+                <button class="tf-btn" data-period="5d">1W</button>
+                <button class="tf-btn active" data-period="1mo">1M</button>
+                <button class="tf-btn" data-period="1y">1Y</button>
+                <button class="tf-btn" data-period="5y">5Y</button>
+                <button class="tf-btn" data-period="10y">10Y</button>
+            </div>
+            <button class="market-chart-close" id="chart-close-btn">&times;</button>
+        </div>
+        <div class="market-chart-container">
+            <canvas id="market-history-chart"></canvas>
+            <div class="chart-loading" id="market-chart-loading" style="display:none;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
 </section>
 
 <!-- Latest Research -->
@@ -67,5 +93,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="/static/js/home.js"></script>
 {% endblock %}

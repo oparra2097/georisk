@@ -1,4 +1,4 @@
-/* ===== Data Page: Central Bank Reserves ===== */
+/* ===== Data Page: Multi-Dataset Handler ===== */
 
 (function () {
     'use strict';
@@ -10,80 +10,159 @@
         '#eab308', '#0ea5e9', '#d946ef', '#64748b', '#fb923c',
     ];
 
-    let rawData = null;
-    let chart = null;
-    let currentRegion = 'World';
-    let currentType = 'total'; // 'total', 'fx', 'gold'
+    // ── State ────────────────────────────────────────────
+    let currentDataset = 'cofer';
 
-    // ── Bootstrap ──────────────────────────────────────────
+    // COFER state
+    let coferData = null;
+    let coferChart = null;
+    let coferRegion = 'World';
+    let coferType = 'total';
+
+    // US CPI state
+    let usCpiData = null;
+    let usCpiChart = null;
+    let usCpiRange = '10';
+
+    // UK CPI state
+    let ukCpiData = null;
+    let ukCpiChart = null;
+    let ukCpiRange = '10';
+
+    // Track which datasets have been fetched (lazy loading)
+    const fetched = { cofer: false, us_cpi: false, uk_cpi: false };
+
+    // ── Bootstrap ────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
-        fetchData();
-
-        document.getElementById('region-filter').addEventListener('change', (e) => {
-            currentRegion = e.target.value;
-            if (rawData) render();
+        // Sidebar navigation
+        document.querySelectorAll('.sidebar-item').forEach(btn => {
+            btn.addEventListener('click', () => switchDataset(btn.dataset.dataset));
         });
 
-        document.getElementById('reserve-type').addEventListener('change', (e) => {
-            currentType = e.target.value;
-            if (rawData) render();
-        });
+        // COFER controls
+        const regionFilter = document.getElementById('region-filter');
+        if (regionFilter) {
+            regionFilter.addEventListener('change', (e) => {
+                coferRegion = e.target.value;
+                if (coferData) renderCofer();
+            });
+        }
+
+        const reserveType = document.getElementById('reserve-type');
+        if (reserveType) {
+            reserveType.addEventListener('change', (e) => {
+                coferType = e.target.value;
+                if (coferData) renderCofer();
+            });
+        }
+
+        // US CPI controls
+        const usCpiRangeEl = document.getElementById('us-cpi-range');
+        if (usCpiRangeEl) {
+            usCpiRangeEl.addEventListener('change', (e) => {
+                usCpiRange = e.target.value;
+                if (usCpiData) renderUsCpi();
+            });
+        }
+
+        // UK CPI controls
+        const ukCpiRangeEl = document.getElementById('uk-cpi-range');
+        if (ukCpiRangeEl) {
+            ukCpiRangeEl.addEventListener('change', (e) => {
+                ukCpiRange = e.target.value;
+                if (ukCpiData) renderUkCpi();
+            });
+        }
+
+        // Load default dataset
+        loadDataset('cofer');
     });
 
-    // ── Fetch ──────────────────────────────────────────────
-    async function fetchData() {
+    // ── Dataset Switching ────────────────────────────────
+    function switchDataset(dataset) {
+        if (dataset === currentDataset) return;
+        currentDataset = dataset;
+
+        // Update sidebar active state
+        document.querySelectorAll('.sidebar-item').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.dataset === dataset);
+        });
+
+        // Show/hide panels
+        document.querySelectorAll('.dataset-panel').forEach(panel => {
+            panel.style.display = 'none';
+        });
+        const targetPanel = document.getElementById('panel-' + dataset);
+        if (targetPanel) targetPanel.style.display = '';
+
+        // Lazy-load data if not yet fetched
+        loadDataset(dataset);
+    }
+
+    function loadDataset(dataset) {
+        if (fetched[dataset]) return;
+        fetched[dataset] = true;
+
+        switch (dataset) {
+            case 'cofer':   fetchCofer(); break;
+            case 'us_cpi':  fetchUsCpi(); break;
+            case 'uk_cpi':  fetchUkCpi(); break;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // COFER RESERVES
+    // ══════════════════════════════════════════════════════
+
+    async function fetchCofer() {
         try {
             const resp = await fetch('/api/cofer');
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            rawData = await resp.json();
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            coferData = await resp.json();
             document.getElementById('reserves-loading').style.display = 'none';
 
-            // Populate region dropdown
             const regionSelect = document.getElementById('region-filter');
-            const regions = rawData.regions || [];
+            const regions = coferData.regions || [];
             regions.forEach(r => {
-                if (r === 'World') return; // already default option
+                if (r === 'World') return;
                 const opt = document.createElement('option');
                 opt.value = r;
                 opt.textContent = r;
                 regionSelect.appendChild(opt);
             });
 
-            render();
+            renderCofer();
         } catch (err) {
             console.error('Reserves fetch failed:', err);
             document.getElementById('reserves-loading').innerHTML =
-                '<p style="color:var(--text-muted)">Failed to load reserves data. Try refreshing.</p>';
+                '<p style="color:var(--text-muted)">Failed to load reserves data.</p>';
         }
     }
 
-    // ── Filter + Render ───────────────────────────────────
-    function render() {
-        const years = rawData.years || [];
-        let countries = rawData.countries || [];
-        const regionMembers = rawData.region_members || {};
+    function renderCofer() {
+        const years = coferData.years || [];
+        let countries = coferData.countries || [];
+        const regionMembers = coferData.region_members || {};
 
-        // Filter by region
-        if (currentRegion === 'World') {
-            countries = countries.slice(0, 20); // top 20 by reserves
+        if (coferRegion === 'World') {
+            countries = countries.slice(0, 20);
         } else {
-            const members = regionMembers[currentRegion] || [];
+            const members = regionMembers[coferRegion] || [];
             countries = countries.filter(c => members.includes(c.iso3));
         }
 
-        renderChart(years, countries);
-        renderTable(years, countries);
-        renderMeta(rawData.meta || {}, countries.length);
+        renderReservesChart(years, countries);
+        renderReservesTable(years, countries);
+        renderReservesMeta(coferData.meta || {}, countries.length);
     }
 
-    // ── Chart ─────────────────────────────────────────────
-    function renderChart(years, countries) {
+    function renderReservesChart(years, countries) {
         const ctx = document.getElementById('reserves-chart').getContext('2d');
 
         const datasets = countries.map((c, i) => {
             let values;
-            if (currentType === 'fx') values = c.fx_reserves;
-            else if (currentType === 'gold') values = c.gold_reserves;
+            if (coferType === 'fx') values = c.fx_reserves;
+            else if (coferType === 'gold') values = c.gold_reserves;
             else values = c.total_reserves;
 
             return {
@@ -99,9 +178,9 @@
             };
         });
 
-        if (chart) chart.destroy();
+        if (coferChart) coferChart.destroy();
 
-        chart = new Chart(ctx, {
+        coferChart = new Chart(ctx, {
             type: 'line',
             data: { labels: years, datasets },
             options: {
@@ -130,8 +209,8 @@
                         callbacks: {
                             label: (ctx) => {
                                 const val = ctx.parsed.y;
-                                if (val == null) return `${ctx.dataset.label}: N/A`;
-                                return `${ctx.dataset.label}: $${val.toFixed(1)}B`;
+                                if (val == null) return ctx.dataset.label + ': N/A';
+                                return ctx.dataset.label + ': $' + val.toFixed(1) + 'B';
                             }
                         }
                     }
@@ -161,34 +240,31 @@
         });
     }
 
-    // ── Table ─────────────────────────────────────────────
-    function renderTable(years, countries) {
+    function renderReservesTable(years, countries) {
         const thead = document.getElementById('reserves-thead');
         const tbody = document.getElementById('reserves-tbody');
 
-        // Header: Country + years (most recent first)
         let hdr = '<tr><th>Country</th>';
         for (let i = years.length - 1; i >= 0; i--) {
-            hdr += `<th>${years[i]}</th>`;
+            hdr += '<th>' + years[i] + '</th>';
         }
         hdr += '</tr>';
         thead.innerHTML = hdr;
 
-        // Rows
         let rows = '';
         for (const c of countries) {
             let values;
-            if (currentType === 'fx') values = c.fx_reserves;
-            else if (currentType === 'gold') values = c.gold_reserves;
+            if (coferType === 'fx') values = c.fx_reserves;
+            else if (coferType === 'gold') values = c.gold_reserves;
             else values = c.total_reserves;
 
-            rows += `<tr><td>${c.name}</td>`;
+            rows += '<tr><td>' + c.name + '</td>';
             for (let i = years.length - 1; i >= 0; i--) {
                 const v = values[i];
                 if (v == null) {
-                    rows += '<td>—</td>';
+                    rows += '<td>\u2014</td>';
                 } else {
-                    rows += `<td>$${v.toFixed(1)}B</td>`;
+                    rows += '<td>$' + v.toFixed(1) + 'B</td>';
                 }
             }
             rows += '</tr>';
@@ -196,16 +272,226 @@
         tbody.innerHTML = rows;
     }
 
-    // ── Meta ──────────────────────────────────────────────
-    function renderMeta(meta, shown) {
+    function renderReservesMeta(meta, shown) {
         const el = document.getElementById('reserves-meta');
         const parts = [];
         if (meta.source) parts.push(meta.source);
         if (meta.frequency) parts.push(meta.frequency);
         if (meta.year_range) parts.push(meta.year_range);
-        parts.push(`${shown} countries shown`);
-        if (meta.country_count) parts.push(`${meta.country_count} total`);
-        el.textContent = parts.join(' · ');
+        parts.push(shown + ' countries shown');
+        if (meta.country_count) parts.push(meta.country_count + ' total');
+        el.textContent = parts.join(' \u00b7 ');
+    }
+
+    // ══════════════════════════════════════════════════════
+    // US CPI (BLS)
+    // ══════════════════════════════════════════════════════
+
+    async function fetchUsCpi() {
+        try {
+            const resp = await fetch('/api/cpi/us');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            usCpiData = await resp.json();
+            document.getElementById('us-cpi-loading').style.display = 'none';
+            renderUsCpi();
+        } catch (err) {
+            console.error('US CPI fetch failed:', err);
+            document.getElementById('us-cpi-loading').innerHTML =
+                '<p style="color:var(--text-muted)">Failed to load US CPI data.</p>';
+        }
+    }
+
+    function renderUsCpi() {
+        renderCpiChart('us', usCpiData, usCpiRange, usCpiChart, (c) => { usCpiChart = c; });
+        renderCpiTable('us', usCpiData, usCpiRange);
+        renderCpiMeta('us', usCpiData);
+    }
+
+    // ══════════════════════════════════════════════════════
+    // UK CPI (ONS)
+    // ══════════════════════════════════════════════════════
+
+    async function fetchUkCpi() {
+        try {
+            const resp = await fetch('/api/cpi/uk');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            ukCpiData = await resp.json();
+            document.getElementById('uk-cpi-loading').style.display = 'none';
+            renderUkCpi();
+        } catch (err) {
+            console.error('UK CPI fetch failed:', err);
+            document.getElementById('uk-cpi-loading').innerHTML =
+                '<p style="color:var(--text-muted)">Failed to load UK CPI data.</p>';
+        }
+    }
+
+    function renderUkCpi() {
+        renderCpiChart('uk', ukCpiData, ukCpiRange, ukCpiChart, (c) => { ukCpiChart = c; });
+        renderCpiTable('uk', ukCpiData, ukCpiRange);
+        renderCpiMeta('uk', ukCpiData);
+    }
+
+    // ══════════════════════════════════════════════════════
+    // SHARED CPI RENDERING
+    // ══════════════════════════════════════════════════════
+
+    function renderCpiChart(prefix, data, rangeVal, existingChart, setChart) {
+        const canvasEl = document.getElementById(prefix + '-cpi-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        const series = data.series || {};
+        const categories = data.categories || {};
+        const colors = data.colors || {};
+        const currentYear = new Date().getFullYear();
+        const isUs = prefix === 'us';
+
+        const datasets = Object.entries(categories).map(([key, label]) => {
+            const points = series[key] || [];
+
+            let filtered = points;
+            if (rangeVal !== 'all') {
+                const minYear = currentYear - parseInt(rangeVal);
+                filtered = points.filter(p => p.year >= minYear);
+            }
+
+            return {
+                label: label,
+                data: filtered.map(p => ({
+                    x: p.date,
+                    y: isUs ? p.yoy_change : p.value,
+                })).filter(d => d.y !== null && d.y !== undefined),
+                borderColor: colors[key] || COLORS[0],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 0,
+                pointHitRadius: 8,
+                tension: 0.3,
+            };
+        });
+
+        if (existingChart) existingChart.destroy();
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#9ca3af',
+                            font: { size: 11 },
+                            boxWidth: 12,
+                            padding: 10,
+                            usePointStyle: true,
+                            pointStyle: 'line',
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        callbacks: {
+                            label: (ctx) => {
+                                const val = ctx.parsed.y;
+                                if (val == null) return ctx.dataset.label + ': N/A';
+                                return ctx.dataset.label + ': ' + val.toFixed(1) + '%';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 12,
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            callback: (val) => val.toFixed(1) + '%',
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
+                    }
+                }
+            }
+        });
+
+        setChart(chart);
+    }
+
+    function renderCpiTable(prefix, data, rangeVal) {
+        const thead = document.getElementById(prefix + '-cpi-thead');
+        const tbody = document.getElementById(prefix + '-cpi-tbody');
+        if (!thead || !tbody) return;
+
+        const series = data.series || {};
+        const categories = data.categories || {};
+        const isUs = prefix === 'us';
+        const currentYear = new Date().getFullYear();
+
+        const refPoints = series['all_items'] || [];
+        let dates = refPoints.map(p => p.date);
+
+        if (rangeVal !== 'all') {
+            const minYear = currentYear - parseInt(rangeVal);
+            dates = dates.filter(d => parseInt(d.split('-')[0]) >= minYear);
+        }
+
+        const reversedDates = dates.slice().reverse();
+
+        let hdr = '<tr><th>Date</th>';
+        Object.values(categories).forEach(label => {
+            hdr += '<th>' + label + '</th>';
+        });
+        hdr += '</tr>';
+        thead.innerHTML = hdr;
+
+        const lookups = {};
+        Object.keys(categories).forEach(key => {
+            lookups[key] = {};
+            (series[key] || []).forEach(p => {
+                lookups[key][p.date] = isUs ? p.yoy_change : p.value;
+            });
+        });
+
+        let rows = '';
+        for (const date of reversedDates) {
+            rows += '<tr><td>' + date + '</td>';
+            Object.keys(categories).forEach(key => {
+                const val = lookups[key][date];
+                if (val == null) {
+                    rows += '<td>--</td>';
+                } else {
+                    rows += '<td>' + val.toFixed(1) + '%</td>';
+                }
+            });
+            rows += '</tr>';
+        }
+        tbody.innerHTML = rows;
+    }
+
+    function renderCpiMeta(prefix, data) {
+        const el = document.getElementById(prefix + '-cpi-meta');
+        if (!el) return;
+        const meta = data.meta || {};
+        const parts = [];
+        if (meta.source) parts.push(meta.source);
+        if (meta.frequency) parts.push(meta.frequency);
+        if (meta.year_range) parts.push(meta.year_range);
+        el.textContent = parts.join(' \u00b7 ');
     }
 
 })();
