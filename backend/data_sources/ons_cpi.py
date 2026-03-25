@@ -174,3 +174,124 @@ def _fetch_ons_cpi():
 def get_ons_cpi_data():
     """Public API: returns cached ONS CPI data."""
     return _cache.get()
+
+
+# ══════════════════════════════════════════════════════════
+# CPI COMPONENT BREAKDOWN (12 COICOP divisions)
+# ══════════════════════════════════════════════════════════
+
+ONS_COMPONENTS = {
+    'food':          {'id': 'd7g8', 'label': 'Food & Non-Alcoholic Beverages', 'color': '#f59e0b'},
+    'alcohol':       {'id': 'd7g9', 'label': 'Alcoholic Beverages & Tobacco',  'color': '#a855f7'},
+    'clothing':      {'id': 'd7ga', 'label': 'Clothing & Footwear',            'color': '#ec4899'},
+    'housing':       {'id': 'd7gb', 'label': 'Housing, Water & Fuels',         'color': '#8b5cf6'},
+    'furniture':     {'id': 'd7gc', 'label': 'Furniture & Household',           'color': '#f97316'},
+    'health':        {'id': 'd7gd', 'label': 'Health',                          'color': '#ef4444'},
+    'transport':     {'id': 'd7ge', 'label': 'Transport',                       'color': '#06b6d4'},
+    'communication': {'id': 'd7gf', 'label': 'Communication',                   'color': '#64748b'},
+    'recreation':    {'id': 'd7gg', 'label': 'Recreation & Culture',            'color': '#10b981'},
+    'education':     {'id': 'd7gh', 'label': 'Education',                       'color': '#6366f1'},
+    'restaurants':   {'id': 'd7gi', 'label': 'Restaurants & Hotels',            'color': '#e11d48'},
+    'misc':          {'id': 'd7gj', 'label': 'Miscellaneous Goods & Services',  'color': '#84cc16'},
+}
+
+
+class OnsComponentCache:
+    """Thread-safe cache for ONS CPI component data."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._data = None
+        self._last_fetch = 0
+        self._last_fail = 0
+
+    def get(self):
+        with self._lock:
+            if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
+                return self._data
+            if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
+                return self._data or _empty_components_result()
+        data = _fetch_ons_components()
+        if data:
+            with self._lock:
+                self._data = data
+                self._last_fetch = time.time()
+                self._last_fail = 0
+            return data
+        with self._lock:
+            self._last_fail = time.time()
+            return self._data or _empty_components_result()
+
+    def clear(self):
+        with self._lock:
+            self._data = None
+            self._last_fetch = 0
+            self._last_fail = 0
+
+
+_component_cache = OnsComponentCache()
+
+
+def _empty_components_result():
+    return {
+        'series': {},
+        'categories': {k: v['label'] for k, v in ONS_COMPONENTS.items()},
+        'colors': {k: v['color'] for k, v in ONS_COMPONENTS.items()},
+        'meta': {'source': 'Office for National Statistics', 'error': 'No data available'}
+    }
+
+
+def _fetch_ons_components():
+    """Fetch CPI component data from ONS JSON data endpoint."""
+    try:
+        series_data = {}
+
+        for key, series_info in ONS_COMPONENTS.items():
+            url = ONS_DATA_BASE.format(series_id=series_info['id'])
+
+            resp = requests.get(url, timeout=30, headers={
+                'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'
+            })
+
+            if resp.status_code != 200:
+                logger.warning(f"ONS component {resp.status_code} for {key} ({series_info['id']})")
+                continue
+
+            points = _parse_ons_json(resp.json())
+            if points:
+                series_data[key] = points
+                logger.info(f"ONS component {key}: {len(points)} monthly data points")
+
+        if not series_data:
+            return None
+
+        all_years = set()
+        for points in series_data.values():
+            for pt in points:
+                all_years.add(pt['year'])
+
+        min_year = min(all_years) if all_years else datetime.utcnow().year - 10
+        max_year = max(all_years) if all_years else datetime.utcnow().year
+
+        return {
+            'series': series_data,
+            'categories': {k: v['label'] for k, v in ONS_COMPONENTS.items()},
+            'colors': {k: v['color'] for k, v in ONS_COMPONENTS.items()},
+            'meta': {
+                'source': 'Office for National Statistics (MM23)',
+                'frequency': 'Monthly',
+                'year_range': f'{min_year}-{max_year}',
+            }
+        }
+
+    except requests.exceptions.Timeout:
+        logger.error("ONS components API timeout")
+        return None
+    except Exception as e:
+        logger.error(f"ONS components fetch failed: {e}")
+        return None
+
+
+def get_ons_components():
+    """Public API: returns cached ONS CPI component data."""
+    return _component_cache.get()

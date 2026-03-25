@@ -192,3 +192,164 @@ def _fetch_bls_cpi():
 def get_bls_cpi_data():
     """Public API: returns cached BLS CPI data."""
     return _cache.get()
+
+
+# ══════════════════════════════════════════════════════════
+# CPI COMPONENT BREAKDOWN (8 major expenditure categories)
+# ══════════════════════════════════════════════════════════
+
+BLS_COMPONENTS = {
+    'food_bev':        {'id': 'CUSR0000SAF', 'label': 'Food & Beverages',          'color': '#f59e0b'},
+    'housing':         {'id': 'CUSR0000SAH', 'label': 'Housing',                   'color': '#8b5cf6'},
+    'apparel':         {'id': 'CUSR0000SAA', 'label': 'Apparel',                   'color': '#ec4899'},
+    'transportation':  {'id': 'CUSR0000SAT', 'label': 'Transportation',            'color': '#06b6d4'},
+    'medical':         {'id': 'CUSR0000SAM', 'label': 'Medical Care',              'color': '#ef4444'},
+    'recreation':      {'id': 'CUSR0000SAR', 'label': 'Recreation',                'color': '#10b981'},
+    'education':       {'id': 'CUSR0000SAE', 'label': 'Education & Communication', 'color': '#6366f1'},
+    'other':           {'id': 'CUSR0000SAG', 'label': 'Other Goods & Services',    'color': '#64748b'},
+}
+
+
+class BlsComponentCache:
+    """Thread-safe cache for BLS CPI component data."""
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._data = None
+        self._last_fetch = 0
+        self._last_fail = 0
+
+    def get(self):
+        with self._lock:
+            if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
+                return self._data
+            if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
+                return self._data or _empty_components_result()
+        data = _fetch_bls_components()
+        if data:
+            with self._lock:
+                self._data = data
+                self._last_fetch = time.time()
+                self._last_fail = 0
+            return data
+        with self._lock:
+            self._last_fail = time.time()
+            return self._data or _empty_components_result()
+
+    def clear(self):
+        with self._lock:
+            self._data = None
+            self._last_fetch = 0
+            self._last_fail = 0
+
+
+_component_cache = BlsComponentCache()
+
+
+def _empty_components_result():
+    return {
+        'series': {},
+        'categories': {k: v['label'] for k, v in BLS_COMPONENTS.items()},
+        'colors': {k: v['color'] for k, v in BLS_COMPONENTS.items()},
+        'meta': {'source': 'Bureau of Labor Statistics', 'error': 'No data available'}
+    }
+
+
+def _fetch_bls_components():
+    """Fetch CPI component data from BLS API v2."""
+    api_key = os.environ.get('BLS_API_KEY', '')
+    current_year = datetime.utcnow().year
+    start_year = current_year - (20 if api_key else 10)
+
+    series_ids = [s['id'] for s in BLS_COMPONENTS.values()]
+
+    payload = {
+        'seriesid': series_ids,
+        'startyear': str(start_year),
+        'endyear': str(current_year),
+    }
+    headers = {'Content-Type': 'application/json'}
+
+    if api_key:
+        payload['registrationkey'] = api_key
+
+    try:
+        resp = requests.post(BLS_API_URL, json=payload, headers=headers, timeout=30, verify=False)
+        resp.raise_for_status()
+        result = resp.json()
+
+        if result.get('status') != 'REQUEST_SUCCEEDED':
+            logger.error(f"BLS components API error: {result.get('message', 'Unknown')}")
+            return None
+
+        id_to_key = {v['id']: k for k, v in BLS_COMPONENTS.items()}
+
+        series_data = {}
+        for series in result.get('Results', {}).get('series', []):
+            series_id = series.get('seriesID', '')
+            category_key = id_to_key.get(series_id)
+            if not category_key:
+                continue
+
+            points = []
+            for item in series.get('data', []):
+                year = item.get('year', '')
+                period = item.get('period', '')
+                value = item.get('value', '')
+
+                if period not in PERIOD_MAP:
+                    continue
+                if value == '-' or value == '':
+                    continue
+
+                month = PERIOD_MAP[period]
+                try:
+                    points.append({
+                        'year': int(year),
+                        'month': month,
+                        'period': period,
+                        'value': float(value),
+                        'date': f'{year}-{str(month).zfill(2)}',
+                    })
+                except (ValueError, TypeError):
+                    continue
+
+            points.sort(key=lambda p: (p['year'], p['month']))
+            series_data[category_key] = points
+
+        # Compute YoY percent change
+        for key, points in series_data.items():
+            for i, pt in enumerate(points):
+                pt['yoy_change'] = None
+                for j in range(i - 1, -1, -1):
+                    prev = points[j]
+                    if prev['year'] == pt['year'] - 1 and prev['month'] == pt['month']:
+                        if prev['value'] != 0:
+                            pt['yoy_change'] = round(
+                                ((pt['value'] - prev['value']) / prev['value']) * 100, 2
+                            )
+                        break
+
+        return {
+            'series': series_data,
+            'categories': {k: v['label'] for k, v in BLS_COMPONENTS.items()},
+            'colors': {k: v['color'] for k, v in BLS_COMPONENTS.items()},
+            'meta': {
+                'source': 'Bureau of Labor Statistics (CPI-U, Seasonally Adjusted)',
+                'frequency': 'Monthly',
+                'year_range': f'{start_year}-{current_year}',
+                'has_api_key': bool(api_key),
+            }
+        }
+
+    except requests.exceptions.Timeout:
+        logger.error("BLS components API timeout")
+        return None
+    except Exception as e:
+        logger.error(f"BLS components fetch failed: {e}")
+        return None
+
+
+def get_bls_components():
+    """Public API: returns cached BLS CPI component data."""
+    return _component_cache.get()

@@ -4,8 +4,8 @@ from flask import Blueprint, jsonify, send_file, request
 from backend.cache.store import store
 from backend.data_sources.market_data import get_market_data, get_market_history
 from backend.data_sources.imf_cofer import get_cofer_data
-from backend.data_sources.bls_cpi import get_bls_cpi_data
-from backend.data_sources.ons_cpi import get_ons_cpi_data
+from backend.data_sources.bls_cpi import get_bls_cpi_data, get_bls_components
+from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
 from backend.data_sources.substack_feed import get_substack_posts
 from backend.cache.persistence import load_history
 from config import Config
@@ -192,6 +192,20 @@ def get_us_cpi():
 def get_uk_cpi():
     """Return UK CPI data from ONS (cached 24 hours)."""
     data = get_ons_cpi_data()
+    return jsonify(data)
+
+
+@api_bp.route('/cpi/us/components')
+def get_us_cpi_components():
+    """Return US CPI component breakdown from BLS (cached 24 hours)."""
+    data = get_bls_components()
+    return jsonify(data)
+
+
+@api_bp.route('/cpi/uk/components')
+def get_uk_cpi_components():
+    """Return UK CPI component breakdown from ONS (cached 24 hours)."""
+    data = get_ons_components()
     return jsonify(data)
 
 

@@ -20,18 +20,50 @@
                         </svg>
                         COFER Reserves
                     </button>
-                    <button class="sidebar-item" data-dataset="us_cpi">
+
+                    <!-- US CPI with expandable sub-menu -->
+                    <button class="sidebar-item sidebar-item-parent" data-dataset="us_cpi">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                         </svg>
                         US CPI (BLS)
+                        <span class="sidebar-expand-icon">&#9656;</span>
                     </button>
-                    <button class="sidebar-item" data-dataset="uk_cpi">
+                    <div class="sidebar-submenu" id="submenu-us_cpi">
+                        <button class="sidebar-subitem active" data-dataset="us_cpi" data-component="overview">Overview</button>
+                        <button class="sidebar-subitem" data-dataset="us_cpi" data-component="food_bev">Food &amp; Beverages</button>
+                        <button class="sidebar-subitem" data-dataset="us_cpi" data-component="housing">Housing</button>
+                        <button class="sidebar-subitem" data-dataset="us_cpi" data-component="apparel">Apparel</button>
+                        <button class="sidebar-subitem" data-dataset="us_cpi" data-component="transportation">Transportation</button>
+                        <button class="sidebar-subitem" data-dataset="us_cpi" data-component="medical">Medical Care</button>
+                        <button class="sidebar-subitem" data-dataset="us_cpi" data-component="recreation">Recreation</button>
+                        <button class="sidebar-subitem" data-dataset="us_cpi" data-component="education">Education &amp; Comm</button>
+                        <button class="sidebar-subitem" data-dataset="us_cpi" data-component="other">Other Goods &amp; Services</button>
+                    </div>
+
+                    <!-- UK CPI with expandable sub-menu -->
+                    <button class="sidebar-item sidebar-item-parent" data-dataset="uk_cpi">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                         </svg>
                         UK CPI (ONS)
+                        <span class="sidebar-expand-icon">&#9656;</span>
                     </button>
+                    <div class="sidebar-submenu" id="submenu-uk_cpi">
+                        <button class="sidebar-subitem active" data-dataset="uk_cpi" data-component="overview">Overview</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="food">Food &amp; Non-Alc Bev</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="alcohol">Alcohol &amp; Tobacco</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="clothing">Clothing &amp; Footwear</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="housing">Housing &amp; Fuels</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="furniture">Furniture &amp; HH</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="health">Health</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="transport">Transport</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="communication">Communication</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="recreation">Recreation &amp; Culture</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="education">Education</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="restaurants">Restaurants &amp; Hotels</button>
+                        <button class="sidebar-subitem" data-dataset="uk_cpi" data-component="misc">Misc Goods &amp; Services</button>
+                    </div>
                 </nav>
             </div>
             <div class="data-sidebar-section">
@@ -89,7 +121,7 @@
                 <div class="data-meta" id="reserves-meta"></div>
             </section>
 
-            <!-- US CPI Dataset (hidden initially) -->
+            <!-- US CPI Overview (hidden initially) -->
             <section class="dataset-panel" id="panel-us_cpi" style="display:none;">
                 <div class="data-section-header">
                     <div>
@@ -133,7 +165,51 @@
                 <div class="data-meta" id="us-cpi-meta"></div>
             </section>
 
-            <!-- UK CPI Dataset (hidden initially) -->
+            <!-- US CPI Component (hidden initially) -->
+            <section class="dataset-panel" id="panel-us_cpi_component" style="display:none;">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title" id="us-comp-title">US CPI Component</h1>
+                        <p class="data-source">Bureau of Labor Statistics &mdash; CPI-U, Seasonally Adjusted</p>
+                    </div>
+                    <div class="data-controls">
+                        <select id="us-comp-freq" class="data-select">
+                            <option value="monthly" selected>Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
+                        <select id="us-comp-view" class="data-select">
+                            <option value="yoy" selected>YoY %</option>
+                            <option value="qoq">QoQ %</option>
+                            <option value="level">Level</option>
+                        </select>
+                        <select id="us-comp-range" class="data-select">
+                            <option value="5">Last 5 Years</option>
+                            <option value="10" selected>Last 10 Years</option>
+                            <option value="all">All Available</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="us-comp-chart-container">
+                    <canvas id="us-comp-chart"></canvas>
+                    <div class="chart-loading" id="us-comp-loading">
+                        <div class="spinner"></div>
+                        <p>Loading component data...</p>
+                    </div>
+                </div>
+
+                <div class="data-table-container" id="us-comp-table-container">
+                    <table class="data-table" id="us-comp-table">
+                        <thead id="us-comp-thead"></thead>
+                        <tbody id="us-comp-tbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="data-meta" id="us-comp-meta"></div>
+            </section>
+
+            <!-- UK CPI Overview (hidden initially) -->
             <section class="dataset-panel" id="panel-uk_cpi" style="display:none;">
                 <div class="data-section-header">
                     <div>
@@ -175,6 +251,50 @@
                 </div>
 
                 <div class="data-meta" id="uk-cpi-meta"></div>
+            </section>
+
+            <!-- UK CPI Component (hidden initially) -->
+            <section class="dataset-panel" id="panel-uk_cpi_component" style="display:none;">
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title" id="uk-comp-title">UK CPI Component</h1>
+                        <p class="data-source">Office for National Statistics &mdash; MM23</p>
+                    </div>
+                    <div class="data-controls">
+                        <select id="uk-comp-freq" class="data-select">
+                            <option value="monthly" selected>Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
+                        <select id="uk-comp-view" class="data-select">
+                            <option value="yoy" selected>YoY %</option>
+                            <option value="qoq">QoQ %</option>
+                            <option value="level">Level</option>
+                        </select>
+                        <select id="uk-comp-range" class="data-select">
+                            <option value="5">Last 5 Years</option>
+                            <option value="10" selected>Last 10 Years</option>
+                            <option value="all">All Available</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="chart-container" id="uk-comp-chart-container">
+                    <canvas id="uk-comp-chart"></canvas>
+                    <div class="chart-loading" id="uk-comp-loading">
+                        <div class="spinner"></div>
+                        <p>Loading component data...</p>
+                    </div>
+                </div>
+
+                <div class="data-table-container" id="uk-comp-table-container">
+                    <table class="data-table" id="uk-comp-table">
+                        <thead id="uk-comp-thead"></thead>
+                        <tbody id="uk-comp-tbody"></tbody>
+                    </table>
+                </div>
+
+                <div class="data-meta" id="uk-comp-meta"></div>
             </section>
         </div>
     </div>

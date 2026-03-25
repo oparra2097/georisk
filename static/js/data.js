@@ -33,14 +33,36 @@
     let ukCpiFreq = 'monthly';
     let ukCpiView = 'yoy';
 
+    // Component state
+    let usCpiComponents = null;
+    let ukCpiComponents = null;
+    let usCompChart = null;
+    let ukCompChart = null;
+    let usCompRange = '10';
+    let usCompFreq = 'monthly';
+    let usCompView = 'yoy';
+    let ukCompRange = '10';
+    let ukCompFreq = 'monthly';
+    let ukCompView = 'yoy';
+    let activeUsComponent = 'overview';
+    let activeUkComponent = 'overview';
+
     // Track which datasets have been fetched (lazy loading)
-    const fetched = { cofer: false, us_cpi: false, uk_cpi: false };
+    const fetched = { cofer: false, us_cpi: false, uk_cpi: false, us_components: false, uk_components: false };
+
+    // Track which submenus are expanded
+    const expanded = { us_cpi: false, uk_cpi: false };
 
     // ── Bootstrap ────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
-        // Sidebar navigation
+        // Sidebar parent items (COFER + CPI parents)
         document.querySelectorAll('.sidebar-item').forEach(btn => {
-            btn.addEventListener('click', () => switchDataset(btn.dataset.dataset));
+            btn.addEventListener('click', () => onSidebarItemClick(btn));
+        });
+
+        // Sidebar sub-items
+        document.querySelectorAll('.sidebar-subitem').forEach(btn => {
+            btn.addEventListener('click', () => onSubitemClick(btn));
         });
 
         // COFER controls
@@ -60,15 +82,25 @@
             });
         }
 
-        // US CPI controls
+        // US CPI overview controls
         bindCpiControl('us-cpi-range', (v) => { usCpiRange = v; }, () => usCpiData && renderUsCpi());
         bindCpiControl('us-cpi-freq', (v) => { usCpiFreq = v; }, () => usCpiData && renderUsCpi());
         bindCpiControl('us-cpi-view', (v) => { usCpiView = v; }, () => usCpiData && renderUsCpi());
 
-        // UK CPI controls
+        // UK CPI overview controls
         bindCpiControl('uk-cpi-range', (v) => { ukCpiRange = v; }, () => ukCpiData && renderUkCpi());
         bindCpiControl('uk-cpi-freq', (v) => { ukCpiFreq = v; }, () => ukCpiData && renderUkCpi());
         bindCpiControl('uk-cpi-view', (v) => { ukCpiView = v; }, () => ukCpiData && renderUkCpi());
+
+        // US component controls
+        bindCpiControl('us-comp-range', (v) => { usCompRange = v; }, () => usCpiComponents && renderUsComponent());
+        bindCpiControl('us-comp-freq', (v) => { usCompFreq = v; }, () => usCpiComponents && renderUsComponent());
+        bindCpiControl('us-comp-view', (v) => { usCompView = v; }, () => usCpiComponents && renderUsComponent());
+
+        // UK component controls
+        bindCpiControl('uk-comp-range', (v) => { ukCompRange = v; }, () => ukCpiComponents && renderUkComponent());
+        bindCpiControl('uk-comp-freq', (v) => { ukCompFreq = v; }, () => ukCpiComponents && renderUkComponent());
+        bindCpiControl('uk-comp-view', (v) => { ukCompView = v; }, () => ukCpiComponents && renderUkComponent());
 
         // Load default dataset
         loadDataset('cofer');
@@ -84,25 +116,100 @@
         }
     }
 
-    // ── Dataset Switching ────────────────────────────────
-    function switchDataset(dataset) {
-        if (dataset === currentDataset) return;
-        currentDataset = dataset;
+    // ── Sidebar Click Handlers ───────────────────────────
 
-        // Update sidebar active state
-        document.querySelectorAll('.sidebar-item').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.dataset === dataset);
+    function onSidebarItemClick(btn) {
+        const dataset = btn.dataset.dataset;
+
+        // Highlight parent items
+        document.querySelectorAll('.sidebar-item').forEach(b => {
+            b.classList.toggle('active', b.dataset.dataset === dataset);
         });
 
-        // Show/hide panels
+        // For CPI items, toggle submenu expand/collapse
+        if (dataset === 'us_cpi' || dataset === 'uk_cpi') {
+            toggleSubmenu(dataset);
+
+            // If clicking a CPI parent, determine which panel to show
+            const activeComp = dataset === 'us_cpi' ? activeUsComponent : activeUkComponent;
+            if (activeComp === 'overview') {
+                showPanel('panel-' + dataset);
+            } else {
+                showPanel('panel-' + dataset + '_component');
+            }
+        } else {
+            // Collapse all submenus
+            collapseSubmenu('us_cpi');
+            collapseSubmenu('uk_cpi');
+            showPanel('panel-' + dataset);
+        }
+
+        currentDataset = dataset;
+        loadDataset(dataset);
+    }
+
+    function onSubitemClick(btn) {
+        const dataset = btn.dataset.dataset;
+        const component = btn.dataset.component;
+
+        // Update sub-item active state within this submenu
+        const submenu = document.getElementById('submenu-' + dataset);
+        if (submenu) {
+            submenu.querySelectorAll('.sidebar-subitem').forEach(b => {
+                b.classList.toggle('active', b.dataset.component === component);
+            });
+        }
+
+        if (component === 'overview') {
+            // Show overview panel
+            if (dataset === 'us_cpi') activeUsComponent = 'overview';
+            else activeUkComponent = 'overview';
+            showPanel('panel-' + dataset);
+            loadDataset(dataset);
+        } else {
+            // Show component panel
+            if (dataset === 'us_cpi') {
+                activeUsComponent = component;
+                showPanel('panel-us_cpi_component');
+                loadComponents('us');
+            } else {
+                activeUkComponent = component;
+                showPanel('panel-uk_cpi_component');
+                loadComponents('uk');
+            }
+        }
+    }
+
+    function toggleSubmenu(dataset) {
+        const submenu = document.getElementById('submenu-' + dataset);
+        const btn = document.querySelector('.sidebar-item[data-dataset="' + dataset + '"]');
+        if (!submenu) return;
+
+        expanded[dataset] = !expanded[dataset];
+
+        if (expanded[dataset]) {
+            submenu.style.display = '';
+            if (btn) btn.classList.add('expanded');
+        } else {
+            submenu.style.display = 'none';
+            if (btn) btn.classList.remove('expanded');
+        }
+    }
+
+    function collapseSubmenu(dataset) {
+        const submenu = document.getElementById('submenu-' + dataset);
+        const btn = document.querySelector('.sidebar-item[data-dataset="' + dataset + '"]');
+        if (submenu) submenu.style.display = 'none';
+        if (btn) btn.classList.remove('expanded');
+        expanded[dataset] = false;
+    }
+
+    function showPanel(panelId) {
         document.querySelectorAll('.dataset-panel').forEach(panel => {
             panel.style.display = 'none';
         });
-        const targetPanel = document.getElementById('panel-' + dataset);
-        if (targetPanel) targetPanel.style.display = '';
-
-        // Lazy-load data if not yet fetched
-        loadDataset(dataset);
+        const target = document.getElementById(panelId);
+        if (target) target.style.display = '';
     }
 
     function loadDataset(dataset) {
@@ -116,15 +223,24 @@
         }
     }
 
+    function loadComponents(prefix) {
+        const key = prefix + '_components';
+        if (fetched[key]) {
+            // Data already loaded, just render
+            if (prefix === 'us') renderUsComponent();
+            else renderUkComponent();
+            return;
+        }
+        fetched[key] = true;
+
+        if (prefix === 'us') fetchUsComponents();
+        else fetchUkComponents();
+    }
+
     // ══════════════════════════════════════════════════════
     // DATA AGGREGATION UTILITIES
     // ══════════════════════════════════════════════════════
 
-    /**
-     * Aggregate monthly points to quarterly by averaging values within each quarter.
-     * Input: [{year, month, value, ...}, ...]
-     * Output: [{year, quarter, value, date}, ...]
-     */
     function toQuarterly(points) {
         const buckets = {};
         for (const p of points) {
@@ -143,11 +259,6 @@
             .sort((a, b) => a.year - b.year || a.quarter - b.quarter);
     }
 
-    /**
-     * Aggregate monthly points to yearly by averaging values within each year.
-     * Input: [{year, month, value, ...}, ...]
-     * Output: [{year, value, date}, ...]
-     */
     function toYearly(points) {
         const buckets = {};
         for (const p of points) {
@@ -163,12 +274,6 @@
             .sort((a, b) => a.year - b.year);
     }
 
-    /**
-     * Compute YoY % change on aggregated data.
-     * For monthly: compare same month prior year.
-     * For quarterly: compare same quarter prior year.
-     * For yearly: compare prior year.
-     */
     function computeYoY(points, freq) {
         const result = [];
         for (let i = 0; i < points.length; i++) {
@@ -192,10 +297,6 @@
         return result;
     }
 
-    /**
-     * Compute period-over-period % change (MoM, QoQ, or YoY for yearly).
-     * Compares each point to the immediately preceding point.
-     */
     function computePoP(points) {
         const result = [];
         for (let i = 0; i < points.length; i++) {
@@ -208,52 +309,30 @@
         return result;
     }
 
-    /**
-     * Transform raw monthly series based on frequency and view mode.
-     *
-     * For BLS (isUs=true): raw points have index-level `value` field.
-     *   - level: show the index value
-     *   - yoy: show YoY % change of the index
-     *   - qoq: show period-over-period % change
-     *
-     * For ONS (isUs=false): raw points have `value` which IS already a YoY annual rate.
-     *   - level: show the raw rate (which is already YoY %)
-     *   - yoy: same as level (the value IS the YoY rate)
-     *   - qoq: period-over-period change in the rate (change in % points)
-     */
     function transformSeries(rawPoints, freq, view, isUs) {
-        // Step 1: Aggregate to desired frequency
         let points;
         if (freq === 'quarterly') {
             points = toQuarterly(rawPoints);
         } else if (freq === 'yearly') {
             points = toYearly(rawPoints);
         } else {
-            // Monthly — keep original, but normalize shape
             points = rawPoints.map(p => ({ ...p }));
         }
 
-        // Step 2: Compute the display value based on view mode
         if (isUs) {
-            // BLS: value is a raw index level
             if (view === 'level') {
-                // Show raw index, no transformation
                 return points.map(p => ({ date: p.date, y: round2(p.value), year: p.year }));
             } else if (view === 'yoy') {
                 const withYoY = computeYoY(points, freq);
                 return withYoY.map(p => ({ date: p.date, y: p.yoy != null ? round2(p.yoy) : null, year: p.year }));
             } else {
-                // qoq = period-over-period
                 const withPoP = computePoP(points);
                 return withPoP.map(p => ({ date: p.date, y: p.pop != null ? round2(p.pop) : null, year: p.year }));
             }
         } else {
-            // ONS: value is already a YoY annual rate
             if (view === 'level' || view === 'yoy') {
-                // Show the rate directly
                 return points.map(p => ({ date: p.date, y: round2(p.value), year: p.year }));
             } else {
-                // qoq = change in the rate (percentage point change)
                 const withPoP = computePoP(points);
                 return withPoP.map(p => ({ date: p.date, y: p.pop != null ? round2(p.pop) : null, year: p.year }));
             }
@@ -264,21 +343,36 @@
         return v != null ? Math.round(v * 100) / 100 : null;
     }
 
-    /**
-     * Get the Y-axis label based on view mode and data source.
-     */
     function getYAxisLabel(view, isUs) {
         if (isUs && view === 'level') return 'Index';
         return '%';
     }
 
-    /**
-     * Get the tooltip suffix based on view mode and data source.
-     */
     function getTooltipSuffix(view, isUs) {
         if (isUs && view === 'level') return '';
         if (view === 'qoq') return ' pp';
         return '%';
+    }
+
+    /**
+     * Filter + transform raw points with range/freq/view and return chart-ready data.
+     */
+    function prepareChartData(rawPoints, rangeVal, freq, view, isUs) {
+        const currentYear = new Date().getFullYear();
+        let filtered = rawPoints;
+        if (rangeVal !== 'all') {
+            const computeMinYear = currentYear - parseInt(rangeVal) - 1;
+            filtered = rawPoints.filter(p => p.year >= computeMinYear);
+        }
+
+        let transformed = transformSeries(filtered, freq, view, isUs);
+
+        if (rangeVal !== 'all') {
+            const minYear = currentYear - parseInt(rangeVal);
+            transformed = transformed.filter(p => p.year >= minYear);
+        }
+
+        return transformed;
     }
 
     // ══════════════════════════════════════════════════════
@@ -388,21 +482,11 @@
                 },
                 scales: {
                     x: {
-                        ticks: {
-                            color: '#6b7280',
-                            font: { size: 10 },
-                            maxRotation: 0,
-                            autoSkip: true,
-                            maxTicksLimit: 15,
-                        },
+                        ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 15 },
                         grid: { color: 'rgba(55,65,81,0.3)' }
                     },
                     y: {
-                        ticks: {
-                            color: '#6b7280',
-                            font: { size: 10 },
-                            callback: (val) => '$' + val.toLocaleString() + 'B',
-                        },
+                        ticks: { color: '#6b7280', font: { size: 10 }, callback: (val) => '$' + val.toLocaleString() + 'B' },
                         grid: { color: 'rgba(55,65,81,0.3)' },
                         beginAtZero: true,
                     }
@@ -416,9 +500,7 @@
         const tbody = document.getElementById('reserves-tbody');
 
         let hdr = '<tr><th>Country</th>';
-        for (let i = years.length - 1; i >= 0; i--) {
-            hdr += '<th>' + years[i] + '</th>';
-        }
+        for (let i = years.length - 1; i >= 0; i--) hdr += '<th>' + years[i] + '</th>';
         hdr += '</tr>';
         thead.innerHTML = hdr;
 
@@ -432,11 +514,7 @@
             rows += '<tr><td>' + c.name + '</td>';
             for (let i = years.length - 1; i >= 0; i--) {
                 const v = values[i];
-                if (v == null) {
-                    rows += '<td>\u2014</td>';
-                } else {
-                    rows += '<td>$' + v.toFixed(1) + 'B</td>';
-                }
+                rows += v == null ? '<td>\u2014</td>' : '<td>$' + v.toFixed(1) + 'B</td>';
             }
             rows += '</tr>';
         }
@@ -455,7 +533,7 @@
     }
 
     // ══════════════════════════════════════════════════════
-    // US CPI (BLS)
+    // US CPI (BLS) — Overview
     // ══════════════════════════════════════════════════════
 
     async function fetchUsCpi() {
@@ -479,7 +557,7 @@
     }
 
     // ══════════════════════════════════════════════════════
-    // UK CPI (ONS)
+    // UK CPI (ONS) — Overview
     // ══════════════════════════════════════════════════════
 
     async function fetchUkCpi() {
@@ -503,7 +581,189 @@
     }
 
     // ══════════════════════════════════════════════════════
-    // SHARED CPI RENDERING
+    // CPI COMPONENTS
+    // ══════════════════════════════════════════════════════
+
+    async function fetchUsComponents() {
+        try {
+            const resp = await fetch('/api/cpi/us/components');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            usCpiComponents = await resp.json();
+            document.getElementById('us-comp-loading').style.display = 'none';
+            renderUsComponent();
+        } catch (err) {
+            console.error('US components fetch failed:', err);
+            document.getElementById('us-comp-loading').innerHTML =
+                '<p style="color:var(--text-muted)">Failed to load component data.</p>';
+        }
+    }
+
+    async function fetchUkComponents() {
+        try {
+            const resp = await fetch('/api/cpi/uk/components');
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            ukCpiComponents = await resp.json();
+            document.getElementById('uk-comp-loading').style.display = 'none';
+            renderUkComponent();
+        } catch (err) {
+            console.error('UK components fetch failed:', err);
+            document.getElementById('uk-comp-loading').innerHTML =
+                '<p style="color:var(--text-muted)">Failed to load component data.</p>';
+        }
+    }
+
+    function renderUsComponent() {
+        if (!usCpiComponents) return;
+        const key = activeUsComponent;
+        const label = (usCpiComponents.categories || {})[key] || key;
+        document.getElementById('us-comp-title').textContent = 'US CPI: ' + label;
+        renderComponentChart('us', usCpiComponents, key, usCompRange, usCompFreq, usCompView, usCompChart, (c) => { usCompChart = c; });
+        renderComponentTable('us', usCpiComponents, key, usCompRange, usCompFreq, usCompView);
+        renderComponentMeta('us', usCpiComponents, usCompFreq, usCompView, label);
+    }
+
+    function renderUkComponent() {
+        if (!ukCpiComponents) return;
+        const key = activeUkComponent;
+        const label = (ukCpiComponents.categories || {})[key] || key;
+        document.getElementById('uk-comp-title').textContent = 'UK CPI: ' + label;
+        renderComponentChart('uk', ukCpiComponents, key, ukCompRange, ukCompFreq, ukCompView, ukCompChart, (c) => { ukCompChart = c; });
+        renderComponentTable('uk', ukCpiComponents, key, ukCompRange, ukCompFreq, ukCompView);
+        renderComponentMeta('uk', ukCpiComponents, ukCompFreq, ukCompView, label);
+    }
+
+    function renderComponentChart(prefix, data, key, rangeVal, freq, view, existingChart, setChart) {
+        const canvasEl = document.getElementById(prefix + '-comp-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        const series = data.series || {};
+        const colors = data.colors || {};
+        const isUs = prefix === 'us';
+        const rawPoints = series[key] || [];
+
+        const transformed = prepareChartData(rawPoints, rangeVal, freq, view, isUs);
+
+        const chartData = transformed
+            .filter(d => d.y !== null && d.y !== undefined)
+            .map(d => ({ x: d.date, y: d.y }));
+
+        if (existingChart) existingChart.destroy();
+
+        const suffix = getTooltipSuffix(view, isUs);
+        const yLabel = getYAxisLabel(view, isUs);
+        const color = colors[key] || COLORS[0];
+
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: (data.categories || {})[key] || key,
+                    data: chartData,
+                    borderColor: color,
+                    backgroundColor: color + '1A',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                    tension: 0.3,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        callbacks: {
+                            label: (ctx) => {
+                                const val = ctx.parsed.y;
+                                if (val == null) return 'N/A';
+                                return val.toFixed(2) + suffix;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            callback: (val) => yLabel === 'Index' ? val.toFixed(1) : val.toFixed(1) + '%',
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
+                    }
+                }
+            }
+        });
+
+        setChart(chart);
+    }
+
+    function renderComponentTable(prefix, data, key, rangeVal, freq, view) {
+        const thead = document.getElementById(prefix + '-comp-thead');
+        const tbody = document.getElementById(prefix + '-comp-tbody');
+        if (!thead || !tbody) return;
+
+        const series = data.series || {};
+        const categories = data.categories || {};
+        const isUs = prefix === 'us';
+        const rawPoints = series[key] || [];
+        const label = categories[key] || key;
+        const suffix = getTooltipSuffix(view, isUs);
+        const isIndex = isUs && view === 'level';
+
+        const transformed = prepareChartData(rawPoints, rangeVal, freq, view, isUs);
+        const reversedPts = transformed.slice().reverse();
+
+        thead.innerHTML = '<tr><th>Date</th><th>' + label + '</th></tr>';
+
+        let rows = '';
+        for (const pt of reversedPts) {
+            rows += '<tr><td>' + pt.date + '</td>';
+            if (pt.y == null) {
+                rows += '<td>--</td>';
+            } else if (isIndex) {
+                rows += '<td>' + pt.y.toFixed(1) + '</td>';
+            } else {
+                rows += '<td>' + pt.y.toFixed(2) + suffix + '</td>';
+            }
+            rows += '</tr>';
+        }
+        tbody.innerHTML = rows;
+    }
+
+    function renderComponentMeta(prefix, data, freq, view, label) {
+        const el = document.getElementById(prefix + '-comp-meta');
+        if (!el) return;
+        const meta = data.meta || {};
+        const isUs = prefix === 'us';
+        const parts = [];
+        if (meta.source) parts.push(meta.source);
+        parts.push(label);
+        const freqLabels = { monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' };
+        parts.push(freqLabels[freq] || 'Monthly');
+        const viewLabels = {
+            yoy: 'Year-over-Year',
+            qoq: freq === 'monthly' ? 'Month-over-Month' : freq === 'quarterly' ? 'Quarter-over-Quarter' : 'Year-over-Year',
+            level: isUs ? 'Index Level' : 'Annual Rate',
+        };
+        parts.push(viewLabels[view] || '');
+        if (meta.year_range) parts.push(meta.year_range);
+        el.textContent = parts.join(' \u00b7 ');
+    }
+
+    // ══════════════════════════════════════════════════════
+    // SHARED CPI OVERVIEW RENDERING
     // ══════════════════════════════════════════════════════
 
     function renderCpiChart(prefix, data, rangeVal, freq, view, existingChart, setChart) {
@@ -514,29 +774,11 @@
         const series = data.series || {};
         const categories = data.categories || {};
         const colors = data.colors || {};
-        const currentYear = new Date().getFullYear();
         const isUs = prefix === 'us';
 
         const datasets = Object.entries(categories).map(([key, label]) => {
             const rawPoints = series[key] || [];
-
-            // Filter by time range first (on raw monthly data)
-            let filtered = rawPoints;
-            if (rangeVal !== 'all') {
-                const minYear = currentYear - parseInt(rangeVal);
-                // Include one extra year before for YoY computation
-                const computeMinYear = minYear - 1;
-                filtered = rawPoints.filter(p => p.year >= computeMinYear);
-            }
-
-            // Transform: aggregate + compute view values
-            let transformed = transformSeries(filtered, freq, view, isUs);
-
-            // Now trim to actual display range (remove the extra year)
-            if (rangeVal !== 'all') {
-                const minYear = currentYear - parseInt(rangeVal);
-                transformed = transformed.filter(p => p.year >= minYear);
-            }
+            const transformed = prepareChartData(rawPoints, rangeVal, freq, view, isUs);
 
             return {
                 label: label,
@@ -568,14 +810,7 @@
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: {
-                            color: '#9ca3af',
-                            font: { size: 11 },
-                            boxWidth: 12,
-                            padding: 10,
-                            usePointStyle: true,
-                            pointStyle: 'line',
-                        }
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
                     },
                     tooltip: {
                         backgroundColor: 'rgba(0,0,0,0.9)',
@@ -593,23 +828,14 @@
                 scales: {
                     x: {
                         type: 'category',
-                        ticks: {
-                            color: '#6b7280',
-                            font: { size: 10 },
-                            maxRotation: 0,
-                            autoSkip: true,
-                            maxTicksLimit: 12,
-                        },
+                        ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
                         grid: { color: 'rgba(55,65,81,0.3)' }
                     },
                     y: {
                         ticks: {
                             color: '#6b7280',
                             font: { size: 10 },
-                            callback: (val) => {
-                                if (yLabel === 'Index') return val.toFixed(1);
-                                return val.toFixed(1) + '%';
-                            },
+                            callback: (val) => yLabel === 'Index' ? val.toFixed(1) : val.toFixed(1) + '%',
                         },
                         grid: { color: 'rgba(55,65,81,0.3)' }
                     }
@@ -628,63 +854,37 @@
         const series = data.series || {};
         const categories = data.categories || {};
         const isUs = prefix === 'us';
-        const currentYear = new Date().getFullYear();
         const suffix = getTooltipSuffix(view, isUs);
         const isIndex = isUs && view === 'level';
 
-        // Transform all series
         const transformed = {};
         Object.keys(categories).forEach(key => {
-            const rawPoints = series[key] || [];
-            let filtered = rawPoints;
-            if (rangeVal !== 'all') {
-                const minYear = currentYear - parseInt(rangeVal);
-                const computeMinYear = minYear - 1;
-                filtered = rawPoints.filter(p => p.year >= computeMinYear);
-            }
-            let pts = transformSeries(filtered, freq, view, isUs);
-            if (rangeVal !== 'all') {
-                const minYear = currentYear - parseInt(rangeVal);
-                pts = pts.filter(p => p.year >= minYear);
-            }
-            transformed[key] = pts;
+            transformed[key] = prepareChartData(series[key] || [], rangeVal, freq, view, isUs);
         });
 
-        // Get date list from first category
         const firstKey = Object.keys(categories)[0];
         const dates = (transformed[firstKey] || []).map(p => p.date);
         const reversedDates = dates.slice().reverse();
 
-        // Header
         let hdr = '<tr><th>Date</th>';
-        Object.values(categories).forEach(label => {
-            hdr += '<th>' + label + '</th>';
-        });
+        Object.values(categories).forEach(label => { hdr += '<th>' + label + '</th>'; });
         hdr += '</tr>';
         thead.innerHTML = hdr;
 
-        // Build lookups
         const lookups = {};
         Object.keys(categories).forEach(key => {
             lookups[key] = {};
-            (transformed[key] || []).forEach(p => {
-                lookups[key][p.date] = p.y;
-            });
+            (transformed[key] || []).forEach(p => { lookups[key][p.date] = p.y; });
         });
 
-        // Rows
         let rows = '';
         for (const date of reversedDates) {
             rows += '<tr><td>' + date + '</td>';
             Object.keys(categories).forEach(key => {
                 const val = lookups[key][date];
-                if (val == null) {
-                    rows += '<td>--</td>';
-                } else if (isIndex) {
-                    rows += '<td>' + val.toFixed(1) + '</td>';
-                } else {
-                    rows += '<td>' + val.toFixed(2) + suffix + '</td>';
-                }
+                if (val == null) rows += '<td>--</td>';
+                else if (isIndex) rows += '<td>' + val.toFixed(1) + '</td>';
+                else rows += '<td>' + val.toFixed(2) + suffix + '</td>';
             });
             rows += '</tr>';
         }
@@ -695,15 +895,13 @@
         const el = document.getElementById(prefix + '-cpi-meta');
         if (!el) return;
         const meta = data.meta || {};
+        const isUs = prefix === 'us';
         const parts = [];
         if (meta.source) parts.push(meta.source);
 
-        // Show current frequency
         const freqLabels = { monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' };
         parts.push(freqLabels[freq] || 'Monthly');
 
-        // Show current view
-        const isUs = prefix === 'us';
         const viewLabels = {
             yoy: 'Year-over-Year',
             qoq: freq === 'monthly' ? 'Month-over-Month' : freq === 'quarterly' ? 'Quarter-over-Quarter' : 'Year-over-Year',
