@@ -1102,6 +1102,40 @@
     // COMMODITIES FORECASTS
     // ══════════════════════════════════════════════════════
 
+    function populateScenarioDropdowns() {
+        if (!forecastData) return;
+        const groupMapping = {
+            'fc-oil-scenario': 'Oil & Gas',
+            'fc-ag-scenario': 'Agriculture',
+            'fc-metals-scenario': 'Metals',
+        };
+
+        Object.entries(groupMapping).forEach(([selectId, groupName]) => {
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            const group = (forecastData.groups || {})[groupName];
+            if (!group) return;
+
+            const order = group.scenario_order || [];
+            // Clear existing options
+            sel.innerHTML = '';
+            // Add Weighted Avg first (default)
+            const waOpt = document.createElement('option');
+            waOpt.value = 'Weighted Avg';
+            waOpt.textContent = 'Weighted Avg';
+            waOpt.selected = true;
+            sel.appendChild(waOpt);
+            // Add the non-meta scenarios (skip Actual and Weighted Avg)
+            order.forEach(sc => {
+                if (sc === 'Actual' || sc === 'Weighted Avg') return;
+                const opt = document.createElement('option');
+                opt.value = sc;
+                opt.textContent = sc;
+                sel.appendChild(opt);
+            });
+        });
+    }
+
     async function fetchForecasts() {
         try {
             const resp = await fetch('/api/forecasts');
@@ -1113,6 +1147,9 @@
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
             });
+
+            // Populate scenario dropdowns dynamically from per-group configs
+            populateScenarioDropdowns();
 
             // Render the active forecast view
             if (activeForecastCommodity) {
@@ -1281,7 +1318,7 @@
         const metaEl = document.getElementById(prefix + '-meta');
         if (metaEl) {
             const meta = forecastData.meta || {};
-            const weights = forecastData.scenario_weights || {};
+            const weights = group.scenario_weights || {};
             const parts = [];
             if (meta.source) parts.push(meta.source);
             parts.push(scenario);
@@ -1304,9 +1341,9 @@
         if (!info) return;
 
         const scenarios = info.scenarios || {};
-        const scenarioColors = forecastData.scenario_colors || {};
-        const scenarioLabels = forecastData.scenario_labels || {};
-        const scenarioOrder = ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
+        const scenarioColors = group.scenario_colors || {};
+        const scenarioLabels = group.scenario_labels || {};
+        const scenarioOrder = group.scenario_order || ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
 
         // Dynamic labels from API
         const timeCtx = forecastData.time_context || {};
@@ -1335,20 +1372,24 @@
 
         if (fcCommodityChart) fcCommodityChart.destroy();
 
+        // Determine the "base" scenario (middle scenario that gets fill)
+        const baseScenario = scenarioOrder.find(sc => sc === 'Base Case' || sc === 'Base') || scenarioOrder[1];
+
         const datasets = scenarioOrder
             .filter(sc => scenarios[sc] && sc !== 'Actual')
             .map(sc => {
                 const scenData = scenarios[sc];
                 const color = scenarioColors[sc] || '#9ca3af';
                 const isDashed = sc === 'Weighted Avg';
+                const isBase = sc === baseScenario;
                 return {
                     label: sc,
                     data: labels.map(l => scenData[l] != null ? scenData[l] : null),
                     borderColor: color,
-                    backgroundColor: sc === 'Base Case' ? color + '1A' : 'transparent',
+                    backgroundColor: isBase ? color + '1A' : 'transparent',
                     borderWidth: sc === 'Weighted Avg' ? 3 : 2,
                     borderDash: isDashed ? [6, 3] : [],
-                    fill: sc === 'Base Case',
+                    fill: isBase,
                     pointRadius: 5,
                     pointBackgroundColor: color,
                     pointBorderColor: color,
@@ -1435,9 +1476,10 @@
         // ── Meta: Scenario narratives ──
         const metaEl = document.getElementById('fc-commodity-meta');
         if (metaEl) {
-            const weights = forecastData.scenario_weights || {};
+            const weights = group.scenario_weights || {};
             const parts = [];
-            ['Base Case', 'Severe Case', 'Worst Case'].forEach(sc => {
+            // Use all weighted scenarios (exclude Actual and Weighted Avg)
+            scenarioOrder.filter(sc => sc !== 'Actual' && sc !== 'Weighted Avg').forEach(sc => {
                 const w = weights[sc] ? (weights[sc] * 100).toFixed(0) + '%' : '';
                 const label = scenarioLabels[sc] || '';
                 if (label) parts.push(sc + ' (' + w + '): ' + label);

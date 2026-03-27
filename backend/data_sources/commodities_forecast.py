@@ -7,9 +7,13 @@ Dynamic, date-aware forecast engine:
   - Computes current quarter-end estimate from partial data
   - Forecasts next 3 quarters using scenario spread assumptions (rolling)
   - Calculates year-end (FY) weighted average for current calendar year
+  - Per-group scenario frameworks (geopolitical, supply/weather, speculative)
   - Thread-safe cache with 24-hour TTL
 
-Scenario weights: Base Case 70% | Severe Case 20% | Worst Case 10%
+Groups & Scenarios:
+  Oil & Gas — Geopolitical: Base Case 70% | Severe Case 20% | Worst Case 10%
+  Agriculture — Supply/Weather: Bear 25% | Base 50% | Bull 25%
+  Metals — Speculative/Macro: Bear 25% | Base 50% | Bull 25%
 """
 
 import threading
@@ -24,18 +28,70 @@ CACHE_TTL = 86400   # 24 hours
 RETRY_BACKOFF = 3600  # 1 hour after failure
 HISTORY_YEARS = 10   # years of historical quarterly data
 
-# ── Forecast Configuration ──────────────────────────────────────────────────
+# ── Per-Group Scenario Configuration ───────────────────────────────────────
+# Each group has its own scenario names, weights, labels, and colors.
 
-SCENARIO_WEIGHTS = {
-    'Worst Case': 0.10,
-    'Severe Case': 0.20,
-    'Base Case': 0.70,
-}
-
-SCENARIO_LABELS = {
-    'Worst Case': 'Iran targets critical ME production \u00b7 Brent >$130 peak \u00b7 stays $110s',
-    'Severe Case': 'Hormuz closed through year-end \u00b7 No ceasefire \u00b7 Brent $115-118 sustained',
-    'Base Case': 'Gradual de-escalation \u00b7 OPEC+ discipline \u00b7 Brent drifts to ~$80 Q4',
+GROUP_SCENARIOS = {
+    'Oil & Gas': {
+        'weights': {
+            'Worst Case': 0.10,
+            'Severe Case': 0.20,
+            'Base Case': 0.70,
+        },
+        'labels': {
+            'Base Case':   'Gradual de-escalation · OPEC+ discipline · Brent reverts to ~$78 by Q4',
+            'Severe Case': 'Hormuz closed through year-end · No ceasefire · Brent $110-115 sustained',
+            'Worst Case':  'Iran targets critical ME production · Brent >$130 peak · stays $110s',
+        },
+        'colors': {
+            'Actual':       '#94a3b8',
+            'Base Case':    '#3b82f6',
+            'Severe Case':  '#f59e0b',
+            'Worst Case':   '#ef4444',
+            'Weighted Avg': '#10b981',
+        },
+        'scenario_order': ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'],
+    },
+    'Agriculture': {
+        'weights': {
+            'Bear': 0.25,
+            'Base': 0.50,
+            'Bull': 0.25,
+        },
+        'labels': {
+            'Bear':  'Bumper harvest globally · Favourable weather · Ample supply depresses prices',
+            'Base':  'Normal seasonal patterns · Trend-line yields · Steady demand',
+            'Bull':  'Major drought in key growing regions · Supply shock · Export restrictions',
+        },
+        'colors': {
+            'Actual':       '#94a3b8',
+            'Bear':         '#3b82f6',
+            'Base':         '#10b981',
+            'Bull':         '#ef4444',
+            'Weighted Avg': '#f59e0b',
+        },
+        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull', 'Weighted Avg'],
+    },
+    'Metals': {
+        'weights': {
+            'Bear': 0.25,
+            'Base': 0.50,
+            'Bull': 0.25,
+        },
+        'labels': {
+            'Bear':  'Risk-off environment · Dollar strength · Demand slowdown · De-leveraging',
+            'Base':  'Steady macro · Moderate central bank buying · Gradual industrial recovery',
+            'Bull':  'Flight to safety · Speculative inflows · Central bank accumulation · Gold $5600+',
+        },
+        'colors': {
+            'Actual':       '#94a3b8',
+            'Bear':         '#3b82f6',
+            'Base':         '#10b981',
+            'Bull':         '#ef4444',
+            'Weighted Avg': '#f59e0b',
+        },
+        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull', 'Weighted Avg'],
+    },
 }
 
 # (display_name, yfinance_ticker, unit, group)
@@ -52,71 +108,80 @@ COMMODITIES = {
     'Gold':             ('GC=F',  '$/troy oz',  'Metals'),
 }
 
-# ── Scenario Spread Targets ─────────────────────────────────────────────────
-# Quarterly targets: cumulative % change from latest close price.
-# Keyed Q1-Q4.  Q1 is always 0 (current baseline).  The engine looks up the
-# spread directly for each forecast quarter (no interpolation needed).
+# ── Scenario Price Targets ──────────────────────────────────────────────────
+# Absolute quarterly price targets per scenario.
+# Q1 can be set to None — the engine will use the live YTD actual for Q1.
+# Scenario NAMES must match the keys in GROUP_SCENARIOS[group]['weights'].
 
-SCENARIO_SPREADS = {
+SCENARIO_TARGETS = {
+    # ═══════════════════════════════════════════════════════════════════════════
+    # OIL & GAS — Geopolitical scenarios
+    # Brent: Base → $95-100 Q2, reverts to $75-80 Q4
+    # WTI tracks Brent with ~$5-7 discount
+    # TTF: Elevated due to Qatar bombing / longer-term production loss
+    # ═══════════════════════════════════════════════════════════════════════════
     'WTI Crude': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': +0.9531, 'Q3': +0.8780, 'Q4': +0.7278},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.6226, 'Q3': +0.6827, 'Q4': +0.6526},
-        'Base Case':   {'Q1': 0.00, 'Q2': +0.03,   'Q3': +0.05,   'Q4': +0.07},
+        'Base Case':   {'Q1': None, 'Q2': 95,  'Q3': 83,  'Q4': 72},
+        'Severe Case': {'Q1': None, 'Q2': 108, 'Q3': 104, 'Q4': 94},
+        'Worst Case':  {'Q1': None, 'Q2': 124, 'Q3': 117, 'Q4': 107},
     },
     'Brent Crude': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': +0.9358, 'Q3': +0.8516, 'Q4': +0.6833},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.6131, 'Q3': +0.6552, 'Q4': +0.6272},
-        'Base Case':   {'Q1': 0.00, 'Q2': +0.03,   'Q3': +0.04,   'Q4': +0.05},
+        'Base Case':   {'Q1': None, 'Q2': 100, 'Q3': 87,  'Q4': 78},
+        'Severe Case': {'Q1': None, 'Q2': 113, 'Q3': 110, 'Q4': 99},
+        'Worst Case':  {'Q1': None, 'Q2': 130, 'Q3': 121, 'Q4': 112},
     },
     'Natural Gas (HH)': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': +1.1008, 'Q3': +1.2409, 'Q4': +1.3810},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.6246, 'Q3': +0.7367, 'Q4': +0.8207},
-        'Base Case':   {'Q1': 0.00, 'Q2': -0.05,   'Q3': +0.05,   'Q4': +0.10},
+        'Base Case':   {'Q1': None, 'Q2': 3.20, 'Q3': 3.40, 'Q4': 3.60},
+        'Severe Case': {'Q1': None, 'Q2': 4.00, 'Q3': 4.40, 'Q4': 4.25},
+        'Worst Case':  {'Q1': None, 'Q2': 4.90, 'Q3': 5.80, 'Q4': 5.50},
     },
     'TTF Gas': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': +1.50, 'Q3': +1.80, 'Q4': +1.60},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.80, 'Q3': +0.90, 'Q4': +0.70},
-        'Base Case':   {'Q1': 0.00, 'Q2': +0.05, 'Q3': +0.00, 'Q4': +0.15},
+        # Elevated — Qatar production loss, structural supply deficit
+        'Base Case':   {'Q1': None, 'Q2': 60,  'Q3': 64,  'Q4': 66},
+        'Severe Case': {'Q1': None, 'Q2': 76,  'Q3': 87,  'Q4': 81},
+        'Worst Case':  {'Q1': None, 'Q2': 98,  'Q3': 119, 'Q4': 108},
     },
+    # ═══════════════════════════════════════════════════════════════════════════
+    # AGRICULTURE — Supply / Weather scenarios
+    # Bear = bumper harvest, oversupply depresses prices
+    # Bull = drought in key regions, supply shock, export restrictions
+    # ═══════════════════════════════════════════════════════════════════════════
     'Cocoa': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': -0.10, 'Q3': -0.12, 'Q4': -0.08},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.08, 'Q3': +0.12, 'Q4': +0.15},
-        'Base Case':   {'Q1': 0.00, 'Q2': -0.03, 'Q3': -0.05, 'Q4': +0.02},
+        'Bear':  {'Q1': None, 'Q2': 2780, 'Q3': 2590, 'Q4': 2690},
+        'Base':  {'Q1': None, 'Q2': 3065, 'Q3': 3000, 'Q4': 3100},
+        'Bull':  {'Q1': None, 'Q2': 3475, 'Q3': 3790, 'Q4': 3950},
     },
     'Wheat': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': -0.08, 'Q3': -0.10, 'Q4': -0.06},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.10, 'Q3': +0.15, 'Q4': +0.12},
-        'Base Case':   {'Q1': 0.00, 'Q2': +0.02, 'Q3': +0.00, 'Q4': +0.03},
+        'Bear':  {'Q1': None, 'Q2': 555, 'Q3': 530, 'Q4': 545},
+        'Base':  {'Q1': None, 'Q2': 615, 'Q3': 622, 'Q4': 628},
+        'Bull':  {'Q1': None, 'Q2': 676, 'Q3': 736, 'Q4': 712},
     },
     'Soybeans': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': -0.07, 'Q3': -0.09, 'Q4': -0.05},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.09, 'Q3': +0.12, 'Q4': +0.10},
-        'Base Case':   {'Q1': 0.00, 'Q2': +0.01, 'Q3': +0.02, 'Q4': +0.03},
+        'Bear':  {'Q1': None, 'Q2': 1090, 'Q3': 1045, 'Q4': 1070},
+        'Base':  {'Q1': None, 'Q2': 1185, 'Q3': 1195, 'Q4': 1207},
+        'Bull':  {'Q1': None, 'Q2': 1277, 'Q3': 1370, 'Q4': 1335},
     },
     'Coffee': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': -0.08, 'Q3': -0.10, 'Q4': -0.07},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.12, 'Q3': +0.15, 'Q4': +0.18},
-        'Base Case':   {'Q1': 0.00, 'Q2': +0.02, 'Q3': +0.01, 'Q4': +0.04},
+        'Bear':  {'Q1': None, 'Q2': 277, 'Q3': 259, 'Q4': 271},
+        'Base':  {'Q1': None, 'Q2': 307, 'Q3': 304, 'Q4': 310},
+        'Bull':  {'Q1': None, 'Q2': 346, 'Q3': 376, 'Q4': 391},
     },
+    # ═══════════════════════════════════════════════════════════════════════════
+    # METALS — Speculative / Macro scenarios
+    # Bear = risk-off, dollar strength, demand slowdown
+    # Bull = flight to safety, speculative inflows, CB accumulation
+    # Gold Bull: $5600 year-end target
+    # ═══════════════════════════════════════════════════════════════════════════
     'Copper': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': -0.08, 'Q3': -0.10, 'Q4': -0.07},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.08, 'Q3': +0.12, 'Q4': +0.14},
-        'Base Case':   {'Q1': 0.00, 'Q2': +0.01, 'Q3': +0.02, 'Q4': +0.03},
+        'Bear':  {'Q1': None, 'Q2': 5.03, 'Q3': 4.81, 'Q4': 4.92},
+        'Base':  {'Q1': None, 'Q2': 5.63, 'Q3': 5.74, 'Q4': 5.80},
+        'Bull':  {'Q1': None, 'Q2': 6.02, 'Q3': 6.45, 'Q4': 6.67},
     },
     'Gold': {
-        'Worst Case':  {'Q1': 0.00, 'Q2': -0.05, 'Q3': -0.06, 'Q4': -0.04},
-        'Severe Case': {'Q1': 0.00, 'Q2': +0.06, 'Q3': +0.09, 'Q4': +0.12},
-        'Base Case':   {'Q1': 0.00, 'Q2': +0.01, 'Q3': +0.02, 'Q4': +0.03},
+        'Bear':  {'Q1': None, 'Q2': 4250, 'Q3': 4070, 'Q4': 4160},
+        'Base':  {'Q1': None, 'Q2': 4705, 'Q3': 4885, 'Q4': 5065},
+        'Bull':  {'Q1': None, 'Q2': 4975, 'Q3': 5340, 'Q4': 5600},
     },
-}
-
-# Scenario colors for frontend
-SCENARIO_COLORS = {
-    'Actual':       '#94a3b8',
-    'Base Case':    '#3b82f6',
-    'Severe Case':  '#f59e0b',
-    'Worst Case':   '#ef4444',
-    'Weighted Avg': '#10b981',
 }
 
 # Group colors for commodity lines in group overview
@@ -262,9 +327,6 @@ def _empty_result():
             'label_types': ctx['label_types'],
             'year_end_label': f"FY {ctx['year']}",
         },
-        'scenario_weights': SCENARIO_WEIGHTS,
-        'scenario_labels': SCENARIO_LABELS,
-        'scenario_colors': SCENARIO_COLORS,
         'groups': {},
         'meta': {
             'source': 'ParraMacro Commodities Forecast',
@@ -386,23 +448,27 @@ def _fetch_all_data(time_ctx):
     return historical, actuals
 
 
-def _build_scenario_forecasts(name, actual_data, time_ctx):
+def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
     """
     Build scenario-based forecasts for a single commodity.
 
-    Uses direct quarterly spread lookups (no monthly interpolation).
-    Labels follow the rolling quarter scheme from time_ctx.
+    Uses absolute price targets from SCENARIO_TARGETS (not spreads).
+    For actual/current_q columns uses live data; for forecast columns uses
+    the fixed model targets.  Q1 targets set to None are auto-filled from
+    the current quarter YTD average.
 
     Returns a dict of scenario -> {label: price} for all time labels + FY.
     """
-    spreads_cfg = SCENARIO_SPREADS.get(name)
-    if not spreads_cfg:
+    targets_cfg = SCENARIO_TARGETS.get(name)
+    if not targets_cfg:
         return None
+
+    group_cfg = GROUP_SCENARIOS.get(group_name, {})
+    weights = group_cfg.get('weights', {})
 
     labels = time_ctx['labels']
     label_types = time_ctx['label_types']
     forecast_quarters = time_ctx['forecast_quarters']
-    latest_close = actual_data['latest_close']
     completed = actual_data.get('completed', {})
     current_q_avg = actual_data.get('current_q_avg')
     year = time_ctx['year']
@@ -421,39 +487,40 @@ def _build_scenario_forecasts(name, actual_data, time_ctx):
     actual_row['FY'] = None
     scenarios['Actual'] = actual_row
 
-    # ── Scenario rows ──
-    for scenario in spreads_cfg.keys():
+    # ── Scenario rows (using group-specific scenario names) ──
+    for scenario in targets_cfg.keys():
         row = {}
-        fy_parts = []  # (value, quarter_num) for FY calc — current year only
+        fy_parts = []
 
         for i, (label, ltype) in enumerate(zip(labels, label_types)):
             if ltype == 'actual':
-                # Completed quarter — use actual average
                 val = completed.get(label)
                 row[label] = val
                 if val is not None:
                     fy_parts.append(val)
 
             elif ltype == 'current_q':
+                # Use live actual for current quarter
                 row[label] = current_q_avg
                 if current_q_avg is not None:
                     fy_parts.append(current_q_avg)
 
             elif ltype == 'forecast':
-                # Find matching forecast quarter
                 fc_idx = sum(1 for lt in label_types[:i] if lt == 'forecast')
                 if fc_idx < len(forecast_quarters):
                     fy_q, fq_num, _ = forecast_quarters[fc_idx]
-                    spread = spreads_cfg.get(scenario, {}).get(f'Q{fq_num}', 0.0)
-                    val = round(latest_close * (1 + spread), 2)
+                    # Direct absolute price target lookup
+                    target = targets_cfg.get(scenario, {}).get(f'Q{fq_num}')
+                    if target is not None:
+                        val = round(float(target), 2)
+                    else:
+                        val = current_q_avg  # fallback for None targets
                     row[label] = val
-                    # Only include in FY if this quarter is in the current year
-                    if fy_q == year:
+                    if val is not None and fy_q == year:
                         fy_parts.append(val)
                 else:
                     row[label] = None
 
-        # FY = simple average of all current-year quarter values
         if fy_parts:
             row['FY'] = round(sum(fy_parts) / len(fy_parts), 2)
         else:
@@ -461,12 +528,12 @@ def _build_scenario_forecasts(name, actual_data, time_ctx):
 
         scenarios[scenario] = row
 
-    # ── Weighted average row ──
+    # ── Weighted average row (using group-specific weights) ──
     weighted = {}
     for label in labels:
         val = 0.0
         has_all = True
-        for sc, w in SCENARIO_WEIGHTS.items():
+        for sc, w in weights.items():
             sc_val = scenarios.get(sc, {}).get(label)
             if sc_val is not None:
                 val += w * sc_val
@@ -478,7 +545,7 @@ def _build_scenario_forecasts(name, actual_data, time_ctx):
     # FY weighted average
     fy_val = 0.0
     fy_ok = True
-    for sc, w in SCENARIO_WEIGHTS.items():
+    for sc, w in weights.items():
         sc_fy = scenarios.get(sc, {}).get('FY')
         if sc_fy is not None:
             fy_val += w * sc_fy
@@ -508,12 +575,21 @@ def _fetch_forecasts():
             if name not in actuals:
                 continue
 
-            scenarios = _build_scenario_forecasts(name, actuals[name], time_ctx)
+            scenarios = _build_scenario_forecasts(
+                name, actuals[name], time_ctx, group
+            )
             if not scenarios:
                 continue
 
             if group not in groups:
-                groups[group] = {'commodities': {}}
+                group_cfg = GROUP_SCENARIOS.get(group, {})
+                groups[group] = {
+                    'commodities': {},
+                    'scenario_weights': group_cfg.get('weights', {}),
+                    'scenario_labels': group_cfg.get('labels', {}),
+                    'scenario_colors': group_cfg.get('colors', {}),
+                    'scenario_order': group_cfg.get('scenario_order', []),
+                }
 
             groups[group]['commodities'][name] = {
                 'unit': unit,
@@ -548,9 +624,6 @@ def _fetch_forecasts():
                 'label_types': time_ctx['label_types'],
                 'year_end_label': f"FY {time_ctx['year']}",
             },
-            'scenario_weights': SCENARIO_WEIGHTS,
-            'scenario_labels': SCENARIO_LABELS,
-            'scenario_colors': SCENARIO_COLORS,
             'groups': groups,
             'meta': {
                 'source': 'ParraMacro Commodities Forecast',

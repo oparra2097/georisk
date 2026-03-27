@@ -440,9 +440,7 @@ def export_forecasts_excel():
     labels = time_ctx.get('labels', [])
     label_types = time_ctx.get('label_types', [])
     year_end_label = time_ctx.get('year_end_label', 'FY Avg')
-    scenario_weights = data.get('scenario_weights', {})
-    scenario_labels = data.get('scenario_labels', {})
-    scenario_order = ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg']
+    # Per-group scenario config — extracted per group below
 
     # Styles
     header_font = Font(bold=True, color='FFFFFF', size=11)
@@ -467,6 +465,10 @@ def export_forecasts_excel():
         if not group:
             continue
 
+        # Per-group scenario config
+        scenario_order = group.get('scenario_order', ['Actual', 'Weighted Avg'])
+        scenario_weights = group.get('scenario_weights', {})
+        scenario_labels = group.get('scenario_labels', {})
         commodities = group.get('commodities', {})
 
         for comm_name, comm_data in commodities.items():
@@ -549,7 +551,9 @@ def export_forecasts_excel():
             row += 1
 
             # ── Scenario Descriptions ──
-            for sc in ['Base Case', 'Severe Case', 'Worst Case']:
+            for sc in scenario_order:
+                if sc in ('Actual', 'Weighted Avg'):
+                    continue
                 desc = scenario_labels.get(sc, '')
                 w = scenario_weights.get(sc)
                 w_str = f' ({w*100:.0f}%)' if w else ''
