@@ -903,30 +903,57 @@
         const commodities = group.commodities || {};
         const groupColors = group.colors || {};
         const timeCtx = data.time_context || {};
-        const labels = timeCtx.labels || [];
+        const forecastLabels = timeCtx.labels || [];
         const labelTypes = timeCtx.label_types || [];
         const yearEndLabel = timeCtx.year_end_label || 'FY Avg';
-        const forecastStartIdx = labelTypes.findIndex(t => t === 'forecast');
+
+        // ── Build unified timeline: historical quarters + current year forecast ──
+        // Collect all historical labels across commodities, then append forecast labels
+        const histLabelSet = new Set();
+        Object.values(commodities).forEach(info => {
+            (info.historical || []).forEach(h => histLabelSet.add(h.label));
+        });
+        // Sort historical labels chronologically ("2015 Q1" < "2015 Q2" < "2016 Q1" ...)
+        const histLabels = Array.from(histLabelSet).sort((a, b) => {
+            const [ya, qa] = a.split(' Q'); const [yb, qb] = b.split(' Q');
+            return (parseInt(ya) * 10 + parseInt(qa)) - (parseInt(yb) * 10 + parseInt(qb));
+        });
+
+        // Combine: all historical + forecast labels
+        const allLabels = histLabels.concat(forecastLabels);
+        const forecastStartIdx = histLabels.length; // index where forecast portion begins
+
+        // Build a lookup map for each commodity: label → value
+        const commodityMaps = {};
+        Object.entries(commodities).forEach(([name, info]) => {
+            const valMap = {};
+            // Historical data
+            (info.historical || []).forEach(h => { valMap[h.label] = h.avg_price; });
+            // Forecast / current year scenario data
+            const scenData = (info.scenarios || {})[scenario] || {};
+            forecastLabels.forEach(l => { if (scenData[l] != null) valMap[l] = scenData[l]; });
+            commodityMaps[name] = valMap;
+        });
 
         // Summary not used for forecast groups
         const summary = document.getElementById('panel-summary');
         if (summary) summary.innerHTML = '';
 
-        // Chart
+        // ── Chart ──
         PD.destroyChart('main');
         const canvasEl = document.getElementById('panel-chart');
         if (!canvasEl) return;
         const ctx = canvasEl.getContext('2d');
 
         const datasets = Object.entries(commodities).map(([name, info]) => {
-            const scenData = (info.scenarios || {})[scenario] || {};
+            const valMap = commodityMaps[name];
             const color = groupColors[name] || COLORS[0];
             return {
                 label: name,
-                data: labels.map(l => scenData[l] != null ? scenData[l] : null),
+                data: allLabels.map(l => valMap[l] != null ? valMap[l] : null),
                 borderColor: color,
-                backgroundColor: color + '1A',
-                borderWidth: 2.5, fill: false, pointRadius: 5,
+                backgroundColor: 'transparent',
+                borderWidth: 2, fill: false, pointRadius: 0, pointHitRadius: 8,
                 pointBackgroundColor: color, pointBorderColor: color, tension: 0.3,
                 segment: forecastStartIdx > 0 ? {
                     borderDash: ctx2 => ctx2.p0DataIndex >= forecastStartIdx - 1 ? [4, 3] : [],
@@ -936,33 +963,111 @@
 
         PD.setChart('main', new Chart(ctx, {
             type: 'line',
-            data: { labels: labels, datasets },
-            options: forecastChartOptions(labelTypes, commodities),
+            data: { labels: allLabels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        bodyFont: { size: 12 },
+                        callbacks: {
+                            label: (tooltipCtx) => {
+                                const val = tooltipCtx.parsed.y;
+                                const name = tooltipCtx.dataset.label;
+                                const info = commodities[name];
+                                const unit = info ? info.unit : '';
+                                if (val == null) return name + ': N/A';
+                                return name + ': ' + val.toFixed(2) + ' ' + unit;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: {
+                            color: (tickCtx) => {
+                                if (tickCtx.index >= forecastStartIdx) {
+                                    // Color forecast ticks by their type
+                                    const fIdx = tickCtx.index - forecastStartIdx;
+                                    if (labelTypes[fIdx] === 'current_q') return '#f59e0b';
+                                    if (labelTypes[fIdx] === 'forecast') return '#6b7280';
+                                }
+                                return '#9ca3af';
+                            },
+                            font: { size: 11 },
+                            maxRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 20,
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                    },
+                    y: {
+                        ticks: { color: '#6b7280', font: { size: 10 } },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                    }
+                }
+            },
         }));
 
-        // Table
+        // ── Table: show yearly averages from historical + forecast quarters ──
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
-            let hdr = '<tr><th>Commodity</th><th>Unit</th>';
-            labels.forEach((l, i) => {
-                const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
-                hdr += '<th' + cls + '>' + l + '</th>';
+            // Build yearly summary from historical + forecast data
+            const yearMap = {}; // year → { commodity → [values] }
+            allLabels.forEach((l, idx) => {
+                // Parse year from label: "2015 Q1" → 2015, "Q3" → forecastYear, "Q1'27" → 2027
+                let yr;
+                if (l.includes(' Q')) {
+                    yr = parseInt(l.split(' Q')[0]);
+                } else if (l.includes("'")) {
+                    yr = 2000 + parseInt(l.split("'")[1]);
+                } else {
+                    yr = data.forecast_year || new Date().getFullYear();
+                }
+                if (!yearMap[yr]) yearMap[yr] = {};
+                Object.entries(commodities).forEach(([name]) => {
+                    if (!yearMap[yr][name]) yearMap[yr][name] = [];
+                    const v = commodityMaps[name][l];
+                    if (v != null) yearMap[yr][name].push(v);
+                });
             });
-            hdr += '<th>' + yearEndLabel + '</th></tr>';
+
+            const sortedYears = Object.keys(yearMap).map(Number).sort();
+            const forecastYear = data.forecast_year || new Date().getFullYear();
+
+            let hdr = '<tr><th>Commodity</th><th>Unit</th>';
+            sortedYears.forEach(yr => {
+                const cls = yr >= forecastYear ? ' class="col-forecast"' : '';
+                hdr += '<th' + cls + '>' + yr + '</th>';
+            });
+            hdr += '</tr>';
             thead.innerHTML = hdr;
 
             let rows = '';
             Object.entries(commodities).forEach(([name, info]) => {
-                const scenData = (info.scenarios || {})[scenario] || {};
                 rows += '<tr><td>' + name + '</td><td>' + (info.unit || '') + '</td>';
-                labels.forEach((l, i) => {
-                    const v = scenData[l];
-                    const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
-                    rows += v != null ? '<td' + cls + '>' + v.toFixed(2) + '</td>' : '<td' + cls + '>\u2014</td>';
+                sortedYears.forEach(yr => {
+                    const vals = (yearMap[yr] || {})[name] || [];
+                    const cls = yr >= forecastYear ? ' class="col-forecast"' : '';
+                    if (vals.length > 0) {
+                        const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+                        rows += '<td' + cls + '>' + avg.toFixed(2) + '</td>';
+                    } else {
+                        rows += '<td' + cls + '>\u2014</td>';
+                    }
                 });
-                const fy = scenData['FY'];
-                rows += fy != null ? '<td>' + fy.toFixed(2) + '</td>' : '<td>\u2014</td>';
                 rows += '</tr>';
             });
             tbody.innerHTML = rows;
@@ -983,7 +1088,7 @@
             metaEl.textContent = parts.join(' \u00b7 ');
         }
 
-        // Hide history section
+        // Hide history section (unified into main chart)
         const histSection = document.getElementById('panel-history-section');
         if (histSection) histSection.style.display = 'none';
     }
@@ -1001,10 +1106,19 @@
         const scenarioLabels = group.scenario_labels || {};
         const scenarioOrder = group.scenario_order || ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
         const timeCtx = data.time_context || {};
-        const labels = timeCtx.labels || [];
+        const forecastLabels = timeCtx.labels || [];
         const labelTypes = timeCtx.label_types || [];
         const yearEndLabel = timeCtx.year_end_label || 'FY Avg';
         const forecastYear = data.forecast_year || new Date().getFullYear();
+
+        // ── Build unified timeline: historical + current year scenarios ──
+        const historical = info.historical || [];
+        const histLabels = historical.map(h => h.label);
+        const histMap = {};
+        historical.forEach(h => { histMap[h.label] = h.avg_price; });
+
+        const allLabels = histLabels.concat(forecastLabels);
+        const forecastStartIdx = histLabels.length;
 
         // Update title
         const titleEl = document.getElementById('panel-title');
@@ -1014,44 +1128,125 @@
         const summary = document.getElementById('panel-summary');
         if (summary) summary.innerHTML = '';
 
-        // Chart
+        // ── Chart ──
         PD.destroyChart('main');
         const canvasEl = document.getElementById('panel-chart');
         if (!canvasEl) return;
         const ctx = canvasEl.getContext('2d');
 
         const baseScenario = scenarioOrder.find(sc => sc === 'Base Case' || sc === 'Base') || scenarioOrder[1];
-        const datasets = scenarioOrder
+
+        // Build one "History" line + scenario fan lines
+        const datasets = [];
+
+        // Historical line (single line covering the historical portion)
+        if (histLabels.length > 0) {
+            datasets.push({
+                label: 'Historical',
+                data: allLabels.map((l, i) => i < forecastStartIdx ? (histMap[l] != null ? histMap[l] : null) : null),
+                borderColor: '#94a3b8',
+                backgroundColor: '#94a3b81A',
+                borderWidth: 2, fill: true, pointRadius: 0, pointHitRadius: 8,
+                pointBackgroundColor: '#94a3b8', pointBorderColor: '#94a3b8', tension: 0.3,
+            });
+        }
+
+        // Scenario lines (covering the forecast portion, connecting from last historical point)
+        scenarioOrder
             .filter(sc => scenarios[sc] && sc !== 'Actual')
-            .map(sc => {
+            .forEach(sc => {
                 const scenData = scenarios[sc];
                 const color = scenarioColors[sc] || '#9ca3af';
                 const isDashed = sc === 'Weighted Avg';
                 const isBase = sc === baseScenario;
-                return {
+
+                // Build data array: null for historical, then scenario values
+                // But connect to the last historical point for continuity
+                const lineData = allLabels.map((l, i) => {
+                    if (i < forecastStartIdx) {
+                        // Show the last historical point as the starting anchor
+                        if (i === forecastStartIdx - 1 && histMap[l] != null) return histMap[l];
+                        return null;
+                    }
+                    return scenData[forecastLabels[i - forecastStartIdx]] != null ? scenData[forecastLabels[i - forecastStartIdx]] : null;
+                });
+
+                datasets.push({
                     label: sc,
-                    data: labels.map(l => scenData[l] != null ? scenData[l] : null),
+                    data: lineData,
                     borderColor: color,
                     backgroundColor: isBase ? color + '1A' : 'transparent',
                     borderWidth: sc === 'Weighted Avg' ? 3 : 2,
                     borderDash: isDashed ? [6, 3] : [],
-                    fill: isBase, pointRadius: 5,
+                    fill: false, pointRadius: 4, pointHitRadius: 8,
                     pointBackgroundColor: color, pointBorderColor: color, tension: 0.3,
-                };
+                    spanGaps: true,
+                });
             });
+
+        const unit = info.unit || '';
 
         PD.setChart('main', new Chart(ctx, {
             type: 'line',
-            data: { labels: labels, datasets },
-            options: forecastChartOptions(labelTypes, { [commodityName]: info }),
+            data: { labels: allLabels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        bodyFont: { size: 12 },
+                        callbacks: {
+                            label: (tooltipCtx) => {
+                                const val = tooltipCtx.parsed.y;
+                                if (val == null) return tooltipCtx.dataset.label + ': N/A';
+                                return tooltipCtx.dataset.label + ': ' + val.toFixed(2) + ' ' + unit;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: {
+                            color: (tickCtx) => {
+                                if (tickCtx.index >= forecastStartIdx) {
+                                    const fIdx = tickCtx.index - forecastStartIdx;
+                                    if (labelTypes[fIdx] === 'current_q') return '#f59e0b';
+                                    if (labelTypes[fIdx] === 'forecast') return '#6b7280';
+                                }
+                                return '#9ca3af';
+                            },
+                            font: { size: 11 },
+                            maxRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 20,
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                    },
+                    y: {
+                        ticks: { color: '#6b7280', font: { size: 10 } },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                    }
+                }
+            },
         }));
 
-        // Table
+        // ── Table: scenarios × forecast labels (keep existing format) ──
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
             let hdr = '<tr><th>Scenario</th>';
-            labels.forEach((l, i) => {
+            forecastLabels.forEach((l, i) => {
                 const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
                 hdr += '<th' + cls + '>' + l + '</th>';
             });
@@ -1064,7 +1259,7 @@
                 if (!scenData) return;
                 const color = scenarioColors[sc] || '#9ca3af';
                 rows += '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:6px;"></span>' + sc + '</td>';
-                labels.forEach((l, i) => {
+                forecastLabels.forEach((l, i) => {
                     const v = scenData[l];
                     const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
                     rows += v != null ? '<td' + cls + '>' + v.toFixed(2) + '</td>' : '<td' + cls + '>\u2014</td>';
@@ -1089,66 +1284,12 @@
             metaEl.textContent = parts.join(' \u00b7 ');
         }
 
-        // Historical
-        renderForecastHistory(info, commodityName);
-    }
-
-    function renderForecastHistory(info, name) {
-        const historical = info.historical || [];
+        // Hide separate history section (now unified into main chart)
         const histSection = document.getElementById('panel-history-section');
-        if (historical.length === 0) {
-            if (histSection) histSection.style.display = 'none';
-            return;
-        }
-        if (histSection) histSection.style.display = '';
-
-        const unit = info.unit || '';
-
-        // Chart
-        PD.destroyChart('history');
-        const histCanvasEl = document.getElementById('history-chart');
-        if (histCanvasEl) {
-            const histCtx = histCanvasEl.getContext('2d');
-            const histLabels = historical.map(h => h.label);
-            const histValues = historical.map(h => h.avg_price);
-
-            PD.setChart('history', new Chart(histCtx, {
-                type: 'line',
-                data: {
-                    labels: histLabels,
-                    datasets: [{
-                        label: name + ' (Quarterly Avg)',
-                        data: histValues,
-                        borderColor: '#3b82f6',
-                        backgroundColor: '#3b82f61A',
-                        borderWidth: 2, fill: true, pointRadius: 0, pointHitRadius: 8, tension: 0.3,
-                    }]
-                },
-                options: chartOptions({
-                    legend: false,
-                    tooltip: (ctx) => {
-                        const val = ctx.parsed.y;
-                        if (val == null) return 'N/A';
-                        return val.toFixed(2) + ' ' + unit;
-                    },
-                    maxTicksLimitX: 20, maxRotation: 45,
-                }),
-            }));
-        }
-
-        // Table
-        const histThead = document.getElementById('history-thead');
-        const histTbody = document.getElementById('history-tbody');
-        if (histThead && histTbody) {
-            histThead.innerHTML = '<tr><th>Period</th><th>Avg Price (' + unit + ')</th></tr>';
-            let rows = '';
-            for (let i = historical.length - 1; i >= 0; i--) {
-                const rec = historical[i];
-                rows += '<tr><td>' + rec.label + '</td><td>' + rec.avg_price.toFixed(2) + '</td></tr>';
-            }
-            histTbody.innerHTML = rows;
-        }
+        if (histSection) histSection.style.display = 'none';
     }
+
+    // renderForecastHistory removed — historical data now unified into main chart
 
     // ══════════════════════════════════════════════════════
     // WEO RENDERER (Phase 5)
@@ -1427,52 +1568,7 @@
         };
     }
 
-    function forecastChartOptions(labelTypes, commodities) {
-        return {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: {
-                    position: 'top',
-                    labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'circle' }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0,0,0,0.9)',
-                    titleColor: '#fff',
-                    bodyColor: '#d1d5db',
-                    callbacks: {
-                        label: (ctx) => {
-                            const val = ctx.parsed.y;
-                            if (val == null) return ctx.dataset.label + ': N/A';
-                            const name = ctx.dataset.label;
-                            const info = commodities[name];
-                            const unit = info ? info.unit : '';
-                            return name + ': ' + val.toFixed(2) + ' ' + unit;
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    ticks: {
-                        color: (ctx) => {
-                            const idx = ctx.index;
-                            if (labelTypes[idx] === 'forecast') return '#6b7280';
-                            if (labelTypes[idx] === 'current_q') return '#f59e0b';
-                            return '#9ca3af';
-                        },
-                        font: { size: 12, weight: 'bold' },
-                    },
-                    grid: { color: 'rgba(55,65,81,0.3)' }
-                },
-                y: {
-                    ticks: { color: '#6b7280', font: { size: 10 } },
-                    grid: { color: 'rgba(55,65,81,0.3)' }
-                }
-            }
-        };
-    }
+    // forecastChartOptions removed — chart options now inline in each renderer
 
     // ══════════════════════════════════════════════════════
     // SEARCH OVERLAY (Phase 3)
