@@ -9,6 +9,7 @@ Used as a calibration signal within the base score calculation
 alongside WGI governance scores and macro indicators.
 
 Cached locally for 30 days. No API key needed — public data.
+File is legacy .xls (CDFV2) format — requires xlrd library.
 """
 
 import os
@@ -18,6 +19,8 @@ import logging
 import requests
 from datetime import datetime
 from config import Config
+
+RETRY_BACKOFF = 3600  # 1 hour cooldown after a failed download
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +52,7 @@ GPR_COUNTRIES = {
 # In-memory cache
 _gpr_scores = None
 _gpr_fetched_at = None
+_gpr_last_failure = None  # Prevents retry storms on download failure
 
 
 def _load_cache():
@@ -83,19 +87,24 @@ def _save_cache(scores):
 def _normalize_gpr(raw_value):
     """
     Normalize raw GPR index value to 0-100 scale.
-    GPR typically ranges from ~50 (low risk) to ~500+ (crisis).
-    Uses log2 scaling for better spread:
-      GPR  50 → ~10
-      GPR 100 → ~27
-      GPR 200 → ~44
-      GPR 400 → ~61
-      GPR 800 → ~78
+
+    Country-level GPRC values typically range from ~0.3 (calm) to ~20+ (crisis).
+    The global GPR index uses a different scale (~50-500).
+
+    Uses log-based scaling that works for both ranges:
+      GPRC  0.5 →  ~5    (very low risk)
+      GPRC  1.0 → ~15    (low)
+      GPRC  2.0 → ~25    (moderate)
+      GPRC  5.0 → ~40    (elevated)
+      GPRC 10.0 → ~55    (high)
+      GPRC 20.0 → ~70    (severe)
+      GPR 100+  → ~85+   (extreme - global index)
     """
     if raw_value is None or raw_value <= 0:
         return 0.0
-    log_val = math.log2(max(raw_value, 1))
-    # Map log2(50)≈5.64 to ~10, log2(800)≈9.64 to ~78
-    norm = max(0, min(100, (log_val - 5.0) * 17.0))
+    log_val = math.log2(max(raw_value, 0.1))
+    # Map log2(0.5)≈-1 to ~5, log2(20)≈4.3 to ~70
+    norm = max(0, min(100, (log_val + 1.5) * 12.5))
     return round(norm, 1)
 
 
@@ -103,8 +112,10 @@ def fetch_gpr_data():
     """
     Download and parse GPR index data. Returns {iso2: normalized_score}.
     Uses disk cache (30 days), then memory cache.
+    The source file is legacy .xls format — parsed with xlrd.
+    Includes a 1-hour backoff after download failures to prevent retry storms.
     """
-    global _gpr_scores, _gpr_fetched_at
+    global _gpr_scores, _gpr_fetched_at, _gpr_last_failure
 
     # Check memory cache
     if _gpr_scores is not None and _gpr_fetched_at is not None:
@@ -118,45 +129,43 @@ def fetch_gpr_data():
         _gpr_fetched_at = datetime.utcnow()
         return cached
 
+    # Backoff: don't retry within 1 hour of a failure
+    if _gpr_last_failure is not None:
+        elapsed = (datetime.utcnow() - _gpr_last_failure).total_seconds()
+        if elapsed < RETRY_BACKOFF:
+            return _gpr_scores or {}
+
     # Download fresh data
     try:
+        import xlrd
+
         resp = requests.get(GPR_DATA_URL, timeout=30)
         if resp.status_code != 200:
             logger.warning(f"GPR download failed: HTTP {resp.status_code}")
+            _gpr_last_failure = datetime.utcnow()
             return _gpr_scores or {}
 
-        from io import BytesIO
-        from openpyxl import load_workbook
-        wb = load_workbook(BytesIO(resp.content), read_only=True, data_only=True)
-        ws = wb.active
+        # Parse legacy .xls with xlrd
+        wb = xlrd.open_workbook(file_contents=resp.content)
+        ws = wb.sheet_by_index(0)
 
-        # Parse headers from first row
-        headers = []
-        for row in ws.iter_rows(min_row=1, max_row=1):
-            headers = [cell.value for cell in row]
-            break
-
-        if not headers:
-            logger.warning("GPR Excel has no headers")
-            return _gpr_scores or {}
-
-        # Find the last data row (most recent month)
-        last_row = None
-        for row in ws.iter_rows(min_row=2, values_only=True):
-            last_row = row
-
-        wb.close()
-
-        if not last_row:
+        if ws.nrows < 2:
             logger.warning("GPR Excel has no data rows")
+            _gpr_last_failure = datetime.utcnow()
             return _gpr_scores or {}
+
+        # Headers from first row
+        headers = [ws.cell_value(0, c) for c in range(ws.ncols)]
+
+        # Last row = most recent month
+        last_row_idx = ws.nrows - 1
 
         # Extract and normalize scores
         scores = {}
         for i, header in enumerate(headers):
-            if header and header in GPR_COUNTRIES and i < len(last_row):
-                raw = last_row[i]
-                if raw is not None:
+            if header and header in GPR_COUNTRIES:
+                raw = ws.cell_value(last_row_idx, i)
+                if raw is not None and raw != '':
                     try:
                         iso2 = GPR_COUNTRIES[header]
                         scores[iso2] = _normalize_gpr(float(raw))
@@ -166,18 +175,22 @@ def fetch_gpr_data():
         if scores:
             _gpr_scores = scores
             _gpr_fetched_at = datetime.utcnow()
+            _gpr_last_failure = None
             _save_cache(scores)
             logger.info(f"GPR Index loaded: {len(scores)} countries")
         else:
             logger.warning("GPR parsing produced no scores")
+            _gpr_last_failure = datetime.utcnow()
 
         return scores
 
     except ImportError:
-        logger.warning("openpyxl not installed — GPR Index unavailable")
+        logger.warning("xlrd not installed — GPR Index unavailable (pip install xlrd)")
+        _gpr_last_failure = datetime.utcnow()
         return _gpr_scores or {}
     except Exception as e:
         logger.error(f"Failed to fetch GPR data: {e}")
+        _gpr_last_failure = datetime.utcnow()
         return _gpr_scores or {}
 
 

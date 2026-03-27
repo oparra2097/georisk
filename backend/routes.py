@@ -8,6 +8,7 @@ from backend.data_sources.bls_cpi import get_bls_cpi_data, get_bls_components, c
 from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
 from backend.data_sources.substack_feed import get_substack_posts
 from backend.data_sources.commodities_forecast import get_forecast_data
+from backend.data_sources.imf_weo import get_weo_data
 from backend.cache.database import get_country_history, get_all_history, detect_anomalies, get_score_count
 from config import Config
 
@@ -612,6 +613,93 @@ def export_forecasts_excel():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'parramacro_commodity_forecasts_{today}.xlsx'
+    )
+
+
+@api_bp.route('/weo/<indicator>')
+def get_weo(indicator):
+    """Return IMF WEO data for the given indicator (cached 24 hours)."""
+    data = get_weo_data(indicator)
+    return jsonify(data)
+
+
+@api_bp.route('/weo/<indicator>/export')
+def export_weo_excel(indicator):
+    """Generate Excel file with WEO indicator data."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_weo_data(indicator)
+    countries = data.get('countries', {})
+    years = data.get('years', [])
+    forecast_start = data.get('forecast_start_year')
+    meta = data.get('meta', {})
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    forecast_fill = PatternFill(start_color='EFF6FF', end_color='EFF6FF', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = meta.get('indicator_name', indicator)[:31]
+
+    # Title
+    ws.cell(row=1, column=1, value=meta.get('indicator_name', indicator))
+    ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value=meta.get('source', 'IMF WEO'))
+    ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
+
+    # Headers
+    headers = ['Country', 'ISO3'] + [str(y) for y in years]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+        if forecast_start and col > 2:
+            yr = years[col - 3]
+            if yr >= forecast_start:
+                cell.fill = PatternFill(start_color='374151', end_color='374151', fill_type='solid')
+
+    # Data rows sorted by country name
+    sorted_countries = sorted(countries.items(), key=lambda x: x[1].get('name', x[0]))
+    for row_idx, (iso, cdata) in enumerate(sorted_countries, 5):
+        ws.cell(row=row_idx, column=1, value=cdata.get('name', iso)).border = thin_border
+        ws.cell(row=row_idx, column=2, value=iso).border = thin_border
+        for i, yr in enumerate(years):
+            val = cdata['values'].get(str(yr))
+            cell = ws.cell(row=row_idx, column=3 + i, value=val)
+            cell.number_format = '0.00'
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+            if forecast_start and yr >= forecast_start and val is not None:
+                cell.fill = forecast_fill
+
+    # Auto-width
+    ws.column_dimensions['A'].width = 24
+    ws.column_dimensions['B'].width = 8
+    for i in range(len(years)):
+        col_letter = ws.cell(row=4, column=3 + i).column_letter
+        ws.column_dimensions[col_letter].width = 10
+    ws.freeze_panes = 'C5'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'weo_{indicator}_{today}.xlsx'
     )
 
 

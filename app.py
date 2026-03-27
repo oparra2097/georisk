@@ -26,7 +26,8 @@ def create_app():
         return render_template('about.html', active_page='about')
 
     @app.route('/data')
-    def data():
+    @app.route('/data/<path:subpath>')
+    def data(subpath=None):
         return render_template('data.html', active_page='data')
 
     @app.route('/research')
