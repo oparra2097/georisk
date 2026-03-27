@@ -81,7 +81,7 @@ GROUP_SCENARIOS = {
         'labels': {
             'Bear':  'Risk-off environment · Dollar strength · Demand slowdown · De-leveraging',
             'Base':  'Steady macro · Moderate central bank buying · Gradual industrial recovery',
-            'Bull':  'Flight to safety · Speculative inflows · Central bank accumulation · Gold $5600+',
+            'Bull':  'Flight to safety · Speculative inflows · Central bank accumulation · Gold $6200+',
         },
         'colors': {
             'Actual':       '#94a3b8',
@@ -178,9 +178,9 @@ SCENARIO_TARGETS = {
         'Bull':  {'Q1': None, 'Q2': 6.02, 'Q3': 6.45, 'Q4': 6.67},
     },
     'Gold': {
-        'Bear':  {'Q1': None, 'Q2': 4250, 'Q3': 4070, 'Q4': 4160},
-        'Base':  {'Q1': None, 'Q2': 4705, 'Q3': 4885, 'Q4': 5065},
-        'Bull':  {'Q1': None, 'Q2': 4975, 'Q3': 5340, 'Q4': 5600},
+        'Bear':  {'Q1': None, 'Q2': 4550, 'Q3': 4380, 'Q4': 4500},
+        'Base':  {'Q1': None, 'Q2': 5100, 'Q3': 5350, 'Q4': 5600},
+        'Bull':  {'Q1': None, 'Q2': 5450, 'Q3': 5800, 'Q4': 6200},
     },
 }
 
