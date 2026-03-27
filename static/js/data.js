@@ -377,6 +377,7 @@
             case 'cpi': renderCpi(ds); break;
             case 'forecast-group': renderForecast(ds); break;
             case 'weo': renderWeo(ds); break;
+            case 'wb': renderWeo(ds); break;  // World Bank uses same data shape as WEO
         }
     }
 
