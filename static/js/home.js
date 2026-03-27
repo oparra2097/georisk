@@ -252,6 +252,16 @@ function renderHistoryChart(data) {
     const lineColor = isUp ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
     const fillColor = isUp ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
 
+    // Update header % change to reflect selected period
+    const changeEl = document.getElementById('chart-change');
+    if (changeEl && first != null && last != null && first !== 0) {
+        const periodPct = ((last - first) / first) * 100;
+        const dir = periodPct >= 0 ? 'up' : 'down';
+        const sign = periodPct >= 0 ? '+' : '';
+        changeEl.textContent = `${sign}${periodPct.toFixed(2)}%`;
+        changeEl.className = 'market-chart-change ' + dir;
+    }
+
     marketChart = new Chart(ctx, {
         type: 'line',
         data: {

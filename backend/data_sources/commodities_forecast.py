@@ -5,8 +5,8 @@ Dynamic, date-aware forecast engine:
   - Detects today's date to determine completed/current quarters
   - Fetches YTD actual prices from yfinance (live data)
   - Computes current quarter-end estimate from partial data
-  - Forecasts next 4 months using scenario spread assumptions
-  - Calculates year-end (FY) weighted average
+  - Forecasts next 3 quarters using scenario spread assumptions (rolling)
+  - Calculates year-end (FY) weighted average for current calendar year
   - Thread-safe cache with 24-hour TTL
 
 Scenario weights: Base Case 70% | Severe Case 20% | Worst Case 10%
@@ -23,11 +23,6 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 86400   # 24 hours
 RETRY_BACKOFF = 3600  # 1 hour after failure
 HISTORY_YEARS = 10   # years of historical quarterly data
-
-MONTH_NAMES = [
-    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-]
 
 # ── Forecast Configuration ──────────────────────────────────────────────────
 
@@ -58,9 +53,9 @@ COMMODITIES = {
 }
 
 # ── Scenario Spread Targets ─────────────────────────────────────────────────
-# Quarterly targets: cumulative % change from current price by end of quarter.
-# These are keyed Q1-Q4 and represent year-end targets from the start of each
-# quarter.  The engine interpolates monthly values from these.
+# Quarterly targets: cumulative % change from latest close price.
+# Keyed Q1-Q4.  Q1 is always 0 (current baseline).  The engine looks up the
+# spread directly for each forecast quarter (no interpolation needed).
 
 SCENARIO_SPREADS = {
     'WTI Crude': {
@@ -148,7 +143,7 @@ GROUP_COMMODITY_COLORS = {
 # ── Time Context ────────────────────────────────────────────────────────────
 
 def _get_time_context():
-    """Determine current quarter, completed quarters, and forecast months."""
+    """Determine current quarter, completed quarters, and rolling forecast quarters."""
     today = date.today()
     year = today.year
     current_month = today.month
@@ -172,21 +167,26 @@ def _get_time_context():
     # Current quarter label
     current_q_label = f'Q{current_quarter}'
 
-    # Next 4 months for forecast
-    forecast_months = []
-    for i in range(1, 5):
-        m = current_month + i
-        y = year
-        if m > 12:
-            m -= 12
-            y += 1
-        forecast_months.append((y, m))
+    # Rolling forecast: next 3 quarters after current (wraps into next year)
+    forecast_quarters = []  # list of (year, quarter_num, display_label)
+    for i in range(1, 4):
+        fq = current_quarter + i
+        fy = year
+        if fq > 4:
+            fq -= 4
+            fy += 1
+        # Label: "Q2" if same year, "Q1'27" if next year
+        if fy == year:
+            label = f'Q{fq}'
+        else:
+            label = f"Q{fq}'{str(fy)[-2:]}"
+        forecast_quarters.append((fy, fq, label))
 
     # Build labels array for the API response
     labels = []
     label_types = []
 
-    # Completed quarters
+    # Completed quarters in current year (before current)
     for q_label in completed:
         labels.append(q_label)
         label_types.append('actual')
@@ -195,9 +195,9 @@ def _get_time_context():
     labels.append(current_q_label + '*')
     label_types.append('current_q')
 
-    # Next 4 forecast months
-    for (y, m) in forecast_months:
-        labels.append(MONTH_NAMES[m])
+    # Next 3 forecast quarters
+    for (fy, fq, display_label) in forecast_quarters:
+        labels.append(display_label)
         label_types.append('forecast')
 
     return {
@@ -207,7 +207,7 @@ def _get_time_context():
         'completed_quarters': completed,
         'current_quarter': current_q_label,
         'current_quarter_num': current_quarter,
-        'forecast_months': forecast_months,
+        'forecast_quarters': forecast_quarters,
         'labels': labels,
         'label_types': label_types,
     }
@@ -386,87 +386,12 @@ def _fetch_all_data(time_ctx):
     return historical, actuals
 
 
-def _interpolate_monthly_spread(commodity_name, scenario, time_ctx):
-    """
-    Interpolate monthly spread values for the next 4 forecast months.
-
-    Uses the quarterly spread targets and linearly interpolates based on
-    how many months remain until each target quarter-end.
-
-    Returns a list of 4 spread values (one per forecast month).
-    """
-    spreads_cfg = SCENARIO_SPREADS.get(commodity_name, {}).get(scenario, {})
-    if not spreads_cfg:
-        return [0.0] * 4
-
-    year = time_ctx['year']
-    forecast_months = time_ctx['forecast_months']
-
-    # Build a month -> cumulative spread mapping from the quarterly targets
-    # Quarter targets map to the end-month of each quarter
-    quarter_end_months = {
-        'Q1': 3, 'Q2': 6, 'Q3': 9, 'Q4': 12
-    }
-
-    # Build interpolation points: (month_number, spread)
-    # Month 0 = start of year, current state = 0.0 spread
-    # We use month-of-year as the x-axis for interpolation
-    current_month = time_ctx['today'].month
-    interp_points = [(current_month, 0.0)]  # baseline = today
-
-    for q_label in ['Q1', 'Q2', 'Q3', 'Q4']:
-        end_month = quarter_end_months[q_label]
-        spread = spreads_cfg.get(q_label, 0.0)
-        if end_month > current_month:
-            interp_points.append((end_month, spread))
-
-    # Sort by month
-    interp_points.sort(key=lambda x: x[0])
-
-    # For forecast months that go into next year, extend the last known spread
-    last_spread = interp_points[-1][1] if interp_points else 0.0
-
-    monthly_spreads = []
-    for (fy, fm) in forecast_months:
-        # Effective month position (can be >12 for next year)
-        effective_month = fm if fy == year else fm + 12
-
-        # Find surrounding interpolation points
-        spread = _lerp_spread(effective_month, interp_points, last_spread)
-        monthly_spreads.append(spread)
-
-    return monthly_spreads
-
-
-def _lerp_spread(target_month, interp_points, last_spread):
-    """Linear interpolation between quarterly spread targets."""
-    if not interp_points:
-        return 0.0
-
-    # Before first point
-    if target_month <= interp_points[0][0]:
-        return interp_points[0][1]
-
-    # After last point — hold the last value
-    if target_month >= interp_points[-1][0]:
-        return last_spread
-
-    # Find surrounding points and interpolate
-    for i in range(len(interp_points) - 1):
-        m0, s0 = interp_points[i]
-        m1, s1 = interp_points[i + 1]
-        if m0 <= target_month <= m1:
-            if m1 == m0:
-                return s1
-            t = (target_month - m0) / (m1 - m0)
-            return s0 + t * (s1 - s0)
-
-    return last_spread
-
-
 def _build_scenario_forecasts(name, actual_data, time_ctx):
     """
     Build scenario-based forecasts for a single commodity.
+
+    Uses direct quarterly spread lookups (no monthly interpolation).
+    Labels follow the rolling quarter scheme from time_ctx.
 
     Returns a dict of scenario -> {label: price} for all time labels + FY.
     """
@@ -476,61 +401,61 @@ def _build_scenario_forecasts(name, actual_data, time_ctx):
 
     labels = time_ctx['labels']
     label_types = time_ctx['label_types']
+    forecast_quarters = time_ctx['forecast_quarters']
     latest_close = actual_data['latest_close']
     completed = actual_data.get('completed', {})
     current_q_avg = actual_data.get('current_q_avg')
+    year = time_ctx['year']
 
     scenarios = {}
 
     # ── Actual row: only has values for actual/current_q columns ──
     actual_row = {}
-    for i, (label, ltype) in enumerate(zip(labels, label_types)):
+    for label, ltype in zip(labels, label_types):
         if ltype == 'actual':
-            # Completed quarter — use actual average
-            q_key = label  # e.g. "Q1"
-            actual_row[label] = completed.get(q_key)
+            actual_row[label] = completed.get(label)
         elif ltype == 'current_q':
-            # Current quarter estimate
             actual_row[label] = current_q_avg
         else:
             actual_row[label] = None
-    actual_row['FY'] = None  # We don't compute FY for the "Actual" row
+    actual_row['FY'] = None
     scenarios['Actual'] = actual_row
 
     # ── Scenario rows ──
     for scenario in spreads_cfg.keys():
         row = {}
-        monthly_spreads = _interpolate_monthly_spread(name, scenario, time_ctx)
+        fy_parts = []  # (value, quarter_num) for FY calc — current year only
 
-        # Actual/current_q columns — same as actual row
-        forecast_vals = []
         for i, (label, ltype) in enumerate(zip(labels, label_types)):
             if ltype == 'actual':
-                q_key = label
-                val = completed.get(q_key)
+                # Completed quarter — use actual average
+                val = completed.get(label)
                 row[label] = val
                 if val is not None:
-                    forecast_vals.append(val)
+                    fy_parts.append(val)
+
             elif ltype == 'current_q':
                 row[label] = current_q_avg
                 if current_q_avg is not None:
-                    forecast_vals.append(current_q_avg)
+                    fy_parts.append(current_q_avg)
+
             elif ltype == 'forecast':
-                # Find which forecast month index this is
+                # Find matching forecast quarter
                 fc_idx = sum(1 for lt in label_types[:i] if lt == 'forecast')
-                if fc_idx < len(monthly_spreads):
-                    spread = monthly_spreads[fc_idx]
+                if fc_idx < len(forecast_quarters):
+                    fy_q, fq_num, _ = forecast_quarters[fc_idx]
+                    spread = spreads_cfg.get(scenario, {}).get(f'Q{fq_num}', 0.0)
                     val = round(latest_close * (1 + spread), 2)
                     row[label] = val
-                    forecast_vals.append(val)
+                    # Only include in FY if this quarter is in the current year
+                    if fy_q == year:
+                        fy_parts.append(val)
                 else:
                     row[label] = None
 
-        # FY average: weighted by number of months each value represents
-        # Completed quarters: 3 months each, current quarter: ~3 months,
-        # forecast months: 1 month each
-        if forecast_vals:
-            row['FY'] = round(sum(forecast_vals) / len(forecast_vals), 2)
+        # FY = simple average of all current-year quarter values
+        if fy_parts:
+            row['FY'] = round(sum(fy_parts) / len(fy_parts), 2)
         else:
             row['FY'] = None
 
@@ -630,7 +555,7 @@ def _fetch_forecasts():
             'meta': {
                 'source': 'ParraMacro Commodities Forecast',
                 'data_source': f'yfinance ({HISTORY_YEARS}yr history + YTD {time_ctx["year"]})',
-                'method': 'Scenario spread-based forecasts with monthly interpolation',
+                'method': 'Scenario spread-based quarterly forecasts',
                 'baseline': 'Latest close price',
                 'commodities_count': commodities_count,
                 'last_updated': now.isoformat(),
