@@ -441,7 +441,8 @@ def export_forecasts_excel():
     time_ctx = data.get('time_context', {})
     labels = time_ctx.get('labels', [])
     label_types = time_ctx.get('label_types', [])
-    year_end_label = time_ctx.get('year_end_label', 'FY Avg')
+    year_end_labels = time_ctx.get('year_end_labels', [time_ctx.get('year_end_label', 'FY Avg')])
+    fy_keys = ['FY'] + [f'FY{i+2}' for i in range(len(year_end_labels) - 1)]
     # Per-group scenario config — extracted per group below
 
     # Styles
@@ -505,12 +506,13 @@ def export_forecasts_excel():
             ws.cell(row=row, column=1, value='SCENARIO FORECASTS')
             ws.cell(row=row, column=1).font = section_font
             ws.cell(row=row, column=1).fill = section_fill
-            for ci in range(2, len(labels) + 3):
+            total_cols = len(labels) + len(year_end_labels) + 1
+            for ci in range(2, total_cols + 1):
                 ws.cell(row=row, column=ci).fill = section_fill
             row += 1
 
             # Header row
-            fc_headers = ['Scenario'] + labels + [year_end_label]
+            fc_headers = ['Scenario'] + labels + year_end_labels
             for ci, h in enumerate(fc_headers, 1):
                 cell = ws.cell(row=row, column=ci, value=h)
                 cell.font = header_font
@@ -542,12 +544,13 @@ def export_forecasts_excel():
                     elif lt == 'current_q':
                         cell.fill = current_fill
 
-                # FY column
-                fy_val = sc_data.get('FY')
-                cell = ws.cell(row=row, column=len(labels) + 2, value=fy_val)
-                cell.number_format = num_fmt
-                cell.alignment = Alignment(horizontal='center')
-                cell.border = thin_border
+                # FY columns (FY, FY2, ...)
+                for fi, fy_key in enumerate(fy_keys):
+                    fy_val = sc_data.get(fy_key)
+                    cell = ws.cell(row=row, column=len(labels) + 2 + fi, value=fy_val)
+                    cell.number_format = num_fmt
+                    cell.alignment = Alignment(horizontal='center')
+                    cell.border = thin_border
                 row += 1
 
             row += 1

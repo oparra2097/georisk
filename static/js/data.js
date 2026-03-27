@@ -328,35 +328,23 @@
         const apiUrl = ds.api;
         const cached = PD.getCached(apiUrl);
 
-        if (cached) {
+        // Common post-load setup: populate dynamic dropdowns + render
+        function onDataReady() {
             hideLoading();
             renderCurrentDataset();
-            // Populate dynamic dropdowns that depend on fetched data
             if (ds.type === 'forecast-group') populateScenarioDropdown(ds);
             if (ds.type === 'cofer') populateRegionDropdown();
-            // Also fetch components if needed
-            if (ds.type === 'cpi' && state.subview && state.subview !== 'overview' && ds.componentApi) {
-                const compCached = PD.getCached(ds.componentApi);
-                if (compCached) {
-                    renderCurrentDataset();
-                } else {
-                    fetchData(ds.componentApi, () => renderCurrentDataset());
-                }
-            }
-        } else {
-            fetchData(apiUrl, () => {
-                hideLoading();
-                renderCurrentDataset();
-                // Populate region dropdown for COFER
-                if (ds.type === 'cofer') populateRegionDropdown();
-                // Populate scenario dropdown for forecasts
-                if (ds.type === 'forecast-group') populateScenarioDropdown(ds);
-            });
-            // Also fetch components if CPI component view
-            if (ds.type === 'cpi' && state.subview && state.subview !== 'overview' && ds.componentApi) {
-                fetchData(ds.componentApi, () => renderCurrentDataset());
-            }
         }
+
+        if (cached) {
+            onDataReady();
+        } else {
+            fetchData(apiUrl, onDataReady);
+        }
+
+        // CPI component data — let renderCpi() handle fetching internally
+        // to avoid double-fetch race conditions. renderCpi() already calls
+        // fetchData(componentApi) if the component data isn't cached.
     }
 
     function hideLoading() {
@@ -365,22 +353,43 @@
     }
 
     async function fetchData(url, callback) {
+        // Deduplicate in-flight requests — if already fetching this URL,
+        // queue the callback to fire when the existing request completes.
+        if (PD._fetching[url]) {
+            PD._fetching[url].push(callback);
+            return;
+        }
+        PD._fetching[url] = [callback];
+
         try {
             const resp = await fetch(url);
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
             PD.setCached(url, data);
-            if (callback) callback();
+            // Fire all queued callbacks
+            const callbacks = PD._fetching[url] || [];
+            delete PD._fetching[url];
+            callbacks.forEach(cb => { if (cb) cb(); });
         } catch (err) {
             console.error('Fetch failed for ' + url + ':', err);
+            delete PD._fetching[url];
             const el = document.getElementById('panel-loading');
-            if (el) el.innerHTML = '<p style="color:var(--text-muted)">Failed to load data.</p>';
+            if (el) {
+                el.innerHTML = '<p style="color:var(--text-muted)">Failed to load data.</p>' +
+                    '<button onclick="location.reload()" style="margin-top:8px;padding:6px 16px;' +
+                    'border-radius:6px;border:1px solid var(--border);background:var(--bg-tertiary);' +
+                    'color:var(--text-muted);cursor:pointer;font-size:12px;">Retry</button>';
+                el.style.display = '';
+            }
         }
     }
 
     function renderCurrentDataset() {
         const ds = PD.findDataset(state.category, state.dataset);
         if (!ds) return;
+
+        // Guard: don't render if primary data isn't cached yet (still loading)
+        if (!PD.getCached(ds.api)) return;
 
         switch (ds.type) {
             case 'cofer': renderCofer(ds); break;

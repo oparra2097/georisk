@@ -21,17 +21,33 @@ window.ParraData.state = {
     countries: [],
 };
 
-// ── Data Cache ─────────────────────────────────────────────────────────────
+// ── Data Cache (with TTL) ─────────────────────────────────────────────────
 
+window.ParraData._CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 window.ParraData.cache = {};
 window.ParraData.charts = {};
+window.ParraData._fetching = {}; // Track in-flight requests to prevent duplicates
 
 window.ParraData.getCached = function (url) {
-    return window.ParraData.cache[url] || null;
+    var entry = window.ParraData.cache[url];
+    if (!entry) return null;
+    if (Date.now() - entry.ts > window.ParraData._CACHE_TTL) {
+        delete window.ParraData.cache[url];
+        return null;
+    }
+    return entry.data;
 };
 
 window.ParraData.setCached = function (url, data) {
-    window.ParraData.cache[url] = data;
+    window.ParraData.cache[url] = { data: data, ts: Date.now() };
+};
+
+window.ParraData.clearCache = function (url) {
+    if (url) {
+        delete window.ParraData.cache[url];
+    } else {
+        window.ParraData.cache = {};
+    }
 };
 
 window.ParraData.destroyChart = function (key) {

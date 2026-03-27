@@ -484,6 +484,7 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
     completed = actual_data.get('completed', {})
     current_q_avg = actual_data.get('current_q_avg')
     year = time_ctx['year']
+    next_year = time_ctx.get('next_year', year + 1)
 
     scenarios = {}
 
@@ -497,12 +498,14 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
         else:
             actual_row[label] = None
     actual_row['FY'] = None
+    actual_row['FY2'] = None
     scenarios['Actual'] = actual_row
 
     # ── Scenario rows (using group-specific scenario names) ──
     for scenario in targets_cfg.keys():
         row = {}
-        fy_parts = []
+        fy_parts = []    # current year
+        fy2_parts = []   # next year
 
         for i, (label, ltype) in enumerate(zip(labels, label_types)):
             if ltype == 'actual':
@@ -528,15 +531,17 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
                     else:
                         val = current_q_avg  # fallback for None targets
                     row[label] = val
-                    if val is not None and fy_q == year:
-                        fy_parts.append(val)
+                    # Bucket into current year or next year FY
+                    if val is not None:
+                        if fy_q == year:
+                            fy_parts.append(val)
+                        elif fy_q == next_year:
+                            fy2_parts.append(val)
                 else:
                     row[label] = None
 
-        if fy_parts:
-            row['FY'] = round(sum(fy_parts) / len(fy_parts), 2)
-        else:
-            row['FY'] = None
+        row['FY'] = round(sum(fy_parts) / len(fy_parts), 2) if fy_parts else None
+        row['FY2'] = round(sum(fy2_parts) / len(fy2_parts), 2) if fy2_parts else None
 
         scenarios[scenario] = row
 
@@ -554,17 +559,18 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
                 break
         weighted[label] = round(val, 2) if has_all else None
 
-    # FY weighted average
-    fy_val = 0.0
-    fy_ok = True
-    for sc, w in weights.items():
-        sc_fy = scenarios.get(sc, {}).get('FY')
-        if sc_fy is not None:
-            fy_val += w * sc_fy
-        else:
-            fy_ok = False
-            break
-    weighted['FY'] = round(fy_val, 2) if fy_ok else None
+    # FY and FY2 weighted averages
+    for fy_key in ('FY', 'FY2'):
+        fy_val = 0.0
+        fy_ok = True
+        for sc, w in weights.items():
+            sc_fy = scenarios.get(sc, {}).get(fy_key)
+            if sc_fy is not None:
+                fy_val += w * sc_fy
+            else:
+                fy_ok = False
+                break
+        weighted[fy_key] = round(fy_val, 2) if fy_ok else None
 
     scenarios['Weighted Avg'] = weighted
 
@@ -635,6 +641,7 @@ def _fetch_forecasts():
                 'labels': time_ctx['labels'],
                 'label_types': time_ctx['label_types'],
                 'year_end_label': f"FY {time_ctx['year']}",
+                'year_end_labels': time_ctx.get('year_end_labels', [f"FY {time_ctx['year']}"]),
             },
             'groups': groups,
             'meta': {
