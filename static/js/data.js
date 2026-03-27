@@ -275,6 +275,12 @@
                 '<option value="Weighted Avg"' + (state.scenario === 'Weighted Avg' ? ' selected' : '') + '>Weighted Avg</option>' +
                 '</select>';
         }
+        if (ds.controls.includes('comm-freq')) {
+            html += '<select id="ctrl-comm-freq" class="data-select">' +
+                '<option value="quarterly"' + (state.commFreq === 'quarterly' ? ' selected' : '') + '>Quarterly</option>' +
+                '<option value="yearly"' + (state.commFreq === 'yearly' ? ' selected' : '') + '>Yearly</option>' +
+                '</select>';
+        }
         if (ds.controls.includes('region')) {
             html += '<select id="ctrl-region" class="data-select">' +
                 '<option value="World">Top 20</option>' +
@@ -303,6 +309,7 @@
         bind('ctrl-view', v => { state.view = v; });
         bind('ctrl-range', v => { state.range = v; });
         bind('ctrl-scenario', v => { state.scenario = v; });
+        bind('ctrl-comm-freq', v => { state.commFreq = v; });
         bind('ctrl-region', v => { state.region = v; });
         bind('ctrl-reserve-type', v => { state.reserveType = v; });
     }
@@ -872,13 +879,21 @@
         if (!group) return;
         const order = group.scenario_order || [];
         sel.innerHTML = '';
+        // "All Scenarios" option for overview mode
+        const allOpt = document.createElement('option');
+        allOpt.value = 'All'; allOpt.textContent = 'All Scenarios';
+        if (state.scenario === 'All') allOpt.selected = true;
+        sel.appendChild(allOpt);
+        // Weighted Avg
         const waOpt = document.createElement('option');
-        waOpt.value = 'Weighted Avg'; waOpt.textContent = 'Weighted Avg'; waOpt.selected = true;
+        waOpt.value = 'Weighted Avg'; waOpt.textContent = 'Weighted Avg';
+        if (state.scenario === 'Weighted Avg') waOpt.selected = true;
         sel.appendChild(waOpt);
         order.forEach(sc => {
             if (sc === 'Actual' || sc === 'Weighted Avg') return;
             const opt = document.createElement('option');
             opt.value = sc; opt.textContent = sc;
+            if (state.scenario === sc) opt.selected = true;
             sel.appendChild(opt);
         });
     }
@@ -901,42 +916,139 @@
         if (!group) return;
 
         const scenario = state.scenario;
+        const isAllScenarios = scenario === 'All';
+        const commFreq = state.commFreq || 'quarterly';
         const commodities = group.commodities || {};
         const groupColors = group.colors || {};
+        const scenarioColors = group.scenario_colors || {};
+        const scenarioOrder = group.scenario_order || [];
         const timeCtx = data.time_context || {};
         const forecastLabels = timeCtx.labels || [];
         const labelTypes = timeCtx.label_types || [];
-        const yearEndLabel = timeCtx.year_end_label || 'FY Avg';
 
         // ── Build unified timeline: historical quarters + current year forecast ──
-        // Collect all historical labels across commodities, then append forecast labels
         const histLabelSet = new Set();
         Object.values(commodities).forEach(info => {
             (info.historical || []).forEach(h => histLabelSet.add(h.label));
         });
-        // Sort historical labels chronologically ("2015 Q1" < "2015 Q2" < "2016 Q1" ...)
         const histLabels = Array.from(histLabelSet).sort((a, b) => {
             const [ya, qa] = a.split(' Q'); const [yb, qb] = b.split(' Q');
             return (parseInt(ya) * 10 + parseInt(qa)) - (parseInt(yb) * 10 + parseInt(qb));
         });
 
-        // Combine: all historical + forecast labels
-        const allLabels = histLabels.concat(forecastLabels);
-        const forecastStartIdx = histLabels.length; // index where forecast portion begins
+        const allQLabels = histLabels.concat(forecastLabels);
+        const forecastStartIdx = histLabels.length;
 
-        // Build a lookup map for each commodity: label → value
-        const commodityMaps = {};
+        // Build per-scenario maps for each commodity: { commodityName: { scenario: { label: val } } }
+        const scenariosToShow = isAllScenarios
+            ? scenarioOrder.filter(sc => sc !== 'Actual')
+            : [scenario];
+
+        const commodityScenMaps = {};
         Object.entries(commodities).forEach(([name, info]) => {
-            const valMap = {};
-            // Historical data
-            (info.historical || []).forEach(h => { valMap[h.label] = h.avg_price; });
-            // Forecast / current year scenario data
-            const scenData = (info.scenarios || {})[scenario] || {};
-            forecastLabels.forEach(l => { if (scenData[l] != null) valMap[l] = scenData[l]; });
-            commodityMaps[name] = valMap;
+            const scMaps = {};
+            scenariosToShow.forEach(sc => {
+                const valMap = {};
+                // Historical data (same for all scenarios)
+                (info.historical || []).forEach(h => { valMap[h.label] = h.avg_price; });
+                // Forecast portion from this scenario
+                const scenData = (info.scenarios || {})[sc] || {};
+                forecastLabels.forEach(l => { if (scenData[l] != null) valMap[l] = scenData[l]; });
+                scMaps[sc] = valMap;
+            });
+            commodityScenMaps[name] = scMaps;
         });
 
-        // Summary not used for forecast groups
+        // ── Helper: parse year from label ──
+        function labelYear(l) {
+            if (l.includes(' Q')) return parseInt(l.split(' Q')[0]);
+            if (l.includes("'")) return 2000 + parseInt(l.split("'")[1]);
+            return data.forecast_year || new Date().getFullYear();
+        }
+
+        // ── Aggregate to yearly if needed ──
+        let chartLabels, chartForecastStartIdx, chartIsForecast;
+        const chartDatasets = [];
+
+        if (commFreq === 'yearly') {
+            // Aggregate quarterly data into yearly averages
+            const yearSet = new Set();
+            allQLabels.forEach(l => yearSet.add(labelYear(l)));
+            const sortedYears = Array.from(yearSet).sort();
+            const forecastYear = data.forecast_year || new Date().getFullYear();
+
+            chartLabels = sortedYears.map(String);
+            chartForecastStartIdx = sortedYears.findIndex(y => y >= forecastYear);
+            if (chartForecastStartIdx < 0) chartForecastStartIdx = chartLabels.length;
+            chartIsForecast = (idx) => idx >= chartForecastStartIdx;
+
+            const commNames = Object.keys(commodities);
+            commNames.forEach((name, ci) => {
+                scenariosToShow.forEach((sc, si) => {
+                    const valMap = commodityScenMaps[name][sc];
+                    const yearAggs = {};
+                    allQLabels.forEach(l => {
+                        const yr = labelYear(l);
+                        const v = valMap[l];
+                        if (v != null) {
+                            if (!yearAggs[yr]) yearAggs[yr] = [];
+                            yearAggs[yr].push(v);
+                        }
+                    });
+                    const lineColor = isAllScenarios
+                        ? (scenarioColors[sc] || COLORS[si % COLORS.length])
+                        : (groupColors[name] || COLORS[ci % COLORS.length]);
+                    const label = isAllScenarios ? name + ' (' + sc + ')' : name;
+                    chartDatasets.push({
+                        label: label,
+                        data: sortedYears.map(yr => {
+                            const vals = yearAggs[yr];
+                            return vals && vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+                        }),
+                        borderColor: lineColor,
+                        backgroundColor: 'transparent',
+                        borderWidth: sc === 'Weighted Avg' ? 3 : 2,
+                        borderDash: sc === 'Weighted Avg' ? [6, 3] : [],
+                        fill: false, pointRadius: 3, pointHitRadius: 8,
+                        pointBackgroundColor: lineColor, pointBorderColor: lineColor, tension: 0.3,
+                        segment: chartForecastStartIdx > 0 ? {
+                            borderDash: ctx2 => ctx2.p0DataIndex >= chartForecastStartIdx - 1 ? [4, 3] : [],
+                        } : undefined,
+                    });
+                });
+            });
+        } else {
+            // Quarterly mode — use allQLabels directly
+            chartLabels = allQLabels;
+            chartForecastStartIdx = forecastStartIdx;
+            chartIsForecast = (idx) => idx >= forecastStartIdx;
+
+            const commNames = Object.keys(commodities);
+            commNames.forEach((name, ci) => {
+                scenariosToShow.forEach((sc, si) => {
+                    const valMap = commodityScenMaps[name][sc];
+                    const lineColor = isAllScenarios
+                        ? (scenarioColors[sc] || COLORS[si % COLORS.length])
+                        : (groupColors[name] || COLORS[ci % COLORS.length]);
+                    const label = isAllScenarios ? name + ' (' + sc + ')' : name;
+                    chartDatasets.push({
+                        label: label,
+                        data: allQLabels.map(l => valMap[l] != null ? valMap[l] : null),
+                        borderColor: lineColor,
+                        backgroundColor: 'transparent',
+                        borderWidth: sc === 'Weighted Avg' ? 3 : 2,
+                        borderDash: sc === 'Weighted Avg' ? [6, 3] : [],
+                        fill: false, pointRadius: 0, pointHitRadius: 8,
+                        pointBackgroundColor: lineColor, pointBorderColor: lineColor, tension: 0.3,
+                        segment: forecastStartIdx > 0 ? {
+                            borderDash: ctx2 => ctx2.p0DataIndex >= forecastStartIdx - 1 ? [4, 3] : [],
+                        } : undefined,
+                    });
+                });
+            });
+        }
+
+        // Summary not used
         const summary = document.getElementById('panel-summary');
         if (summary) summary.innerHTML = '';
 
@@ -946,25 +1058,9 @@
         if (!canvasEl) return;
         const ctx = canvasEl.getContext('2d');
 
-        const datasets = Object.entries(commodities).map(([name, info]) => {
-            const valMap = commodityMaps[name];
-            const color = groupColors[name] || COLORS[0];
-            return {
-                label: name,
-                data: allLabels.map(l => valMap[l] != null ? valMap[l] : null),
-                borderColor: color,
-                backgroundColor: 'transparent',
-                borderWidth: 2, fill: false, pointRadius: 0, pointHitRadius: 8,
-                pointBackgroundColor: color, pointBorderColor: color, tension: 0.3,
-                segment: forecastStartIdx > 0 ? {
-                    borderDash: ctx2 => ctx2.p0DataIndex >= forecastStartIdx - 1 ? [4, 3] : [],
-                } : undefined,
-            };
-        });
-
         PD.setChart('main', new Chart(ctx, {
             type: 'line',
-            data: { labels: allLabels, datasets },
+            data: { labels: chartLabels, datasets: chartDatasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -984,11 +1080,8 @@
                         callbacks: {
                             label: (tooltipCtx) => {
                                 const val = tooltipCtx.parsed.y;
-                                const name = tooltipCtx.dataset.label;
-                                const info = commodities[name];
-                                const unit = info ? info.unit : '';
-                                if (val == null) return name + ': N/A';
-                                return name + ': ' + val.toFixed(2) + ' ' + unit;
+                                if (val == null) return tooltipCtx.dataset.label + ': N/A';
+                                return tooltipCtx.dataset.label + ': ' + val.toFixed(2);
                             }
                         }
                     }
@@ -998,18 +1091,13 @@
                         type: 'category',
                         ticks: {
                             color: (tickCtx) => {
-                                if (tickCtx.index >= forecastStartIdx) {
-                                    // Color forecast ticks by their type
-                                    const fIdx = tickCtx.index - forecastStartIdx;
-                                    if (labelTypes[fIdx] === 'current_q') return '#f59e0b';
-                                    if (labelTypes[fIdx] === 'forecast') return '#6b7280';
-                                }
+                                if (chartIsForecast(tickCtx.index)) return '#6b7280';
                                 return '#9ca3af';
                             },
                             font: { size: 11 },
                             maxRotation: 45,
                             autoSkip: true,
-                            maxTicksLimit: 20,
+                            maxTicksLimit: commFreq === 'yearly' ? 15 : 20,
                         },
                         grid: { color: 'rgba(55,65,81,0.3)' },
                     },
@@ -1021,26 +1109,19 @@
             },
         }));
 
-        // ── Table: show yearly averages from historical + forecast quarters ──
+        // ── Table: always show yearly averages ──
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
-            // Build yearly summary from historical + forecast data
-            const yearMap = {}; // year → { commodity → [values] }
-            allLabels.forEach((l, idx) => {
-                // Parse year from label: "2015 Q1" → 2015, "Q3" → forecastYear, "Q1'27" → 2027
-                let yr;
-                if (l.includes(' Q')) {
-                    yr = parseInt(l.split(' Q')[0]);
-                } else if (l.includes("'")) {
-                    yr = 2000 + parseInt(l.split("'")[1]);
-                } else {
-                    yr = data.forecast_year || new Date().getFullYear();
-                }
+            const yearMap = {};
+            allQLabels.forEach(l => {
+                const yr = labelYear(l);
                 if (!yearMap[yr]) yearMap[yr] = {};
                 Object.entries(commodities).forEach(([name]) => {
                     if (!yearMap[yr][name]) yearMap[yr][name] = [];
-                    const v = commodityMaps[name][l];
+                    // Use the first scenario's data for table
+                    const scMap = commodityScenMaps[name][scenariosToShow[0]];
+                    const v = scMap[l];
                     if (v != null) yearMap[yr][name].push(v);
                 });
             });
@@ -1081,8 +1162,9 @@
             const weights = group.scenario_weights || {};
             const parts = [];
             if (meta.source) parts.push(meta.source);
-            parts.push(scenario);
-            if (weights[scenario]) parts.push('Weight: ' + (weights[scenario] * 100).toFixed(0) + '%');
+            parts.push(isAllScenarios ? 'All Scenarios' : scenario);
+            if (!isAllScenarios && weights[scenario]) parts.push('Weight: ' + (weights[scenario] * 100).toFixed(0) + '%');
+            parts.push(commFreq === 'yearly' ? 'Yearly averages' : 'Quarterly');
             if (meta.method) parts.push(meta.method);
             if (meta.baseline) parts.push('Baseline: ' + meta.baseline);
             if (meta.last_updated) parts.push('Updated: ' + meta.last_updated.split('T')[0]);

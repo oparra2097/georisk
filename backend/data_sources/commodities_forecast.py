@@ -110,7 +110,9 @@ COMMODITIES = {
 
 # ── Scenario Price Targets ──────────────────────────────────────────────────
 # Absolute quarterly price targets per scenario.
-# Q1 can be set to None — the engine will use the live YTD actual for Q1.
+# Q1 values: None = use live YTD actual (current quarter only);
+#            number = used for next-year Q1 forecasts.
+# When Q1 is the current quarter the engine auto-fills from live data.
 # Scenario NAMES must match the keys in GROUP_SCENARIOS[group]['weights'].
 
 SCENARIO_TARGETS = {
@@ -121,25 +123,25 @@ SCENARIO_TARGETS = {
     # TTF: Elevated due to Qatar bombing / longer-term production loss
     # ═══════════════════════════════════════════════════════════════════════════
     'WTI Crude': {
-        'Base Case':   {'Q1': None, 'Q2': 95,  'Q3': 83,  'Q4': 72},
-        'Severe Case': {'Q1': None, 'Q2': 108, 'Q3': 104, 'Q4': 94},
-        'Worst Case':  {'Q1': None, 'Q2': 124, 'Q3': 117, 'Q4': 107},
+        'Base Case':   {'Q1': 68,  'Q2': 95,  'Q3': 83,  'Q4': 72},
+        'Severe Case': {'Q1': 90,  'Q2': 108, 'Q3': 104, 'Q4': 94},
+        'Worst Case':  {'Q1': 102, 'Q2': 124, 'Q3': 117, 'Q4': 107},
     },
     'Brent Crude': {
-        'Base Case':   {'Q1': None, 'Q2': 100, 'Q3': 87,  'Q4': 78},
-        'Severe Case': {'Q1': None, 'Q2': 113, 'Q3': 110, 'Q4': 99},
-        'Worst Case':  {'Q1': None, 'Q2': 130, 'Q3': 121, 'Q4': 112},
+        'Base Case':   {'Q1': 74,  'Q2': 100, 'Q3': 87,  'Q4': 78},
+        'Severe Case': {'Q1': 96,  'Q2': 113, 'Q3': 110, 'Q4': 99},
+        'Worst Case':  {'Q1': 108, 'Q2': 130, 'Q3': 121, 'Q4': 112},
     },
     'Natural Gas (HH)': {
-        'Base Case':   {'Q1': None, 'Q2': 3.20, 'Q3': 3.40, 'Q4': 3.60},
-        'Severe Case': {'Q1': None, 'Q2': 4.00, 'Q3': 4.40, 'Q4': 4.25},
-        'Worst Case':  {'Q1': None, 'Q2': 4.90, 'Q3': 5.80, 'Q4': 5.50},
+        'Base Case':   {'Q1': 3.80, 'Q2': 3.20, 'Q3': 3.40, 'Q4': 3.60},
+        'Severe Case': {'Q1': 4.50, 'Q2': 4.00, 'Q3': 4.40, 'Q4': 4.25},
+        'Worst Case':  {'Q1': 5.70, 'Q2': 4.90, 'Q3': 5.80, 'Q4': 5.50},
     },
     'TTF Gas': {
         # Elevated — Qatar production loss, structural supply deficit
-        'Base Case':   {'Q1': None, 'Q2': 60,  'Q3': 64,  'Q4': 66},
-        'Severe Case': {'Q1': None, 'Q2': 76,  'Q3': 87,  'Q4': 81},
-        'Worst Case':  {'Q1': None, 'Q2': 98,  'Q3': 119, 'Q4': 108},
+        'Base Case':   {'Q1': 68,  'Q2': 60,  'Q3': 64,  'Q4': 66},
+        'Severe Case': {'Q1': 84,  'Q2': 76,  'Q3': 87,  'Q4': 81},
+        'Worst Case':  {'Q1': 112, 'Q2': 98,  'Q3': 119, 'Q4': 108},
     },
     # ═══════════════════════════════════════════════════════════════════════════
     # AGRICULTURE — Supply / Weather scenarios
@@ -147,40 +149,40 @@ SCENARIO_TARGETS = {
     # Bull = drought in key regions, supply shock, export restrictions
     # ═══════════════════════════════════════════════════════════════════════════
     'Cocoa': {
-        'Bear':  {'Q1': None, 'Q2': 2780, 'Q3': 2590, 'Q4': 2690},
-        'Base':  {'Q1': None, 'Q2': 3065, 'Q3': 3000, 'Q4': 3100},
-        'Bull':  {'Q1': None, 'Q2': 3475, 'Q3': 3790, 'Q4': 3950},
+        'Bear':  {'Q1': 2650, 'Q2': 2780, 'Q3': 2590, 'Q4': 2690},
+        'Base':  {'Q1': 3050, 'Q2': 3065, 'Q3': 3000, 'Q4': 3100},
+        'Bull':  {'Q1': 4100, 'Q2': 3475, 'Q3': 3790, 'Q4': 3950},
     },
     'Wheat': {
-        'Bear':  {'Q1': None, 'Q2': 555, 'Q3': 530, 'Q4': 545},
-        'Base':  {'Q1': None, 'Q2': 615, 'Q3': 622, 'Q4': 628},
-        'Bull':  {'Q1': None, 'Q2': 676, 'Q3': 736, 'Q4': 712},
+        'Bear':  {'Q1': 535, 'Q2': 555, 'Q3': 530, 'Q4': 545},
+        'Base':  {'Q1': 620, 'Q2': 615, 'Q3': 622, 'Q4': 628},
+        'Bull':  {'Q1': 700, 'Q2': 676, 'Q3': 736, 'Q4': 712},
     },
     'Soybeans': {
-        'Bear':  {'Q1': None, 'Q2': 1090, 'Q3': 1045, 'Q4': 1070},
-        'Base':  {'Q1': None, 'Q2': 1185, 'Q3': 1195, 'Q4': 1207},
-        'Bull':  {'Q1': None, 'Q2': 1277, 'Q3': 1370, 'Q4': 1335},
+        'Bear':  {'Q1': 1055, 'Q2': 1090, 'Q3': 1045, 'Q4': 1070},
+        'Base':  {'Q1': 1200, 'Q2': 1185, 'Q3': 1195, 'Q4': 1207},
+        'Bull':  {'Q1': 1320, 'Q2': 1277, 'Q3': 1370, 'Q4': 1335},
     },
     'Coffee': {
-        'Bear':  {'Q1': None, 'Q2': 277, 'Q3': 259, 'Q4': 271},
-        'Base':  {'Q1': None, 'Q2': 307, 'Q3': 304, 'Q4': 310},
-        'Bull':  {'Q1': None, 'Q2': 346, 'Q3': 376, 'Q4': 391},
+        'Bear':  {'Q1': 265, 'Q2': 277, 'Q3': 259, 'Q4': 271},
+        'Base':  {'Q1': 305, 'Q2': 307, 'Q3': 304, 'Q4': 310},
+        'Bull':  {'Q1': 400, 'Q2': 346, 'Q3': 376, 'Q4': 391},
     },
     # ═══════════════════════════════════════════════════════════════════════════
     # METALS — Speculative / Macro scenarios
     # Bear = risk-off, dollar strength, demand slowdown
     # Bull = flight to safety, speculative inflows, CB accumulation
-    # Gold Bull: $5600 year-end target
+    # Gold Base: $5600 year-end, Bull: $6200 year-end
     # ═══════════════════════════════════════════════════════════════════════════
     'Copper': {
-        'Bear':  {'Q1': None, 'Q2': 5.03, 'Q3': 4.81, 'Q4': 4.92},
-        'Base':  {'Q1': None, 'Q2': 5.63, 'Q3': 5.74, 'Q4': 5.80},
-        'Bull':  {'Q1': None, 'Q2': 6.02, 'Q3': 6.45, 'Q4': 6.67},
+        'Bear':  {'Q1': 4.85, 'Q2': 5.03, 'Q3': 4.81, 'Q4': 4.92},
+        'Base':  {'Q1': 5.75, 'Q2': 5.63, 'Q3': 5.74, 'Q4': 5.80},
+        'Bull':  {'Q1': 6.80, 'Q2': 6.02, 'Q3': 6.45, 'Q4': 6.67},
     },
     'Gold': {
-        'Bear':  {'Q1': None, 'Q2': 4550, 'Q3': 4380, 'Q4': 4500},
-        'Base':  {'Q1': None, 'Q2': 5100, 'Q3': 5350, 'Q4': 5600},
-        'Bull':  {'Q1': None, 'Q2': 5450, 'Q3': 5800, 'Q4': 6200},
+        'Bear':  {'Q1': 4400, 'Q2': 4550, 'Q3': 4380, 'Q4': 4500},
+        'Base':  {'Q1': 5700, 'Q2': 5100, 'Q3': 5350, 'Q4': 5600},
+        'Bull':  {'Q1': 6400, 'Q2': 5450, 'Q3': 5800, 'Q4': 6200},
     },
 }
 
@@ -232,9 +234,9 @@ def _get_time_context():
     # Current quarter label
     current_q_label = f'Q{current_quarter}'
 
-    # Rolling forecast: next 3 quarters after current (wraps into next year)
+    # Rolling forecast: next 4 quarters after current (wraps into next year)
     forecast_quarters = []  # list of (year, quarter_num, display_label)
-    for i in range(1, 4):
+    for i in range(1, 5):
         fq = current_quarter + i
         fy = year
         if fq > 4:
@@ -246,6 +248,11 @@ def _get_time_context():
         else:
             label = f"Q{fq}'{str(fy)[-2:]}"
         forecast_quarters.append((fy, fq, label))
+
+    # Determine which years are covered → build FY labels
+    forecast_years = sorted({fy for fy, _, _ in forecast_quarters})
+    all_years = sorted({year} | set(forecast_years))
+    next_year = year + 1
 
     # Build labels array for the API response
     labels = []
@@ -260,13 +267,17 @@ def _get_time_context():
     labels.append(current_q_label + '*')
     label_types.append('current_q')
 
-    # Next 3 forecast quarters
+    # Next 4 forecast quarters
     for (fy, fq, display_label) in forecast_quarters:
         labels.append(display_label)
         label_types.append('forecast')
 
+    # Year-end labels (one per year covered)
+    year_end_labels = [f'FY {y}' for y in all_years]
+
     return {
         'year': year,
+        'next_year': next_year,
         'today': today,
         'quarters': quarters,
         'completed_quarters': completed,
@@ -275,6 +286,7 @@ def _get_time_context():
         'forecast_quarters': forecast_quarters,
         'labels': labels,
         'label_types': label_types,
+        'year_end_labels': year_end_labels,
     }
 
 

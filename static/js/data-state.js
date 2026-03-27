@@ -15,6 +15,7 @@ window.ParraData.state = {
     view: 'yoy',
     range: '10',
     scenario: 'Weighted Avg',
+    commFreq: 'quarterly',
     region: 'World',
     reserveType: 'total',
     countries: [],
@@ -63,6 +64,7 @@ window.ParraData.parseUrl = function () {
     if (params.has('view')) state.view = params.get('view');
     if (params.has('range')) state.range = params.get('range');
     if (params.has('scenario')) state.scenario = params.get('scenario');
+    if (params.has('commFreq')) state.commFreq = params.get('commFreq');
     if (params.has('region')) state.region = params.get('region');
     if (params.has('type')) state.reserveType = params.get('type');
     if (params.has('countries')) state.countries = params.get('countries').split(',').filter(Boolean);
@@ -90,6 +92,7 @@ window.ParraData.buildUrl = function () {
     if (ds.controls.includes('view') && state.view !== 'yoy') params.set('view', state.view);
     if (ds.controls.includes('range') && state.range !== '10') params.set('range', state.range);
     if (ds.controls.includes('scenario') && state.scenario !== 'Weighted Avg') params.set('scenario', state.scenario);
+    if (ds.controls.includes('comm-freq') && state.commFreq !== 'quarterly') params.set('commFreq', state.commFreq);
     if (ds.controls.includes('region') && state.region !== 'World') params.set('region', state.region);
     if (ds.controls.includes('reserve-type') && state.reserveType !== 'total') params.set('type', state.reserveType);
     if (ds.controls.includes('countries') && state.countries.length > 0) params.set('countries', state.countries.join(','));

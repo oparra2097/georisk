@@ -82,7 +82,7 @@ window.ParraData.CATALOG = {
                     exportUrl: '/api/forecasts/export',
                     type: 'forecast-group',
                     forecastGroupName: 'Oil & Gas',
-                    controls: ['scenario'],
+                    controls: ['scenario', 'comm-freq'],
                     subviews: [
                         { id: 'overview', label: 'Overview' },
                         { id: 'WTI Crude', label: 'WTI Crude' },
@@ -101,7 +101,7 @@ window.ParraData.CATALOG = {
                     exportUrl: '/api/forecasts/export',
                     type: 'forecast-group',
                     forecastGroupName: 'Agriculture',
-                    controls: ['scenario'],
+                    controls: ['scenario', 'comm-freq'],
                     subviews: [
                         { id: 'overview', label: 'Overview' },
                         { id: 'Cocoa', label: 'Cocoa' },
@@ -120,7 +120,7 @@ window.ParraData.CATALOG = {
                     exportUrl: '/api/forecasts/export',
                     type: 'forecast-group',
                     forecastGroupName: 'Metals',
-                    controls: ['scenario'],
+                    controls: ['scenario', 'comm-freq'],
                     subviews: [
                         { id: 'overview', label: 'Overview' },
                         { id: 'Copper', label: 'Copper' },
