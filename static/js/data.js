@@ -331,6 +331,9 @@
         if (cached) {
             hideLoading();
             renderCurrentDataset();
+            // Populate dynamic dropdowns that depend on fetched data
+            if (ds.type === 'forecast-group') populateScenarioDropdown(ds);
+            if (ds.type === 'cofer') populateRegionDropdown();
             // Also fetch components if needed
             if (ds.type === 'cpi' && state.subview && state.subview !== 'overview' && ds.componentApi) {
                 const compCached = PD.getCached(ds.componentApi);
@@ -1192,6 +1195,8 @@
         const forecastLabels = timeCtx.labels || [];
         const labelTypes = timeCtx.label_types || [];
         const yearEndLabel = timeCtx.year_end_label || 'FY Avg';
+        const yearEndLabels = timeCtx.year_end_labels || [yearEndLabel];
+        const fyKeys = ['FY'].concat(yearEndLabels.slice(1).map((_, i) => 'FY' + (i + 2)));
         const forecastYear = data.forecast_year || new Date().getFullYear();
 
         // ── Build unified timeline: historical + current year scenarios ──
@@ -1333,7 +1338,8 @@
                 const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
                 hdr += '<th' + cls + '>' + l + '</th>';
             });
-            hdr += '<th>' + yearEndLabel + '</th></tr>';
+            yearEndLabels.forEach(lbl => { hdr += '<th>' + lbl + '</th>'; });
+            hdr += '</tr>';
             thead.innerHTML = hdr;
 
             let rows = '';
@@ -1347,8 +1353,10 @@
                     const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
                     rows += v != null ? '<td' + cls + '>' + v.toFixed(2) + '</td>' : '<td' + cls + '>\u2014</td>';
                 });
-                const fy = scenData['FY'];
-                rows += fy != null ? '<td>' + fy.toFixed(2) + '</td>' : '<td>\u2014</td>';
+                fyKeys.forEach(key => {
+                    const fy = scenData[key];
+                    rows += fy != null ? '<td>' + fy.toFixed(2) + '</td>' : '<td>\u2014</td>';
+                });
                 rows += '</tr>';
             });
             tbody.innerHTML = rows;
