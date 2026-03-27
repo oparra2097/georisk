@@ -53,6 +53,7 @@
     let fcAgChart = null;
     let fcMetalsChart = null;
     let fcCommodityChart = null;
+    let fcHistoryChart = null;
     let activeForecastGroup = null;
     let activeForecastCommodity = null;
     let fcOilScenario = 'Weighted Avg';
@@ -631,6 +632,7 @@
     }
 
     function renderUsCpi() {
+        renderCpiSummary('us', usCpiData, usCpiRange, usCpiFreq, usCpiView);
         renderCpiChart('us', usCpiData, usCpiRange, usCpiFreq, usCpiView, usCpiChart, (c) => { usCpiChart = c; });
         renderCpiTable('us', usCpiData, usCpiRange, usCpiFreq, usCpiView);
         renderCpiMeta('us', usCpiData, usCpiFreq, usCpiView);
@@ -655,6 +657,7 @@
     }
 
     function renderUkCpi() {
+        renderCpiSummary('uk', ukCpiData, ukCpiRange, ukCpiFreq, ukCpiView);
         renderCpiChart('uk', ukCpiData, ukCpiRange, ukCpiFreq, ukCpiView, ukCpiChart, (c) => { ukCpiChart = c; });
         renderCpiTable('uk', ukCpiData, ukCpiRange, ukCpiFreq, ukCpiView);
         renderCpiMeta('uk', ukCpiData, ukCpiFreq, ukCpiView);
@@ -697,6 +700,7 @@
         const key = activeUsComponent;
         const label = (usCpiComponents.categories || {})[key] || key;
         document.getElementById('us-comp-title').textContent = 'US CPI: ' + label;
+        renderCompSummary('us', usCpiComponents, key, usCompRange, usCompFreq, usCompView);
         renderComponentChart('us', usCpiComponents, key, usCompRange, usCompFreq, usCompView, usCompChart, (c) => { usCompChart = c; });
         renderComponentTable('us', usCpiComponents, key, usCompRange, usCompFreq, usCompView);
         renderComponentMeta('us', usCpiComponents, usCompFreq, usCompView, label);
@@ -707,6 +711,7 @@
         const key = activeUkComponent;
         const label = (ukCpiComponents.categories || {})[key] || key;
         document.getElementById('uk-comp-title').textContent = 'UK CPI: ' + label;
+        renderCompSummary('uk', ukCpiComponents, key, ukCompRange, ukCompFreq, ukCompView);
         renderComponentChart('uk', ukCpiComponents, key, ukCompRange, ukCompFreq, ukCompView, ukCompChart, (c) => { ukCompChart = c; });
         renderComponentTable('uk', ukCpiComponents, key, ukCompRange, ukCompFreq, ukCompView);
         renderComponentMeta('uk', ukCpiComponents, ukCompFreq, ukCompView, label);
@@ -840,6 +845,106 @@
         parts.push(viewLabels[view] || '');
         if (meta.year_range) parts.push(meta.year_range);
         el.textContent = parts.join(' \u00b7 ');
+    }
+
+    // ══════════════════════════════════════════════════════
+    // CPI SUMMARY CARDS (latest reading per category)
+    // ══════════════════════════════════════════════════════
+
+    function renderCpiSummary(prefix, data, rangeVal, freq, view) {
+        const container = document.getElementById(prefix + '-cpi-summary');
+        if (!container) return;
+
+        const series = data.series || {};
+        const categories = data.categories || {};
+        const colors = data.colors || {};
+        const isUs = prefix === 'us';
+        const suffix = getTooltipSuffix(view, isUs);
+        const isIndex = isUs && view === 'level';
+
+        let html = '';
+        for (const [key, label] of Object.entries(categories)) {
+            const rawPoints = series[key] || [];
+            const transformed = prepareChartData(rawPoints, rangeVal, freq, view, isUs);
+            // Get last non-null point
+            let latest = null;
+            let prev = null;
+            for (let i = transformed.length - 1; i >= 0; i--) {
+                if (transformed[i].y != null) {
+                    if (!latest) { latest = transformed[i]; }
+                    else if (!prev) { prev = transformed[i]; break; }
+                }
+            }
+
+            if (!latest) continue;
+
+            const val = latest.y;
+            const dir = prev ? (val > prev.y ? 'up' : val < prev.y ? 'down' : 'flat') : 'flat';
+            const arrow = dir === 'up' ? '&#9650;' : dir === 'down' ? '&#9660;' : '';
+            const dirClass = dir === 'up' ? 'summary-up' : dir === 'down' ? 'summary-down' : '';
+            const formatted = isIndex ? val.toFixed(1) : val.toFixed(2) + suffix;
+            const borderColor = colors[key] || '#3b82f6';
+
+            html += `
+                <div class="cpi-summary-card" style="border-top: 3px solid ${borderColor}">
+                    <div class="cpi-summary-label">${label}</div>
+                    <div class="cpi-summary-value ${dirClass}">
+                        ${formatted}
+                        <span class="cpi-summary-arrow ${dirClass}">${arrow}</span>
+                    </div>
+                    <div class="cpi-summary-date">${latest.date}</div>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+    }
+
+    function renderCompSummary(prefix, data, key, rangeVal, freq, view) {
+        const container = document.getElementById(prefix + '-comp-summary');
+        if (!container) return;
+
+        const series = data.series || {};
+        const categories = data.categories || {};
+        const colors = data.colors || {};
+        const isUs = prefix === 'us';
+        const suffix = getTooltipSuffix(view, isUs);
+        const isIndex = isUs && view === 'level';
+
+        const rawPoints = series[key] || [];
+        const transformed = prepareChartData(rawPoints, rangeVal, freq, view, isUs);
+        const label = categories[key] || key;
+        const borderColor = colors[key] || '#3b82f6';
+
+        let latest = null;
+        let prev = null;
+        for (let i = transformed.length - 1; i >= 0; i--) {
+            if (transformed[i].y != null) {
+                if (!latest) { latest = transformed[i]; }
+                else if (!prev) { prev = transformed[i]; break; }
+            }
+        }
+
+        if (!latest) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const val = latest.y;
+        const dir = prev ? (val > prev.y ? 'up' : val < prev.y ? 'down' : 'flat') : 'flat';
+        const arrow = dir === 'up' ? '&#9650;' : dir === 'down' ? '&#9660;' : '';
+        const dirClass = dir === 'up' ? 'summary-up' : dir === 'down' ? 'summary-down' : '';
+        const formatted = isIndex ? val.toFixed(1) : val.toFixed(2) + suffix;
+
+        container.innerHTML = `
+            <div class="cpi-summary-card" style="border-top: 3px solid ${borderColor}">
+                <div class="cpi-summary-label">${label}</div>
+                <div class="cpi-summary-value ${dirClass}">
+                    ${formatted}
+                    <span class="cpi-summary-arrow ${dirClass}">${arrow}</span>
+                </div>
+                <div class="cpi-summary-date">${latest.date}</div>
+            </div>
+        `;
     }
 
     // ══════════════════════════════════════════════════════
@@ -1054,7 +1159,12 @@
         const prefix = groupKey.replace('forecast_', 'fc-');
         const commodities = group.commodities || {};
         const groupColors = group.colors || {};
-        const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+        // Dynamic labels from API
+        const timeCtx = forecastData.time_context || {};
+        const labels = timeCtx.labels || ['Q1', 'Q2', 'Q3', 'Q4'];
+        const labelTypes = timeCtx.label_types || [];
+        const yearEndLabel = timeCtx.year_end_label || 'FY Avg';
 
         // ── Chart ──
         const canvasEl = document.getElementById(prefix + '-chart');
@@ -1064,12 +1174,15 @@
         const existingChart = getGroupChartRef(groupKey);
         if (existingChart) existingChart.destroy();
 
+        // Find the boundary between actual/current and forecast
+        const forecastStartIdx = labelTypes.findIndex(t => t === 'forecast');
+
         const datasets = Object.entries(commodities).map(([name, info]) => {
             const scenData = (info.scenarios || {})[scenario] || {};
             const color = groupColors[name] || COLORS[0];
             return {
                 label: name,
-                data: quarters.map(q => scenData[q] != null ? scenData[q] : null),
+                data: labels.map(l => scenData[l] != null ? scenData[l] : null),
                 borderColor: color,
                 backgroundColor: color + '1A',
                 borderWidth: 2.5,
@@ -1078,12 +1191,15 @@
                 pointBackgroundColor: color,
                 pointBorderColor: color,
                 tension: 0.3,
+                segment: forecastStartIdx > 0 ? {
+                    borderDash: ctx2 => ctx2.p0DataIndex >= forecastStartIdx - 1 ? [4, 3] : [],
+                } : undefined,
             };
         });
 
         const chart = new Chart(ctx, {
             type: 'line',
-            data: { labels: quarters, datasets },
+            data: { labels: labels, datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -1111,7 +1227,15 @@
                 },
                 scales: {
                     x: {
-                        ticks: { color: '#6b7280', font: { size: 12, weight: 'bold' } },
+                        ticks: {
+                            color: (ctx) => {
+                                const idx = ctx.index;
+                                if (labelTypes[idx] === 'forecast') return '#6b7280';
+                                if (labelTypes[idx] === 'current_q') return '#f59e0b';
+                                return '#9ca3af';
+                            },
+                            font: { size: 12, weight: 'bold' },
+                        },
                         grid: { color: 'rgba(55,65,81,0.3)' }
                     },
                     y: {
@@ -1128,16 +1252,23 @@
         const thead = document.getElementById(prefix + '-thead');
         const tbody = document.getElementById(prefix + '-tbody');
         if (thead && tbody) {
-            thead.innerHTML = '<tr><th>Commodity</th><th>Unit</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>FY Avg</th></tr>';
+            let hdr = '<tr><th>Commodity</th><th>Unit</th>';
+            labels.forEach((l, i) => {
+                const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
+                hdr += '<th' + cls + '>' + l + '</th>';
+            });
+            hdr += '<th>' + yearEndLabel + '</th></tr>';
+            thead.innerHTML = hdr;
 
             let rows = '';
             Object.entries(commodities).forEach(([name, info]) => {
                 const scenData = (info.scenarios || {})[scenario] || {};
                 rows += '<tr><td>' + name + '</td>';
                 rows += '<td>' + (info.unit || '') + '</td>';
-                quarters.forEach(q => {
-                    const v = scenData[q];
-                    rows += v != null ? '<td>' + v.toFixed(2) + '</td>' : '<td>\u2014</td>';
+                labels.forEach((l, i) => {
+                    const v = scenData[l];
+                    const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
+                    rows += v != null ? '<td' + cls + '>' + v.toFixed(2) + '</td>' : '<td' + cls + '>\u2014</td>';
                 });
                 const fy = scenData['FY'];
                 rows += fy != null ? '<td>' + fy.toFixed(2) + '</td>' : '<td>\u2014</td>';
@@ -1156,6 +1287,7 @@
             parts.push(scenario);
             if (weights[scenario]) parts.push('Weight: ' + (weights[scenario] * 100).toFixed(0) + '%');
             if (meta.method) parts.push(meta.method);
+            if (meta.baseline) parts.push('Baseline: ' + meta.baseline);
             if (meta.last_updated) parts.push('Updated: ' + meta.last_updated.split('T')[0]);
             metaEl.textContent = parts.join(' \u00b7 ');
         }
@@ -1172,17 +1304,29 @@
         if (!info) return;
 
         const scenarios = info.scenarios || {};
-        const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
         const scenarioColors = forecastData.scenario_colors || {};
         const scenarioLabels = forecastData.scenario_labels || {};
         const scenarioOrder = ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
+
+        // Dynamic labels from API
+        const timeCtx = forecastData.time_context || {};
+        const labels = timeCtx.labels || ['Q1', 'Q2', 'Q3', 'Q4'];
+        const labelTypes = timeCtx.label_types || [];
+        const yearEndLabel = timeCtx.year_end_label || 'FY Avg';
+        const forecastYear = forecastData.forecast_year || new Date().getFullYear();
+
+        // Find the boundary between actual/current and forecast
+        const forecastStartIdx = labelTypes.findIndex(t => t === 'forecast');
 
         // Update title
         const titleEl = document.getElementById('fc-commodity-title');
         if (titleEl) titleEl.textContent = activeForecastCommodity + ' \u2014 Scenario Forecast';
 
         const sourceEl = document.getElementById('fc-commodity-source');
-        if (sourceEl) sourceEl.textContent = 'ParraMacro \u2014 ' + (info.unit || '') + ' \u00b7 2026';
+        if (sourceEl) {
+            const latestClose = info.latest_close ? ' \u00b7 Last: ' + info.latest_close.toFixed(2) + ' ' + (info.unit || '') : '';
+            sourceEl.textContent = 'ParraMacro \u2014 ' + (info.unit || '') + ' \u00b7 ' + forecastYear + latestClose;
+        }
 
         // ── Chart ──
         const canvasEl = document.getElementById('fc-commodity-chart');
@@ -1199,7 +1343,7 @@
                 const isDashed = sc === 'Weighted Avg';
                 return {
                     label: sc,
-                    data: quarters.map(q => scenData[q] != null ? scenData[q] : null),
+                    data: labels.map(l => scenData[l] != null ? scenData[l] : null),
                     borderColor: color,
                     backgroundColor: sc === 'Base Case' ? color + '1A' : 'transparent',
                     borderWidth: sc === 'Weighted Avg' ? 3 : 2,
@@ -1214,7 +1358,7 @@
 
         fcCommodityChart = new Chart(ctx, {
             type: 'line',
-            data: { labels: quarters, datasets },
+            data: { labels: labels, datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -1239,7 +1383,15 @@
                 },
                 scales: {
                     x: {
-                        ticks: { color: '#6b7280', font: { size: 12, weight: 'bold' } },
+                        ticks: {
+                            color: (ctx) => {
+                                const idx = ctx.index;
+                                if (labelTypes[idx] === 'forecast') return '#6b7280';
+                                if (labelTypes[idx] === 'current_q') return '#f59e0b';
+                                return '#9ca3af';
+                            },
+                            font: { size: 12, weight: 'bold' },
+                        },
                         grid: { color: 'rgba(55,65,81,0.3)' }
                     },
                     y: {
@@ -1254,7 +1406,13 @@
         const thead = document.getElementById('fc-commodity-thead');
         const tbody = document.getElementById('fc-commodity-tbody');
         if (thead && tbody) {
-            thead.innerHTML = '<tr><th>Scenario</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>FY Avg</th></tr>';
+            let hdr = '<tr><th>Scenario</th>';
+            labels.forEach((l, i) => {
+                const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
+                hdr += '<th' + cls + '>' + l + '</th>';
+            });
+            hdr += '<th>' + yearEndLabel + '</th></tr>';
+            thead.innerHTML = hdr;
 
             let rows = '';
             scenarioOrder.forEach(sc => {
@@ -1262,9 +1420,10 @@
                 if (!scenData) return;
                 const color = scenarioColors[sc] || '#9ca3af';
                 rows += '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:6px;"></span>' + sc + '</td>';
-                quarters.forEach(q => {
-                    const v = scenData[q];
-                    rows += v != null ? '<td>' + v.toFixed(2) + '</td>' : '<td>\u2014</td>';
+                labels.forEach((l, i) => {
+                    const v = scenData[l];
+                    const cls = labelTypes[i] === 'forecast' ? ' class="col-forecast"' : labelTypes[i] === 'current_q' ? ' class="col-current"' : ' class="col-actual"';
+                    rows += v != null ? '<td' + cls + '>' + v.toFixed(2) + '</td>' : '<td' + cls + '>\u2014</td>';
                 });
                 const fy = scenData['FY'];
                 rows += fy != null ? '<td>' + fy.toFixed(2) + '</td>' : '<td>\u2014</td>';
@@ -1284,6 +1443,94 @@
                 if (label) parts.push(sc + ' (' + w + '): ' + label);
             });
             metaEl.textContent = parts.join(' \u00b7 ');
+        }
+
+        // ── Historical Data ──
+        renderForecastHistory(info);
+    }
+
+    function renderForecastHistory(info) {
+        const historical = info.historical || [];
+        if (historical.length === 0) return;
+
+        const unit = info.unit || '';
+
+        // ── Historical Chart ──
+        const histCanvasEl = document.getElementById('fc-history-chart');
+        if (histCanvasEl) {
+            const histCtx = histCanvasEl.getContext('2d');
+            if (fcHistoryChart) fcHistoryChart.destroy();
+
+            const histLabels = historical.map(h => h.label);
+            const histValues = historical.map(h => h.avg_price);
+
+            fcHistoryChart = new Chart(histCtx, {
+                type: 'line',
+                data: {
+                    labels: histLabels,
+                    datasets: [{
+                        label: activeForecastCommodity + ' (Quarterly Avg)',
+                        data: histValues,
+                        borderColor: '#3b82f6',
+                        backgroundColor: '#3b82f61A',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHitRadius: 8,
+                        tension: 0.3,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#d1d5db',
+                            callbacks: {
+                                label: (ctx) => {
+                                    const val = ctx.parsed.y;
+                                    if (val == null) return 'N/A';
+                                    return val.toFixed(2) + ' ' + unit;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 20 },
+                            grid: { color: 'rgba(55,65,81,0.3)' }
+                        },
+                        y: {
+                            ticks: { color: '#6b7280', font: { size: 10 } },
+                            grid: { color: 'rgba(55,65,81,0.3)' }
+                        }
+                    }
+                }
+            });
+
+            // Show the history section
+            const histSection = document.getElementById('fc-history-section');
+            if (histSection) histSection.style.display = '';
+        }
+
+        // ── Historical Table ──
+        const histThead = document.getElementById('fc-history-thead');
+        const histTbody = document.getElementById('fc-history-tbody');
+        if (histThead && histTbody) {
+            histThead.innerHTML = '<tr><th>Period</th><th>Avg Price (' + unit + ')</th></tr>';
+
+            let rows = '';
+            // Reverse: most recent first
+            for (let i = historical.length - 1; i >= 0; i--) {
+                const rec = historical[i];
+                rows += '<tr><td>' + rec.label + '</td>';
+                rows += '<td>' + rec.avg_price.toFixed(2) + '</td></tr>';
+            }
+            histTbody.innerHTML = rows;
         }
     }
 

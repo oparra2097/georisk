@@ -1,31 +1,35 @@
 """
 Commodities Forecast data source.
 
-Fetches Q1 actual prices from yfinance, applies scenario spread
-assumptions to produce Q2-Q4 forecasts, and computes weighted averages.
-Thread-safe cache with 24-hour TTL.
+Dynamic, date-aware forecast engine:
+  - Detects today's date to determine completed/current quarters
+  - Fetches YTD actual prices from yfinance (live data)
+  - Computes current quarter-end estimate from partial data
+  - Forecasts next 4 months using scenario spread assumptions
+  - Calculates year-end (FY) weighted average
+  - Thread-safe cache with 24-hour TTL
+
+Scenario weights: Base Case 70% | Severe Case 20% | Worst Case 10%
 """
 
 import threading
 import time
 import logging
-from datetime import datetime, date
+import calendar
+from datetime import datetime, date, timedelta
 
 logger = logging.getLogger(__name__)
 
 CACHE_TTL = 86400   # 24 hours
 RETRY_BACKOFF = 3600  # 1 hour after failure
+HISTORY_YEARS = 10   # years of historical quarterly data
+
+MONTH_NAMES = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
 
 # ── Forecast Configuration ──────────────────────────────────────────────────
-
-FORECAST_YEAR = 2026
-
-QUARTERS = {
-    'Q1': (date(2026, 1, 1), date(2026, 3, 31)),
-    'Q2': (date(2026, 4, 1), date(2026, 6, 30)),
-    'Q3': (date(2026, 7, 1), date(2026, 9, 30)),
-    'Q4': (date(2026, 10, 1), date(2026, 12, 31)),
-}
 
 SCENARIO_WEIGHTS = {
     'Worst Case': 0.10,
@@ -53,7 +57,11 @@ COMMODITIES = {
     'Gold':             ('GC=F',  '$/troy oz',  'Metals'),
 }
 
-# Scenario spread assumptions: % change vs Q1 actual per quarter
+# ── Scenario Spread Targets ─────────────────────────────────────────────────
+# Quarterly targets: cumulative % change from current price by end of quarter.
+# These are keyed Q1-Q4 and represent year-end targets from the start of each
+# quarter.  The engine interpolates monthly values from these.
+
 SCENARIO_SPREADS = {
     'WTI Crude': {
         'Worst Case':  {'Q1': 0.00, 'Q2': +0.9531, 'Q3': +0.8780, 'Q4': +0.7278},
@@ -137,6 +145,74 @@ GROUP_COMMODITY_COLORS = {
 }
 
 
+# ── Time Context ────────────────────────────────────────────────────────────
+
+def _get_time_context():
+    """Determine current quarter, completed quarters, and forecast months."""
+    today = date.today()
+    year = today.year
+    current_month = today.month
+    current_quarter = (current_month - 1) // 3 + 1  # 1-4
+
+    # Build quarter date ranges for current year
+    quarters = {}
+    for q in range(1, 5):
+        q_start = date(year, (q - 1) * 3 + 1, 1)
+        if q < 4:
+            q_end_month = q * 3
+            q_end_day = calendar.monthrange(year, q_end_month)[1]
+            q_end = date(year, q_end_month, q_end_day)
+        else:
+            q_end = date(year, 12, 31)
+        quarters[f'Q{q}'] = (q_start, q_end)
+
+    # Completed quarters: Q1..Q(current-1)
+    completed = [f'Q{q}' for q in range(1, current_quarter)]
+
+    # Current quarter label
+    current_q_label = f'Q{current_quarter}'
+
+    # Next 4 months for forecast
+    forecast_months = []
+    for i in range(1, 5):
+        m = current_month + i
+        y = year
+        if m > 12:
+            m -= 12
+            y += 1
+        forecast_months.append((y, m))
+
+    # Build labels array for the API response
+    labels = []
+    label_types = []
+
+    # Completed quarters
+    for q_label in completed:
+        labels.append(q_label)
+        label_types.append('actual')
+
+    # Current quarter (with asterisk to indicate estimate)
+    labels.append(current_q_label + '*')
+    label_types.append('current_q')
+
+    # Next 4 forecast months
+    for (y, m) in forecast_months:
+        labels.append(MONTH_NAMES[m])
+        label_types.append('forecast')
+
+    return {
+        'year': year,
+        'today': today,
+        'quarters': quarters,
+        'completed_quarters': completed,
+        'current_quarter': current_q_label,
+        'current_quarter_num': current_quarter,
+        'forecast_months': forecast_months,
+        'labels': labels,
+        'label_types': label_types,
+    }
+
+
 # ── Cache ────────────────────────────────────────────────────────────────────
 
 class ForecastCache:
@@ -176,8 +252,16 @@ _cache = ForecastCache()
 
 
 def _empty_result():
+    ctx = _get_time_context()
     return {
-        'forecast_year': FORECAST_YEAR,
+        'forecast_year': ctx['year'],
+        'time_context': {
+            'today': ctx['today'].isoformat(),
+            'current_quarter': ctx['current_quarter'],
+            'labels': ctx['labels'],
+            'label_types': ctx['label_types'],
+            'year_end_label': f"FY {ctx['year']}",
+        },
         'scenario_weights': SCENARIO_WEIGHTS,
         'scenario_labels': SCENARIO_LABELS,
         'scenario_colors': SCENARIO_COLORS,
@@ -191,106 +275,315 @@ def _empty_result():
 
 # ── Core Fetch Logic ─────────────────────────────────────────────────────────
 
-def _fetch_q1_actuals():
-    """Fetch Q1 average prices from yfinance for all commodities."""
+def _extract_series(data, ticker, num_tickers):
+    """Extract a single ticker's Close series from yfinance multi-download."""
+    try:
+        if num_tickers == 1:
+            series = data['Close'].dropna()
+        else:
+            series = data['Close'][ticker].dropna()
+        return series if len(series) > 0 else None
+    except Exception:
+        return None
+
+
+def _fetch_all_data(time_ctx):
+    """
+    Fetch historical + YTD data in a single yfinance call.
+
+    Returns:
+        (historical, actuals) tuple where:
+        - historical: {commodity_name: [{year, quarter, label, avg_price}, ...]}
+        - actuals: {commodity_name: {completed, latest_close, current_q_avg}}
+    """
     import yfinance as yf
 
-    q1_start, q1_end = QUARTERS['Q1']
+    year = time_ctx['year']
+    quarters = time_ctx['quarters']
+    today = time_ctx['today']
+
+    # Fetch from 10 years ago through today
+    hist_start = date(year - HISTORY_YEARS, 1, 1)
     tickers = list(set(t for t, _, _ in COMMODITIES.values()))
 
-    logger.info(f"Fetching Q1 {FORECAST_YEAR} actuals for {len(tickers)} tickers from yfinance")
+    logger.info(
+        f"Fetching data ({hist_start} to {today}) for "
+        f"{len(tickers)} tickers from yfinance"
+    )
 
     try:
         data = yf.download(
             tickers,
-            start=q1_start.isoformat(),
-            end=(date(q1_end.year, q1_end.month + 1, 1) if q1_end.month < 12
-                 else date(q1_end.year + 1, 1, 1)).isoformat(),
+            start=hist_start.isoformat(),
+            end=(today + timedelta(days=1)).isoformat(),
             auto_adjust=True,
             progress=False,
         )
     except Exception as e:
         logger.error(f"yfinance download failed: {e}")
-        return {}
+        return {}, {}
 
+    historical = {}
     actuals = {}
+
     for name, (ticker, unit, group) in COMMODITIES.items():
-        try:
-            if len(tickers) == 1:
-                series = data['Close'].dropna()
-            else:
-                series = data['Close'][ticker].dropna()
+        series = _extract_series(data, ticker, len(tickers))
+        if series is None:
+            logger.warning(f"No data for {name} ({ticker})")
+            continue
 
-            if len(series) == 0:
-                logger.warning(f"No Q1 data for {name} ({ticker})")
-                continue
+        # ── Historical quarterly averages (past 10 years) ──
+        hist_records = []
+        for y in range(year - HISTORY_YEARS, year):
+            for q in range(1, 5):
+                q_start = date(y, (q - 1) * 3 + 1, 1)
+                q_end_month = q * 3
+                q_end_day = calendar.monthrange(y, q_end_month)[1]
+                q_end = date(y, q_end_month, q_end_day)
 
-            q1_avg = round(float(series.mean()), 2)
-            actuals[name] = q1_avg
-            logger.info(f"  {name}: Q1 avg = {q1_avg} {unit}")
-        except Exception as e:
-            logger.warning(f"Failed to get Q1 actual for {name} ({ticker}): {e}")
+                q_data = series[q_start.isoformat():q_end.isoformat()]
+                if len(q_data) > 0:
+                    hist_records.append({
+                        'year': y,
+                        'quarter': q,
+                        'label': f"{y} Q{q}",
+                        'avg_price': round(float(q_data.mean()), 2),
+                    })
 
-    return actuals
+        historical[name] = hist_records
+
+        # ── Current year actuals ──
+        ytd_series = series[date(year, 1, 1).isoformat():]
+        if len(ytd_series) == 0:
+            continue
+
+        result = {
+            'completed': {},
+            'latest_close': round(float(ytd_series.iloc[-1]), 2),
+        }
+
+        # Completed quarter averages
+        for q_label in time_ctx['completed_quarters']:
+            q_start, q_end = quarters[q_label]
+            q_data = ytd_series[q_start.isoformat():q_end.isoformat()]
+            if len(q_data) > 0:
+                result['completed'][q_label] = round(float(q_data.mean()), 2)
+
+        # Current quarter partial average
+        cq = time_ctx['current_quarter']
+        cq_start, _ = quarters[cq]
+        cq_data = ytd_series[cq_start.isoformat():]
+        if len(cq_data) > 0:
+            result['current_q_avg'] = round(float(cq_data.mean()), 2)
+
+        actuals[name] = result
+        logger.info(
+            f"  {name}: latest={result['latest_close']} {unit}, "
+            f"current_q_avg={result.get('current_q_avg', 'N/A')}, "
+            f"hist_quarters={len(hist_records)}"
+        )
+
+    return historical, actuals
 
 
-def _build_scenario_prices(name, q1_actual):
-    """Apply scenario spreads to Q1 actual to get Q2-Q4 forecast prices."""
-    spreads = SCENARIO_SPREADS.get(name)
-    if not spreads:
+def _interpolate_monthly_spread(commodity_name, scenario, time_ctx):
+    """
+    Interpolate monthly spread values for the next 4 forecast months.
+
+    Uses the quarterly spread targets and linearly interpolates based on
+    how many months remain until each target quarter-end.
+
+    Returns a list of 4 spread values (one per forecast month).
+    """
+    spreads_cfg = SCENARIO_SPREADS.get(commodity_name, {}).get(scenario, {})
+    if not spreads_cfg:
+        return [0.0] * 4
+
+    year = time_ctx['year']
+    forecast_months = time_ctx['forecast_months']
+
+    # Build a month -> cumulative spread mapping from the quarterly targets
+    # Quarter targets map to the end-month of each quarter
+    quarter_end_months = {
+        'Q1': 3, 'Q2': 6, 'Q3': 9, 'Q4': 12
+    }
+
+    # Build interpolation points: (month_number, spread)
+    # Month 0 = start of year, current state = 0.0 spread
+    # We use month-of-year as the x-axis for interpolation
+    current_month = time_ctx['today'].month
+    interp_points = [(current_month, 0.0)]  # baseline = today
+
+    for q_label in ['Q1', 'Q2', 'Q3', 'Q4']:
+        end_month = quarter_end_months[q_label]
+        spread = spreads_cfg.get(q_label, 0.0)
+        if end_month > current_month:
+            interp_points.append((end_month, spread))
+
+    # Sort by month
+    interp_points.sort(key=lambda x: x[0])
+
+    # For forecast months that go into next year, extend the last known spread
+    last_spread = interp_points[-1][1] if interp_points else 0.0
+
+    monthly_spreads = []
+    for (fy, fm) in forecast_months:
+        # Effective month position (can be >12 for next year)
+        effective_month = fm if fy == year else fm + 12
+
+        # Find surrounding interpolation points
+        spread = _lerp_spread(effective_month, interp_points, last_spread)
+        monthly_spreads.append(spread)
+
+    return monthly_spreads
+
+
+def _lerp_spread(target_month, interp_points, last_spread):
+    """Linear interpolation between quarterly spread targets."""
+    if not interp_points:
+        return 0.0
+
+    # Before first point
+    if target_month <= interp_points[0][0]:
+        return interp_points[0][1]
+
+    # After last point — hold the last value
+    if target_month >= interp_points[-1][0]:
+        return last_spread
+
+    # Find surrounding points and interpolate
+    for i in range(len(interp_points) - 1):
+        m0, s0 = interp_points[i]
+        m1, s1 = interp_points[i + 1]
+        if m0 <= target_month <= m1:
+            if m1 == m0:
+                return s1
+            t = (target_month - m0) / (m1 - m0)
+            return s0 + t * (s1 - s0)
+
+    return last_spread
+
+
+def _build_scenario_forecasts(name, actual_data, time_ctx):
+    """
+    Build scenario-based forecasts for a single commodity.
+
+    Returns a dict of scenario -> {label: price} for all time labels + FY.
+    """
+    spreads_cfg = SCENARIO_SPREADS.get(name)
+    if not spreads_cfg:
         return None
+
+    labels = time_ctx['labels']
+    label_types = time_ctx['label_types']
+    latest_close = actual_data['latest_close']
+    completed = actual_data.get('completed', {})
+    current_q_avg = actual_data.get('current_q_avg')
 
     scenarios = {}
 
-    # Actual row
-    scenarios['Actual'] = {
-        'Q1': q1_actual,
-        'Q2': None,
-        'Q3': None,
-        'Q4': None,
-        'FY': q1_actual,
-    }
+    # ── Actual row: only has values for actual/current_q columns ──
+    actual_row = {}
+    for i, (label, ltype) in enumerate(zip(labels, label_types)):
+        if ltype == 'actual':
+            # Completed quarter — use actual average
+            q_key = label  # e.g. "Q1"
+            actual_row[label] = completed.get(q_key)
+        elif ltype == 'current_q':
+            # Current quarter estimate
+            actual_row[label] = current_q_avg
+        else:
+            actual_row[label] = None
+    actual_row['FY'] = None  # We don't compute FY for the "Actual" row
+    scenarios['Actual'] = actual_row
 
-    # Scenario rows
-    for scenario, q_spreads in spreads.items():
-        prices = {}
-        for q in ['Q1', 'Q2', 'Q3', 'Q4']:
-            spread = q_spreads.get(q, 0.0)
-            prices[q] = round(q1_actual * (1 + spread), 2)
-        vals = [v for v in prices.values() if v is not None]
-        prices['FY'] = round(sum(vals) / len(vals), 2) if vals else None
-        scenarios[scenario] = prices
+    # ── Scenario rows ──
+    for scenario in spreads_cfg.keys():
+        row = {}
+        monthly_spreads = _interpolate_monthly_spread(name, scenario, time_ctx)
 
-    # Weighted average
+        # Actual/current_q columns — same as actual row
+        forecast_vals = []
+        for i, (label, ltype) in enumerate(zip(labels, label_types)):
+            if ltype == 'actual':
+                q_key = label
+                val = completed.get(q_key)
+                row[label] = val
+                if val is not None:
+                    forecast_vals.append(val)
+            elif ltype == 'current_q':
+                row[label] = current_q_avg
+                if current_q_avg is not None:
+                    forecast_vals.append(current_q_avg)
+            elif ltype == 'forecast':
+                # Find which forecast month index this is
+                fc_idx = sum(1 for lt in label_types[:i] if lt == 'forecast')
+                if fc_idx < len(monthly_spreads):
+                    spread = monthly_spreads[fc_idx]
+                    val = round(latest_close * (1 + spread), 2)
+                    row[label] = val
+                    forecast_vals.append(val)
+                else:
+                    row[label] = None
+
+        # FY average: weighted by number of months each value represents
+        # Completed quarters: 3 months each, current quarter: ~3 months,
+        # forecast months: 1 month each
+        if forecast_vals:
+            row['FY'] = round(sum(forecast_vals) / len(forecast_vals), 2)
+        else:
+            row['FY'] = None
+
+        scenarios[scenario] = row
+
+    # ── Weighted average row ──
     weighted = {}
-    for q in ['Q1', 'Q2', 'Q3', 'Q4']:
-        weighted[q] = round(sum(
-            SCENARIO_WEIGHTS[sc] * scenarios[sc][q]
-            for sc in SCENARIO_WEIGHTS
-        ), 2)
-    vals = [v for v in weighted.values() if v is not None]
-    weighted['FY'] = round(sum(vals) / len(vals), 2) if vals else None
+    for label in labels:
+        val = 0.0
+        has_all = True
+        for sc, w in SCENARIO_WEIGHTS.items():
+            sc_val = scenarios.get(sc, {}).get(label)
+            if sc_val is not None:
+                val += w * sc_val
+            else:
+                has_all = False
+                break
+        weighted[label] = round(val, 2) if has_all else None
+
+    # FY weighted average
+    fy_val = 0.0
+    fy_ok = True
+    for sc, w in SCENARIO_WEIGHTS.items():
+        sc_fy = scenarios.get(sc, {}).get('FY')
+        if sc_fy is not None:
+            fy_val += w * sc_fy
+        else:
+            fy_ok = False
+            break
+    weighted['FY'] = round(fy_val, 2) if fy_ok else None
+
     scenarios['Weighted Avg'] = weighted
 
     return scenarios
 
 
 def _fetch_forecasts():
-    """Build complete forecast dataset."""
+    """Build complete dynamic forecast dataset."""
     try:
-        q1_actuals = _fetch_q1_actuals()
-        if not q1_actuals:
-            logger.error("No Q1 actuals available")
+        time_ctx = _get_time_context()
+        historical, actuals = _fetch_all_data(time_ctx)
+
+        if not actuals:
+            logger.error("No actuals available")
             return None
 
         # Organize by group
         groups = {}
         for name, (ticker, unit, group) in COMMODITIES.items():
-            if name not in q1_actuals:
+            if name not in actuals:
                 continue
 
-            q1 = q1_actuals[name]
-            scenarios = _build_scenario_prices(name, q1)
+            scenarios = _build_scenario_forecasts(name, actuals[name], time_ctx)
             if not scenarios:
                 continue
 
@@ -299,7 +592,9 @@ def _fetch_forecasts():
 
             groups[group]['commodities'][name] = {
                 'unit': unit,
+                'latest_close': actuals[name]['latest_close'],
                 'scenarios': scenarios,
+                'historical': historical.get(name, []),
             }
 
         if not groups:
@@ -314,18 +609,29 @@ def _fetch_forecasts():
             len(g['commodities']) for g in groups.values()
         )
 
-        logger.info(f"Built forecasts for {commodities_count} commodities across {len(groups)} groups")
+        logger.info(
+            f"Built dynamic forecasts for {commodities_count} commodities "
+            f"across {len(groups)} groups (as of {time_ctx['today']})"
+        )
 
         return {
-            'forecast_year': FORECAST_YEAR,
+            'forecast_year': time_ctx['year'],
+            'time_context': {
+                'today': time_ctx['today'].isoformat(),
+                'current_quarter': time_ctx['current_quarter'],
+                'labels': time_ctx['labels'],
+                'label_types': time_ctx['label_types'],
+                'year_end_label': f"FY {time_ctx['year']}",
+            },
             'scenario_weights': SCENARIO_WEIGHTS,
             'scenario_labels': SCENARIO_LABELS,
             'scenario_colors': SCENARIO_COLORS,
             'groups': groups,
             'meta': {
                 'source': 'ParraMacro Commodities Forecast',
-                'q1_source': f'yfinance (Jan-Mar {FORECAST_YEAR} daily averages)',
-                'method': 'Scenario spread-based forecasts',
+                'data_source': f'yfinance ({HISTORY_YEARS}yr history + YTD {time_ctx["year"]})',
+                'method': 'Scenario spread-based forecasts with monthly interpolation',
+                'baseline': 'Latest close price',
                 'commodities_count': commodities_count,
                 'last_updated': now.isoformat(),
             }

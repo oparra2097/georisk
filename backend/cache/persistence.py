@@ -181,66 +181,21 @@ def load_scores(store):
 
 def save_daily_snapshot(store):
     """
-    Save one snapshot per day: date -> {country: composite_score + base + news}.
-    Keeps up to 90 days of history for trend analysis.
+    Save daily score snapshot to SQLite database.
+    Called after each GDELT refresh cycle.
     """
-    with _save_lock:
-        try:
-            _ensure_data_dir()
-
-            # Load existing history
-            history = {}
-            if os.path.exists(Config.HISTORY_FILE):
-                with open(Config.HISTORY_FILE, 'r') as f:
-                    history = json.load(f)
-
-            today = date.today().isoformat()
-
-            # Build today's snapshot
-            all_scores = store.get_all_scores()
-            snapshot = {}
-            for code, risk in all_scores.items():
-                snapshot[code] = {
-                    'composite': round(risk.composite_score, 1),
-                    'base_score': round(risk.base_score, 1),
-                    'news_score': round(risk.news_score, 1),
-                    'indicators': {
-                        'political_stability': round(risk.indicators.political_stability, 1),
-                        'military_conflict': round(risk.indicators.military_conflict, 1),
-                        'economic_sanctions': round(risk.indicators.economic_sanctions, 1),
-                        'protests_civil_unrest': round(risk.indicators.protests_civil_unrest, 1),
-                        'terrorism': round(risk.indicators.terrorism, 1),
-                        'diplomatic_tensions': round(risk.indicators.diplomatic_tensions, 1),
-                    },
-                    'avg_tone': round(risk.avg_tone, 2),
-                }
-
-            history[today] = snapshot
-
-            # Prune to last 90 days
-            sorted_dates = sorted(history.keys())
-            if len(sorted_dates) > 90:
-                for old_date in sorted_dates[:-90]:
-                    del history[old_date]
-
-            tmp_path = Config.HISTORY_FILE + '.tmp'
-            with open(tmp_path, 'w') as f:
-                json.dump(history, f, separators=(',', ':'))
-            os.replace(tmp_path, Config.HISTORY_FILE)
-
-            logger.info(f"Daily snapshot saved: {today}, {len(snapshot)} countries, {len(history)} days total")
-
-        except Exception as e:
-            logger.error(f"Failed to save daily snapshot: {e}")
+    try:
+        from backend.cache.database import save_daily_scores
+        save_daily_scores(store)
+    except Exception as e:
+        logger.error(f"Failed to save daily snapshot to SQLite: {e}")
 
 
 def load_history():
-    """Load historical snapshots. Returns {date_str: {country_code: {...}}}."""
-    if not os.path.exists(Config.HISTORY_FILE):
-        return {}
+    """Load historical snapshots from SQLite. Returns {date_str: {country_code: composite}}."""
     try:
-        with open(Config.HISTORY_FILE, 'r') as f:
-            return json.load(f)
+        from backend.cache.database import get_all_history
+        return get_all_history(days=90)
     except Exception as e:
-        logger.error(f"Failed to load history: {e}")
+        logger.error(f"Failed to load history from SQLite: {e}")
         return {}

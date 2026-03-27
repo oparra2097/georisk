@@ -1,7 +1,12 @@
 const PanelModule = {
     radarChart: null,
+    historyChart: null,
+    currentCountryCode: null,
+    currentHistoryDays: 30,
 
     async open(countryCode) {
+        this.currentCountryCode = countryCode;
+
         const detail = await ApiClient.getCountryDetail(countryCode);
         if (!detail) return;
 
@@ -37,7 +42,9 @@ const PanelModule = {
 
         this.renderRadarChart(detail.indicators || {});
         this.renderIndicatorBars(detail.indicators || {});
+        this.renderHistoryChart(countryCode, this.currentHistoryDays);
         this.renderHeadlines(headlines.articles || []);
+        this.bindHistoryControls();
 
         document.getElementById('country-panel').classList.remove('hidden');
     },
@@ -112,6 +119,153 @@ const PanelModule = {
         });
     },
 
+    async renderHistoryChart(countryCode, days) {
+        const canvasEl = document.getElementById('panel-history-chart');
+        if (!canvasEl) return;
+
+        const data = await ApiClient.getCountryHistory(countryCode, days);
+        const series = data.series || [];
+
+        const ctx = canvasEl.getContext('2d');
+        if (this.historyChart) this.historyChart.destroy();
+
+        if (series.length === 0) {
+            // No history data yet — show placeholder
+            canvasEl.style.display = 'none';
+            let placeholder = document.getElementById('history-placeholder');
+            if (!placeholder) {
+                placeholder = document.createElement('p');
+                placeholder.id = 'history-placeholder';
+                placeholder.style.cssText = 'color: #6b7280; font-size: 12px; text-align: center; padding: 20px 0;';
+                canvasEl.parentNode.insertBefore(placeholder, canvasEl.nextSibling);
+            }
+            placeholder.textContent = 'Score history will appear after daily data accumulates.';
+            placeholder.style.display = '';
+            return;
+        }
+
+        canvasEl.style.display = '';
+        const placeholder = document.getElementById('history-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
+
+        const labels = series.map(d => d.date);
+        const compositeData = series.map(d => d.composite_score);
+        const baseData = series.map(d => d.base_score);
+        const newsData = series.map(d => d.news_score);
+
+        this.historyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Composite',
+                        data: compositeData,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0,
+                        tension: 0.3,
+                    },
+                    {
+                        label: 'Base Score',
+                        data: baseData,
+                        borderColor: 'rgba(59, 130, 246, 0.5)',
+                        borderWidth: 1.5,
+                        borderDash: [4, 2],
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.3,
+                    },
+                    {
+                        label: 'News Score',
+                        data: newsData,
+                        borderColor: 'rgba(245, 158, 11, 0.5)',
+                        borderWidth: 1.5,
+                        borderDash: [4, 2],
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.3,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#9ca3af',
+                            font: { size: 10 },
+                            boxWidth: 10,
+                            padding: 8,
+                            usePointStyle: true,
+                            pointStyle: 'line'
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        callbacks: {
+                            label: (ctx) => {
+                                const val = ctx.parsed.y;
+                                return ctx.dataset.label + ': ' + (val != null ? val.toFixed(1) : 'N/A');
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 9 },
+                            maxTicksLimit: 8,
+                            maxRotation: 0
+                        },
+                        grid: { color: 'rgba(55,65,81,0.2)' }
+                    },
+                    y: {
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 9 },
+                            stepSize: 25
+                        },
+                        grid: { color: 'rgba(55,65,81,0.2)' }
+                    }
+                }
+            }
+        });
+    },
+
+    bindHistoryControls() {
+        const buttons = document.querySelectorAll('.history-range-btn');
+        buttons.forEach(btn => {
+            // Remove existing listeners by cloning
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+
+            newBtn.addEventListener('click', () => {
+                const days = parseInt(newBtn.dataset.days);
+                this.currentHistoryDays = days;
+
+                // Update active state
+                document.querySelectorAll('.history-range-btn').forEach(b => b.classList.remove('active'));
+                newBtn.classList.add('active');
+
+                // Re-render chart
+                if (this.currentCountryCode) {
+                    this.renderHistoryChart(this.currentCountryCode, days);
+                }
+            });
+        });
+    },
+
     renderHeadlines(articles) {
         const list = document.getElementById('panel-headlines');
         if (!articles.length) {
@@ -135,6 +289,11 @@ const PanelModule = {
     },
 
     close() {
+        if (this.historyChart) {
+            this.historyChart.destroy();
+            this.historyChart = null;
+        }
+        this.currentCountryCode = null;
         document.getElementById('country-panel').classList.add('hidden');
     }
 };

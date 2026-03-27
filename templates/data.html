@@ -190,8 +190,18 @@
                             <option value="10" selected>Last 10 Years</option>
                             <option value="all">All Available</option>
                         </select>
+                        <a href="/api/cpi/us/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
                     </div>
                 </div>
+
+                <div class="cpi-summary-cards" id="us-cpi-summary"></div>
 
                 <div class="chart-container" id="us-cpi-chart-container">
                     <canvas id="us-cpi-chart"></canvas>
@@ -234,8 +244,18 @@
                             <option value="10" selected>Last 10 Years</option>
                             <option value="all">All Available</option>
                         </select>
+                        <a href="/api/cpi/us/components/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
                     </div>
                 </div>
+
+                <div class="cpi-summary-cards" id="us-comp-summary"></div>
 
                 <div class="chart-container" id="us-comp-chart-container">
                     <canvas id="us-comp-chart"></canvas>
@@ -278,8 +298,18 @@
                             <option value="10" selected>Last 10 Years</option>
                             <option value="all">All Available</option>
                         </select>
+                        <a href="/api/cpi/uk/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
                     </div>
                 </div>
+
+                <div class="cpi-summary-cards" id="uk-cpi-summary"></div>
 
                 <div class="chart-container" id="uk-cpi-chart-container">
                     <canvas id="uk-cpi-chart"></canvas>
@@ -322,8 +352,18 @@
                             <option value="10" selected>Last 10 Years</option>
                             <option value="all">All Available</option>
                         </select>
+                        <a href="/api/cpi/uk/components/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
                     </div>
                 </div>
+
+                <div class="cpi-summary-cards" id="uk-comp-summary"></div>
 
                 <div class="chart-container" id="uk-comp-chart-container">
                     <canvas id="uk-comp-chart"></canvas>
@@ -348,7 +388,7 @@
                 <div class="data-section-header">
                     <div>
                         <h1 class="data-title">Oil &amp; Gas Forecast</h1>
-                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts (2026)</p>
+                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts</p>
                     </div>
                     <div class="data-controls">
                         <select id="fc-oil-scenario" class="data-select">
@@ -357,6 +397,14 @@
                             <option value="Severe Case">Severe Case</option>
                             <option value="Worst Case">Worst Case</option>
                         </select>
+                        <a href="/api/forecasts/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
                     </div>
                 </div>
                 <div class="chart-container" id="fc-oil-chart-container">
@@ -380,7 +428,7 @@
                 <div class="data-section-header">
                     <div>
                         <h1 class="data-title">Agriculture Forecast</h1>
-                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts (2026)</p>
+                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts</p>
                     </div>
                     <div class="data-controls">
                         <select id="fc-ag-scenario" class="data-select">
@@ -389,6 +437,14 @@
                             <option value="Severe Case">Severe Case</option>
                             <option value="Worst Case">Worst Case</option>
                         </select>
+                        <a href="/api/forecasts/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
                     </div>
                 </div>
                 <div class="chart-container" id="fc-ag-chart-container">
@@ -412,7 +468,7 @@
                 <div class="data-section-header">
                     <div>
                         <h1 class="data-title">Metals Forecast</h1>
-                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts (2026)</p>
+                        <p class="data-source">ParraMacro &mdash; Scenario-Based Commodity Forecasts</p>
                     </div>
                     <div class="data-controls">
                         <select id="fc-metals-scenario" class="data-select">
@@ -421,6 +477,14 @@
                             <option value="Severe Case">Severe Case</option>
                             <option value="Worst Case">Worst Case</option>
                         </select>
+                        <a href="/api/forecasts/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
                     </div>
                 </div>
                 <div class="chart-container" id="fc-metals-chart-container">
@@ -444,7 +508,17 @@
                 <div class="data-section-header">
                     <div>
                         <h1 class="data-title" id="fc-commodity-title">Commodity Forecast</h1>
-                        <p class="data-source" id="fc-commodity-source">ParraMacro &mdash; Scenario-Based Forecast (2026)</p>
+                        <p class="data-source" id="fc-commodity-source">ParraMacro &mdash; Scenario-Based Forecast</p>
+                    </div>
+                    <div class="data-controls">
+                        <a href="/api/forecasts/export" class="export-btn-data" title="Download Excel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Excel
+                        </a>
                     </div>
                 </div>
                 <div class="chart-container" id="fc-commodity-chart-container">
@@ -461,6 +535,25 @@
                     </table>
                 </div>
                 <div class="data-meta" id="fc-commodity-meta"></div>
+
+                <!-- Historical Data Section -->
+                <div id="fc-history-section" style="display:none; margin-top: 32px;">
+                    <div class="data-section-header" style="margin-bottom: 0;">
+                        <div>
+                            <h2 class="data-title" style="font-size: 1.1rem;">Historical Quarterly Averages</h2>
+                            <p class="data-source">yfinance &mdash; 10-Year Quarterly Average Prices</p>
+                        </div>
+                    </div>
+                    <div class="chart-container" id="fc-history-chart-container">
+                        <canvas id="fc-history-chart"></canvas>
+                    </div>
+                    <div class="data-table-container" id="fc-history-table-container">
+                        <table class="data-table" id="fc-history-table">
+                            <thead id="fc-history-thead"></thead>
+                            <tbody id="fc-history-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
         </div>
     </div>

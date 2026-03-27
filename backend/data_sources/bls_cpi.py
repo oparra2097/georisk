@@ -8,13 +8,13 @@ Without API key: 25 queries/day, 10 years max.
 With BLS_API_KEY env var: 500 queries/day, 20 years max.
 """
 
-import os
 import threading
 import time
 import logging
 import requests
 import urllib3
 from datetime import datetime
+from config import Config
 
 # BLS API has recurring SSL certificate issues; suppress warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -38,7 +38,7 @@ BLS_SERIES = {
 PERIOD_MAP = {f'M{str(i).zfill(2)}': i for i in range(1, 13)}
 
 
-RETRY_BACKOFF = 3600  # Wait 1 hour before retrying after a failure
+RETRY_BACKOFF = 600  # Wait 10 minutes before retrying after a failure
 
 
 class BlsCpiCache:
@@ -89,10 +89,11 @@ def _empty_result():
 
 def _fetch_bls_cpi():
     """Fetch CPI data from BLS API v2."""
-    api_key = os.environ.get('BLS_API_KEY', '')
+    api_key = Config.BLS_API_KEY
     current_year = datetime.utcnow().year
 
     start_year = current_year - (20 if api_key else 10)
+    logger.info(f"BLS CPI fetch: key={'set' if api_key else 'MISSING'}, range={start_year}-{current_year}")
 
     series_ids = [s['id'] for s in BLS_SERIES.values()]
 
@@ -257,9 +258,10 @@ def _empty_components_result():
 
 def _fetch_bls_components():
     """Fetch CPI component data from BLS API v2."""
-    api_key = os.environ.get('BLS_API_KEY', '')
+    api_key = Config.BLS_API_KEY
     current_year = datetime.utcnow().year
     start_year = current_year - (20 if api_key else 10)
+    logger.info(f"BLS components fetch: key={'set' if api_key else 'MISSING'}, range={start_year}-{current_year}")
 
     series_ids = [s['id'] for s in BLS_COMPONENTS.values()]
 
@@ -353,3 +355,10 @@ def _fetch_bls_components():
 def get_bls_components():
     """Public API: returns cached BLS CPI component data."""
     return _component_cache.get()
+
+
+def clear_bls_caches():
+    """Clear both CPI caches to force fresh fetch on next request."""
+    _cache.clear()
+    _component_cache.clear()
+    logger.info("BLS CPI caches cleared")

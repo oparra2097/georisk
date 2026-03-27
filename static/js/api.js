@@ -65,5 +65,16 @@ const ApiClient = {
             console.warn('Failed to fetch status:', e);
             return {};
         }
+    },
+
+    async getCountryHistory(countryCode, days = 90) {
+        try {
+            const res = await fetch(`${this.BASE_URL}/history/${countryCode}?days=${days}`);
+            if (!res.ok) return { series: [] };
+            return await res.json();
+        } catch (e) {
+            console.warn(`Failed to fetch history for ${countryCode}:`, e);
+            return { series: [] };
+        }
     }
 };

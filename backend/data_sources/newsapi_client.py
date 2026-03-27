@@ -1,9 +1,29 @@
 import requests
 import logging
+import threading
+from datetime import date
 from config import Config
 from backend.data_sources.country_codes import iso_alpha2_to_name
 
 logger = logging.getLogger(__name__)
+
+# Daily budget tracking (100 req/day limit, keep 10 buffer)
+_budget_lock = threading.Lock()
+_daily_budget = {'count': 0, 'date': None}
+_DAILY_LIMIT = 90
+
+
+def _check_budget():
+    """Check if we have remaining API budget for today."""
+    today = date.today()
+    with _budget_lock:
+        if _daily_budget['date'] != today:
+            _daily_budget['count'] = 0
+            _daily_budget['date'] = today
+        if _daily_budget['count'] >= _DAILY_LIMIT:
+            return False
+        _daily_budget['count'] += 1
+        return True
 
 NEWSAPI_SUPPORTED = {
     'ae', 'ar', 'at', 'au', 'be', 'bg', 'br', 'ca', 'ch', 'cn',
@@ -23,6 +43,10 @@ def fetch_headlines_for_country(country_alpha2, page_size=20):
     """Fetch headlines for a specific country."""
     key = _get_key()
     if not key or key == 'your_api_key_here':
+        return []
+
+    if not _check_budget():
+        logger.debug("NewsAPI daily budget exhausted — skipping request")
         return []
 
     code = country_alpha2.lower()
@@ -73,6 +97,10 @@ def fetch_global_headlines(page_size=50):
     """Fetch global geopolitical headlines."""
     key = _get_key()
     if not key or key == 'your_api_key_here':
+        return []
+
+    if not _check_budget():
+        logger.debug("NewsAPI daily budget exhausted — skipping global headlines")
         return []
 
     articles = []

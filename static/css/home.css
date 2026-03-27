@@ -99,6 +99,24 @@
     margin-left: auto;
 }
 
+.export-btn-home {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+.export-btn-home:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+}
+
 
 /* ===== Market Grid ===== */
 

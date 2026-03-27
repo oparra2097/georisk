@@ -10,6 +10,8 @@ class Config:
     NEWSDATA_KEY = os.environ.get('NEWSDATA_KEY', '')
     GNEWS_KEY = os.environ.get('GNEWS_KEY', '')
     BLS_API_KEY = os.environ.get('BLS_API_KEY', '')
+    ACLED_EMAIL = os.environ.get('ACLED_EMAIL', '')
+    ACLED_PASSWORD = os.environ.get('ACLED_PASSWORD', '')
 
     GDELT_BASE_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
     NEWSAPI_BASE_URL = 'https://newsapi.org/v2'
@@ -26,10 +28,12 @@ class Config:
     EMA_ALPHA = 0.5                # Blending: 50% new data, 50% existing
     WGI_CACHE_DAYS = 30            # Refresh base data monthly
 
-    # Persistent storage — JSON files survive process restarts on Render
+    # Persistent storage — survives process restarts on Render
     DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data'))
     SCORES_FILE = os.path.join(DATA_DIR, 'scores.json')
     HISTORY_FILE = os.path.join(DATA_DIR, 'history.json')
+    DB_FILE = os.path.join(DATA_DIR, 'georisk.db')
+    HISTORY_RETENTION_DAYS = 365
 
     # --- Multi-provider regional assignment ---
     # Each region is assigned a news API provider to spread request budget.

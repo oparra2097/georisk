@@ -26,6 +26,7 @@ INDICATOR_KEYWORDS = {
             'coup', 'overthrow', 'assassination', 'assassinated', 'martial law',
             'impeach', 'impeached', 'impeachment', 'dictator', 'junta',
             'authoritarian', 'crackdown', 'purge', 'despot',
+            'state of emergency', 'power grab', 'political crisis',
         ],
         'medium': [
             'corruption', 'scandal', 'fraud', 'rigged', 'disputed',
@@ -43,12 +44,15 @@ INDICATOR_KEYWORDS = {
             'casualties', 'killed', 'shelling', 'offensive', 'missile',
             'missiles', 'bombing', 'bombed', 'genocide', 'massacre',
             'troops', 'soldiers', 'battlefield', 'combat', 'warfare',
+            'air strike', 'ground offensive', 'ethnic cleansing',
+            'war crimes', 'drone strike', 'military coup',
         ],
         'medium': [
             'military', 'deploy', 'deployed', 'deployment', 'ceasefire',
             'arms', 'weapons', 'drone', 'drones', 'naval', 'clash',
             'skirmish', 'mobilization', 'nuclear', 'escalation',
             'artillery', 'tank', 'tanks', 'wounded', 'strike',
+            'arms deal', 'weapons shipment', 'no fly zone',
         ],
         'low': [
             'defense', 'defence', 'army', 'navy', 'peacekeeping',
@@ -59,11 +63,13 @@ INDICATOR_KEYWORDS = {
         'high': [
             'sanctions', 'sanctioned', 'embargo', 'blockade',
             'freeze', 'frozen', 'blacklist', 'blacklisted', 'banned',
+            'trade war', 'asset freeze', 'oil embargo', 'financial sanctions',
         ],
         'medium': [
             'tariff', 'tariffs', 'restriction', 'restrictions', 'penalty',
             'default', 'crisis', 'devaluation', 'inflation',
             'currency', 'debt', 'deficit',
+            'capital controls', 'debt restructuring',
         ],
         'low': [
             'trade', 'economic', 'export', 'import', 'negotiate',
@@ -75,6 +81,7 @@ INDICATOR_KEYWORDS = {
             'riot', 'riots', 'rioting', 'uprising', 'revolution',
             'looting', 'unrest', 'revolt', 'insurrection', 'curfew',
             'shutdown', 'clashes', 'brutality', 'crackdown',
+            'civil unrest', 'mass protest', 'general strike',
         ],
         'medium': [
             'protest', 'protests', 'protesters', 'protesting',
@@ -93,6 +100,7 @@ INDICATOR_KEYWORDS = {
             'hostage', 'hostages', 'massacre', 'shooting', 'attack',
             'attacked', 'explosion', 'explosive', 'suicide',
             'kidnap', 'kidnapped', 'abducted',
+            'car bomb', 'suicide bomber', 'terror attack',
         ],
         'medium': [
             'militant', 'militants', 'extremist', 'extremism',
@@ -109,6 +117,7 @@ INDICATOR_KEYWORDS = {
             'expelled', 'expel', 'embassy', 'diplomat', 'severed',
             'recalled', 'ultimatum', 'condemn', 'condemned',
             'retaliation', 'retaliatory',
+            'diplomatic crisis', 'trade dispute', 'border dispute',
         ],
         'medium': [
             'tensions', 'dispute', 'disputed', 'provocative',

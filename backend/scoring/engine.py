@@ -48,9 +48,8 @@ from backend.data_sources.gnews_client import (
 )
 from backend.data_sources.world_bank_wgi import fetch_base_scores, get_base_score
 from backend.scoring.keyword_analyzer import analyze_articles
-from backend.scoring.indicator_calculators import (
-    calculate_indicator_score, get_baseline
-)
+from backend.scoring.indicator_calculators import calculate_indicator_score
+from backend.scoring.baselines import get_country_baseline
 from backend.scoring.normalizer import calculate_news_score, calculate_composite
 from backend.cache.persistence import save_scores, save_daily_snapshot
 from config import Config
@@ -200,10 +199,25 @@ def score_single_country(country_alpha2, use_news=False):
     for ind in INDICATORS:
         signal = analysis.get(ind, {'signal_strength': 0.0, 'theme_volume': 0})
         volume = signal.get('theme_volume', 0)
-        baseline = get_baseline(ind)
+        baseline = get_country_baseline(country_alpha2, ind)
         fresh_indicator_scores[ind] = calculate_indicator_score(
             ind, volume, baseline, avg_tone, signal
         )
+
+    # Blend structured conflict data from ACLED (if configured)
+    if Config.ACLED_EMAIL and Config.ACLED_PASSWORD:
+        try:
+            from backend.data_sources.acled_client import get_acled_signal
+            acled_signal = get_acled_signal(country_alpha2)
+            if acled_signal:
+                for ind in INDICATORS:
+                    acled_ind = acled_signal.get(ind)
+                    if acled_ind and acled_ind['event_count'] > 0:
+                        acled_boost = acled_ind['severity'] * 20.0
+                        fresh_indicator_scores[ind] = min(100.0,
+                            fresh_indicator_scores[ind] + acled_boost)
+        except Exception as e:
+            logger.debug(f"ACLED signal unavailable for {country_alpha2}: {e}")
 
     fresh_indicators = IndicatorScore(
         political_stability=fresh_indicator_scores.get('political_stability', 0),

@@ -32,6 +32,12 @@ def init_scheduler(app):
     gdelt_interval = app.config.get('GDELT_REFRESH_MINUTES', 15)
     news_interval = app.config.get('NEWS_ROTATION_MINUTES', 120)
 
+    # Initialize SQLite database and migrate history.json if present
+    from backend.cache.database import init_db, migrate_from_json, cleanup_old_scores
+    init_db()
+    migrate_from_json()
+    cleanup_old_scores()
+
     # Load persisted scores from disk (survives restarts/redeploys)
     had_data = load_scores(store)
     if had_data:
@@ -63,6 +69,19 @@ def init_scheduler(app):
         misfire_grace_time=600,
         max_instances=1
     )
+
+    # Job 3: ACLED conflict data refresh (daily at 6 AM UTC)
+    if Config.ACLED_EMAIL and Config.ACLED_PASSWORD:
+        from backend.data_sources.acled_client import prefetch_acled_data
+        scheduler.add_job(
+            func=prefetch_acled_data,
+            trigger='cron',
+            hour=6,
+            id='refresh_acled',
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("ACLED daily prefetch scheduled (6 AM UTC).")
 
     scheduler.start()
     logger.info(

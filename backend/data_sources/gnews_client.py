@@ -8,10 +8,30 @@ Endpoint: https://gnews.io/api/v4/search
 
 import requests
 import logging
+import threading
+from datetime import date
 from config import Config
 from backend.data_sources.country_codes import iso_alpha2_to_name
 
 logger = logging.getLogger(__name__)
+
+# Daily budget tracking (100 req/day limit, keep 10 buffer)
+_budget_lock = threading.Lock()
+_daily_budget = {'count': 0, 'date': None}
+_DAILY_LIMIT = 90
+
+
+def _check_budget():
+    """Check if we have remaining API budget for today."""
+    today = date.today()
+    with _budget_lock:
+        if _daily_budget['date'] != today:
+            _daily_budget['count'] = 0
+            _daily_budget['date'] = today
+        if _daily_budget['count'] >= _DAILY_LIMIT:
+            return False
+        _daily_budget['count'] += 1
+        return True
 
 GNEWS_SEARCH_URL = 'https://gnews.io/api/v4/search'
 GNEWS_HEADLINES_URL = 'https://gnews.io/api/v4/top-headlines'
@@ -35,6 +55,10 @@ def fetch_headlines_for_country(country_alpha2, max_articles=10):
     """Fetch headlines for a specific country from GNews API."""
     key = _get_key()
     if not key:
+        return []
+
+    if not _check_budget():
+        logger.debug("GNews daily budget exhausted — skipping request")
         return []
 
     code = country_alpha2.lower()

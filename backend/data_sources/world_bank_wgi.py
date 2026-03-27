@@ -370,13 +370,25 @@ def fetch_base_scores(country_codes_iso2=None):
             macro_risks.append(converter(value))
         macro_score = sum(macro_risks) / len(macro_risks)
 
-        # Combined base score
-        base = governance_score * 0.6 + macro_score * 0.4
+        # Combined base score (with optional GPR Index calibration)
+        try:
+            from backend.data_sources.gpr_index import get_gpr_score
+            gpr = get_gpr_score(country)
+        except Exception:
+            gpr = None
+
+        if gpr is not None:
+            # GPR available (44 countries): governance 50% + macro 30% + GPR 20%
+            base = governance_score * 0.50 + macro_score * 0.30 + gpr * 0.20
+        else:
+            # No GPR data: governance 60% + macro 40%
+            base = governance_score * 0.60 + macro_score * 0.40
 
         base_scores[country] = {
             'base_score': round(base, 1),
             'governance_score': round(governance_score, 1),
             'macro_score': round(macro_score, 1),
+            'gpr_score': round(gpr, 1) if gpr is not None else None,
             'wgi': {k: round(v, 3) if v else None for k, v in gov_values.items()},
             'macro': {k: round(v, 2) if v else None for k, v in mac_values.items()},
         }
