@@ -113,8 +113,13 @@ def _fetch_weo(indicator):
 
 _INDICATOR_NAMES = {
     'NGDP_RPCH': 'Real GDP Growth (Annual % Change)',
+    'NGDPD': 'GDP, Current Prices (Billions USD)',
+    'PPPGDP': 'GDP, PPP (Billions International $)',
+    'PPPPC': 'GDP Per Capita, PPP (International $)',
     'PCPIPCH': 'Inflation, Average Consumer Prices (Annual % Change)',
     'LUR': 'Unemployment Rate (%)',
     'BCA_NGDPD': 'Current Account Balance (% of GDP)',
+    'BCA': 'Current Account Balance (Billions USD)',
     'GGXWDG_NGDP': 'General Government Gross Debt (% of GDP)',
+    'LP': 'Population (Millions)',
 }

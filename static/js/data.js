@@ -1149,6 +1149,59 @@
     // WEO RENDERER (Phase 5)
     // ══════════════════════════════════════════════════════
 
+    function weoFormatValue(val, ds) {
+        if (val == null) return '\u2014';
+        const decimals = ds.weoValueDecimals != null ? ds.weoValueDecimals : 2;
+        const prefix = ds.weoValuePrefix || '';
+        const suffix = ds.weoValueSuffix || '%';
+        return prefix + val.toFixed(decimals) + suffix;
+    }
+
+    function populateCountryPicker(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data) return;
+        const sel = document.getElementById('ctrl-countries');
+        if (!sel) return;
+
+        const countryData = data.countries || {};
+        const groups = ds.countryGroups || {};
+        const defaults = ds.defaultCountries || [];
+
+        // Build options: groups first, then individual countries
+        let html = '';
+        Object.entries(groups).forEach(([name, isos]) => {
+            html += '<option value="group:' + name + '">' + name + '</option>';
+        });
+        if (Object.keys(groups).length > 0) html += '<option disabled>\u2500\u2500\u2500\u2500\u2500\u2500</option>';
+
+        // Sort countries by name
+        const sorted = Object.entries(countryData)
+            .map(([iso, c]) => ({ iso, name: c.name || iso }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+        sorted.forEach(c => {
+            const selected = defaults.includes(c.iso) && state.countries.length === 0 ? ' selected' : '';
+            html += '<option value="' + c.iso + '"' + selected + '>' + c.name + '</option>';
+        });
+        sel.innerHTML = html;
+
+        // Replace the raw <select multiple> with a friendlier dropdown
+        // Build a single-select for group presets + keep current behavior
+        sel.size = 1;
+        sel.removeAttribute('multiple');
+
+        sel.addEventListener('change', () => {
+            const v = sel.value;
+            if (v.startsWith('group:')) {
+                const groupName = v.replace('group:', '');
+                state.countries = groups[groupName] || [];
+            } else {
+                state.countries = [v];
+            }
+            PD.pushState();
+            renderCurrentDataset();
+        });
+    }
+
     function renderWeo(ds) {
         const data = PD.getCached(ds.api);
         if (!data) return;
@@ -1157,6 +1210,9 @@
         const countryData = data.countries || {};
         const years = data.years || [];
         const forecastStart = data.forecast_start_year || null;
+
+        // Populate country picker
+        populateCountryPicker(ds);
 
         // Summary not used
         const summary = document.getElementById('panel-summary');
@@ -1169,6 +1225,12 @@
             const minYear = currentYear - parseInt(state.range);
             filteredYears = years.filter(y => y >= minYear);
         }
+
+        // Unit formatting from catalog
+        const unitLabel = ds.weoUnit || '%';
+        const valueSuffix = ds.weoValueSuffix != null ? ds.weoValueSuffix : '%';
+        const valuePrefix = ds.weoValuePrefix || '';
+        const decimals = ds.weoValueDecimals != null ? ds.weoValueDecimals : 2;
 
         // Chart
         PD.destroyChart('main');
@@ -1203,12 +1265,12 @@
             data: { labels: filteredYears.map(String), datasets },
             options: chartOptions({
                 legend: true,
-                tooltip: (ctx) => {
-                    const val = ctx.parsed.y;
-                    if (val == null) return ctx.dataset.label + ': N/A';
-                    return ctx.dataset.label + ': ' + val.toFixed(2) + '%';
+                tooltip: (tooltipCtx) => {
+                    const val = tooltipCtx.parsed.y;
+                    if (val == null) return tooltipCtx.dataset.label + ': N/A';
+                    return tooltipCtx.dataset.label + ': ' + valuePrefix + val.toFixed(decimals) + valueSuffix;
                 },
-                yCallback: (val) => val.toFixed(1) + '%',
+                yCallback: (val) => valuePrefix + val.toFixed(decimals > 1 ? 1 : decimals) + valueSuffix,
             }),
         }));
 
@@ -1233,7 +1295,7 @@
                 reversedYears.forEach(y => {
                     const val = cData.values[String(y)];
                     const cls = forecastStart && y >= forecastStart ? ' class="col-forecast"' : '';
-                    rows += val != null ? '<td' + cls + '>' + val.toFixed(2) + '%</td>' : '<td' + cls + '>\u2014</td>';
+                    rows += '<td' + cls + '>' + weoFormatValue(val, ds) + '</td>';
                 });
                 rows += '</tr>';
             });
