@@ -172,6 +172,11 @@
         const panel = document.getElementById('active-panel');
         if (!panel) return;
 
+        // Reset country picker binding flag — the old <select> DOM node
+        // is destroyed when we rebuild the panel, so the new one needs
+        // a fresh event listener.
+        _countryPickerBound = false;
+
         const ds = PD.findDataset(state.category, state.dataset);
         if (!ds) {
             panel.innerHTML = '<p style="color:var(--text-muted);padding:40px;">Select a dataset from the sidebar.</p>';
@@ -1157,6 +1162,8 @@
         return prefix + val.toFixed(decimals) + suffix;
     }
 
+    let _countryPickerBound = false;
+
     function populateCountryPicker(ds) {
         const data = PD.getCached(ds.api);
         if (!data) return;
@@ -1165,44 +1172,62 @@
 
         const countryData = data.countries || {};
         const groups = ds.countryGroups || {};
-        const defaults = ds.defaultCountries || [];
 
-        // Build options: groups first, then individual countries
-        let html = '';
+        // Build options: group presets first, separator, then individual countries
+        let html = '<option value="" disabled selected>Select countries\u2026</option>';
         Object.entries(groups).forEach(([name, isos]) => {
-            html += '<option value="group:' + name + '">' + name + '</option>';
+            html += '<option value="group:' + name + '">\u25B8 ' + name + '</option>';
         });
-        if (Object.keys(groups).length > 0) html += '<option disabled>\u2500\u2500\u2500\u2500\u2500\u2500</option>';
+        if (Object.keys(groups).length > 0) html += '<option disabled>\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500</option>';
 
         // Sort countries by name
         const sorted = Object.entries(countryData)
             .map(([iso, c]) => ({ iso, name: c.name || iso }))
             .sort((a, b) => a.name.localeCompare(b.name));
         sorted.forEach(c => {
-            const selected = defaults.includes(c.iso) && state.countries.length === 0 ? ' selected' : '';
-            html += '<option value="' + c.iso + '"' + selected + '>' + c.name + '</option>';
+            html += '<option value="' + c.iso + '">' + c.name + '</option>';
         });
         sel.innerHTML = html;
 
-        // Replace the raw <select multiple> with a friendlier dropdown
-        // Build a single-select for group presets + keep current behavior
+        // Make it a single-select dropdown
         sel.size = 1;
         sel.removeAttribute('multiple');
 
-        sel.addEventListener('change', () => {
-            const v = sel.value;
-            if (v.startsWith('group:')) {
-                const groupName = v.replace('group:', '');
-                state.countries = groups[groupName] || [];
-            } else {
-                state.countries = [v];
-            }
-            PD.pushState();
-            renderCurrentDataset();
-        });
+        // Only bind the change listener once to prevent stacking
+        if (!_countryPickerBound) {
+            _countryPickerBound = true;
+            sel.addEventListener('change', () => {
+                const v = sel.value;
+                const currentDs = PD.findDataset(state.category, state.dataset);
+                const currentGroups = currentDs ? (currentDs.countryGroups || {}) : {};
+                if (v.startsWith('group:')) {
+                    const groupName = v.replace('group:', '');
+                    state.countries = currentGroups[groupName] || [];
+                } else if (v) {
+                    state.countries = [v];
+                }
+                PD.pushState();
+                // Re-render just chart + table, not the whole panel
+                renderWeoContent(currentDs);
+            });
+        }
     }
 
     function renderWeo(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data) return;
+
+        // Populate country picker (builds options, binds listener once)
+        populateCountryPicker(ds);
+
+        // Summary not used
+        const summary = document.getElementById('panel-summary');
+        if (summary) summary.innerHTML = '';
+
+        renderWeoContent(ds);
+    }
+
+    function renderWeoContent(ds) {
         const data = PD.getCached(ds.api);
         if (!data) return;
 
@@ -1210,13 +1235,6 @@
         const countryData = data.countries || {};
         const years = data.years || [];
         const forecastStart = data.forecast_start_year || null;
-
-        // Populate country picker
-        populateCountryPicker(ds);
-
-        // Summary not used
-        const summary = document.getElementById('panel-summary');
-        if (summary) summary.innerHTML = '';
 
         // Filter years by range
         const currentYear = new Date().getFullYear();
@@ -1227,7 +1245,6 @@
         }
 
         // Unit formatting from catalog
-        const unitLabel = ds.weoUnit || '%';
         const valueSuffix = ds.weoValueSuffix != null ? ds.weoValueSuffix : '%';
         const valuePrefix = ds.weoValuePrefix || '';
         const decimals = ds.weoValueDecimals != null ? ds.weoValueDecimals : 2;
@@ -1239,6 +1256,7 @@
         const ctx = canvasEl.getContext('2d');
 
         const forecastIdx = forecastStart ? filteredYears.indexOf(forecastStart) : -1;
+        const yearLabels = filteredYears.map(y => String(y));
 
         const datasets = countries.map((iso, i) => {
             const cData = countryData[iso];
@@ -1262,16 +1280,58 @@
 
         PD.setChart('main', new Chart(ctx, {
             type: 'line',
-            data: { labels: filteredYears.map(String), datasets },
-            options: chartOptions({
-                legend: true,
-                tooltip: (tooltipCtx) => {
-                    const val = tooltipCtx.parsed.y;
-                    if (val == null) return tooltipCtx.dataset.label + ': N/A';
-                    return tooltipCtx.dataset.label + ': ' + valuePrefix + val.toFixed(decimals) + valueSuffix;
+            data: { labels: yearLabels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        bodyFont: { size: 12 },
+                        callbacks: {
+                            label: (tooltipCtx) => {
+                                const val = tooltipCtx.parsed.y;
+                                if (val == null) return tooltipCtx.dataset.label + ': N/A';
+                                return tooltipCtx.dataset.label + ': ' + valuePrefix + val.toFixed(decimals) + valueSuffix;
+                            }
+                        }
+                    }
                 },
-                yCallback: (val) => valuePrefix + val.toFixed(decimals > 1 ? 1 : decimals) + valueSuffix,
-            }),
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: {
+                            color: (tickCtx) => {
+                                const yr = parseInt(yearLabels[tickCtx.index]);
+                                if (forecastStart && yr >= forecastStart) return '#6b7280';
+                                return '#9ca3af';
+                            },
+                            font: { size: 11 },
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 15,
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        title: { display: true, text: 'Year', color: '#6b7280', font: { size: 11 } },
+                    },
+                    y: {
+                        ticks: {
+                            color: '#6b7280', font: { size: 10 },
+                            callback: (val) => valuePrefix + val.toFixed(decimals > 1 ? 1 : decimals) + valueSuffix,
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                    }
+                }
+            },
         }));
 
         // Table
