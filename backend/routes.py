@@ -6,6 +6,7 @@ from backend.data_sources.market_data import get_market_data, get_market_history
 from backend.data_sources.imf_cofer import get_cofer_data
 from backend.data_sources.bls_cpi import get_bls_cpi_data, get_bls_components, clear_bls_caches
 from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
+from backend.data_sources.eurostat_hicp import get_eurostat_cpi_data, get_eurostat_components
 from backend.data_sources.substack_feed import get_substack_posts
 from backend.data_sources.commodities_forecast import get_forecast_data
 from backend.data_sources.imf_weo import get_weo_data
@@ -241,6 +242,32 @@ def export_us_components_excel():
 def export_uk_components_excel():
     """Generate Excel file with UK CPI component breakdown."""
     return _export_cpi_excel(get_ons_components(), 'UK CPI Components', 'uk_cpi_components')
+
+
+@api_bp.route('/cpi/eu')
+def get_eu_cpi():
+    """Return EU HICP data from Eurostat (cached 24 hours)."""
+    data = get_eurostat_cpi_data()
+    return jsonify(data)
+
+
+@api_bp.route('/cpi/eu/components')
+def get_eu_cpi_components():
+    """Return EU HICP component breakdown from Eurostat (cached 24 hours)."""
+    data = get_eurostat_components()
+    return jsonify(data)
+
+
+@api_bp.route('/cpi/eu/export')
+def export_eu_cpi_excel():
+    """Generate Excel file with EU HICP overview data."""
+    return _export_cpi_excel(get_eurostat_cpi_data(), 'EU HICP', 'eu_hicp_data')
+
+
+@api_bp.route('/cpi/eu/components/export')
+def export_eu_components_excel():
+    """Generate Excel file with EU HICP component breakdown."""
+    return _export_cpi_excel(get_eurostat_components(), 'EU HICP Components', 'eu_hicp_components')
 
 
 def _export_cpi_excel(data, title, filename_prefix):
