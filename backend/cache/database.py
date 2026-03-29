@@ -31,7 +31,7 @@ def get_connection():
     global _conn
     if _conn is None:
         os.makedirs(Config.DATA_DIR, exist_ok=True)
-        _conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        _conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
         _conn.execute("PRAGMA journal_mode=WAL")
         _conn.execute("PRAGMA synchronous=NORMAL")
         _conn.row_factory = sqlite3.Row
