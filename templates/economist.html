@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Parra Economist — AI Macro Research{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/economist.css">
+{% endblock %}
+
+{% block content %}
+<div class="economist-page">
+    <div class="economist-container">
+        <div class="economist-header">
+            <h1 class="economist-title">Parra Economist</h1>
+            <p class="economist-subtitle">AI-powered macro research analyst. Ask about geopolitical risk, inflation, markets, commodities, and global macro trends — grounded in live Parra Macro data.</p>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="welcome-state" id="welcomeState">
+                <div class="welcome-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+                    </svg>
+                </div>
+                <p class="welcome-text">What macro question can I help you with?</p>
+                <div class="suggested-questions">
+                    <button class="suggestion-pill" data-question="What are the top geopolitical hotspots right now?">Top geopolitical hotspots</button>
+                    <button class="suggestion-pill" data-question="Give me the US inflation outlook based on recent CPI data">US inflation outlook</button>
+                    <button class="suggestion-pill" data-question="How are commodities performing? What's the oil price forecast?">Commodity outlook</button>
+                    <button class="suggestion-pill" data-question="Which countries have rising political instability?">Rising instability</button>
+                    <button class="suggestion-pill" data-question="Give me a global macro overview — markets, risk, and key themes">Global macro overview</button>
+                    <button class="suggestion-pill" data-question="What's the GDP growth outlook for major economies?">GDP growth outlook</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input-area">
+            <div class="input-wrapper">
+                <textarea id="chatInput" placeholder="Ask about macro, markets, geopolitical risk..." rows="1"></textarea>
+                <button id="sendBtn" class="send-btn" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+            <p class="input-disclaimer">Parra Economist uses AI and may make mistakes. Verify important data independently.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/economist.js"></script>
+{% endblock %}
