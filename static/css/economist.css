@@ -293,7 +293,14 @@
 }
 
 
-/* ===== Error Message ===== */
+/* ===== Status & Error ===== */
+
+.tool-status {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 2px 0;
+}
 
 .message-error {
     color: var(--red);

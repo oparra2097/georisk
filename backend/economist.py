@@ -267,29 +267,40 @@ def economist_chat():
     def generate():
         try:
             current_messages = list(messages)
+            rounds = 0
 
-            # Tool-use loop: keep calling until we get a final text response
-            while True:
+            # Tool-use loop: Claude may call tools, then we feed results back
+            while rounds < 5:
+                rounds += 1
+
+                # Non-streaming call for tool-use rounds (tools need full response)
+                # Final text round uses streaming for real-time UX
                 response = client.messages.create(
                     model=Config.ANTHROPIC_MODEL,
-                    max_tokens=1500,
+                    max_tokens=2048,
                     system=SYSTEM_PROMPT,
                     tools=TOOLS,
                     messages=current_messages,
                 )
 
-                # Check if there are tool calls in the response
                 tool_calls = [b for b in response.content if b.type == "tool_use"]
 
                 if not tool_calls:
-                    # No tool calls — extract text and stream it
-                    for block in response.content:
-                        if block.type == "text":
-                            yield f"data: {json.dumps({'type': 'text', 'content': block.text})}\n\n"
+                    # No tool calls — this is the final answer
+                    # Re-run as streaming for real-time token delivery
+                    with client.messages.stream(
+                        model=Config.ANTHROPIC_MODEL,
+                        max_tokens=2048,
+                        system=SYSTEM_PROMPT,
+                        tools=TOOLS,
+                        messages=current_messages,
+                    ) as stream:
+                        for text in stream.text_stream:
+                            yield f"data: {json.dumps({'type': 'text', 'content': text})}\n\n"
                     yield f"data: {json.dumps({'type': 'done'})}\n\n"
                     return
 
-                # Execute tool calls and build tool results
+                # Execute tool calls and build results
                 assistant_content = []
                 tool_results = []
                 for block in response.content:
@@ -302,6 +313,7 @@ def economist_chat():
                             "name": block.name,
                             "input": block.input
                         })
+                        yield f"data: {json.dumps({'type': 'status', 'content': f'Fetching {block.name.replace(\"_\", \" \")}...'})}\n\n"
                         result = _execute_tool(block.name, block.input)
                         tool_results.append({
                             "type": "tool_result",
@@ -309,15 +321,8 @@ def economist_chat():
                             "content": result
                         })
 
-                # Add assistant message with tool calls, then tool results
                 current_messages.append({"role": "assistant", "content": assistant_content})
                 current_messages.append({"role": "user", "content": tool_results})
-
-                # Safety: max 5 tool-call rounds
-                if len(current_messages) - len(messages) > 10:
-                    yield f"data: {json.dumps({'type': 'text', 'content': 'I gathered a lot of data. Let me summarize what I found.'})}\n\n"
-                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
-                    return
 
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"

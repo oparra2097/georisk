@@ -142,8 +142,14 @@
                             fullText += event.content;
                             textEl.innerHTML = renderMarkdown(fullText);
                             scrollToBottom();
+                        } else if (event.type === 'status') {
+                            // Show tool-fetching status while waiting
+                            if (!fullText) {
+                                textEl.innerHTML = `<div class="tool-status">${escapeHtml(event.content)}</div>`;
+                                scrollToBottom();
+                            }
                         } else if (event.type === 'error') {
-                            textEl.innerHTML = `<span class="message-error">${event.content}</span>`;
+                            textEl.innerHTML = `<span class="message-error">${escapeHtml(event.content)}</span>`;
                         } else if (event.type === 'done') {
                             // done
                         }
