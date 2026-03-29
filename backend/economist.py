@@ -3,16 +3,7 @@ import time
 import threading
 from datetime import datetime
 from flask import Blueprint, request, Response, jsonify, stream_with_context
-from anthropic import Anthropic
 from config import Config
-from backend.cache.store import store
-from backend.data_sources.market_data import get_market_data
-from backend.data_sources.bls_cpi import get_bls_cpi_data
-from backend.data_sources.ons_cpi import get_ons_cpi_data
-from backend.data_sources.eurostat_hicp import get_eurostat_cpi_data
-from backend.data_sources.imf_weo import get_weo_data
-from backend.data_sources.commodities_forecast import get_forecast_data
-from backend.data_sources.imf_cofer import get_cofer_data
 
 economist_bp = Blueprint('economist', __name__)
 
@@ -159,6 +150,7 @@ def _check_rate_limit(ip):
 
 def _execute_tool(name, input_data):
     """Execute a tool call and return the result as a string."""
+    from backend.cache.store import store
     try:
         if name == "get_hotspots":
             hotspots = store.get_hotspots(Config.HOTSPOT_THRESHOLD)
@@ -181,16 +173,20 @@ def _execute_tool(name, input_data):
             return json.dumps([a.to_dict() for a in articles[:20]])
 
         elif name == "get_market_snapshot":
+            from backend.data_sources.market_data import get_market_data
             data = get_market_data()
             return json.dumps(data)
 
         elif name == "get_cpi_data":
             region = input_data.get("region", "us")
             if region == "us":
+                from backend.data_sources.bls_cpi import get_bls_cpi_data
                 data = get_bls_cpi_data()
             elif region == "uk":
+                from backend.data_sources.ons_cpi import get_ons_cpi_data
                 data = get_ons_cpi_data()
             elif region == "eu":
+                from backend.data_sources.eurostat_hicp import get_eurostat_cpi_data
                 data = get_eurostat_cpi_data()
             else:
                 return json.dumps({"error": f"Unknown region '{region}'"})
@@ -201,15 +197,18 @@ def _execute_tool(name, input_data):
             return json.dumps(data)
 
         elif name == "get_weo_indicator":
+            from backend.data_sources.imf_weo import get_weo_data
             indicator = input_data.get("indicator", "NGDP_RPCH")
             data = get_weo_data(indicator)
             return json.dumps(data)
 
         elif name == "get_commodity_forecasts":
+            from backend.data_sources.commodities_forecast import get_forecast_data
             data = get_forecast_data()
             return json.dumps(data)
 
         elif name == "get_central_bank_reserves":
+            from backend.data_sources.imf_cofer import get_cofer_data
             data = get_cofer_data()
             # Trim to recent years to save tokens
             if "years" in data and len(data["years"]) > 10:
@@ -262,6 +261,7 @@ def economist_chat():
         if msg.get("role") not in ("user", "assistant"):
             return jsonify({"error": "Invalid message role"}), 400
 
+    from anthropic import Anthropic
     client = Anthropic(api_key=Config.ANTHROPIC_API_KEY)
 
     def generate():
