@@ -400,6 +400,7 @@
             case 'forecast-group': renderForecast(ds); break;
             case 'weo': renderWeo(ds); break;
             case 'wb': renderWeo(ds); break;  // World Bank uses same data shape as WEO
+            case 'sovereign-debt': renderSovereignDebt(ds); break;
         }
     }
 
@@ -1170,20 +1171,30 @@
             tbody.innerHTML = rows;
         }
 
-        // Meta
+        // Meta / Footnote
         const metaEl = document.getElementById('panel-meta');
         if (metaEl) {
             const meta = data.meta || {};
             const weights = group.scenario_weights || {};
-            const parts = [];
-            if (meta.source) parts.push(meta.source);
-            parts.push(isAllScenarios ? 'All Scenarios' : scenario);
-            if (!isAllScenarios && weights[scenario]) parts.push('Weight: ' + (weights[scenario] * 100).toFixed(0) + '%');
-            parts.push(commFreq === 'yearly' ? 'Yearly averages' : 'Quarterly');
-            if (meta.method) parts.push(meta.method);
-            if (meta.baseline) parts.push('Baseline: ' + meta.baseline);
-            if (meta.last_updated) parts.push('Updated: ' + meta.last_updated.split('T')[0]);
-            metaEl.textContent = parts.join(' \u00b7 ');
+            const yearEndLabels = timeCtx.year_end_labels || [];
+
+            // Line 1: Source · Scenario · Frequency · Horizon
+            const line1 = [];
+            if (meta.source) line1.push(meta.source);
+            line1.push(isAllScenarios ? 'All Scenarios' : scenario);
+            if (!isAllScenarios && weights[scenario]) line1.push('Weight: ' + (weights[scenario] * 100).toFixed(0) + '%');
+            line1.push(commFreq === 'yearly' ? 'Yearly averages' : 'Quarterly');
+            const fqCount = forecastLabels.filter((_, i) => labelTypes[i] === 'forecast').length;
+            line1.push(fqCount + '-quarter rolling forecast');
+            if (yearEndLabels.length > 1) line1.push(yearEndLabels.join(' & '));
+
+            // Line 2: Methodology details
+            const line2 = [];
+            line2.push('Absolute price targets per scenario');
+            line2.push('Current quarter from live YTD data (yfinance)');
+            if (meta.last_updated) line2.push('Updated ' + meta.last_updated.split('T')[0]);
+
+            metaEl.innerHTML = '<span>' + line1.join(' · ') + '</span><br><span style="opacity:0.7">' + line2.join(' · ') + '</span>';
         }
 
         // Hide history section (unified into main chart)
@@ -1374,17 +1385,31 @@
             tbody.innerHTML = rows;
         }
 
-        // Meta
+        // Meta / Footnote
         const metaEl = document.getElementById('panel-meta');
         if (metaEl) {
+            const meta = data.meta || {};
             const weights = group.scenario_weights || {};
-            const parts = [];
+
+            // Line 1: Scenario narratives with weights
+            const scenParts = [];
             scenarioOrder.filter(sc => sc !== 'Actual' && sc !== 'Weighted Avg').forEach(sc => {
                 const w = weights[sc] ? (weights[sc] * 100).toFixed(0) + '%' : '';
                 const label = scenarioLabels[sc] || '';
-                if (label) parts.push(sc + ' (' + w + '): ' + label);
+                if (label) scenParts.push('<strong>' + sc + ' (' + w + ')</strong>: ' + label);
             });
-            metaEl.textContent = parts.join(' \u00b7 ');
+
+            // Line 2: Methodology
+            const fqCount = forecastLabels.filter((_, i) => labelTypes[i] === 'forecast').length;
+            const methParts = [];
+            methParts.push(fqCount + '-quarter rolling forecast');
+            methParts.push('Current quarter uses live YTD data');
+            if (yearEndLabels.length > 1) methParts.push(yearEndLabels.join(' & ') + ' annual averages');
+            else if (yearEndLabels.length === 1) methParts.push(yearEndLabels[0] + ' annual average');
+            if (meta.last_updated) methParts.push('Updated ' + meta.last_updated.split('T')[0]);
+
+            metaEl.innerHTML = '<div style="margin-bottom:4px">' + scenParts.join('<br>') + '</div>' +
+                '<div style="opacity:0.7">' + methParts.join(' · ') + '</div>';
         }
 
         // Hide separate history section (now unified into main chart)
@@ -1922,6 +1947,391 @@
                 }
             });
         }
+    }
+
+
+    // ══════════════════════════════════════════════════════
+    // SOVEREIGN DEBT INDICATOR RENDERER
+    // ══════════════════════════════════════════════════════
+
+    let _debtMapChart = null;
+    let _debtBarChart = null;
+
+    const TIER_COLORS = {
+        Critical: { bg: '#991b1b', light: '#fecaca', text: '#fca5a5' },
+        High:     { bg: '#c2410c', light: '#fed7aa', text: '#fdba74' },
+        Elevated: { bg: '#a16207', light: '#fef08a', text: '#fde047' },
+        Moderate: { bg: '#15803d', light: '#bbf7d0', text: '#86efac' },
+        Low:      { bg: '#1d4ed8', light: '#bfdbfe', text: '#93c5fd' },
+    };
+
+    const TIER_ORDER = ['Critical', 'High', 'Elevated', 'Moderate', 'Low'];
+
+    function renderSovereignDebt(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || !data.countries) return;
+
+        const panel = document.getElementById('active-panel');
+        const subview = state.subview || 'map';
+
+        // Build summary bar + controls
+        const summary = data.summary || {};
+        const tierCounts = summary.tier_counts || {};
+
+        let tierBadges = TIER_ORDER.map(t => {
+            const c = TIER_COLORS[t];
+            const n = tierCounts[t] || 0;
+            return `<span class="sd-tier-badge" style="background:${c.bg};color:${c.text}">${t}: ${n}</span>`;
+        }).join('');
+
+        // Region filter
+        const regions = [...new Set(Object.values(data.countries).map(c => c.region).filter(Boolean))].sort();
+        let regionOpts = '<option value="all">All Regions</option>' +
+            regions.map(r => `<option value="${r}">${r}</option>`).join('');
+
+        // Tier filter
+        let tierOpts = '<option value="all">All Tiers</option>' +
+            TIER_ORDER.map(t => `<option value="${t}">${t}</option>`).join('');
+
+        panel.innerHTML = `
+            <div class="sd-header">
+                <div class="sd-title-row">
+                    <h2 class="sd-title">Shadow Debt Indicator</h2>
+                    <a href="${ds.exportUrl}" class="sd-export-btn" title="Export Excel">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export
+                    </a>
+                </div>
+                <div class="sd-summary">
+                    <span class="sd-stat">${summary.total_countries || 0} countries</span>
+                    <span class="sd-stat">Avg official: ${summary.avg_official || '—'}%</span>
+                    <span class="sd-stat">Avg estimated: ${summary.avg_estimated || '—'}%</span>
+                    <span class="sd-stat">Avg gap: ${summary.avg_gap || '—'}pp</span>
+                </div>
+                <div class="sd-tier-row">${tierBadges}</div>
+                <div class="sd-controls">
+                    <select id="sd-region-filter" class="sd-select">${regionOpts}</select>
+                    <select id="sd-tier-filter" class="sd-select">${tierOpts}</select>
+                </div>
+            </div>
+            <div id="sd-content"></div>
+        `;
+
+        // Wire up filters
+        const regionSelect = document.getElementById('sd-region-filter');
+        const tierSelect = document.getElementById('sd-tier-filter');
+        const renderContent = () => _renderDebtSubview(subview, data, regionSelect.value, tierSelect.value);
+        regionSelect.addEventListener('change', renderContent);
+        tierSelect.addEventListener('change', renderContent);
+
+        renderContent();
+    }
+
+    function _filterDebtCountries(data, regionFilter, tierFilter) {
+        let entries = Object.entries(data.countries);
+        if (regionFilter !== 'all') {
+            entries = entries.filter(([, c]) => c.region === regionFilter);
+        }
+        if (tierFilter !== 'all') {
+            entries = entries.filter(([, c]) => c.risk_tier === tierFilter);
+        }
+        return entries;
+    }
+
+    function _renderDebtSubview(subview, data, regionFilter, tierFilter) {
+        const container = document.getElementById('sd-content');
+        if (!container) return;
+
+        const filtered = _filterDebtCountries(data, regionFilter, tierFilter);
+
+        switch (subview) {
+            case 'map':
+                _renderDebtMap(container, filtered, data);
+                break;
+            case 'ranking':
+                _renderDebtRanking(container, filtered);
+                break;
+            case 'table':
+                _renderDebtTable(container, filtered);
+                break;
+            default:
+                _renderDebtMap(container, filtered, data);
+        }
+    }
+
+    function _renderDebtMap(container, entries, data) {
+        // D3 choropleth map of debt gap
+        container.innerHTML = `
+            <div class="sd-map-wrap">
+                <div id="sd-map-svg"></div>
+                <div id="sd-map-tooltip" class="sd-tooltip hidden"></div>
+                <div class="sd-map-legend">
+                    <span>Low gap</span>
+                    <div class="sd-legend-bar"></div>
+                    <span>High gap</span>
+                </div>
+            </div>
+            <div class="sd-map-below">
+                <h3>Top 20 — Largest Shadow Debt Gaps</h3>
+                <div id="sd-top-chart-wrap"><canvas id="sd-top-chart"></canvas></div>
+            </div>
+        `;
+
+        // Check if D3 is available
+        if (typeof d3 === 'undefined') {
+            document.getElementById('sd-map-svg').innerHTML =
+                '<p style="text-align:center;color:var(--text-muted);padding:40px;">Map requires D3.js (available on GeoRisk page). Showing ranking view instead.</p>';
+            // Render the bar chart below anyway
+        } else {
+            _drawDebtChoropleth(entries, data);
+        }
+
+        // Bar chart of top 20
+        _drawDebtTopChart(entries);
+    }
+
+    async function _drawDebtChoropleth(entries, data) {
+        const svgContainer = document.getElementById('sd-map-svg');
+        if (!svgContainer || typeof d3 === 'undefined') return;
+
+        const width = 960, height = 480;
+
+        const svg = d3.select('#sd-map-svg')
+            .append('svg')
+            .attr('viewBox', `0 0 ${width} ${height}`)
+            .attr('preserveAspectRatio', 'xMidYMid meet');
+
+        svg.append('rect').attr('width', width).attr('height', height).attr('fill', '#0a0e1a');
+
+        const g = svg.append('g');
+        const projection = d3.geoNaturalEarth1().scale(153).translate([width / 2, height / 2]);
+        const pathGen = d3.geoPath().projection(projection);
+
+        // Build ISO3 lookup from country_codes.json
+        let codeMap = {};
+        try {
+            const res = await fetch('/static/data/country_codes.json');
+            const codes = await res.json();
+            codes.forEach(c => {
+                if (c['country-code'] && c['alpha-3']) {
+                    codeMap[c['country-code']] = c['alpha-3'];
+                    codeMap[String(parseInt(c['country-code']))] = c['alpha-3'];
+                }
+            });
+        } catch (e) {}
+
+        // Build gap lookup
+        const gapLookup = {};
+        for (const [iso3, c] of Object.entries(data.countries)) {
+            gapLookup[iso3] = c;
+        }
+
+        // Color scale: gap 0 → 50+ pp
+        const colorScale = d3.scaleLinear()
+            .domain([0, 5, 15, 30, 50])
+            .range(['#1e3a5f', '#2563eb', '#f59e0b', '#f97316', '#dc2626'])
+            .clamp(true);
+
+        const tooltip = document.getElementById('sd-map-tooltip');
+
+        try {
+            const world = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+            const countries = topojson.feature(world, world.objects.countries);
+
+            g.selectAll('path.sd-country')
+                .data(countries.features)
+                .join('path')
+                .attr('class', 'sd-country')
+                .attr('d', pathGen)
+                .attr('fill', d => {
+                    const iso3 = codeMap[String(d.id)];
+                    const c = gapLookup[iso3];
+                    if (!c || c.debt_gap_pp == null) return '#1f2937';
+                    return colorScale(c.debt_gap_pp);
+                })
+                .attr('stroke', '#2d3748')
+                .attr('stroke-width', 0.5)
+                .style('cursor', 'pointer')
+                .on('mouseover', (event, d) => {
+                    const iso3 = codeMap[String(d.id)];
+                    const c = gapLookup[iso3];
+                    if (!c) {
+                        tooltip.innerHTML = `<strong>${iso3 || 'Unknown'}</strong><br>No data`;
+                    } else {
+                        const tierColor = TIER_COLORS[c.risk_tier] || TIER_COLORS.Low;
+                        tooltip.innerHTML = `
+                            <strong>${c.name}</strong>
+                            <span class="sd-tip-tier" style="background:${tierColor.bg};color:${tierColor.text}">${c.risk_tier}</span>
+                            <div class="sd-tip-grid">
+                                <span>Official</span><span>${c.official_debt_gdp != null ? c.official_debt_gdp.toFixed(1) + '%' : '—'}</span>
+                                <span>Estimated</span><span>${c.estimated_debt_gdp != null ? c.estimated_debt_gdp.toFixed(1) + '%' : '—'}</span>
+                                <span>Gap</span><span style="color:${c.debt_gap_pp > 10 ? '#f59e0b' : '#9ca3af'}">${c.debt_gap_pp != null ? c.debt_gap_pp.toFixed(1) + 'pp' : '—'}</span>
+                            </div>
+                        `;
+                    }
+                    tooltip.classList.remove('hidden');
+                    tooltip.style.left = (event.pageX + 12) + 'px';
+                    tooltip.style.top = (event.pageY - 10) + 'px';
+                })
+                .on('mousemove', (event) => {
+                    tooltip.style.left = (event.pageX + 12) + 'px';
+                    tooltip.style.top = (event.pageY - 10) + 'px';
+                })
+                .on('mouseout', () => tooltip.classList.add('hidden'));
+
+            // Zoom
+            const zoom = d3.zoom().scaleExtent([1, 8]).on('zoom', e => g.attr('transform', e.transform));
+            svg.call(zoom);
+            svg.on('dblclick.zoom', () => svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity));
+
+        } catch (e) {
+            svgContainer.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Could not load map data</p>';
+        }
+    }
+
+    function _drawDebtTopChart(entries) {
+        const canvas = document.getElementById('sd-top-chart');
+        if (!canvas) return;
+
+        if (_debtBarChart) { _debtBarChart.destroy(); _debtBarChart = null; }
+
+        // Top 20 by gap
+        const top20 = [...entries]
+            .sort((a, b) => (b[1].debt_gap_pp || 0) - (a[1].debt_gap_pp || 0))
+            .slice(0, 20);
+
+        const labels = top20.map(([, c]) => c.name || c.iso3);
+        const officialData = top20.map(([, c]) => c.official_debt_gdp || 0);
+        const gapData = top20.map(([, c]) => c.debt_gap_pp || 0);
+
+        _debtBarChart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Official Debt (% GDP)',
+                        data: officialData,
+                        backgroundColor: '#2563eb',
+                        borderRadius: 2,
+                    },
+                    {
+                        label: 'Shadow Debt Gap (pp)',
+                        data: gapData,
+                        backgroundColor: '#dc2626',
+                        borderRadius: 2,
+                    },
+                ],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}${ctx.datasetIndex === 0 ? '%' : 'pp'}`,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        grid: { color: '#1f2937' },
+                        ticks: { color: '#9ca3af', font: { size: 10 } },
+                        title: { display: true, text: '% of GDP', color: '#6b7280', font: { size: 10 } },
+                    },
+                    y: {
+                        stacked: true,
+                        grid: { display: false },
+                        ticks: { color: '#e5e7eb', font: { size: 11 } },
+                    },
+                },
+            },
+        });
+    }
+
+    function _renderDebtRanking(container, entries) {
+        const sorted = [...entries].sort((a, b) => (b[1].debt_gap_pp || 0) - (a[1].debt_gap_pp || 0));
+
+        let rows = sorted.map(([iso3, c], i) => {
+            const tier = c.risk_tier || 'Low';
+            const tc = TIER_COLORS[tier];
+            const gapWidth = Math.min(100, (c.debt_gap_pp || 0) / 60 * 100);
+            return `
+                <div class="sd-rank-row">
+                    <span class="sd-rank-num">${i + 1}</span>
+                    <span class="sd-rank-name">${c.name || iso3}</span>
+                    <span class="sd-rank-tier" style="background:${tc.bg};color:${tc.text}">${tier}</span>
+                    <div class="sd-rank-bar-wrap">
+                        <div class="sd-rank-bar-official" style="width:${Math.min(100, (c.official_debt_gdp || 0) / 250 * 100)}%"></div>
+                        <div class="sd-rank-bar-gap" style="width:${gapWidth}%"></div>
+                    </div>
+                    <span class="sd-rank-val">${(c.official_debt_gdp || 0).toFixed(0)}%</span>
+                    <span class="sd-rank-gap">+${(c.debt_gap_pp || 0).toFixed(1)}pp</span>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="sd-ranking">
+                <div class="sd-rank-header">
+                    <span></span><span>Country</span><span>Tier</span>
+                    <span>Official + Gap</span><span>Official</span><span>Gap</span>
+                </div>
+                ${rows}
+            </div>
+        `;
+    }
+
+    function _renderDebtTable(container, entries) {
+        const sorted = [...entries].sort((a, b) => (b[1].estimated_debt_gdp || 0) - (a[1].estimated_debt_gdp || 0));
+
+        let rows = sorted.map(([iso3, c]) => {
+            const tier = c.risk_tier || 'Low';
+            const tc = TIER_COLORS[tier];
+            return `<tr>
+                <td>${c.name || iso3}</td>
+                <td>${iso3}</td>
+                <td>${c.region || ''}</td>
+                <td>${_fmtNum(c.official_debt_gdp)}%</td>
+                <td class="sd-cell-est">${_fmtNum(c.estimated_debt_gdp)}%</td>
+                <td class="sd-cell-gap" style="color:${(c.debt_gap_pp||0) > 10 ? '#f59e0b' : '#9ca3af'}">${_fmtNum(c.debt_gap_pp)}pp</td>
+                <td>${_fmtNum(c.confidence_floor_gdp)}%</td>
+                <td>${_fmtNum(c.confidence_ceiling_gdp)}%</td>
+                <td>${_fmtNum(c.gdp_usd_bn, '$', 'B')}</td>
+                <td>${_fmtNum(c.chinese_lending_usd_bn, '$', 'B')}</td>
+                <td>${_fmtNum(c.wgi_avg, '', '', 2)}</td>
+                <td><span class="sd-tier-cell" style="background:${tc.bg};color:${tc.text}">${tier}</span></td>
+            </tr>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="sd-table-wrap">
+                <table class="sd-table">
+                    <thead>
+                        <tr>
+                            <th>Country</th><th>ISO3</th><th>Region</th>
+                            <th>Official (%GDP)</th><th>Estimated (%GDP)</th><th>Gap</th>
+                            <th>Floor</th><th>Ceiling</th>
+                            <th>GDP</th><th>Chinese Lending</th><th>WGI</th><th>Tier</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    function _fmtNum(val, prefix, suffix, dec) {
+        if (val == null) return '—';
+        const d = dec != null ? dec : 1;
+        return (prefix || '') + val.toFixed(d) + (suffix || '');
     }
 
 })();

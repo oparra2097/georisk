@@ -5,8 +5,8 @@ Dynamic, date-aware forecast engine:
   - Detects today's date to determine completed/current quarters
   - Fetches YTD actual prices from yfinance (live data)
   - Computes current quarter-end estimate from partial data
-  - Forecasts next 3 quarters using scenario spread assumptions (rolling)
-  - Calculates year-end (FY) weighted average for current calendar year
+  - Forecasts next 4 quarters using absolute price targets (rolling into next year)
+  - Calculates FY weighted averages for current and next calendar year
   - Per-group scenario frameworks (geopolitical, supply/weather, speculative)
   - Thread-safe cache with 24-hour TTL
 
@@ -39,9 +39,9 @@ GROUP_SCENARIOS = {
             'Base Case': 0.70,
         },
         'labels': {
-            'Base Case':   'Gradual de-escalation · OPEC+ discipline · Brent reverts to ~$78 by Q4',
-            'Severe Case': 'Hormuz closed through year-end · No ceasefire · Brent $110-115 sustained',
-            'Worst Case':  'Iran targets critical ME production · Brent >$130 peak · stays $110s',
+            'Base Case':   'Gradual de-escalation · OPEC+ holds discipline · Brent normalises toward $72-78 by year-end',
+            'Severe Case': 'Strait of Hormuz disruption persists · No ceasefire · Brent $95-110 sustained into 2027',
+            'Worst Case':  'Iran targets critical ME production · Brent spikes >$130 then settles $105-112',
         },
         'colors': {
             'Actual':       '#94a3b8',
@@ -59,9 +59,9 @@ GROUP_SCENARIOS = {
             'Bull': 0.25,
         },
         'labels': {
-            'Bear':  'Bumper harvest globally · Favourable weather · Ample supply depresses prices',
-            'Base':  'Normal seasonal patterns · Trend-line yields · Steady demand',
-            'Bull':  'Major drought in key growing regions · Supply shock · Export restrictions',
+            'Bear':  'Favourable weather globally · Bumper harvests · Ample supply depresses prices through 2027',
+            'Base':  'Normal seasonal patterns · Trend-line yields · Steady demand · Gradual recovery',
+            'Bull':  'El Niño drought in key growing regions · Supply shock · Export restrictions tighten',
         },
         'colors': {
             'Actual':       '#94a3b8',
@@ -79,9 +79,9 @@ GROUP_SCENARIOS = {
             'Bull': 0.25,
         },
         'labels': {
-            'Bear':  'Risk-off environment · Dollar strength · Demand slowdown · De-leveraging',
+            'Bear':  'Risk-off pivot · Dollar strength · Demand slowdown · De-leveraging into 2027',
             'Base':  'Steady macro · Moderate central bank buying · Gradual industrial recovery',
-            'Bull':  'Flight to safety · Speculative inflows · Central bank accumulation · Gold $6200+',
+            'Bull':  'Flight to safety · Speculative inflows · Central bank accumulation accelerates',
         },
         'colors': {
             'Actual':       '#94a3b8',
@@ -610,6 +610,7 @@ def _fetch_forecasts():
                 }
 
             groups[group]['commodities'][name] = {
+                'ticker': ticker,
                 'unit': unit,
                 'latest_close': actuals[name]['latest_close'],
                 'scenarios': scenarios,
@@ -647,8 +648,8 @@ def _fetch_forecasts():
             'meta': {
                 'source': 'ParraMacro Commodities Forecast',
                 'data_source': f'yfinance ({HISTORY_YEARS}yr history + YTD {time_ctx["year"]})',
-                'method': 'Scenario spread-based quarterly forecasts',
-                'baseline': 'Latest close price',
+                'method': 'Scenario-based absolute price targets · 4-quarter rolling forecast',
+                'baseline': 'Live YTD close prices via yfinance',
                 'commodities_count': commodities_count,
                 'last_updated': now.isoformat(),
             }

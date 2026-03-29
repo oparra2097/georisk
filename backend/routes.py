@@ -11,6 +11,7 @@ from backend.data_sources.substack_feed import get_substack_posts
 from backend.data_sources.commodities_forecast import get_forecast_data
 from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
+from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.cache.database import get_country_history, get_all_history, detect_anomalies, get_score_count
 from config import Config
 
@@ -647,6 +648,267 @@ def export_forecasts_excel():
     )
 
 
+# ── Power BI flat-table endpoints ─────────────────────────────────────────
+
+def _build_powerbi_tables(data):
+    """Flatten nested forecast data into Power BI star-schema tables."""
+    groups = data.get('groups', {})
+    time_ctx = data.get('time_context', {})
+    meta = data.get('meta', {})
+    labels = time_ctx.get('labels', [])
+    label_types = time_ctx.get('label_types', [])
+    year_end_labels = time_ctx.get('year_end_labels', [])
+    fy_keys = ['FY'] + [f'FY{i+2}' for i in range(len(year_end_labels) - 1)]
+
+    fact_prices = []
+    dim_scenarios = []
+    dim_commodities = []
+    seen_scenarios = set()
+
+    for group_name, group in groups.items():
+        scenario_weights = group.get('scenario_weights', {})
+        scenario_labels = group.get('scenario_labels', {})
+        scenario_colors = group.get('scenario_colors', {})
+        scenario_order = group.get('scenario_order', [])
+        group_colors = group.get('colors', {})
+
+        # Build dim_scenarios for this group
+        for idx, sc in enumerate(scenario_order):
+            key = (group_name, sc)
+            if key not in seen_scenarios:
+                seen_scenarios.add(key)
+                dim_scenarios.append({
+                    'Group': group_name,
+                    'Scenario': sc,
+                    'Weight': scenario_weights.get(sc),
+                    'Description': scenario_labels.get(sc, ''),
+                    'Color_Hex': scenario_colors.get(sc, ''),
+                    'Sort_Order': idx,
+                })
+
+        for comm_name, info in group.get('commodities', {}).items():
+            # dim_commodities
+            dim_commodities.append({
+                'Commodity': comm_name,
+                'Group': group_name,
+                'Unit': info.get('unit', ''),
+                'Ticker': info.get('ticker', ''),
+                'Latest_Close': info.get('latest_close'),
+                'Color_Hex': group_colors.get(comm_name, ''),
+            })
+
+            # Historical rows → fact_prices (scenario = "Actual")
+            for h in info.get('historical', []):
+                year_val = h.get('year')
+                quarter_val = h.get('quarter')
+                fact_prices.append({
+                    'Commodity': comm_name,
+                    'Group': group_name,
+                    'Scenario': 'Actual',
+                    'Period': h.get('label', ''),
+                    'Period_Type': 'historical',
+                    'Year': year_val,
+                    'Quarter': quarter_val,
+                    'Price': h.get('avg_price'),
+                    'Is_FY': False,
+                })
+
+            # Forecast rows → fact_prices (all scenarios)
+            scenarios = info.get('scenarios', {})
+            for sc_name, sc_data in scenarios.items():
+                # Quarter-level rows
+                for i, lbl in enumerate(labels):
+                    price = sc_data.get(lbl)
+                    if price is None:
+                        continue
+                    lt = label_types[i] if i < len(label_types) else 'forecast'
+                    # Parse year/quarter from label
+                    yr, qtr = _parse_period_label(lbl, time_ctx)
+                    fact_prices.append({
+                        'Commodity': comm_name,
+                        'Group': group_name,
+                        'Scenario': sc_name,
+                        'Period': lbl,
+                        'Period_Type': lt,
+                        'Year': yr,
+                        'Quarter': qtr,
+                        'Price': price,
+                        'Is_FY': False,
+                    })
+
+                # FY rows
+                for fi, fy_key in enumerate(fy_keys):
+                    fy_val = sc_data.get(fy_key)
+                    if fy_val is None:
+                        continue
+                    fy_label = year_end_labels[fi] if fi < len(year_end_labels) else fy_key
+                    # Extract year from "FY 2026"
+                    fy_year = None
+                    try:
+                        fy_year = int(fy_label.split()[-1])
+                    except (ValueError, IndexError):
+                        pass
+                    fact_prices.append({
+                        'Commodity': comm_name,
+                        'Group': group_name,
+                        'Scenario': sc_name,
+                        'Period': fy_label,
+                        'Period_Type': 'fy',
+                        'Year': fy_year,
+                        'Quarter': None,
+                        'Price': fy_val,
+                        'Is_FY': True,
+                    })
+
+    return {
+        'fact_prices': fact_prices,
+        'dim_scenarios': dim_scenarios,
+        'dim_commodities': dim_commodities,
+        'meta': {
+            'source': meta.get('source', 'ParraMacro'),
+            'last_updated': meta.get('last_updated', ''),
+            'method': meta.get('method', ''),
+            'commodities_count': meta.get('commodities_count', 0),
+            'fact_rows': len(fact_prices),
+            'forecast_labels': labels,
+            'year_end_labels': year_end_labels,
+        },
+    }
+
+
+def _parse_period_label(lbl, time_ctx):
+    """Extract (year, quarter) from labels like 'Q1*', 'Q2', \"Q1'27\", '2024 Q3'."""
+    forecast_year = time_ctx.get('year', datetime.utcnow().year)
+    # Historical: "2024 Q3"
+    if ' Q' in lbl:
+        parts = lbl.split(' Q')
+        return int(parts[0]), int(parts[1])
+    # Next-year shorthand: "Q1'27"
+    if "'" in lbl:
+        q_part = lbl.split("'")
+        qtr = int(q_part[0].replace('Q', ''))
+        yr = 2000 + int(q_part[1])
+        return yr, qtr
+    # Current year: "Q1*", "Q2", "Q3", "Q4"
+    clean = lbl.replace('*', '').replace('Q', '')
+    try:
+        return forecast_year, int(clean)
+    except ValueError:
+        return None, None
+
+
+@api_bp.route('/forecasts/powerbi')
+def get_forecasts_powerbi():
+    """Return flat Power BI-optimized tables (fact + dimensions) as JSON."""
+    data = get_forecast_data()
+    if not data:
+        return jsonify({'error': 'Forecast data unavailable'}), 503
+    return jsonify(_build_powerbi_tables(data))
+
+
+@api_bp.route('/forecasts/powerbi/export')
+def export_forecasts_powerbi_excel():
+    """Generate flat Power BI-optimized Excel with Fact_Prices, Dim_Scenarios, Dim_Commodities sheets."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_forecast_data()
+    if not data:
+        return jsonify({'error': 'Forecast data unavailable'}), 503
+
+    tables = _build_powerbi_tables(data)
+    wb = Workbook()
+
+    header_font = Font(bold=True, size=11, color='FFFFFF')
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+    num_fmt = '#,##0.00'
+
+    # ── Sheet 1: Fact_Prices ──
+    ws = wb.active
+    ws.title = 'Fact_Prices'
+    fact_cols = ['Commodity', 'Group', 'Scenario', 'Period', 'Period_Type', 'Year', 'Quarter', 'Price', 'Is_FY']
+    for ci, col_name in enumerate(fact_cols, 1):
+        cell = ws.cell(row=1, column=ci, value=col_name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    for ri, row_data in enumerate(tables['fact_prices'], 2):
+        for ci, col_name in enumerate(fact_cols, 1):
+            val = row_data.get(col_name)
+            cell = ws.cell(row=ri, column=ci, value=val)
+            cell.border = thin_border
+            if col_name == 'Price' and val is not None:
+                cell.number_format = num_fmt
+                cell.alignment = Alignment(horizontal='right')
+
+    # ── Sheet 2: Dim_Scenarios ──
+    ws2 = wb.create_sheet('Dim_Scenarios')
+    scen_cols = ['Group', 'Scenario', 'Weight', 'Description', 'Color_Hex', 'Sort_Order']
+    for ci, col_name in enumerate(scen_cols, 1):
+        cell = ws2.cell(row=1, column=ci, value=col_name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    for ri, row_data in enumerate(tables['dim_scenarios'], 2):
+        for ci, col_name in enumerate(scen_cols, 1):
+            val = row_data.get(col_name)
+            cell = ws2.cell(row=ri, column=ci, value=val)
+            cell.border = thin_border
+
+    # ── Sheet 3: Dim_Commodities ──
+    ws3 = wb.create_sheet('Dim_Commodities')
+    comm_cols = ['Commodity', 'Group', 'Unit', 'Ticker', 'Latest_Close', 'Color_Hex']
+    for ci, col_name in enumerate(comm_cols, 1):
+        cell = ws3.cell(row=1, column=ci, value=col_name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    for ri, row_data in enumerate(tables['dim_commodities'], 2):
+        for ci, col_name in enumerate(comm_cols, 1):
+            val = row_data.get(col_name)
+            cell = ws3.cell(row=ri, column=ci, value=val)
+            cell.border = thin_border
+            if col_name == 'Latest_Close' and val is not None:
+                cell.number_format = num_fmt
+
+    # Auto-width all sheets
+    for sheet in wb.worksheets:
+        for col in sheet.columns:
+            max_len = 0
+            col_letter = col[0].column_letter
+            for cell in col:
+                try:
+                    if cell.value:
+                        max_len = max(max_len, len(str(cell.value)))
+                except Exception:
+                    pass
+            sheet.column_dimensions[col_letter].width = min(max_len + 3, 50)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'parramacro_powerbi_commodities_{today}.xlsx'
+    )
+
+
 @api_bp.route('/weo/<indicator>')
 def get_weo(indicator):
     """Return IMF WEO data for the given indicator (cached 24 hours)."""
@@ -961,3 +1223,133 @@ def get_status():
             'total_score_rows': get_score_count(),
         }
     })
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SOVEREIGN DEBT INDICATOR
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_bp.route('/sovereign-debt')
+def get_sovereign_debt():
+    """Return sovereign debt estimates for all countries."""
+    data = get_sovereign_debt_data()
+    return jsonify(data)
+
+
+@api_bp.route('/sovereign-debt/export')
+def export_sovereign_debt_excel():
+    """Generate Excel file with sovereign debt indicator data."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_sovereign_debt_data()
+    countries = data.get('countries', {})
+
+    if not countries:
+        return jsonify({'error': 'No sovereign debt data available'}), 404
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F3864', end_color='1F3864', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+
+    tier_fills = {
+        'Critical': PatternFill(start_color='FFCCCC', end_color='FFCCCC', fill_type='solid'),
+        'High': PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid'),
+        'Elevated': PatternFill(start_color='FFF2CC', end_color='FFF2CC', fill_type='solid'),
+        'Moderate': PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid'),
+        'Low': PatternFill(start_color='DDEBF7', end_color='DDEBF7', fill_type='solid'),
+    }
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Sovereign Debt Indicator'
+
+    # Title
+    ws.cell(row=1, column=1, value='ParraMacro Sovereign Debt Indicator')
+    ws.cell(row=1, column=1).font = Font(bold=True, size=14, color='1F3864')
+    ws.cell(row=2, column=1, value='Estimated Actual Debt Including Shadow/Hidden Components')
+    ws.cell(row=2, column=1).font = Font(italic=True, size=10, color='6B7280')
+    summary = data.get('summary', {})
+    ws.cell(row=3, column=1,
+            value=f'{summary.get("total_countries", 0)} countries  |  '
+                  f'Avg official: {summary.get("avg_official", "N/A")}%  |  '
+                  f'Avg estimated: {summary.get("avg_estimated", "N/A")}%  |  '
+                  f'Avg gap: {summary.get("avg_gap", "N/A")}pp')
+    ws.cell(row=3, column=1).font = Font(size=9, color='6B7280')
+
+    # Headers
+    headers = [
+        'Country', 'ISO3', 'Region',
+        'Official Debt (% GDP)', 'Est. Actual Debt (% GDP)', 'Debt Gap (pp)',
+        'Floor (% GDP)', 'Ceiling (% GDP)',
+        'GDP ($B)', 'External Debt ($B)', 'BIS Claims ($B)', 'Chinese Lending ($B)',
+        'Governance Score', 'Risk Tier',
+    ]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=5, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = thin_border
+
+    # Data rows — sorted by estimated debt descending
+    sorted_items = sorted(countries.items(),
+                          key=lambda x: x[1].get('estimated_debt_gdp') or 0,
+                          reverse=True)
+
+    for row_idx, (iso3, c) in enumerate(sorted_items, 6):
+        vals = [
+            c.get('name', iso3),
+            iso3,
+            c.get('region', ''),
+            c.get('official_debt_gdp'),
+            c.get('estimated_debt_gdp'),
+            c.get('debt_gap_pp'),
+            c.get('confidence_floor_gdp'),
+            c.get('confidence_ceiling_gdp'),
+            c.get('gdp_usd_bn'),
+            c.get('external_debt_usd_bn'),
+            c.get('bis_claims_usd_bn'),
+            c.get('chinese_lending_usd_bn'),
+            c.get('wgi_avg'),
+            c.get('risk_tier', ''),
+        ]
+        for col, val in enumerate(vals, 1):
+            cell = ws.cell(row=row_idx, column=col, value=val)
+            cell.border = thin_border
+            if col >= 4 and col <= 13 and val is not None:
+                cell.number_format = '#,##0.0'
+                cell.alignment = Alignment(horizontal='center')
+
+        # Color risk tier cell
+        tier = c.get('risk_tier', '')
+        tier_fill = tier_fills.get(tier)
+        if tier_fill:
+            ws.cell(row=row_idx, column=14).fill = tier_fill
+            # Also highlight estimated debt column for Critical/High
+            if tier in ('Critical', 'High'):
+                ws.cell(row=row_idx, column=5).fill = tier_fill
+
+    # Column widths
+    widths = [22, 6, 20, 14, 16, 10, 10, 10, 10, 12, 12, 14, 12, 10]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[ws.cell(row=5, column=i).column_letter].width = w
+
+    ws.freeze_panes = 'A6'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'sovereign_debt_indicator_{today}.xlsx'
+    )

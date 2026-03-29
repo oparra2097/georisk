@@ -169,9 +169,18 @@ const MapModule = {
 
     highlightHotspots() {
         this.g.selectAll('path.country')
+            .classed('warzone', d => {
+                const alpha2 = this.countryCodeMap[String(d.id)];
+                const scoreData = this.scores[alpha2];
+                if (!scoreData || !scoreData.indicators) return false;
+                return scoreData.indicators.military_conflict > 85;
+            })
             .classed('hotspot', d => {
                 const alpha2 = this.countryCodeMap[String(d.id)];
                 const scoreData = this.scores[alpha2];
+                if (!scoreData || !scoreData.indicators) return false;
+                // hotspot only if NOT already a warzone
+                if (scoreData.indicators.military_conflict > 85) return false;
                 const value = this.getScoreValue(scoreData);
                 return value !== undefined && value > 70;
             });
@@ -197,13 +206,19 @@ const MapModule = {
             const isBaseActive = this.activeScoreField === 'base_score';
             const isNewsActive = this.activeScoreField === 'news_score';
             const scoreLabel = SCORE_LABELS[this.activeScoreField];
+            const isWarzone = scoreData.indicators && scoreData.indicators.military_conflict > 85;
 
             // Show "No news data" hint when viewing News Signal with zero articles
             const newsDisplay = (isNewsActive && news === 0 && articles === 0)
                 ? '<span class="tier-value" style="color: #6b7280">N/A</span>'
                 : `<span class="tier-value" style="color: ${newsColor}">${news}</span>`;
 
+            const warzoneBadge = isWarzone
+                ? '<div class="tooltip-warzone-badge">Active Conflict</div>'
+                : '';
+
             scoreHtml = `
+                ${warzoneBadge}
                 <div class="tooltip-score" style="color: ${color}">${score}</div>
                 <span class="tooltip-label">${scoreLabel} — ${label} Risk</span>
                 <div class="tooltip-breakdown">
@@ -266,6 +281,9 @@ const MapModule = {
                 <div class="legend-title">${title}</div>
             </div>
             <span>Critical</span>
+            <span class="legend-separator"></span>
+            <span class="legend-warzone-icon"></span>
+            <span>Active Conflict</span>
         `;
     }
 };
