@@ -155,14 +155,26 @@ def _execute_tool(name, input_data):
         if name == "get_hotspots":
             hotspots = store.get_hotspots(Config.HOTSPOT_THRESHOLD)
             hotspots.sort(key=lambda x: x.composite_score, reverse=True)
-            return json.dumps([h.to_dict() for h in hotspots[:15]])
+            results = []
+            for h in hotspots[:10]:
+                ind = h.indicators.to_dict()
+                top = sorted(ind.items(), key=lambda x: x[1], reverse=True)[:2]
+                results.append({
+                    "country": h.country_name,
+                    "code": h.country_code,
+                    "score": round(h.composite_score, 1),
+                    "top_indicators": {k: round(v, 1) for k, v in top},
+                })
+            return json.dumps(results)
 
         elif name == "get_country_risk":
             code = input_data.get("country_code", "").upper()
             risk = store.get_country(code)
             if not risk:
                 return json.dumps({"error": f"No data for country code '{code}'"})
-            return json.dumps(risk.to_dict())
+            d = risk.to_dict()
+            d.pop("trend", None)
+            return json.dumps(d)
 
         elif name == "get_headlines":
             code = input_data.get("country_code", "").upper()
@@ -170,11 +182,21 @@ def _execute_tool(name, input_data):
                 articles = store.get_global_headlines()
             else:
                 articles = store.get_headlines(code)
-            return json.dumps([a.to_dict() for a in articles[:20]])
+            return json.dumps([{"title": a.title, "source": a.source} for a in articles[:10]])
 
         elif name == "get_market_snapshot":
             from backend.data_sources.market_data import get_market_data
             data = get_market_data()
+            # Trim to just price, change, pct — remove history arrays
+            if isinstance(data, list):
+                for item in data:
+                    item.pop("history", None)
+                    item.pop("sparkline", None)
+            elif isinstance(data, dict):
+                for key in list(data.keys()):
+                    if isinstance(data[key], dict):
+                        data[key].pop("history", None)
+                        data[key].pop("sparkline", None)
             return json.dumps(data)
 
         elif name == "get_cpi_data":
@@ -190,34 +212,92 @@ def _execute_tool(name, input_data):
                 data = get_eurostat_cpi_data()
             else:
                 return json.dumps({"error": f"Unknown region '{region}'"})
-            # Trim to last 24 data points to save tokens
-            for key in data.get("series", {}):
-                if isinstance(data["series"][key], list):
-                    data["series"][key] = data["series"][key][-24:]
+            # Trim to last 12 data points per series
+            if isinstance(data, dict):
+                for key in data:
+                    if isinstance(data[key], list):
+                        data[key] = data[key][-12:]
+                    elif isinstance(data[key], dict):
+                        for sk in data[key]:
+                            if isinstance(data[key][sk], list):
+                                data[key][sk] = data[key][sk][-12:]
             return json.dumps(data)
 
         elif name == "get_weo_indicator":
             from backend.data_sources.imf_weo import get_weo_data
             indicator = input_data.get("indicator", "NGDP_RPCH")
             data = get_weo_data(indicator)
+            # Only keep G20 + key economies, last 5 years
+            major = {'USA', 'CHN', 'JPN', 'DEU', 'GBR', 'FRA', 'IND', 'BRA',
+                     'CAN', 'AUS', 'ITA', 'KOR', 'MEX', 'RUS', 'SAU', 'ZAF',
+                     'ARG', 'TUR', 'IDN'}
+            if isinstance(data, dict) and "countries" in data:
+                filtered = {}
+                for k, v in data["countries"].items():
+                    if k in major:
+                        if isinstance(v, dict):
+                            # Keep only last 5 year entries
+                            keys = sorted(v.keys())[-5:]
+                            filtered[k] = {yr: v[yr] for yr in keys}
+                        else:
+                            filtered[k] = v
+                data["countries"] = filtered
             return json.dumps(data)
 
         elif name == "get_commodity_forecasts":
             from backend.data_sources.commodities_forecast import get_forecast_data
             data = get_forecast_data()
+            # Only keep current price + forecast, drop full history
+            if isinstance(data, list):
+                trimmed = []
+                for item in data:
+                    entry = {
+                        "name": item.get("name", ""),
+                        "group": item.get("group", ""),
+                        "current_price": item.get("current_price"),
+                        "unit": item.get("unit", ""),
+                    }
+                    # Keep forecasts but drop historical quarterly data
+                    if "forecasts" in item:
+                        entry["forecasts"] = item["forecasts"]
+                    if "scenarios" in item:
+                        entry["scenarios"] = item["scenarios"]
+                    if "quarterly" in item:
+                        q = item["quarterly"]
+                        if isinstance(q, list):
+                            entry["quarterly"] = q[-4:]  # last 4 quarters only
+                        elif isinstance(q, dict):
+                            keys = sorted(q.keys())[-4:]
+                            entry["quarterly"] = {k: q[k] for k in keys}
+                    trimmed.append(entry)
+                return json.dumps(trimmed)
+            elif isinstance(data, dict):
+                for group in data:
+                    if isinstance(data[group], list):
+                        for item in data[group]:
+                            if isinstance(item, dict) and "history" in item:
+                                h = item["history"]
+                                if isinstance(h, list):
+                                    item["history"] = h[-4:]
+                                elif isinstance(h, dict):
+                                    keys = sorted(h.keys())[-4:]
+                                    item["history"] = {k: h[k] for k in keys}
             return json.dumps(data)
 
         elif name == "get_central_bank_reserves":
             from backend.data_sources.imf_cofer import get_cofer_data
             data = get_cofer_data()
-            # Trim to recent years to save tokens
-            if "years" in data and len(data["years"]) > 10:
-                trim = len(data["years"]) - 10
-                data["years"] = data["years"][trim:]
-                for c in data.get("countries", []):
-                    for field in ["total_reserves", "fx_reserves", "gold_reserves"]:
-                        if field in c and isinstance(c[field], list):
-                            c[field] = c[field][trim:]
+            # Keep only last 5 years and top 10 countries
+            if isinstance(data, dict):
+                if "years" in data and len(data["years"]) > 5:
+                    trim = len(data["years"]) - 5
+                    data["years"] = data["years"][trim:]
+                    for c in data.get("countries", []):
+                        for field in ["total_reserves", "fx_reserves", "gold_reserves"]:
+                            if field in c and isinstance(c[field], list):
+                                c[field] = c[field][trim:]
+                if "countries" in data:
+                    data["countries"] = data["countries"][:10]
             return json.dumps(data)
 
         elif name == "get_all_risk_scores":
@@ -229,10 +309,9 @@ def _execute_tool(name, input_data):
                 summary.append({
                     "code": code,
                     "name": risk.country_name,
-                    "composite": round(risk.composite_score, 1),
-                    "trend": [round(t, 1) for t in risk.trend[-5:]] if risk.trend else []
+                    "score": round(risk.composite_score, 1),
                 })
-            return json.dumps(summary[:50])
+            return json.dumps(summary[:25])
 
         return json.dumps({"error": f"Unknown tool '{name}'"})
 
