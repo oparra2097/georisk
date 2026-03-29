@@ -12,6 +12,8 @@ class Config:
     BLS_API_KEY = os.environ.get('BLS_API_KEY', '')
     ACLED_EMAIL = os.environ.get('ACLED_EMAIL', '')
     ACLED_PASSWORD = os.environ.get('ACLED_PASSWORD', '')
+    ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+    ANTHROPIC_MODEL = 'claude-sonnet-4-20250514'
 
     GDELT_BASE_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
     NEWSAPI_BASE_URL = 'https://newsapi.org/v2'

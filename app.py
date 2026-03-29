@@ -2,6 +2,7 @@ from flask import Flask, render_template
 from flask_cors import CORS
 from config import Config
 from backend.routes import api_bp
+from backend.economist import economist_bp
 from backend.scheduler import init_scheduler
 
 
@@ -12,6 +13,7 @@ def create_app():
     app.config.from_object(Config)
     CORS(app)
     app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(economist_bp, url_prefix='/api')
 
     @app.route('/')
     def home():
@@ -33,6 +35,10 @@ def create_app():
     @app.route('/research')
     def research():
         return render_template('research.html', active_page='research')
+
+    @app.route('/economist')
+    def economist():
+        return render_template('economist.html', active_page='economist')
 
     init_scheduler(app)
     return app
