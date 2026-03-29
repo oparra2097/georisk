@@ -41,6 +41,9 @@
         // Setup mobile bottom sheet
         setupBottomSheet();
 
+        // Setup mobile nav bar
+        setupMobileNavBar();
+
         // Handle browser back/forward
         window.addEventListener('popstate', () => {
             PD.parseUrl();
@@ -1781,13 +1784,64 @@
 
         const closeBtn = sheet.querySelector('.bottom-sheet-close');
         if (closeBtn) closeBtn.addEventListener('click', closeBottomSheet);
+
+        // Filter input inside the bottom sheet
+        const filterInput = document.getElementById('bottom-sheet-search-input');
+        if (filterInput) {
+            filterInput.addEventListener('input', () => {
+                const q = filterInput.value.toLowerCase().trim();
+                const items = sheet.querySelectorAll('.bs-item');
+                const headings = sheet.querySelectorAll('.bs-heading');
+
+                if (!q) {
+                    items.forEach(el => el.style.display = '');
+                    headings.forEach(el => el.style.display = '');
+                    return;
+                }
+
+                // Track which headings have visible children
+                const headingVisible = new Map();
+                headings.forEach(h => headingVisible.set(h, false));
+
+                items.forEach(el => {
+                    const text = el.textContent.toLowerCase();
+                    const match = text.includes(q);
+                    el.style.display = match ? '' : 'none';
+                    if (match) {
+                        // Find preceding heading
+                        let prev = el.previousElementSibling;
+                        while (prev && !prev.classList.contains('bs-heading')) {
+                            prev = prev.previousElementSibling;
+                        }
+                        if (prev) headingVisible.set(prev, true);
+                    }
+                });
+
+                headings.forEach(h => {
+                    h.style.display = headingVisible.get(h) ? '' : 'none';
+                });
+            });
+        }
     }
+
+    // Current bottom sheet level for reuse by nav bar
+    let _sheetLevel = 'root';
 
     function openBottomSheet(level, id) {
         const sheet = document.getElementById('bottom-sheet');
         const sheetOverlay = document.getElementById('bottom-sheet-overlay');
         const sheetContent = document.getElementById('bottom-sheet-content');
+        const filterInput = document.getElementById('bottom-sheet-search-input');
         if (!sheet || !sheetOverlay || !sheetContent) return;
+
+        _sheetLevel = level;
+
+        // Reset filter
+        if (filterInput) {
+            filterInput.value = '';
+            // Show/hide filter — only useful for browse level
+            filterInput.parentElement.style.display = (level === 'root' || level === 'category') ? '' : 'none';
+        }
 
         let html = '';
 
@@ -1838,6 +1892,36 @@
         const sheetOverlay = document.getElementById('bottom-sheet-overlay');
         if (sheet) sheet.classList.remove('open');
         if (sheetOverlay) sheetOverlay.classList.remove('open');
+    }
+
+    // ══════════════════════════════════════════════════════
+    // MOBILE NAV BAR
+    // ══════════════════════════════════════════════════════
+
+    function setupMobileNavBar() {
+        const browseBtn = document.getElementById('mobile-nav-browse');
+        const searchBtn = document.getElementById('mobile-nav-search');
+
+        if (browseBtn) {
+            browseBtn.addEventListener('click', () => {
+                openBottomSheet('root', null);
+            });
+        }
+
+        if (searchBtn) {
+            searchBtn.addEventListener('click', () => {
+                // Reuse the existing Ctrl+K search overlay
+                const overlay = document.getElementById('search-overlay');
+                const input = document.getElementById('search-input');
+                const results = document.getElementById('search-results');
+                if (overlay && input) {
+                    overlay.style.display = '';
+                    input.value = '';
+                    if (results) results.innerHTML = '';
+                    setTimeout(() => input.focus(), 50);
+                }
+            });
+        }
     }
 
 })();
