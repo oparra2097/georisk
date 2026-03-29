@@ -313,7 +313,8 @@ def economist_chat():
                             "name": block.name,
                             "input": block.input
                         })
-                        yield f"data: {json.dumps({'type': 'status', 'content': f'Fetching {block.name.replace(\"_\", \" \")}...'})}\n\n"
+                        tool_label = block.name.replace("_", " ")
+                        yield f"data: {json.dumps({'type': 'status', 'content': f'Fetching {tool_label}...'})}\n\n"
                         result = _execute_tool(block.name, block.input)
                         tool_results.append({
                             "type": "tool_result",
