@@ -50,7 +50,22 @@
 <div class="bottom-sheet" id="bottom-sheet">
     <div class="bottom-sheet-handle"></div>
     <button class="bottom-sheet-close">&times;</button>
+    <div class="bottom-sheet-search">
+        <input type="text" id="bottom-sheet-search-input" placeholder="Filter datasets..." autocomplete="off">
+    </div>
     <div class="bottom-sheet-content" id="bottom-sheet-content"></div>
+</div>
+
+<!-- Mobile Nav Bar -->
+<div class="mobile-nav-bar" id="mobile-nav-bar">
+    <button class="mobile-nav-btn" id="mobile-nav-browse">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <span>Browse</span>
+    </button>
+    <button class="mobile-nav-btn" id="mobile-nav-search">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Search</span>
+    </button>
 </div>
 {% endblock %}
 

@@ -601,6 +601,76 @@ th.col-actual {
 }
 
 
+/* ===== Bottom Sheet Search ===== */
+
+.bottom-sheet-search {
+    padding: 8px 16px 4px;
+}
+
+.bottom-sheet-search input {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+}
+.bottom-sheet-search input:focus {
+    border-color: var(--accent);
+}
+.bottom-sheet-search input::placeholder {
+    color: var(--text-muted);
+}
+
+
+/* ===== Mobile Nav Bar ===== */
+
+.mobile-nav-bar {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-nav-bar {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 56px;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        z-index: 150;
+        align-items: center;
+        justify-content: space-around;
+        padding: 0 16px;
+    }
+}
+
+.mobile-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 20px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+}
+.mobile-nav-btn:active,
+.mobile-nav-btn:hover {
+    color: var(--accent);
+}
+.mobile-nav-btn span {
+    font-size: 10px;
+    font-weight: 500;
+}
+
+
 /* ===== Responsive ===== */
 
 @media (max-width: 768px) {
@@ -610,6 +680,8 @@ th.col-actual {
     .data-sidebar {
         display: none;
     }
+
+    /* Breadcrumb: tappable look on mobile */
     .data-breadcrumb {
         padding: 8px 0 12px;
         font-size: 13px;
@@ -617,9 +689,26 @@ th.col-actual {
     }
     .bc-segment {
         cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: var(--bg-tertiary);
+        transition: background 0.15s, color 0.15s;
     }
+    .bc-segment:active {
+        background: rgba(59, 130, 246, 0.15);
+        color: var(--accent);
+    }
+    .bc-active {
+        background: rgba(59, 130, 246, 0.1);
+        color: var(--text-primary);
+    }
+    .bc-sep {
+        color: var(--text-muted);
+        padding: 0 2px;
+    }
+
     .data-content {
-        padding: 16px 16px 60px;
+        padding: 16px 16px 72px;
     }
     .data-section-header {
         flex-direction: column;
@@ -654,7 +743,7 @@ th.col-actual {
 
 @media (max-width: 480px) {
     .data-content {
-        padding: 12px 12px 48px;
+        padding: 12px 12px 64px;
     }
     .data-title {
         font-size: 16px;
