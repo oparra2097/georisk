@@ -972,7 +972,7 @@ th.col-actual {
 
 .sd-rank-header {
     display: grid;
-    grid-template-columns: 36px 1fr 80px 2fr 70px 70px;
+    grid-template-columns: 36px 1fr 72px 2fr 60px 65px 72px;
     gap: 8px;
     padding: 6px 10px;
     font-size: 10px;
@@ -985,7 +985,7 @@ th.col-actual {
 
 .sd-rank-row {
     display: grid;
-    grid-template-columns: 36px 1fr 80px 2fr 70px 70px;
+    grid-template-columns: 36px 1fr 72px 2fr 60px 65px 72px;
     gap: 8px;
     padding: 8px 10px;
     align-items: center;
@@ -1120,7 +1120,7 @@ th.col-actual {
     .sd-stat { font-size: 10px; padding: 3px 8px; }
     .sd-tier-badge { font-size: 10px; padding: 2px 8px; }
     .sd-rank-header, .sd-rank-row {
-        grid-template-columns: 30px 1fr 60px 1.5fr 50px 50px;
+        grid-template-columns: 30px 1fr 55px 1.5fr 45px 50px 55px;
         gap: 4px;
     }
     .sd-rank-name { font-size: 11px; }
