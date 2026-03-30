@@ -401,6 +401,7 @@
             case 'weo': renderWeo(ds); break;
             case 'wb': renderWeo(ds); break;  // World Bank uses same data shape as WEO
             case 'sovereign-debt': renderSovereignDebt(ds); break;
+            case 'fertilizer-em': renderFertilizerEM(ds); break;
         }
     }
 
@@ -2420,5 +2421,208 @@
         const d = dec != null ? dec : 1;
         return (prefix || '') + val.toFixed(d) + (suffix || '');
     }
+
+
+    // ══════════════════════════════════════════════════════
+    // FERTILIZER & EM INFLATION IMPACT
+    // ══════════════════════════════════════════════════════
+
+    function renderFertilizerEM(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || !data.countries) return;
+
+        const panel = document.getElementById('active-panel');
+        const subview = state.subview || 'ranking';
+
+        if (subview === 'ranking')    _renderFertEMRanking(panel, data);
+        else if (subview === 'fertilizer') _renderFertPrices(panel, data);
+        else if (subview === 'scenarios')  _renderFertEMScenarios(panel, data);
+    }
+
+    function _tierColor(tier) {
+        if (tier.includes('SEVERE')) return { bg: '#fecaca', text: '#991b1b', badge: '#ef4444' };
+        if (tier.includes('HIGH'))   return { bg: '#fed7aa', text: '#9a3412', badge: '#f59e0b' };
+        if (tier.includes('MODERATE')) return { bg: '#fef3c7', text: '#92400e', badge: '#eab308' };
+        return { bg: '#d1fae5', text: '#065f46', badge: '#10b981' };
+    }
+
+    function _renderFertEMRanking(panel, data) {
+        const summary = data.summary || {};
+        const countries = data.countries || {};
+
+        // Sort by total impact
+        const sorted = Object.entries(countries).sort((a, b) =>
+            (b[1].total_addl_cpi_pp || 0) - (a[1].total_addl_cpi_pp || 0)
+        );
+
+        // Summary cards
+        let html = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                <div style="background: #1e293b; border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Countries Analyzed</div>
+                    <div style="color: #f1f5f9; font-size: 28px; font-weight: 700; margin-top: 4px;">${summary.total_countries || 0}</div>
+                </div>
+                <div style="background: #1e293b; border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Blended Fert Shock</div>
+                    <div style="color: #ef4444; font-size: 28px; font-weight: 700; margin-top: 4px;">+${(summary.blended_fert_shock_pct || 0).toFixed(0)}%</div>
+                </div>
+                <div style="background: #1e293b; border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Brent YoY</div>
+                    <div style="color: #f59e0b; font-size: 28px; font-weight: 700; margin-top: 4px;">+${(summary.brent_yoy_pct || 0).toFixed(0)}%</div>
+                </div>
+                <div style="background: #1e293b; border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Severe Impact</div>
+                    <div style="color: #ef4444; font-size: 28px; font-weight: 700; margin-top: 4px;">${(summary.tier_counts || {})['Tier 1'] || 0}</div>
+                    <div style="color: #94a3b8; font-size: 10px;">countries</div>
+                </div>
+            </div>
+        `;
+
+        // Ranking table
+        html += `<div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                    <th style="padding: 10px 8px; text-align: left;">#</th>
+                    <th style="padding: 10px 8px; text-align: left;">Country</th>
+                    <th style="padding: 10px 8px; text-align: left;">Region</th>
+                    <th style="padding: 10px 8px; text-align: center;">Tier</th>
+                    <th style="padding: 10px 8px; text-align: center;">Energy (pp)</th>
+                    <th style="padding: 10px 8px; text-align: center;">Food/Fert (pp)</th>
+                    <th style="padding: 10px 8px; text-align: center;">Total (pp)</th>
+                    <th style="padding: 10px 8px; text-align: center;">Current CPI</th>
+                    <th style="padding: 10px 8px; text-align: center;">Est. CPI</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+        sorted.forEach(([name, c], i) => {
+            const tc = _tierColor(c.impact_tier || '');
+            const tierLabel = (c.impact_tier || '').split(' — ')[1] || c.impact_tier || '';
+            html += `
+                <tr style="border-bottom: 1px solid #1e293b; ${i < 5 ? 'font-weight: 600;' : ''}">
+                    <td style="padding: 8px; color: #64748b;">${i + 1}</td>
+                    <td style="padding: 8px; color: #f1f5f9;">${name}</td>
+                    <td style="padding: 8px; color: #94a3b8; font-size: 12px;">${c.region || ''}</td>
+                    <td style="padding: 8px; text-align: center;">
+                        <span style="background: ${tc.badge}22; color: ${tc.badge}; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">${tierLabel}</span>
+                    </td>
+                    <td style="padding: 8px; text-align: center; color: #94a3b8;">+${(c.energy_impact_pp || 0).toFixed(1)}</td>
+                    <td style="padding: 8px; text-align: center; color: #f59e0b;">+${(c.food_fert_impact_pp || 0).toFixed(1)}</td>
+                    <td style="padding: 8px; text-align: center; color: #ef4444; font-weight: 700;">+${(c.total_addl_cpi_pp || 0).toFixed(1)}</td>
+                    <td style="padding: 8px; text-align: center; color: #94a3b8;">${(c.current_cpi || 0).toFixed(0)}%</td>
+                    <td style="padding: 8px; text-align: center; color: #f1f5f9; font-weight: 600;">${(c.new_est_cpi || 0).toFixed(0)}%</td>
+                </tr>`;
+        });
+
+        html += '</tbody></table></div>';
+        html += '<p style="color: #64748b; font-size: 11px; margin-top: 12px;">Estimated additional CPI inflation (percentage points) from combined energy and fertilizer cost-push. Transmission lag: 6-12 months. Food impact peaks late 2026 / early 2027.</p>';
+
+        panel.innerHTML = html;
+    }
+
+    function _renderFertPrices(panel, data) {
+        const ferts = data.fertilizer_forecasts || {};
+        const quarters = ['Q1', 'Q2', 'Q3', 'Q4', 'FY 2026'];
+        const scenarios = ['Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
+        const scenarioColors = { 'Base Case': '#3b82f6', 'Severe Case': '#f59e0b', 'Worst Case': '#ef4444', 'Weighted Avg': '#10b981' };
+
+        let html = '';
+        for (const fertName of ['Urea', 'DAP', 'Potash']) {
+            const fert = ferts[fertName];
+            if (!fert) continue;
+
+            html += `
+                <div style="margin-bottom: 24px;">
+                    <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px;">
+                        <h3 style="color: #f1f5f9; font-size: 16px; font-weight: 700; margin: 0;">${fertName}</h3>
+                        <span style="color: #64748b; font-size: 12px;">${fert.unit || '$/ton'}</span>
+                        <span style="color: #ef4444; font-size: 13px; font-weight: 600;">+${fert.yoy_pct || 0}% YoY</span>
+                        <span style="color: #64748b; font-size: 12px;">2025 baseline: $${fert.baseline_2025 || 0}</span>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead>
+                            <tr style="background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase;">
+                                <th style="padding: 8px; text-align: left;">Scenario</th>
+                                ${quarters.map(q => `<th style="padding: 8px; text-align: center;">${q}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+            for (const s of scenarios) {
+                const prices = (fert.scenarios || {})[s] || {};
+                const color = scenarioColors[s] || '#94a3b8';
+                const bold = s === 'Weighted Avg' ? 'font-weight: 700;' : '';
+                html += `<tr style="border-bottom: 1px solid #1e293b; ${bold}">
+                    <td style="padding: 8px; color: ${color};">${s}</td>
+                    ${quarters.map(q => `<td style="padding: 8px; text-align: center; color: #e2e8f0;">${prices[q] != null ? '$' + prices[q].toLocaleString() : '—'}</td>`).join('')}
+                </tr>`;
+            }
+
+            html += '</tbody></table></div>';
+        }
+
+        html += `<div style="background: #1e293b; border-radius: 8px; padding: 12px; margin-top: 8px;">
+            <span style="color: #94a3b8; font-size: 12px;">Blended fertilizer shock (N 60% / P 25% / K 15%): </span>
+            <span style="color: #ef4444; font-weight: 700;">+${(ferts.blended_yoy_pct || 0).toFixed(1)}% YoY</span>
+        </div>`;
+
+        panel.innerHTML = html;
+    }
+
+    function _renderFertEMScenarios(panel, data) {
+        const countries = data.countries || {};
+        const scenarios = ['Base Case', 'Severe Case', 'Worst Case'];
+        const scenarioColors = { 'Base Case': '#3b82f6', 'Severe Case': '#f59e0b', 'Worst Case': '#ef4444' };
+
+        // Sort by worst case total
+        const sorted = Object.entries(countries).sort((a, b) => {
+            const aWC = (a[1].scenarios || {})['Worst Case'] || {};
+            const bWC = (b[1].scenarios || {})['Worst Case'] || {};
+            return (bWC.total_pp || 0) - (aWC.total_pp || 0);
+        });
+
+        let html = `<div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+                <tr style="background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                    <th style="padding: 10px 8px; text-align: left;" rowspan="2">Country</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #3b82f6; border-bottom: 1px solid #334155;" colspan="2">Base Case</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #f59e0b; border-bottom: 1px solid #334155;" colspan="2">Severe</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #ef4444; border-bottom: 1px solid #334155;" colspan="2">Worst Case</th>
+                </tr>
+                <tr style="background: #1e293b; color: #64748b; font-size: 10px;">
+                    <th style="padding: 4px 8px; text-align: center;">Food (pp)</th>
+                    <th style="padding: 4px 8px; text-align: center;">Total (pp)</th>
+                    <th style="padding: 4px 8px; text-align: center;">Food (pp)</th>
+                    <th style="padding: 4px 8px; text-align: center;">Total (pp)</th>
+                    <th style="padding: 4px 8px; text-align: center;">Food (pp)</th>
+                    <th style="padding: 4px 8px; text-align: center;">Total (pp)</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+        sorted.forEach(([name, c], i) => {
+            const sc = c.scenarios || {};
+            html += `<tr style="border-bottom: 1px solid #1e293b; ${i < 5 ? 'font-weight: 600;' : ''}">
+                <td style="padding: 8px; color: #f1f5f9;">${name}</td>`;
+
+            for (const s of scenarios) {
+                const d = sc[s] || {};
+                const color = scenarioColors[s];
+                html += `
+                    <td style="padding: 8px; text-align: center; color: #94a3b8;">+${(d.food_pp || 0).toFixed(1)}</td>
+                    <td style="padding: 8px; text-align: center; color: ${color}; font-weight: 600;">+${(d.total_pp || 0).toFixed(1)}</td>`;
+            }
+
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        html += '<p style="color: #64748b; font-size: 11px; margin-top: 12px;">Scenario weights: Base Case 70% | Severe Case 20% | Worst Case 10%. All values in percentage points of additional CPI inflation.</p>';
+
+        panel.innerHTML = html;
+    }
+
 
 })();

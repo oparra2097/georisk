@@ -157,6 +157,22 @@ window.ParraData.CATALOG = {
                     ],
                     searchTerms: ['metals', 'copper', 'gold', 'precious', 'industrial metals', 'mining'],
                 },
+                {
+                    id: 'fertilizer-em-inflation',
+                    label: 'Fertilizer & EM Inflation',
+                    source: 'ParraMacro',
+                    sourceDetail: 'Fertilizer Price Forecasts & Emerging Market Inflation Impact',
+                    api: '/api/fertilizer-em-inflation',
+                    exportUrl: '/api/fertilizer-em-inflation/export',
+                    type: 'fertilizer-em',
+                    controls: ['fert-view'],
+                    subviews: [
+                        { id: 'ranking', label: 'Country Ranking' },
+                        { id: 'fertilizer', label: 'Fertilizer Prices' },
+                        { id: 'scenarios', label: 'Scenario Matrix' },
+                    ],
+                    searchTerms: ['fertilizer', 'urea', 'DAP', 'potash', 'emerging markets', 'inflation', 'food prices', 'CPI', 'Nigeria', 'Ethiopia', 'Pakistan', 'India', 'food security'],
+                },
             ],
         },
         {

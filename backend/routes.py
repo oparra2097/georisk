@@ -12,6 +12,7 @@ from backend.data_sources.commodities_forecast import get_forecast_data
 from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
 from backend.data_sources.sovereign_debt import get_sovereign_debt_data
+from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.cache.database import get_country_history, get_all_history, detect_anomalies, get_score_count
 from config import Config
 
@@ -1360,4 +1361,133 @@ def export_sovereign_debt_excel():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'sovereign_debt_indicator_{today}.xlsx'
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FERTILIZER & EM INFLATION IMPACT
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_bp.route('/fertilizer-em-inflation')
+def get_fertilizer_em_inflation():
+    """Return fertilizer price forecasts and EM inflation impact estimates."""
+    data = get_fertilizer_em_data()
+    return jsonify(data)
+
+
+@api_bp.route('/fertilizer-em-inflation/export')
+def export_fertilizer_em_inflation_excel():
+    """Generate Excel file with fertilizer forecast and EM inflation impact data."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_fertilizer_em_data()
+    countries = data.get('countries', {})
+
+    if not countries:
+        return jsonify({'error': 'No fertilizer/EM inflation data available'}), 404
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F3864', end_color='1F3864', fill_type='solid')
+    tier_fills = {
+        'Tier 1': PatternFill(start_color='FECACA', end_color='FECACA', fill_type='solid'),
+        'Tier 2': PatternFill(start_color='FED7AA', end_color='FED7AA', fill_type='solid'),
+        'Tier 3': PatternFill(start_color='FEF3C7', end_color='FEF3C7', fill_type='solid'),
+        'Tier 4': PatternFill(start_color='D1FAE5', end_color='D1FAE5', fill_type='solid'),
+    }
+
+    wb = Workbook()
+
+    # ── Sheet 1: EM Inflation Impact ─────────────────────────────────────
+    ws = wb.active
+    ws.title = 'EM Inflation Impact'
+
+    ws.cell(row=1, column=1, value='ParraMacro — Fertilizer & EM Inflation Impact')
+    ws.cell(row=1, column=1).font = Font(bold=True, size=14, color='1F3864')
+
+    headers = ['Rank', 'Country', 'Region', 'Impact Tier',
+               'Energy Impact (pp)', 'Food/Fert Impact (pp)', 'FX Multiplier',
+               'Total Add\'l CPI (pp)', 'Current CPI (%)', 'New Est. CPI (%)',
+               'Food CPI Weight', 'Fert Import Dep.']
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=c, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+
+    # Sort by total impact descending
+    sorted_countries = sorted(countries.items(),
+                              key=lambda x: x[1].get('total_addl_cpi_pp', 0),
+                              reverse=True)
+
+    for rank, (name, c) in enumerate(sorted_countries, 1):
+        row = rank + 3
+        tier_key = c.get('impact_tier', '').split(' — ')[0]
+        fill = tier_fills.get(tier_key)
+
+        vals = [rank, name, c.get('region', ''), c.get('impact_tier', ''),
+                c.get('energy_impact_pp'), c.get('food_fert_impact_pp'),
+                c.get('fx_multiplier'), c.get('total_addl_cpi_pp'),
+                c.get('current_cpi'), c.get('new_est_cpi'),
+                c.get('food_cpi_wt'), c.get('fert_import_dep')]
+        for col, v in enumerate(vals, 1):
+            cell = ws.cell(row=row, column=col, value=v)
+            if fill:
+                cell.fill = fill
+            cell.alignment = Alignment(horizontal='center' if col >= 4 else 'left')
+
+    for col in range(1, 13):
+        ws.column_dimensions[chr(64 + col)].width = 16
+    ws.column_dimensions['B'].width = 18
+    ws.column_dimensions['D'].width = 26
+
+    # ── Sheet 2: Fertilizer Forecasts ────────────────────────────────────
+    ws2 = wb.create_sheet('Fertilizer Forecasts')
+    ws2.cell(row=1, column=1, value='Fertilizer Price Forecasts ($/ton)')
+    ws2.cell(row=1, column=1).font = Font(bold=True, size=14, color='1F3864')
+
+    row_num = 3
+    fert_data = data.get('fertilizer_forecasts', {})
+    for fert_name in ['Urea', 'DAP', 'Potash']:
+        fert = fert_data.get(fert_name, {})
+        ws2.cell(row=row_num, column=1, value=fert_name)
+        ws2.cell(row=row_num, column=1).font = Font(bold=True, size=12)
+        row_num += 1
+
+        fert_headers = ['Scenario', 'Q1', 'Q2', 'Q3', 'Q4', 'FY 2026', 'YoY vs 2025']
+        for c, h in enumerate(fert_headers, 1):
+            cell = ws2.cell(row=row_num, column=c, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+        row_num += 1
+
+        scenarios = fert.get('scenarios', {})
+        for scenario_name in ['Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg']:
+            prices = scenarios.get(scenario_name, {})
+            ws2.cell(row=row_num, column=1, value=scenario_name)
+            ws2.cell(row=row_num, column=2, value=prices.get('Q1'))
+            ws2.cell(row=row_num, column=3, value=prices.get('Q2'))
+            ws2.cell(row=row_num, column=4, value=prices.get('Q3'))
+            ws2.cell(row=row_num, column=5, value=prices.get('Q4'))
+            ws2.cell(row=row_num, column=6, value=prices.get('FY 2026'))
+            if scenario_name == 'Weighted Avg':
+                yoy = fert.get('yoy_pct')
+                if yoy:
+                    ws2.cell(row=row_num, column=7, value=f'+{yoy}%')
+            row_num += 1
+        row_num += 1
+
+    for col in range(1, 8):
+        ws2.column_dimensions[chr(64 + col)].width = 14
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'fertilizer_em_inflation_{today}.xlsx'
     )
