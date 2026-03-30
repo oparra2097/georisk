@@ -2434,9 +2434,26 @@
         const panel = document.getElementById('active-panel');
         const subview = state.subview || 'ranking';
 
-        if (subview === 'ranking')    _renderFertEMRanking(panel, data);
-        else if (subview === 'fertilizer') _renderFertPrices(panel, data);
-        else if (subview === 'scenarios')  _renderFertEMScenarios(panel, data);
+        // Build header with export button
+        const exportBtn = ds.exportUrl
+            ? `<a href="${ds.exportUrl}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='#334155';this.style.color='#f1f5f9'" onmouseout="this.style.background='#1e293b';this.style.color='#94a3b8'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel</a>`
+            : '';
+
+        panel.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+                <div>
+                    <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0;">${ds.label}</h2>
+                    <p style="color:#64748b;font-size:12px;margin:4px 0 0;">${ds.source} — ${ds.sourceDetail || ''}</p>
+                </div>
+                ${exportBtn}
+            </div>
+            <div id="fert-em-content"></div>
+        `;
+
+        const content = document.getElementById('fert-em-content');
+        if (subview === 'ranking')    _renderFertEMRanking(content, data);
+        else if (subview === 'fertilizer') _renderFertPrices(content, data);
+        else if (subview === 'scenarios')  _renderFertEMScenarios(content, data);
     }
 
     function _tierColor(tier) {
