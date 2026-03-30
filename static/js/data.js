@@ -1967,6 +1967,9 @@
 
     const TIER_ORDER = ['Critical', 'High', 'Elevated', 'Moderate', 'Low'];
 
+    // Persistent map state — so we don't re-fetch world atlas on every filter change
+    let _sdMapState = null;  // { svg, g, paths, codeMap, gapLookup, colorScale }
+
     function renderSovereignDebt(ds) {
         const data = PD.getCached(ds.api);
         if (!data || !data.countries) return;
@@ -1974,7 +1977,6 @@
         const panel = document.getElementById('active-panel');
         const subview = state.subview || 'map';
 
-        // Build summary bar + controls
         const summary = data.summary || {};
         const tierCounts = summary.tier_counts || {};
 
@@ -1984,12 +1986,9 @@
             return `<span class="sd-tier-badge" style="background:${c.bg};color:${c.text}">${t}: ${n}</span>`;
         }).join('');
 
-        // Region filter
         const regions = [...new Set(Object.values(data.countries).map(c => c.region).filter(Boolean))].sort();
         let regionOpts = '<option value="all">All Regions</option>' +
             regions.map(r => `<option value="${r}">${r}</option>`).join('');
-
-        // Tier filter
         let tierOpts = '<option value="all">All Tiers</option>' +
             TIER_ORDER.map(t => `<option value="${t}">${t}</option>`).join('');
 
@@ -2021,14 +2020,28 @@
             <div id="sd-content"></div>
         `;
 
-        // Wire up filters
+        // Reset map state when switching into this view
+        _sdMapState = null;
+
         const regionSelect = document.getElementById('sd-region-filter');
         const tierSelect = document.getElementById('sd-tier-filter');
-        const renderContent = () => _renderDebtSubview(subview, data, regionSelect.value, tierSelect.value);
-        regionSelect.addEventListener('change', renderContent);
-        tierSelect.addEventListener('change', renderContent);
 
-        renderContent();
+        function onFilterChange() {
+            const r = regionSelect.value, t = tierSelect.value;
+            if (subview === 'map') {
+                // Update map colors + opacity in place (no full re-render)
+                _updateMapFilters(data, r, t);
+                // Re-draw only the bar chart
+                _drawDebtTopChart(_filterDebtCountries(data, r, t));
+            } else {
+                _renderDebtSubview(subview, data, r, t);
+            }
+        }
+
+        regionSelect.addEventListener('change', onFilterChange);
+        tierSelect.addEventListener('change', onFilterChange);
+
+        _renderDebtSubview(subview, data, regionSelect.value, tierSelect.value);
     }
 
     function _filterDebtCountries(data, regionFilter, tierFilter) {
@@ -2045,12 +2058,11 @@
     function _renderDebtSubview(subview, data, regionFilter, tierFilter) {
         const container = document.getElementById('sd-content');
         if (!container) return;
-
         const filtered = _filterDebtCountries(data, regionFilter, tierFilter);
 
         switch (subview) {
             case 'map':
-                _renderDebtMap(container, filtered, data);
+                _renderDebtMap(container, filtered, data, regionFilter, tierFilter);
                 break;
             case 'ranking':
                 _renderDebtRanking(container, filtered);
@@ -2059,14 +2071,13 @@
                 _renderDebtTable(container, filtered);
                 break;
             default:
-                _renderDebtMap(container, filtered, data);
+                _renderDebtMap(container, filtered, data, regionFilter, tierFilter);
         }
     }
 
-    function _renderDebtMap(container, entries, data) {
-        // D3 choropleth map of debt gap
+    function _renderDebtMap(container, entries, data, regionFilter, tierFilter) {
         container.innerHTML = `
-            <div class="sd-map-wrap">
+            <div class="sd-map-wrap" id="sd-map-wrap">
                 <div id="sd-map-svg"></div>
                 <div id="sd-map-tooltip" class="sd-tooltip hidden"></div>
                 <div class="sd-map-legend">
@@ -2081,69 +2092,70 @@
             </div>
         `;
 
-        // Check if D3 is available
         if (typeof d3 === 'undefined') {
             document.getElementById('sd-map-svg').innerHTML =
-                '<p style="text-align:center;color:var(--text-muted);padding:40px;">Map requires D3.js (available on GeoRisk page). Showing ranking view instead.</p>';
-            // Render the bar chart below anyway
+                '<p style="text-align:center;color:var(--text-muted);padding:40px;">Map requires D3.js.</p>';
         } else {
-            _drawDebtChoropleth(entries, data);
+            _drawDebtChoropleth(data, regionFilter, tierFilter);
         }
-
-        // Bar chart of top 20
         _drawDebtTopChart(entries);
     }
 
-    async function _drawDebtChoropleth(entries, data) {
+    async function _drawDebtChoropleth(data, regionFilter, tierFilter) {
         const svgContainer = document.getElementById('sd-map-svg');
         if (!svgContainer || typeof d3 === 'undefined') return;
 
-        const width = 960, height = 480;
+        const width = 960, height = 500;
+
+        // Clear any previous SVG
+        d3.select('#sd-map-svg').selectAll('*').remove();
 
         const svg = d3.select('#sd-map-svg')
             .append('svg')
             .attr('viewBox', `0 0 ${width} ${height}`)
-            .attr('preserveAspectRatio', 'xMidYMid meet');
+            .attr('preserveAspectRatio', 'xMidYMid meet')
+            .style('width', '100%')
+            .style('display', 'block');
 
         svg.append('rect').attr('width', width).attr('height', height).attr('fill', '#0a0e1a');
 
         const g = svg.append('g');
-        const projection = d3.geoNaturalEarth1().scale(153).translate([width / 2, height / 2]);
+        const projection = d3.geoNaturalEarth1().scale(160).translate([width / 2, height / 2 + 20]);
         const pathGen = d3.geoPath().projection(projection);
 
-        // Build ISO3 lookup from country_codes.json
+        // Build numeric-id → ISO3 code map
         let codeMap = {};
         try {
             const res = await fetch('/static/data/country_codes.json');
             const codes = await res.json();
             codes.forEach(c => {
                 if (c['country-code'] && c['alpha-3']) {
-                    codeMap[c['country-code']] = c['alpha-3'];
                     codeMap[String(parseInt(c['country-code']))] = c['alpha-3'];
                 }
             });
         } catch (e) {}
 
-        // Build gap lookup
+        // Gap lookup from full data (not filtered — filters just change opacity)
         const gapLookup = {};
         for (const [iso3, c] of Object.entries(data.countries)) {
             gapLookup[iso3] = c;
         }
 
-        // Color scale: gap 0 → 50+ pp
         const colorScale = d3.scaleLinear()
             .domain([0, 5, 15, 30, 50])
             .range(['#1e3a5f', '#2563eb', '#f59e0b', '#f97316', '#dc2626'])
             .clamp(true);
 
-        const tooltip = document.getElementById('sd-map-tooltip');
+        // Build a Set of currently filtered ISO3 codes
+        const filtered = _filterDebtCountries(data, regionFilter, tierFilter);
+        const filteredSet = new Set(filtered.map(([iso3]) => iso3));
 
         try {
             const world = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
-            const countries = topojson.feature(world, world.objects.countries);
+            const geoCountries = topojson.feature(world, world.objects.countries);
 
-            g.selectAll('path.sd-country')
-                .data(countries.features)
+            const paths = g.selectAll('path.sd-country')
+                .data(geoCountries.features)
                 .join('path')
                 .attr('class', 'sd-country')
                 .attr('d', pathGen)
@@ -2153,44 +2165,93 @@
                     if (!c || c.debt_gap_pp == null) return '#1f2937';
                     return colorScale(c.debt_gap_pp);
                 })
+                .attr('opacity', d => {
+                    const iso3 = codeMap[String(d.id)];
+                    if (!iso3 || !gapLookup[iso3]) return 0.3;
+                    return filteredSet.has(iso3) ? 1 : 0.15;
+                })
                 .attr('stroke', '#2d3748')
                 .attr('stroke-width', 0.5)
-                .style('cursor', 'pointer')
-                .on('mouseover', (event, d) => {
+                .style('cursor', 'pointer');
+
+            // Tooltip — use mouse position relative to the map container
+            const mapWrap = document.getElementById('sd-map-wrap');
+            const tooltip = document.getElementById('sd-map-tooltip');
+
+            paths
+                .on('mouseenter', function (event, d) {
                     const iso3 = codeMap[String(d.id)];
                     const c = gapLookup[iso3];
+                    d3.select(this).attr('stroke', '#fff').attr('stroke-width', 1.5).raise();
+
                     if (!c) {
-                        tooltip.innerHTML = `<strong>${iso3 || 'Unknown'}</strong><br>No data`;
+                        tooltip.innerHTML = `<strong>${iso3 || '—'}</strong><br><span style="color:#6b7280">No data</span>`;
                     } else {
-                        const tierColor = TIER_COLORS[c.risk_tier] || TIER_COLORS.Low;
-                        tooltip.innerHTML = `
-                            <strong>${c.name}</strong>
-                            <span class="sd-tip-tier" style="background:${tierColor.bg};color:${tierColor.text}">${c.risk_tier}</span>
-                            <div class="sd-tip-grid">
-                                <span>Official</span><span>${c.official_debt_gdp != null ? c.official_debt_gdp.toFixed(1) + '%' : '—'}</span>
-                                <span>Estimated</span><span>${c.estimated_debt_gdp != null ? c.estimated_debt_gdp.toFixed(1) + '%' : '—'}</span>
-                                <span>Gap</span><span style="color:${c.debt_gap_pp > 10 ? '#f59e0b' : '#9ca3af'}">${c.debt_gap_pp != null ? c.debt_gap_pp.toFixed(1) + 'pp' : '—'}</span>
-                            </div>
-                        `;
+                        const tc = TIER_COLORS[c.risk_tier] || TIER_COLORS.Low;
+                        tooltip.innerHTML =
+                            `<strong>${c.name}</strong>` +
+                            `<span class="sd-tip-tier" style="background:${tc.bg};color:${tc.text}">${c.risk_tier}</span>` +
+                            `<div class="sd-tip-grid">` +
+                            `<span>Official</span><span>${c.official_debt_gdp != null ? c.official_debt_gdp.toFixed(1) + '%' : '—'}</span>` +
+                            `<span>Estimated</span><span>${c.estimated_debt_gdp != null ? c.estimated_debt_gdp.toFixed(1) + '%' : '—'}</span>` +
+                            `<span>Gap</span><span style="color:${c.debt_gap_pp > 10 ? '#f59e0b' : '#9ca3af'}">${c.debt_gap_pp != null ? c.debt_gap_pp.toFixed(1) + 'pp' : '—'}</span>` +
+                            `</div>`;
                     }
                     tooltip.classList.remove('hidden');
-                    tooltip.style.left = (event.pageX + 12) + 'px';
-                    tooltip.style.top = (event.pageY - 10) + 'px';
                 })
-                .on('mousemove', (event) => {
-                    tooltip.style.left = (event.pageX + 12) + 'px';
-                    tooltip.style.top = (event.pageY - 10) + 'px';
+                .on('mousemove', function (event) {
+                    if (!mapWrap || !tooltip) return;
+                    const rect = mapWrap.getBoundingClientRect();
+                    let x = event.clientX - rect.left + 14;
+                    let y = event.clientY - rect.top - 10;
+                    // Keep tooltip inside the map container
+                    if (x + 220 > rect.width) x = event.clientX - rect.left - 230;
+                    if (y < 0) y = 10;
+                    tooltip.style.left = x + 'px';
+                    tooltip.style.top = y + 'px';
                 })
-                .on('mouseout', () => tooltip.classList.add('hidden'));
+                .on('mouseleave', function () {
+                    d3.select(this).attr('stroke', '#2d3748').attr('stroke-width', 0.5);
+                    tooltip.classList.add('hidden');
+                });
 
-            // Zoom
-            const zoom = d3.zoom().scaleExtent([1, 8]).on('zoom', e => g.attr('transform', e.transform));
+            // Zoom — use filter to allow mouse wheel scroll through page
+            const zoom = d3.zoom()
+                .scaleExtent([1, 8])
+                .filter(event => {
+                    // Only zoom on ctrl+wheel or pinch, not plain scroll
+                    if (event.type === 'wheel') return event.ctrlKey;
+                    return !event.button; // allow drag pan
+                })
+                .on('zoom', e => g.attr('transform', e.transform));
             svg.call(zoom);
-            svg.on('dblclick.zoom', () => svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity));
+            svg.on('dblclick.zoom', () =>
+                svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity));
+
+            // Save state for filter updates
+            _sdMapState = { paths, codeMap, gapLookup, colorScale, filteredSet };
 
         } catch (e) {
             svgContainer.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px;">Could not load map data</p>';
         }
+    }
+
+    function _updateMapFilters(data, regionFilter, tierFilter) {
+        if (!_sdMapState || !_sdMapState.paths) return;
+        const { paths, codeMap, gapLookup } = _sdMapState;
+
+        // Rebuild filtered set
+        const filtered = _filterDebtCountries(data, regionFilter, tierFilter);
+        const filteredSet = new Set(filtered.map(([iso3]) => iso3));
+        _sdMapState.filteredSet = filteredSet;
+
+        // Update opacity only — no full re-render
+        paths.transition().duration(300)
+            .attr('opacity', d => {
+                const iso3 = codeMap[String(d.id)];
+                if (!iso3 || !gapLookup[iso3]) return 0.15;
+                return filteredSet.has(iso3) ? 1 : 0.15;
+            });
     }
 
     function _drawDebtTopChart(entries) {
