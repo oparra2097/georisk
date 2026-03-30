@@ -742,11 +742,11 @@
       "oil_import_dep": 0.0,
       "fert_import_dep": 0.5,
       "fx_multiplier": 1.0,
-      "current_cpi": 22.0,
+      "current_cpi": 33.1,
       "energy_impact_pp": 0.29,
       "food_fert_impact_pp": 1.46,
       "total_addl_cpi_pp": 1.75,
-      "new_est_cpi": 23.7,
+      "new_est_cpi": 34.8,
       "impact_tier": "Tier 4 \u2014 LOW (<2pp)",
       "scenarios": {
         "Base Case": {

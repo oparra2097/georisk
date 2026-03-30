@@ -38,8 +38,13 @@ EM_ISO3 = {
 
 def _enrich_with_live_cpi(data):
     """
-    Overwrite current_cpi and recalculate new_est_cpi using live IMF WEO
-    inflation data. Falls back silently to static values if unavailable.
+    Enrich current_cpi with live IMF WEO inflation data when the WEO has
+    newer actual data than our static JSON. Only uses WEO actuals (not
+    forecasts) — the static JSON already contains Feb/Mar 2026 reported
+    CPI from national statistics agencies, which is more current than
+    the WEO's October 2025 vintage estimates.
+
+    Falls back silently to static values if WEO is unavailable.
     """
     try:
         from backend.data_sources.imf_weo import get_weo_data
@@ -48,6 +53,7 @@ def _enrich_with_live_cpi(data):
             return data
 
         weo_countries = weo['countries']
+        forecast_start = weo.get('forecast_start_year', 2026)
 
         for country_name, info in data.get('countries', {}).items():
             iso3 = EM_ISO3.get(country_name)
@@ -58,19 +64,28 @@ def _enrich_with_live_cpi(data):
             if not values:
                 continue
 
-            # Get latest year with data (prefer actuals over forecasts)
-            years = sorted([int(y) for y in values.keys() if y.isdigit() and values[y] is not None], reverse=True)
-            if not years:
+            # Only use WEO actuals (years before forecast_start_year)
+            actual_years = sorted(
+                [int(y) for y in values.keys()
+                 if y.isdigit() and values[y] is not None and int(y) < forecast_start],
+                reverse=True
+            )
+            if not actual_years:
                 continue
 
-            latest_cpi = values[str(years[0])]
-            if latest_cpi is not None:
-                info['current_cpi'] = round(latest_cpi, 1)
-                info['current_cpi_source'] = f'IMF WEO {years[0]}'
-                info['new_est_cpi'] = round(latest_cpi + info.get('total_addl_cpi_pp', 0), 1)
+            # Only override if WEO has current-year actual data
+            # (i.e., forecast_start_year > current year, meaning current year is actual)
+            latest_actual_year = actual_years[0]
+            latest_cpi = values[str(latest_actual_year)]
+
+            # Store WEO reference for transparency, but don't override
+            # static values with older WEO estimates — our static JSON
+            # has Feb/Mar 2026 actuals from national stats agencies
+            info['weo_latest_actual'] = round(latest_cpi, 1)
+            info['weo_latest_year'] = latest_actual_year
 
     except Exception as e:
-        logger.debug(f"WEO enrichment unavailable, using static CPI values: {e}")
+        logger.debug(f"WEO enrichment unavailable: {e}")
 
     return data
 
