@@ -1290,8 +1290,8 @@ def export_sovereign_debt_excel():
         'Floor (% GDP)', 'Ceiling (% GDP)',
         'GDP ($B)', 'External Debt ($B)', 'BIS Claims ($B)', 'Chinese Lending ($B)',
         'Governance Score', 'Risk Tier',
-        'ST Debt Share %', 'Svc/Exports %', 'Int/Revenue %',
-        'Reserve Coverage %', 'Maturity Score', 'Maturity Tier',
+        'ST Debt ($B)', 'LT Debt ($B)', 'ST Share %',
+        'Svc/Exports %', 'Int/Revenue %', 'Reserve Coverage %',
     ]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=5, column=col, value=h)
@@ -1321,12 +1321,12 @@ def export_sovereign_debt_excel():
             c.get('chinese_lending_usd_bn'),
             c.get('wgi_avg'),
             c.get('risk_tier', ''),
-            c.get('short_term_share'),
+            c.get('short_term_debt_usd_bn'),
+            c.get('long_term_debt_usd_bn'),
+            c.get('short_term_pct'),
             c.get('debt_service_pct_exports'),
             c.get('interest_pct_revenue'),
             c.get('reserve_coverage_pct'),
-            c.get('maturity_risk_score'),
-            c.get('maturity_risk_tier', ''),
         ]
         for col, val in enumerate(vals, 1):
             cell = ws.cell(row=row_idx, column=col, value=val)

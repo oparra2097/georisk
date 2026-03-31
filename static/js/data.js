@@ -1981,17 +1981,10 @@
         const summary = data.summary || {};
         const tierCounts = summary.tier_counts || {};
 
-        const matTierCounts = summary.maturity_tier_counts || {};
-
         let tierBadges = TIER_ORDER.map(t => {
             const c = TIER_COLORS[t];
             const n = tierCounts[t] || 0;
             return `<span class="sd-tier-badge" style="background:${c.bg};color:${c.text}">${t}: ${n}</span>`;
-        }).join('');
-
-        let matBadges = TIER_ORDER.filter(t => (matTierCounts[t] || 0) > 0).map(t => {
-            const c = TIER_COLORS[t];
-            return `<span class="sd-tier-badge" style="background:${c.bg};color:${c.text};font-size:10px">${t}: ${matTierCounts[t]}</span>`;
         }).join('');
 
         const regions = [...new Set(Object.values(data.countries).map(c => c.region).filter(Boolean))].sort();
@@ -2018,12 +2011,9 @@
                     <span class="sd-stat">Avg official: ${summary.avg_official || '—'}%</span>
                     <span class="sd-stat">Avg estimated: ${summary.avg_estimated || '—'}%</span>
                     <span class="sd-stat">Avg gap: ${summary.avg_gap || '—'}pp</span>
+                    <span class="sd-stat">Avg ST share: ${summary.avg_short_term_pct || '—'}%</span>
                 </div>
                 <div class="sd-tier-row">${tierBadges}</div>
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-                    <span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Maturity Risk</span>
-                    ${matBadges}
-                </div>
                 <div class="sd-controls">
                     <select id="sd-region-filter" class="sd-select">${regionOpts}</select>
                     <select id="sd-tier-filter" class="sd-select">${tierOpts}</select>
@@ -2200,7 +2190,6 @@
                         tooltip.innerHTML = `<strong>${iso3 || '—'}</strong><br><span style="color:#6b7280">No data</span>`;
                     } else {
                         const tc = TIER_COLORS[c.risk_tier] || TIER_COLORS.Low;
-                        const mc = TIER_COLORS[c.maturity_risk_tier] || TIER_COLORS.Low;
                         tooltip.innerHTML =
                             `<strong>${c.name}</strong>` +
                             `<span class="sd-tip-tier" style="background:${tc.bg};color:${tc.text}">${c.risk_tier}</span>` +
@@ -2209,13 +2198,14 @@
                             `<span>Estimated</span><span>${c.estimated_debt_gdp != null ? c.estimated_debt_gdp.toFixed(1) + '%' : '—'}</span>` +
                             `<span>Gap</span><span style="color:${c.debt_gap_pp > 10 ? '#f59e0b' : '#9ca3af'}">${c.debt_gap_pp != null ? c.debt_gap_pp.toFixed(1) + 'pp' : '—'}</span>` +
                             `</div>` +
-                            `<div class="sd-tip-mat" style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1)">` +
-                            `<span style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Maturity Risk</span>` +
-                            `<span class="sd-tip-tier" style="background:${mc.bg};color:${mc.text};font-size:9px">${c.maturity_risk_tier || '—'} (${c.maturity_risk_score || '—'})</span>` +
+                            (c.short_term_debt_usd_bn != null ? (
+                            `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1)">` +
+                            `<span style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Maturity</span>` +
                             `<div class="sd-tip-grid" style="font-size:10px">` +
-                            `<span>ST share</span><span>${c.short_term_share != null ? c.short_term_share.toFixed(0) + '%' : '—'}</span>` +
+                            `<span>ST debt</span><span>$${c.short_term_debt_usd_bn.toFixed(1)}B (${(c.short_term_pct || 0).toFixed(0)}%)</span>` +
+                            `<span>LT debt</span><span>$${(c.long_term_debt_usd_bn || 0).toFixed(1)}B</span>` +
                             `<span>Svc/Exports</span><span>${c.debt_service_pct_exports != null ? c.debt_service_pct_exports.toFixed(0) + '%' : '—'}</span>` +
-                            `</div></div>`;
+                            `</div></div>`) : '');
                     }
                     tooltip.classList.remove('hidden');
                 })
@@ -2343,8 +2333,6 @@
         let rows = sorted.map(([iso3, c], i) => {
             const tier = c.risk_tier || 'Low';
             const tc = TIER_COLORS[tier];
-            const mt = c.maturity_risk_tier || 'Low';
-            const mc = TIER_COLORS[mt] || TIER_COLORS.Low;
             const gapWidth = Math.min(100, (c.debt_gap_pp || 0) / 60 * 100);
             return `
                 <div class="sd-rank-row">
@@ -2357,7 +2345,6 @@
                     </div>
                     <span class="sd-rank-val">${(c.official_debt_gdp || 0).toFixed(0)}%</span>
                     <span class="sd-rank-gap">+${(c.debt_gap_pp || 0).toFixed(1)}pp</span>
-                    <span class="sd-rank-tier" style="background:${mc.bg};color:${mc.text};font-size:9px" title="Maturity risk: ${c.maturity_risk_score || '—'}">${mt}</span>
                 </div>
             `;
         }).join('');
@@ -2365,8 +2352,8 @@
         container.innerHTML = `
             <div class="sd-ranking">
                 <div class="sd-rank-header">
-                    <span></span><span>Country</span><span>Debt Tier</span>
-                    <span>Official + Gap</span><span>Official</span><span>Gap</span><span>Maturity</span>
+                    <span></span><span>Country</span><span>Tier</span>
+                    <span>Official + Gap</span><span>Official</span><span>Gap</span>
                 </div>
                 ${rows}
             </div>
@@ -2379,8 +2366,6 @@
         let rows = sorted.map(([iso3, c]) => {
             const tier = c.risk_tier || 'Low';
             const tc = TIER_COLORS[tier];
-            const mt = c.maturity_risk_tier || 'Low';
-            const mc = TIER_COLORS[mt] || TIER_COLORS.Low;
             return `<tr>
                 <td>${c.name || iso3}</td>
                 <td>${iso3}</td>
@@ -2389,12 +2374,12 @@
                 <td class="sd-cell-est">${_fmtNum(c.estimated_debt_gdp)}%</td>
                 <td class="sd-cell-gap" style="color:${(c.debt_gap_pp||0) > 10 ? '#f59e0b' : '#9ca3af'}">${_fmtNum(c.debt_gap_pp)}pp</td>
                 <td><span class="sd-tier-cell" style="background:${tc.bg};color:${tc.text}">${tier}</span></td>
-                <td>${_fmtNum(c.short_term_share)}%</td>
+                <td>${_fmtNum(c.short_term_debt_usd_bn, '$', 'B')}</td>
+                <td>${_fmtNum(c.long_term_debt_usd_bn, '$', 'B')}</td>
+                <td>${_fmtNum(c.short_term_pct)}%</td>
                 <td>${_fmtNum(c.debt_service_pct_exports)}%</td>
                 <td>${_fmtNum(c.interest_pct_revenue)}%</td>
                 <td>${_fmtNum(c.reserve_coverage_pct, '', '%', 0)}</td>
-                <td>${_fmtNum(c.maturity_risk_score, '', '', 0)}</td>
-                <td><span class="sd-tier-cell" style="background:${mc.bg};color:${mc.text}">${mt}</span></td>
             </tr>`;
         }).join('');
 
@@ -2405,9 +2390,9 @@
                         <tr>
                             <th>Country</th><th>ISO3</th><th>Region</th>
                             <th>Official<br>(%GDP)</th><th>Estimated<br>(%GDP)</th><th>Gap</th>
-                            <th>Debt<br>Tier</th>
-                            <th>ST Debt<br>Share</th><th>Svc/<br>Exports</th><th>Int/<br>Revenue</th>
-                            <th>Reserve<br>Cover</th><th>Mat.<br>Score</th><th>Mat.<br>Tier</th>
+                            <th>Tier</th>
+                            <th>ST Debt<br>($B)</th><th>LT Debt<br>($B)</th><th>ST<br>Share</th>
+                            <th>Svc/<br>Exports</th><th>Int/<br>Revenue</th><th>Reserve<br>Cover</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
