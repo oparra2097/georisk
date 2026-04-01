@@ -193,6 +193,17 @@ window.ParraData.CATALOG = {
                     searchTerms: ['reserves', 'COFER', 'central bank', 'FX', 'foreign exchange', 'gold reserves', 'IMF'],
                 },
                 {
+                    id: 'cofer-nowcast',
+                    label: 'Reserve Currency Composition',
+                    source: 'ParraMacro',
+                    sourceDetail: 'Ferranti-style nowcast (IMF COFER + FRED FX)',
+                    api: '/api/cofer/nowcast',
+                    type: 'cofer-nowcast',
+                    controls: [],
+                    subviews: [],
+                    searchTerms: ['currency composition', 'COFER', 'dollar share', 'euro share', 'de-dollarization', 'reserves', 'nowcast', 'FX reserves'],
+                },
+                {
                     id: 'wb-exports-pct',
                     label: 'Exports (% GDP)',
                     source: 'World Bank',

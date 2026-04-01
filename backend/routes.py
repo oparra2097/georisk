@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, send_file, request
 from backend.cache.store import store
 from backend.data_sources.market_data import get_market_data, get_market_history
 from backend.data_sources.imf_cofer import get_cofer_data
+from backend.data_sources.reserves_nowcast import get_nowcast_data
 from backend.data_sources.bls_cpi import get_bls_cpi_data, get_bls_components, clear_bls_caches
 from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
 from backend.data_sources.eurostat_hicp import get_eurostat_cpi_data, get_eurostat_components
@@ -184,6 +185,13 @@ def get_markets_history():
 def get_cofer():
     """Return central bank reserves data (cached 24 hours)."""
     data = get_cofer_data()
+    return jsonify(data)
+
+
+@api_bp.route('/cofer/nowcast')
+def get_cofer_nowcast():
+    """Return reserves nowcast — real-time currency composition estimates."""
+    data = get_nowcast_data()
     return jsonify(data)
 
 

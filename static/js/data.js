@@ -402,6 +402,7 @@
             case 'wb': renderWeo(ds); break;  // World Bank uses same data shape as WEO
             case 'sovereign-debt': renderSovereignDebt(ds); break;
             case 'fertilizer-em': renderFertilizerEM(ds); break;
+            case 'cofer-nowcast': renderCoferNowcast(ds); break;
         }
     }
 
@@ -608,6 +609,145 @@
         // Summary not needed for COFER
         const summary = document.getElementById('panel-summary');
         if (summary) summary.innerHTML = '';
+    }
+
+    // ══════════════════════════════════════════════════════
+    // COFER NOWCAST RENDERER (currency composition)
+    // ══════════════════════════════════════════════════════
+
+    function renderCoferNowcast(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data) return;
+
+        const hist = data.historical || {};
+        const nc = data.nowcast;
+        const colors = data.currency_colors || {};
+        const currencies = (data.metadata || {}).currencies || ['USD','EUR','JPY','GBP','CNY','AUD','CAD','CHF','Other'];
+        const basePeriod = (data.metadata || {}).cofer_base_period || '';
+
+        // Merge historical quarterly + nowcast weekly into one timeline
+        const periods = [...(hist.periods || [])];
+        const mergedShares = {};
+        for (const ccy of currencies) {
+            mergedShares[ccy] = [...(hist.shares[ccy] || [])];
+        }
+
+        if (nc && nc.dates && nc.shares) {
+            for (let i = 0; i < nc.dates.length; i++) {
+                periods.push(nc.dates[i]);
+                for (const ccy of currencies) {
+                    const vals = nc.shares[ccy] || [];
+                    mergedShares[ccy].push(vals[i] != null ? vals[i] : null);
+                }
+            }
+        }
+
+        // Chart: stacked area of currency shares
+        PD.destroyChart('main');
+        const canvasEl = document.getElementById('panel-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        const step = Math.max(1, Math.floor(periods.length / 20));
+        const datasets = currencies.map(ccy => {
+            const color = colors[ccy] || '#999';
+            const r = parseInt(color.slice(1,3),16);
+            const g = parseInt(color.slice(3,5),16);
+            const b = parseInt(color.slice(5,7),16);
+            return {
+                label: ccy,
+                data: mergedShares[ccy].map(v => v != null ? v : null),
+                backgroundColor: `rgba(${r},${g},${b},0.55)`,
+                borderColor: color,
+                borderWidth: 1,
+                fill: true,
+                pointRadius: 0,
+                pointHitRadius: 6,
+                tension: 0.15,
+            };
+        });
+
+        PD.setChart('main', new Chart(ctx, {
+            type: 'line',
+            data: { labels: periods, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                    tooltip: {
+                        mode: 'index', intersect: false,
+                        callbacks: {
+                            title: (items) => items[0] ? items[0].label : '',
+                            label: (ctx) => ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) + '%' : 'N/A'),
+                        },
+                    },
+                },
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { ticks: { callback: (v,i) => i % step === 0 ? periods[i] : '', maxRotation: 45, font: { size: 10 } } },
+                    y: { stacked: true, min: 0, max: 100, title: { display: true, text: 'Share of Allocated Reserves (%)' } },
+                },
+            },
+        }));
+
+        // Table: latest values
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            let hdr = '<tr><th>Currency</th><th>COFER (' + basePeriod + ')</th>';
+            if (nc && nc.dates) hdr += '<th>Nowcast (' + nc.dates[nc.dates.length-1] + ')</th><th>Change</th><th>90% CI</th>';
+            hdr += '</tr>';
+            thead.innerHTML = hdr;
+
+            let rows = '';
+            for (const ccy of currencies) {
+                const histVals = hist.shares[ccy] || [];
+                const coferVal = histVals[histVals.length - 1];
+                rows += '<tr><td style="font-weight:600;color:' + (colors[ccy]||'#333') + '">' + ccy + '</td>';
+                rows += '<td>' + (coferVal != null ? coferVal.toFixed(1) + '%' : '\u2014') + '</td>';
+
+                if (nc && nc.shares && nc.shares[ccy]) {
+                    const ncVals = nc.shares[ccy];
+                    const ncVal = ncVals[ncVals.length - 1];
+                    const change = (ncVal != null && coferVal != null) ? ncVal - coferVal : null;
+                    const lo = nc.confidence_lower && nc.confidence_lower[ccy] ? nc.confidence_lower[ccy][ncVals.length-1] : null;
+                    const hi = nc.confidence_upper && nc.confidence_upper[ccy] ? nc.confidence_upper[ccy][ncVals.length-1] : null;
+
+                    rows += '<td>' + (ncVal != null ? ncVal.toFixed(1) + '%' : '\u2014') + '</td>';
+                    rows += '<td style="color:' + (change > 0 ? '#16a34a' : change < 0 ? '#dc2626' : '#666') + '">' +
+                            (change != null ? (change >= 0 ? '+' : '') + change.toFixed(2) + 'pp' : '\u2014') + '</td>';
+                    rows += '<td>' + (lo != null && hi != null ? '[' + lo.toFixed(1) + ', ' + hi.toFixed(1) + ']' : '\u2014') + '</td>';
+                }
+                rows += '</tr>';
+            }
+            tbody.innerHTML = rows;
+        }
+
+        // Summary card
+        const summary = document.getElementById('panel-summary');
+        if (summary) {
+            const diag = data.diagnostics || {};
+            const daysSince = diag.days_since_cofer || 0;
+            const baseTotal = diag.total_reserves_base_usd_bn;
+            let html = '<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:8px">';
+            html += '<div><span style="color:#888;font-size:11px">COFER Base</span><br><strong>' + basePeriod + '</strong></div>';
+            html += '<div><span style="color:#888;font-size:11px">Days Since Release</span><br><strong>' + daysSince + '</strong></div>';
+            if (baseTotal) html += '<div><span style="color:#888;font-size:11px">Total Allocated</span><br><strong>$' + Math.round(baseTotal).toLocaleString() + 'B</strong></div>';
+            html += '<div><span style="color:#888;font-size:11px">Model</span><br><strong>ParraMacro Ferranti v' + ((data.metadata||{}).model_version||'1.0') + '</strong></div>';
+            html += '</div>';
+            summary.innerHTML = html;
+        }
+
+        // Meta
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            const meta = data.metadata || {};
+            const parts = ['Source: IMF COFER + FRED FX Rates'];
+            if (meta.nowcast_through) parts.push('Nowcast through ' + meta.nowcast_through);
+            parts.push('Generated ' + (meta.generated_at || '').split('T')[0]);
+            metaEl.textContent = parts.join(' \u00b7 ');
+        }
     }
 
     // ══════════════════════════════════════════════════════
