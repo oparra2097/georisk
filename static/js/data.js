@@ -2011,7 +2011,7 @@
                     <span class="sd-stat">Avg official: ${summary.avg_official || '—'}%</span>
                     <span class="sd-stat">Avg estimated: ${summary.avg_estimated || '—'}%</span>
                     <span class="sd-stat">Avg gap: ${summary.avg_gap || '—'}pp</span>
-                    <span class="sd-stat">Avg ST share: ${summary.avg_short_term_pct || '—'}%</span>
+                    <span class="sd-stat">Avg svc/exports: ${summary.avg_debt_service_pct || '—'}%</span>
                 </div>
                 <div class="sd-tier-row">${tierBadges}</div>
                 <div class="sd-controls">
@@ -2198,13 +2198,13 @@
                             `<span>Estimated</span><span>${c.estimated_debt_gdp != null ? c.estimated_debt_gdp.toFixed(1) + '%' : '—'}</span>` +
                             `<span>Gap</span><span style="color:${c.debt_gap_pp > 10 ? '#f59e0b' : '#9ca3af'}">${c.debt_gap_pp != null ? c.debt_gap_pp.toFixed(1) + 'pp' : '—'}</span>` +
                             `</div>` +
-                            (c.short_term_debt_usd_bn != null ? (
+                            (c.debt_service_pct_exports != null || c.interest_pct_revenue != null ? (
                             `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1)">` +
-                            `<span style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Maturity</span>` +
+                            `<span style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Debt Service</span>` +
                             `<div class="sd-tip-grid" style="font-size:10px">` +
-                            `<span>ST debt</span><span>$${c.short_term_debt_usd_bn.toFixed(1)}B (${(c.short_term_pct || 0).toFixed(0)}%)</span>` +
-                            `<span>LT debt</span><span>$${(c.long_term_debt_usd_bn || 0).toFixed(1)}B</span>` +
-                            `<span>Svc/Exports</span><span>${c.debt_service_pct_exports != null ? c.debt_service_pct_exports.toFixed(0) + '%' : '—'}</span>` +
+                            (c.debt_service_pct_exports != null ? `<span>Svc/Exports</span><span style="color:${c.debt_service_pct_exports > 25 ? '#f59e0b' : '#d1d5db'}">${c.debt_service_pct_exports.toFixed(0)}%</span>` : '') +
+                            (c.interest_pct_revenue != null ? `<span>Int/Revenue</span><span style="color:${c.interest_pct_revenue > 15 ? '#f59e0b' : '#d1d5db'}">${c.interest_pct_revenue.toFixed(0)}%</span>` : '') +
+                            (c.short_term_pct != null && c.short_term_pct > 15 ? `<span>ST share</span><span style="color:#f59e0b">${c.short_term_pct.toFixed(0)}%</span>` : '') +
                             `</div></div>`) : '');
                     }
                     tooltip.classList.remove('hidden');
@@ -2345,6 +2345,7 @@
                     </div>
                     <span class="sd-rank-val">${(c.official_debt_gdp || 0).toFixed(0)}%</span>
                     <span class="sd-rank-gap">+${(c.debt_gap_pp || 0).toFixed(1)}pp</span>
+                    <span class="sd-rank-svc" style="color:${(c.debt_service_pct_exports||0) > 25 ? '#f59e0b' : '#6b7280'}">${c.debt_service_pct_exports != null ? c.debt_service_pct_exports.toFixed(0) + '%' : '—'}</span>
                 </div>
             `;
         }).join('');
@@ -2353,7 +2354,7 @@
             <div class="sd-ranking">
                 <div class="sd-rank-header">
                     <span></span><span>Country</span><span>Tier</span>
-                    <span>Official + Gap</span><span>Official</span><span>Gap</span>
+                    <span>Official + Gap</span><span>Official</span><span>Gap</span><span>Svc/Exp</span>
                 </div>
                 ${rows}
             </div>
@@ -2374,12 +2375,12 @@
                 <td class="sd-cell-est">${_fmtNum(c.estimated_debt_gdp)}%</td>
                 <td class="sd-cell-gap" style="color:${(c.debt_gap_pp||0) > 10 ? '#f59e0b' : '#9ca3af'}">${_fmtNum(c.debt_gap_pp)}pp</td>
                 <td><span class="sd-tier-cell" style="background:${tc.bg};color:${tc.text}">${tier}</span></td>
+                <td style="color:${(c.debt_service_pct_exports||0) > 25 ? '#f59e0b' : ''}">${_fmtNum(c.debt_service_pct_exports)}%</td>
+                <td style="color:${(c.interest_pct_revenue||0) > 15 ? '#f59e0b' : ''}">${_fmtNum(c.interest_pct_revenue)}%</td>
+                <td>${_fmtNum(c.reserve_coverage_pct, '', '%', 0)}</td>
                 <td>${_fmtNum(c.short_term_debt_usd_bn, '$', 'B')}</td>
                 <td>${_fmtNum(c.long_term_debt_usd_bn, '$', 'B')}</td>
                 <td>${_fmtNum(c.short_term_pct)}%</td>
-                <td>${_fmtNum(c.debt_service_pct_exports)}%</td>
-                <td>${_fmtNum(c.interest_pct_revenue)}%</td>
-                <td>${_fmtNum(c.reserve_coverage_pct, '', '%', 0)}</td>
             </tr>`;
         }).join('');
 
@@ -2391,8 +2392,8 @@
                             <th>Country</th><th>ISO3</th><th>Region</th>
                             <th>Official<br>(%GDP)</th><th>Estimated<br>(%GDP)</th><th>Gap</th>
                             <th>Tier</th>
-                            <th>ST Debt<br>($B)</th><th>LT Debt<br>($B)</th><th>ST<br>Share</th>
                             <th>Svc/<br>Exports</th><th>Int/<br>Revenue</th><th>Reserve<br>Cover</th>
+                            <th>ST Debt<br>($B)</th><th>LT Debt<br>($B)</th><th>ST %</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
