@@ -568,12 +568,14 @@
             }),
         }));
 
-        // Table
+        // Table — show last 36 periods (months or years) to keep it readable
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
+            const maxCols = 36;
+            const tableStart = Math.max(0, years.length - maxCols);
             let hdr = '<tr><th>Country</th>';
-            for (let i = years.length - 1; i >= 0; i--) hdr += '<th>' + years[i] + '</th>';
+            for (let i = years.length - 1; i >= tableStart; i--) hdr += '<th>' + years[i] + '</th>';
             hdr += '</tr>';
             thead.innerHTML = hdr;
 
@@ -584,7 +586,7 @@
                 else if (state.reserveType === 'gold') values = c.gold_reserves;
                 else values = c.total_reserves;
                 rows += '<tr><td>' + c.name + '</td>';
-                for (let i = years.length - 1; i >= 0; i--) {
+                for (let i = years.length - 1; i >= tableStart; i--) {
                     const v = values[i];
                     rows += v == null ? '<td>\u2014</td>' : '<td>$' + v.toFixed(1) + 'B</td>';
                 }

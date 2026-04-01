@@ -183,8 +183,8 @@ window.ParraData.CATALOG = {
                 {
                     id: 'cofer',
                     label: 'Central Bank Reserves',
-                    source: 'World Bank',
-                    sourceDetail: 'International Financial Statistics',
+                    source: 'IMF IRFCL',
+                    sourceDetail: 'International Reserves & Foreign Currency Liquidity (Monthly)',
                     api: '/api/cofer',
                     exportUrl: '/api/cofer/export',
                     type: 'cofer',
