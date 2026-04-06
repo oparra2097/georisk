@@ -1,5 +1,5 @@
 {
-  "generated": "2026-03-30",
+  "generated": "2026-04-06",
   "source": "ParraMacro Fertilizer & EM Inflation Impact Model",
   "scenario_weights": {
     "Base Case": 0.7,
@@ -177,37 +177,6 @@
         }
       }
     },
-    "Nigeria": {
-      "region": "Sub-Saharan Africa",
-      "food_cpi_wt": 0.55,
-      "energy_cpi_wt": 0.12,
-      "oil_import_dep": 0.0,
-      "fert_import_dep": 0.9,
-      "fx_multiplier": 1.3,
-      "current_cpi": 15.1,
-      "energy_impact_pp": 0.29,
-      "food_fert_impact_pp": 8.07,
-      "total_addl_cpi_pp": 10.88,
-      "new_est_cpi": 26.0,
-      "impact_tier": "Tier 1 \u2014 SEVERE (>7pp)",
-      "scenarios": {
-        "Base Case": {
-          "energy_pp": 0.22,
-          "food_pp": 5.89,
-          "total_pp": 7.95
-        },
-        "Severe Case": {
-          "energy_pp": 0.41,
-          "food_pp": 11.95,
-          "total_pp": 16.07
-        },
-        "Worst Case": {
-          "energy_pp": 0.56,
-          "food_pp": 15.6,
-          "total_pp": 21.0
-        }
-      }
-    },
     "Bangladesh": {
       "region": "South Asia",
       "food_cpi_wt": 0.45,
@@ -363,96 +332,127 @@
         }
       }
     },
-    "Pakistan": {
-      "region": "South Asia",
-      "food_cpi_wt": 0.35,
+    "Thailand": {
+      "region": "ASEAN",
+      "food_cpi_wt": 0.36,
       "energy_cpi_wt": 0.1,
-      "oil_import_dep": 0.83,
-      "fert_import_dep": 0.85,
-      "fx_multiplier": 1.3,
-      "current_cpi": 7.0,
-      "energy_impact_pp": 2.03,
-      "food_fert_impact_pp": 4.85,
-      "total_addl_cpi_pp": 8.95,
-      "new_est_cpi": 15.9,
+      "oil_import_dep": 0.75,
+      "fert_import_dep": 0.83,
+      "fx_multiplier": 1.1,
+      "current_cpi": -0.9,
+      "energy_impact_pp": 1.84,
+      "food_fert_impact_pp": 4.87,
+      "total_addl_cpi_pp": 7.38,
+      "new_est_cpi": 6.5,
       "impact_tier": "Tier 1 \u2014 SEVERE (>7pp)",
       "scenarios": {
         "Base Case": {
-          "energy_pp": 1.54,
-          "food_pp": 3.54,
-          "total_pp": 6.6
+          "energy_pp": 1.39,
+          "food_pp": 3.56,
+          "total_pp": 5.44
         },
         "Severe Case": {
-          "energy_pp": 2.84,
-          "food_pp": 7.18,
-          "total_pp": 13.03
+          "energy_pp": 2.57,
+          "food_pp": 7.21,
+          "total_pp": 10.76
         },
         "Worst Case": {
-          "energy_pp": 3.85,
-          "food_pp": 9.37,
-          "total_pp": 17.19
+          "energy_pp": 3.48,
+          "food_pp": 9.41,
+          "total_pp": 14.18
         }
       }
     },
-    "Philippines": {
-      "region": "ASEAN",
-      "food_cpi_wt": 0.38,
-      "energy_cpi_wt": 0.09,
-      "oil_import_dep": 0.95,
-      "fert_import_dep": 0.8,
-      "fx_multiplier": 1.2,
-      "current_cpi": 2.4,
-      "energy_impact_pp": 2.09,
-      "food_fert_impact_pp": 4.96,
-      "total_addl_cpi_pp": 8.46,
-      "new_est_cpi": 10.9,
-      "impact_tier": "Tier 1 \u2014 SEVERE (>7pp)",
+    "C\u00f4te d'Ivoire": {
+      "region": "Sub-Saharan Africa",
+      "food_cpi_wt": 0.29,
+      "energy_cpi_wt": 0.12,
+      "oil_import_dep": 0.55,
+      "fert_import_dep": 0.98,
+      "fx_multiplier": 1.05,
+      "current_cpi": 1.4,
+      "energy_impact_pp": 1.61,
+      "food_fert_impact_pp": 4.64,
+      "total_addl_cpi_pp": 6.56,
+      "new_est_cpi": 8.0,
+      "impact_tier": "Tier 2 \u2014 HIGH (5-7pp)",
       "scenarios": {
         "Base Case": {
-          "energy_pp": 1.59,
-          "food_pp": 3.62,
-          "total_pp": 6.24
+          "energy_pp": 1.22,
+          "food_pp": 3.38,
+          "total_pp": 4.84
         },
         "Severe Case": {
-          "energy_pp": 2.93,
-          "food_pp": 7.34,
-          "total_pp": 12.32
+          "energy_pp": 2.26,
+          "food_pp": 6.86,
+          "total_pp": 9.58
         },
         "Worst Case": {
-          "energy_pp": 3.97,
-          "food_pp": 9.58,
-          "total_pp": 16.25
+          "energy_pp": 3.06,
+          "food_pp": 8.95,
+          "total_pp": 12.62
         }
       }
     },
     "Tanzania": {
       "region": "Sub-Saharan Africa",
-      "food_cpi_wt": 0.4,
+      "food_cpi_wt": 0.28,
       "energy_cpi_wt": 0.08,
       "oil_import_dep": 1.0,
       "fert_import_dep": 0.85,
       "fx_multiplier": 1.1,
       "current_cpi": 3.3,
       "energy_impact_pp": 1.96,
-      "food_fert_impact_pp": 5.55,
-      "total_addl_cpi_pp": 8.25,
-      "new_est_cpi": 11.6,
-      "impact_tier": "Tier 1 \u2014 SEVERE (>7pp)",
+      "food_fert_impact_pp": 3.88,
+      "total_addl_cpi_pp": 6.42,
+      "new_est_cpi": 9.7,
+      "impact_tier": "Tier 2 \u2014 HIGH (5-7pp)",
       "scenarios": {
         "Base Case": {
           "energy_pp": 1.48,
-          "food_pp": 4.05,
-          "total_pp": 6.08
+          "food_pp": 2.83,
+          "total_pp": 4.75
         },
         "Severe Case": {
           "energy_pp": 2.74,
-          "food_pp": 8.21,
-          "total_pp": 12.04
+          "food_pp": 5.75,
+          "total_pp": 9.34
         },
         "Worst Case": {
           "energy_pp": 3.71,
-          "food_pp": 10.71,
-          "total_pp": 15.87
+          "food_pp": 7.5,
+          "total_pp": 12.33
+        }
+      }
+    },
+    "Philippines": {
+      "region": "ASEAN",
+      "food_cpi_wt": 0.22,
+      "energy_cpi_wt": 0.09,
+      "oil_import_dep": 0.95,
+      "fert_import_dep": 0.8,
+      "fx_multiplier": 1.2,
+      "current_cpi": 2.4,
+      "energy_impact_pp": 2.09,
+      "food_fert_impact_pp": 2.87,
+      "total_addl_cpi_pp": 5.96,
+      "new_est_cpi": 8.4,
+      "impact_tier": "Tier 2 \u2014 HIGH (5-7pp)",
+      "scenarios": {
+        "Base Case": {
+          "energy_pp": 1.59,
+          "food_pp": 2.09,
+          "total_pp": 4.42
+        },
+        "Severe Case": {
+          "energy_pp": 2.93,
+          "food_pp": 4.25,
+          "total_pp": 8.61
+        },
+        "Worst Case": {
+          "energy_pp": 3.97,
+          "food_pp": 5.55,
+          "total_pp": 11.41
         }
       }
     },
@@ -487,96 +487,96 @@
         }
       }
     },
-    "India": {
-      "region": "South Asia",
-      "food_cpi_wt": 0.37,
-      "energy_cpi_wt": 0.07,
-      "oil_import_dep": 0.88,
-      "fert_import_dep": 0.65,
-      "fx_multiplier": 1.1,
-      "current_cpi": 3.2,
-      "energy_impact_pp": 1.51,
-      "food_fert_impact_pp": 2.8,
-      "total_addl_cpi_pp": 4.74,
-      "new_est_cpi": 7.9,
-      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
-      "scenarios": {
-        "Base Case": {
-          "energy_pp": 1.14,
-          "food_pp": 2.04,
-          "total_pp": 3.51
-        },
-        "Severe Case": {
-          "energy_pp": 2.11,
-          "food_pp": 4.15,
-          "total_pp": 6.88
-        },
-        "Worst Case": {
-          "energy_pp": 2.86,
-          "food_pp": 5.41,
-          "total_pp": 9.1
-        }
-      }
-    },
-    "Thailand": {
-      "region": "ASEAN",
-      "food_cpi_wt": 0.34,
-      "energy_cpi_wt": 0.1,
-      "oil_import_dep": 0.75,
-      "fert_import_dep": 0.55,
-      "fx_multiplier": 1.1,
-      "current_cpi": -0.9,
-      "energy_impact_pp": 1.84,
-      "food_fert_impact_pp": 2.18,
-      "total_addl_cpi_pp": 4.42,
-      "new_est_cpi": 3.5,
-      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
-      "scenarios": {
-        "Base Case": {
-          "energy_pp": 1.39,
-          "food_pp": 1.59,
-          "total_pp": 3.28
-        },
-        "Severe Case": {
-          "energy_pp": 2.57,
-          "food_pp": 3.22,
-          "total_pp": 6.37
-        },
-        "Worst Case": {
-          "energy_pp": 3.48,
-          "food_pp": 4.21,
-          "total_pp": 8.46
-        }
-      }
-    },
     "South Africa": {
       "region": "Sub-Saharan Africa",
       "food_cpi_wt": 0.17,
       "energy_cpi_wt": 0.12,
       "oil_import_dep": 0.85,
-      "fert_import_dep": 0.7,
+      "fert_import_dep": 0.93,
       "fx_multiplier": 1.1,
       "current_cpi": 3.2,
       "energy_impact_pp": 2.5,
-      "food_fert_impact_pp": 1.39,
-      "total_addl_cpi_pp": 4.27,
-      "new_est_cpi": 7.5,
-      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
+      "food_fert_impact_pp": 2.58,
+      "total_addl_cpi_pp": 5.58,
+      "new_est_cpi": 8.8,
+      "impact_tier": "Tier 2 \u2014 HIGH (5-7pp)",
       "scenarios": {
         "Base Case": {
           "energy_pp": 1.89,
-          "food_pp": 1.01,
-          "total_pp": 3.19
+          "food_pp": 1.88,
+          "total_pp": 4.15
         },
         "Severe Case": {
           "energy_pp": 3.49,
-          "food_pp": 2.05,
-          "total_pp": 6.1
+          "food_pp": 3.82,
+          "total_pp": 8.04
         },
         "Worst Case": {
           "energy_pp": 4.73,
-          "food_pp": 2.68,
-          "total_pp": 8.15
+          "food_pp": 4.98,
+          "total_pp": 10.68
+        }
+      }
+    },
+    "India": {
+      "region": "South Asia",
+      "food_cpi_wt": 0.37,
+      "energy_cpi_wt": 0.07,
+      "oil_import_dep": 0.88,
+      "fert_import_dep": 0.58,
+      "fx_multiplier": 1.1,
+      "current_cpi": 3.2,
+      "energy_impact_pp": 1.51,
+      "food_fert_impact_pp": 2.5,
+      "total_addl_cpi_pp": 4.41,
+      "new_est_cpi": 7.6,
+      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
+      "scenarios": {
+        "Base Case": {
+          "energy_pp": 1.14,
+          "food_pp": 1.82,
+          "total_pp": 3.26
+        },
+        "Severe Case": {
+          "energy_pp": 2.11,
+          "food_pp": 3.7,
+          "total_pp": 6.39
+        },
+        "Worst Case": {
+          "energy_pp": 2.86,
+          "food_pp": 4.83,
+          "total_pp": 8.46
+        }
+      }
+    },
+    "Pakistan": {
+      "region": "South Asia",
+      "food_cpi_wt": 0.35,
+      "energy_cpi_wt": 0.1,
+      "oil_import_dep": 0.83,
+      "fert_import_dep": 0.33,
+      "fx_multiplier": 1.3,
+      "current_cpi": 7.0,
+      "energy_impact_pp": 2.03,
+      "food_fert_impact_pp": 1.35,
+      "total_addl_cpi_pp": 4.39,
+      "new_est_cpi": 11.4,
+      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
+      "scenarios": {
+        "Base Case": {
+          "energy_pp": 1.54,
+          "food_pp": 0.98,
+          "total_pp": 3.28
+        },
+        "Severe Case": {
+          "energy_pp": 2.84,
+          "food_pp": 1.99,
+          "total_pp": 6.29
+        },
+        "Worst Case": {
+          "energy_pp": 3.85,
+          "food_pp": 2.6,
+          "total_pp": 8.39
         }
       }
     },
@@ -584,154 +584,92 @@
       "region": "LatAm",
       "food_cpi_wt": 0.26,
       "energy_cpi_wt": 0.08,
-      "oil_import_dep": 0.0,
+      "oil_import_dep": 0.13,
       "fert_import_dep": 0.85,
       "fx_multiplier": 1.1,
       "current_cpi": 3.8,
-      "energy_impact_pp": 0.2,
+      "energy_impact_pp": 0.15,
       "food_fert_impact_pp": 3.6,
-      "total_addl_cpi_pp": 4.18,
-      "new_est_cpi": 8.0,
+      "total_addl_cpi_pp": 4.13,
+      "new_est_cpi": 7.9,
       "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
       "scenarios": {
         "Base Case": {
-          "energy_pp": 0.15,
+          "energy_pp": 0.11,
           "food_pp": 2.63,
-          "total_pp": 3.06
+          "total_pp": 3.01
         },
         "Severe Case": {
-          "energy_pp": 0.27,
+          "energy_pp": 0.2,
           "food_pp": 5.34,
-          "total_pp": 6.17
+          "total_pp": 6.09
         },
         "Worst Case": {
-          "energy_pp": 0.37,
+          "energy_pp": 0.28,
           "food_pp": 6.96,
-          "total_pp": 8.07
-        }
-      }
-    },
-    "Colombia": {
-      "region": "LatAm",
-      "food_cpi_wt": 0.28,
-      "energy_cpi_wt": 0.1,
-      "oil_import_dep": 0.0,
-      "fert_import_dep": 0.7,
-      "fx_multiplier": 1.1,
-      "current_cpi": 5.4,
-      "energy_impact_pp": 0.24,
-      "food_fert_impact_pp": 2.28,
-      "total_addl_cpi_pp": 2.78,
-      "new_est_cpi": 8.2,
-      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
-      "scenarios": {
-        "Base Case": {
-          "energy_pp": 0.19,
-          "food_pp": 1.67,
-          "total_pp": 2.04
-        },
-        "Severe Case": {
-          "energy_pp": 0.34,
-          "food_pp": 3.38,
-          "total_pp": 4.09
-        },
-        "Worst Case": {
-          "energy_pp": 0.46,
-          "food_pp": 4.41,
-          "total_pp": 5.36
-        }
-      }
-    },
-    "Indonesia": {
-      "region": "ASEAN",
-      "food_cpi_wt": 0.26,
-      "energy_cpi_wt": 0.09,
-      "oil_import_dep": 0.4,
-      "fert_import_dep": 0.6,
-      "fx_multiplier": 1.1,
-      "current_cpi": 4.8,
-      "energy_impact_pp": 0.5,
-      "food_fert_impact_pp": 1.82,
-      "total_addl_cpi_pp": 2.55,
-      "new_est_cpi": 7.4,
-      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
-      "scenarios": {
-        "Base Case": {
-          "energy_pp": 0.38,
-          "food_pp": 1.33,
-          "total_pp": 1.88
-        },
-        "Severe Case": {
-          "energy_pp": 0.7,
-          "food_pp": 2.69,
-          "total_pp": 3.73
-        },
-        "Worst Case": {
-          "energy_pp": 0.95,
-          "food_pp": 3.51,
-          "total_pp": 4.91
-        }
-      }
-    },
-    "Mexico": {
-      "region": "LatAm",
-      "food_cpi_wt": 0.24,
-      "energy_cpi_wt": 0.11,
-      "oil_import_dep": 0.5,
-      "fert_import_dep": 0.55,
-      "fx_multiplier": 1.05,
-      "current_cpi": 3.8,
-      "energy_impact_pp": 0.77,
-      "food_fert_impact_pp": 1.54,
-      "total_addl_cpi_pp": 2.42,
-      "new_est_cpi": 6.2,
-      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
-      "scenarios": {
-        "Base Case": {
-          "energy_pp": 0.58,
-          "food_pp": 1.12,
-          "total_pp": 1.79
-        },
-        "Severe Case": {
-          "energy_pp": 1.08,
-          "food_pp": 2.28,
-          "total_pp": 3.52
-        },
-        "Worst Case": {
-          "energy_pp": 1.46,
-          "food_pp": 2.97,
-          "total_pp": 4.65
+          "total_pp": 7.96
         }
       }
     },
     "Egypt": {
       "region": "MENA",
-      "food_cpi_wt": 0.37,
+      "food_cpi_wt": 0.32,
       "energy_cpi_wt": 0.1,
       "oil_import_dep": 0.33,
-      "fert_import_dep": 0.3,
+      "fert_import_dep": 0.55,
       "fx_multiplier": 1.3,
       "current_cpi": 13.4,
       "energy_impact_pp": 0.46,
-      "food_fert_impact_pp": 1.29,
-      "total_addl_cpi_pp": 2.28,
-      "new_est_cpi": 15.7,
+      "food_fert_impact_pp": 2.05,
+      "total_addl_cpi_pp": 3.27,
+      "new_est_cpi": 16.7,
       "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
       "scenarios": {
         "Base Case": {
           "energy_pp": 0.35,
-          "food_pp": 0.94,
-          "total_pp": 1.68
+          "food_pp": 1.5,
+          "total_pp": 2.4
         },
         "Severe Case": {
           "energy_pp": 0.65,
-          "food_pp": 1.91,
-          "total_pp": 3.33
+          "food_pp": 3.03,
+          "total_pp": 4.79
         },
         "Worst Case": {
           "energy_pp": 0.87,
-          "food_pp": 2.5,
-          "total_pp": 4.38
+          "food_pp": 3.96,
+          "total_pp": 6.29
+        }
+      }
+    },
+    "Nigeria": {
+      "region": "Sub-Saharan Africa",
+      "food_cpi_wt": 0.4,
+      "energy_cpi_wt": 0.12,
+      "oil_import_dep": 0.4,
+      "fert_import_dep": 0.35,
+      "fx_multiplier": 1.3,
+      "current_cpi": 15.1,
+      "energy_impact_pp": 0.67,
+      "food_fert_impact_pp": 1.63,
+      "total_addl_cpi_pp": 2.99,
+      "new_est_cpi": 18.1,
+      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
+      "scenarios": {
+        "Base Case": {
+          "energy_pp": 0.51,
+          "food_pp": 1.19,
+          "total_pp": 2.21
+        },
+        "Severe Case": {
+          "energy_pp": 0.94,
+          "food_pp": 2.41,
+          "total_pp": 4.36
+        },
+        "Worst Case": {
+          "energy_pp": 1.27,
+          "food_pp": 3.15,
+          "total_pp": 5.75
         }
       }
     },
@@ -740,54 +678,147 @@
       "food_cpi_wt": 0.25,
       "energy_cpi_wt": 0.12,
       "oil_import_dep": 0.0,
-      "fert_import_dep": 0.5,
+      "fert_import_dep": 0.67,
       "fx_multiplier": 1.0,
       "current_cpi": 33.1,
       "energy_impact_pp": 0.29,
-      "food_fert_impact_pp": 1.46,
-      "total_addl_cpi_pp": 1.75,
-      "new_est_cpi": 34.8,
-      "impact_tier": "Tier 4 \u2014 LOW (<2pp)",
+      "food_fert_impact_pp": 1.95,
+      "total_addl_cpi_pp": 2.25,
+      "new_est_cpi": 35.3,
+      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
       "scenarios": {
         "Base Case": {
           "energy_pp": 0.22,
-          "food_pp": 1.06,
-          "total_pp": 1.29
+          "food_pp": 1.42,
+          "total_pp": 1.65
         },
         "Severe Case": {
           "energy_pp": 0.41,
-          "food_pp": 2.16,
-          "total_pp": 2.57
+          "food_pp": 2.89,
+          "total_pp": 3.3
         },
         "Worst Case": {
           "energy_pp": 0.56,
-          "food_pp": 2.81,
-          "total_pp": 3.37
+          "food_pp": 3.77,
+          "total_pp": 4.33
+        }
+      }
+    },
+    "Mexico": {
+      "region": "LatAm",
+      "food_cpi_wt": 0.15,
+      "energy_cpi_wt": 0.11,
+      "oil_import_dep": 0.5,
+      "fert_import_dep": 0.67,
+      "fx_multiplier": 1.05,
+      "current_cpi": 3.8,
+      "energy_impact_pp": 0.77,
+      "food_fert_impact_pp": 1.17,
+      "total_addl_cpi_pp": 2.04,
+      "new_est_cpi": 5.8,
+      "impact_tier": "Tier 3 \u2014 MODERATE (2-5pp)",
+      "scenarios": {
+        "Base Case": {
+          "energy_pp": 0.58,
+          "food_pp": 0.85,
+          "total_pp": 1.51
+        },
+        "Severe Case": {
+          "energy_pp": 1.08,
+          "food_pp": 1.73,
+          "total_pp": 2.95
+        },
+        "Worst Case": {
+          "energy_pp": 1.46,
+          "food_pp": 2.26,
+          "total_pp": 3.91
+        }
+      }
+    },
+    "Indonesia": {
+      "region": "ASEAN",
+      "food_cpi_wt": 0.25,
+      "energy_cpi_wt": 0.09,
+      "oil_import_dep": 0.4,
+      "fert_import_dep": 0.38,
+      "fx_multiplier": 1.1,
+      "current_cpi": 4.8,
+      "energy_impact_pp": 0.5,
+      "food_fert_impact_pp": 1.11,
+      "total_addl_cpi_pp": 1.77,
+      "new_est_cpi": 6.6,
+      "impact_tier": "Tier 4 \u2014 LOW (<2pp)",
+      "scenarios": {
+        "Base Case": {
+          "energy_pp": 0.38,
+          "food_pp": 0.81,
+          "total_pp": 1.31
+        },
+        "Severe Case": {
+          "energy_pp": 0.7,
+          "food_pp": 1.64,
+          "total_pp": 2.58
+        },
+        "Worst Case": {
+          "energy_pp": 0.95,
+          "food_pp": 2.14,
+          "total_pp": 3.4
+        }
+      }
+    },
+    "Colombia": {
+      "region": "LatAm",
+      "food_cpi_wt": 0.15,
+      "energy_cpi_wt": 0.1,
+      "oil_import_dep": 0.0,
+      "fert_import_dep": 0.78,
+      "fx_multiplier": 1.1,
+      "current_cpi": 5.4,
+      "energy_impact_pp": 0.24,
+      "food_fert_impact_pp": 1.36,
+      "total_addl_cpi_pp": 1.77,
+      "new_est_cpi": 7.2,
+      "impact_tier": "Tier 4 \u2014 LOW (<2pp)",
+      "scenarios": {
+        "Base Case": {
+          "energy_pp": 0.19,
+          "food_pp": 0.99,
+          "total_pp": 1.3
+        },
+        "Severe Case": {
+          "energy_pp": 0.34,
+          "food_pp": 2.02,
+          "total_pp": 2.6
+        },
+        "Worst Case": {
+          "energy_pp": 0.46,
+          "food_pp": 2.63,
+          "total_pp": 3.41
         }
       }
     }
   },
   "summary": {
-    "total_countries": 21,
+    "total_countries": 22,
     "blended_fert_shock_pct": 58.3,
     "brent_yoy_pct": 35.0,
     "tier_counts": {
-      "Tier 1": 11,
-      "Tier 2": 1,
-      "Tier 3": 8,
-      "Tier 4": 1
+      "Tier 1": 8,
+      "Tier 2": 5,
+      "Tier 3": 7,
+      "Tier 4": 2
     },
     "most_impacted": [
       "Ethiopia",
       "Zambia",
-      "Nigeria",
       "Bangladesh",
-      "Mozambique"
+      "Mozambique",
+      "Ghana"
     ],
     "least_impacted": [
       "Mexico",
-      "Egypt",
-      "Argentina"
+      "Indonesia",
+      "Colombia"
     ]
   },
   "energy_inputs": {

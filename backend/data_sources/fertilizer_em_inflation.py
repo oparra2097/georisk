@@ -29,10 +29,10 @@ EM_ISO3 = {
     "Ethiopia": "ETH", "Nigeria": "NGA", "Bangladesh": "BGD",
     "Ghana": "GHA", "Pakistan": "PAK", "Zambia": "ZMB",
     "Philippines": "PHL", "Kenya": "KEN", "Mozambique": "MOZ",
-    "Sri Lanka": "LKA", "Egypt": "EGY", "Turkey": "TUR",
-    "India": "IND", "Tanzania": "TZA", "Thailand": "THA",
-    "South Africa": "ZAF", "Indonesia": "IDN", "Brazil": "BRA",
-    "Colombia": "COL", "Mexico": "MEX", "Argentina": "ARG",
+    "Sri Lanka": "LKA", "Côte d'Ivoire": "CIV", "Egypt": "EGY",
+    "Turkey": "TUR", "India": "IND", "Tanzania": "TZA",
+    "Thailand": "THA", "South Africa": "ZAF", "Indonesia": "IDN",
+    "Brazil": "BRA", "Colombia": "COL", "Mexico": "MEX", "Argentina": "ARG",
 }
 
 
