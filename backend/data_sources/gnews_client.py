@@ -54,7 +54,7 @@ def _get_key():
 def fetch_headlines_for_country(country_alpha2, max_articles=10):
     """Fetch headlines for a specific country from GNews API."""
     key = _get_key()
-    if not key:
+    if not key or key.startswith('your_'):
         return []
 
     if not _check_budget():

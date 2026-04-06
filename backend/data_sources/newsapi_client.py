@@ -1,3 +1,4 @@
+import re
 import requests
 import logging
 import threading
@@ -6,6 +7,17 @@ from config import Config
 from backend.data_sources.country_codes import iso_alpha2_to_name
 
 logger = logging.getLogger(__name__)
+
+# Lightweight English detection — rejects titles that are mostly non-ASCII
+_NON_ASCII_RE = re.compile(r'[^\x00-\x7F]')
+
+
+def _is_likely_english(text):
+    """Quick heuristic: reject text where >40% of chars are non-ASCII."""
+    if not text:
+        return False
+    non_ascii = len(_NON_ASCII_RE.findall(text))
+    return non_ascii / len(text) < 0.4
 
 # Daily budget tracking (100 req/day limit, keep 10 buffer)
 _budget_lock = threading.Lock()
@@ -76,9 +88,14 @@ def fetch_headlines_for_country(country_alpha2, page_size=20):
             data = resp.json()
             raw_articles = data.get('articles', [])
             for art in raw_articles:
+                title = art.get('title', '') or ''
+                desc = art.get('description', '') or ''
+                # Filter out non-English articles (top-headlines has no lang param)
+                if not _is_likely_english(title):
+                    continue
                 articles.append({
-                    'title': art.get('title', ''),
-                    'description': art.get('description', '') or '',
+                    'title': title,
+                    'description': desc,
                     'url': art.get('url', ''),
                     'source': art.get('source', {}).get('name', 'Unknown'),
                     'publishedAt': art.get('publishedAt', ''),

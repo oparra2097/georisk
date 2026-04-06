@@ -105,7 +105,7 @@ def fetch_country_articles(country_alpha2, timespan=None, max_records=75):
         timespan = Config.GDELT_TIMESPAN
     search_name = _get_search_name(country_alpha2)
     params = {
-        'query': search_name,
+        'query': f'{search_name} sourcelang:english',
         'mode': 'artlist',
         'maxrecords': max_records,
         'timespan': timespan,
@@ -127,7 +127,7 @@ def fetch_country_tone(country_alpha2, timespan=None):
         timespan = Config.GDELT_TIMESPAN
     search_name = _get_search_name(country_alpha2)
     params = {
-        'query': search_name,
+        'query': f'{search_name} sourcelang:english',
         'mode': 'timelinetone',
         'timespan': timespan,
         'format': 'json'

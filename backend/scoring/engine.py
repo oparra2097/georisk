@@ -15,7 +15,7 @@ Tier 2 — News Score (high-frequency):
 
 Coverage tiers:
   ALL countries   → World Bank base score + GDELT (both unlimited/free)
-  50 priority     → Also get paid news API articles for richer signal
+  51 priority     → Also get paid news API articles for richer signal
 
 Provider assignment (priority countries only):
   AMERICAS  → NewsAPI.org  (100 req/day)

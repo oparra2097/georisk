@@ -27,6 +27,7 @@ INDICATOR_KEYWORDS = {
             'impeach', 'impeached', 'impeachment', 'dictator', 'junta',
             'authoritarian', 'crackdown', 'purge', 'despot',
             'state of emergency', 'power grab', 'political crisis',
+            'narco state', 'failed state', 'lawlessness', 'anarchy',
         ],
         'medium': [
             'corruption', 'scandal', 'fraud', 'rigged', 'disputed',
@@ -53,6 +54,8 @@ INDICATOR_KEYWORDS = {
             'skirmish', 'mobilization', 'nuclear', 'escalation',
             'artillery', 'tank', 'tanks', 'wounded', 'strike',
             'arms deal', 'weapons shipment', 'no fly zone',
+            'gang violence', 'armed group', 'armed groups',
+            'criminal organization', 'militia',
         ],
         'low': [
             'defense', 'defence', 'army', 'navy', 'peacekeeping',
@@ -82,6 +85,7 @@ INDICATOR_KEYWORDS = {
             'looting', 'unrest', 'revolt', 'insurrection', 'curfew',
             'shutdown', 'clashes', 'brutality', 'crackdown',
             'civil unrest', 'mass protest', 'general strike',
+            'gang war', 'turf war', 'vigilante', 'lynching', 'mob violence',
         ],
         'medium': [
             'protest', 'protests', 'protesters', 'protesting',
@@ -101,11 +105,17 @@ INDICATOR_KEYWORDS = {
             'attacked', 'explosion', 'explosive', 'suicide',
             'kidnap', 'kidnapped', 'abducted',
             'car bomb', 'suicide bomber', 'terror attack',
+            'cartel', 'cartels', 'narco', 'narcoterrorism',
+            'gang', 'gangs', 'trafficking', 'traffickers',
+            'paramilitary', 'paramilitaries', 'sicario', 'hitman',
+            'extortion', 'beheading', 'dismembered',
         ],
         'medium': [
             'militant', 'militants', 'extremist', 'extremism',
             'insurgent', 'insurgency', 'radicalized', 'militia',
             'jihadist', 'armed', 'gunmen', 'threat',
+            'organized crime', 'drug lord', 'kingpin', 'smuggling',
+            'drug war', 'turf war',
         ],
         'low': [
             'security', 'surveillance', 'intelligence',
@@ -289,7 +299,7 @@ def analyze_articles(articles):
         'total_score': 0.0, 'sentiments': []
     } for ind in INDICATOR_KEYWORDS}
 
-    total_articles = len(articles)
+    processed_articles = 0
 
     for article in articles:
         text = ''
@@ -300,6 +310,8 @@ def analyze_articles(articles):
 
         if not text.strip():
             continue
+
+        processed_articles += 1
 
         result = analyze_text(text)
         for indicator, data in result.items():
@@ -312,8 +324,8 @@ def analyze_articles(articles):
 
     final = {}
     for indicator, data in aggregated.items():
-        if data['article_count'] > 0 and total_articles > 0:
-            coverage = min(1.0, data['article_count'] / max(total_articles, 1))
+        if data['article_count'] > 0 and processed_articles > 0:
+            coverage = min(1.0, data['article_count'] / max(processed_articles, 1))
             avg_score = data['total_score'] / data['article_count']
 
             # High-severity bonus

@@ -40,14 +40,14 @@ class Config:
     # --- Multi-provider regional assignment ---
     # Each region is assigned a news API provider to spread request budget.
     #
-    # NewsAPI.org  (100 req/day): AMERICAS (10 countries, ~11 req/cycle)
+    # NewsAPI.org  (100 req/day): AMERICAS (11 countries, ~12 req/cycle)
     # NewsData.io  (200 req/day): EUROPE + MENA  (20 countries, ~20 req/cycle)
     # GNews API    (100 req/day): AFRICA + ASIA_PAC (20 countries, ~20 req/cycle)
     #
-    # GDELT (unlimited) runs for ALL 50 countries every 15 min — no key needed.
+    # GDELT (unlimited) runs for ALL 51 countries every 15 min — no key needed.
 
     REGIONS = {
-        'AMERICAS': ['US', 'BR', 'MX', 'CO', 'VE', 'CU', 'CA', 'AR', 'CL', 'PE'],
+        'AMERICAS': ['US', 'BR', 'MX', 'CO', 'VE', 'CU', 'CA', 'AR', 'CL', 'PE', 'EC'],
         'EUROPE':   ['GB', 'FR', 'DE', 'TR', 'UA', 'RU', 'GE', 'BY', 'PL', 'IT'],
         'MENA':     ['IL', 'PS', 'IR', 'IQ', 'SY', 'SA', 'YE', 'LY', 'EG', 'LB'],
         'AFRICA':   ['NG', 'CD', 'SD', 'SS', 'SO', 'ET', 'ML', 'BF', 'KE', 'ZA'],
