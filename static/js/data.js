@@ -2229,6 +2229,13 @@
                     <div class="sd-legend-bar"></div>
                     <span>High gap</span>
                 </div>
+                <button id="sd-download-map" class="sd-download-btn" title="Download map as PNG">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                        <path d="M21 15l-5-5L5 21"/>
+                    </svg>
+                    PNG
+                </button>
             </div>
             <div class="sd-map-below">
                 <h3>Top 20 — Largest Shadow Debt Gaps</h3>
@@ -2243,6 +2250,9 @@
             _drawDebtChoropleth(data, regionFilter, tierFilter);
         }
         _drawDebtTopChart(entries);
+
+        // Wire download button
+        document.getElementById('sd-download-map')?.addEventListener('click', _downloadDebtMap);
     }
 
     async function _drawDebtChoropleth(data, regionFilter, tierFilter) {
@@ -2404,6 +2414,89 @@
                 if (!iso3 || !gapLookup[iso3]) return 0.15;
                 return filteredSet.has(iso3) ? 1 : 0.15;
             });
+    }
+
+    function _downloadDebtMap() {
+        const svgEl = document.querySelector('#sd-map-svg svg');
+        if (!svgEl) return;
+
+        const width = 960, height = 560;
+
+        // Clone SVG and inject title + legend for export
+        const clone = svgEl.cloneNode(true);
+        clone.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+        clone.setAttribute('width', width);
+        clone.setAttribute('height', height);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+
+        // Reset zoom — show full unzoomed map shifted down for title
+        const mapGroup = clone.querySelector('g');
+        if (mapGroup) mapGroup.setAttribute('transform', 'translate(0, 30)');
+        const bgRect = clone.querySelector('rect');
+        if (bgRect) bgRect.setAttribute('height', height);
+
+        // Title
+        const ns = 'http://www.w3.org/2000/svg';
+        const title = document.createElementNS(ns, 'text');
+        title.setAttribute('x', width / 2);
+        title.setAttribute('y', 22);
+        title.setAttribute('text-anchor', 'middle');
+        title.setAttribute('fill', '#e5e7eb');
+        title.setAttribute('font-family', 'Arial, sans-serif');
+        title.setAttribute('font-size', '16');
+        title.setAttribute('font-weight', 'bold');
+        title.textContent = 'Shadow Debt Indicator \u2014 ParraMacro';
+        clone.appendChild(title);
+
+        // Legend at bottom
+        const ly = height - 25;
+        const colors = ['#1e3a5f', '#2563eb', '#f59e0b', '#f97316', '#dc2626'];
+        const sw = 30;
+        const lx = width / 2 - (sw * colors.length) / 2;
+        colors.forEach(function (c, i) {
+            const r = document.createElementNS(ns, 'rect');
+            r.setAttribute('x', lx + i * sw);
+            r.setAttribute('y', ly);
+            r.setAttribute('width', sw);
+            r.setAttribute('height', 8);
+            r.setAttribute('fill', c);
+            clone.appendChild(r);
+        });
+        var lowLbl = document.createElementNS(ns, 'text');
+        lowLbl.setAttribute('x', lx - 5); lowLbl.setAttribute('y', ly + 6);
+        lowLbl.setAttribute('text-anchor', 'end'); lowLbl.setAttribute('fill', '#9ca3af');
+        lowLbl.setAttribute('font-size', '10'); lowLbl.textContent = 'Low gap';
+        clone.appendChild(lowLbl);
+        var highLbl = document.createElementNS(ns, 'text');
+        highLbl.setAttribute('x', lx + sw * colors.length + 5); highLbl.setAttribute('y', ly + 6);
+        highLbl.setAttribute('fill', '#9ca3af'); highLbl.setAttribute('font-size', '10');
+        highLbl.textContent = 'High gap';
+        clone.appendChild(highLbl);
+
+        // Render to canvas → PNG download
+        var serializer = new XMLSerializer();
+        var svgStr = serializer.serializeToString(clone);
+        var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+
+        var img = new Image();
+        img.onload = function () {
+            var canvas = document.createElement('canvas');
+            canvas.width = width * 2;
+            canvas.height = height * 2;
+            var ctx = canvas.getContext('2d');
+            ctx.scale(2, 2);
+            ctx.drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(url);
+            canvas.toBlob(function (pngBlob) {
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(pngBlob);
+                a.download = 'shadow_debt_map.png';
+                a.click();
+                URL.revokeObjectURL(a.href);
+            }, 'image/png');
+        };
+        img.src = url;
     }
 
     function _drawDebtTopChart(entries) {

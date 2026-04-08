@@ -948,6 +948,32 @@ th.col-actual {
     background: linear-gradient(to right, #1e3a5f, #2563eb, #f59e0b, #f97316, #dc2626);
 }
 
+/* Download map button */
+.sd-download-btn {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #9ca3af;
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    z-index: 50;
+    transition: all 0.15s;
+}
+.sd-download-btn:hover {
+    color: #e5e7eb;
+    background: rgba(0, 0, 0, 0.85);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
 /* Bar chart below map */
 .sd-map-below {
     margin-bottom: 16px;
