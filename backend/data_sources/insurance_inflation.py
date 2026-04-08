@@ -359,7 +359,7 @@ def _fetch_construction_opi():
         resp = requests.get(CONSTRUCTION_OPI_URL, timeout=60, headers={'User-Agent': USER_AGENT})
         if resp.status_code != 200:
             logger.warning(f"Construction OPI download failed: {resp.status_code}")
-            return {}
+            return {}, {}
 
         wb = load_workbook(io.BytesIO(resp.content), data_only=True)
         result = {}
@@ -392,7 +392,7 @@ def _fetch_construction_opi():
 
         if not header_row:
             logger.warning("Construction OPI: could not find header row")
-            return {}
+            return {}, {}
 
         # Parse data rows (quarterly: "2024 Q1" format in first column)
         new_points = []
