@@ -375,6 +375,20 @@
                 window.location.href = '/auth/login';
                 return;
             }
+            if (resp.status === 403) {
+                delete PD._fetching[url];
+                try {
+                    const body = await resp.json();
+                    const panel = document.getElementById('active-panel');
+                    if (panel) {
+                        const loadEl = document.getElementById('panel-loading');
+                        if (loadEl) loadEl.style.display = 'none';
+                        const meta = document.getElementById('panel-meta');
+                        if (meta) meta.innerHTML = '<div style="padding:30px;text-align:center;"><p style="color:#f59e0b;font-size:15px;font-weight:600;">' + (body.error || 'Access denied') + '</p><p style="color:#64748b;font-size:13px;margin-top:8px;">Contact the administrator for access.</p></div>';
+                    }
+                } catch(e) {}
+                return;
+            }
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
             PD.setCached(url, data);

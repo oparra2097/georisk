@@ -1,14 +1,22 @@
 """
 Authentication system using Flask-Login + SQLite.
 
-User model backed by data/users.db (separate from georisk.db).
-Password hashing via werkzeug.security.
+Two-tier access:
+  - Anyone can register and log in (public site)
+  - Insurance inflation data requires verified @aig.com email OR admin grant
+
+Email verification via Gmail SMTP (App Password).
 """
 
+import os
+import secrets
+import smtplib
 import sqlite3
 import logging
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask import Blueprint, render_template, redirect, url_for, request, flash
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
 
@@ -20,6 +28,8 @@ auth_bp = Blueprint('auth', __name__, template_folder='../templates')
 
 _DB_PATH = Config.DATA_DIR + '/users.db'
 
+ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', '').strip().lower()
+
 
 def _get_db():
     conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
@@ -29,8 +39,7 @@ def _get_db():
 
 
 def init_auth_db():
-    """Create users table if it doesn't exist."""
-    import os
+    """Create/migrate users table."""
     os.makedirs(Config.DATA_DIR, exist_ok=True)
     conn = _get_db()
     conn.execute('''
@@ -38,9 +47,25 @@ def init_auth_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            email_verified BOOLEAN DEFAULT 0,
+            verification_token TEXT,
+            insurance_access BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    # Migrate existing tables that lack new columns
+    try:
+        conn.execute('ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+    try:
+        conn.execute('ALTER TABLE users ADD COLUMN verification_token TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute('ALTER TABLE users ADD COLUMN insurance_access BOOLEAN DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
     logger.info("Auth DB initialized")
@@ -49,10 +74,12 @@ def init_auth_db():
 # ── User model ───────────────────────────────────────────────────────────
 
 class User(UserMixin):
-    def __init__(self, id, email, password_hash):
+    def __init__(self, id, email, password_hash, email_verified=False, insurance_access=False):
         self.id = id
         self.email = email
         self.password_hash = password_hash
+        self.email_verified = bool(email_verified)
+        self.insurance_access = bool(insurance_access)
 
     @staticmethod
     def get_by_id(user_id):
@@ -60,7 +87,8 @@ class User(UserMixin):
         row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
         conn.close()
         if row:
-            return User(row['id'], row['email'], row['password_hash'])
+            return User(row['id'], row['email'], row['password_hash'],
+                        row['email_verified'], row['insurance_access'])
         return None
 
     @staticmethod
@@ -69,29 +97,122 @@ class User(UserMixin):
         row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
         conn.close()
         if row:
-            return User(row['id'], row['email'], row['password_hash'])
+            return User(row['id'], row['email'], row['password_hash'],
+                        row['email_verified'], row['insurance_access'])
         return None
 
     @staticmethod
     def create(email, password):
         pw_hash = generate_password_hash(password)
+        token = secrets.token_urlsafe(32)
         conn = _get_db()
         try:
-            conn.execute('INSERT INTO users (email, password_hash) VALUES (?, ?)', (email, pw_hash))
+            conn.execute(
+                'INSERT INTO users (email, password_hash, verification_token) VALUES (?, ?, ?)',
+                (email, pw_hash, token)
+            )
             conn.commit()
-            return True
+            return token
         except sqlite3.IntegrityError:
-            return False
+            return None
         finally:
             conn.close()
 
+    @staticmethod
+    def verify_token(token):
+        conn = _get_db()
+        row = conn.execute('SELECT * FROM users WHERE verification_token = ?', (token,)).fetchone()
+        if row:
+            conn.execute('UPDATE users SET email_verified = 1, verification_token = NULL WHERE id = ?', (row['id'],))
+            conn.commit()
+            conn.close()
+            return row['email']
+        conn.close()
+        return None
+
+    @staticmethod
+    def grant_access(email):
+        conn = _get_db()
+        conn.execute('UPDATE users SET insurance_access = 1 WHERE email = ?', (email,))
+        conn.commit()
+        affected = conn.total_changes
+        conn.close()
+        return affected > 0
+
+    @staticmethod
+    def revoke_access(email):
+        conn = _get_db()
+        conn.execute('UPDATE users SET insurance_access = 0 WHERE email = ?', (email,))
+        conn.commit()
+        conn.close()
+
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def has_insurance_access(self):
+        """Check if user can access insurance inflation data."""
+        if not self.email_verified:
+            return False
+        if self.email.endswith('@aig.com'):
+            return True
+        return bool(self.insurance_access)
 
 
 def user_loader(user_id):
     """Flask-Login user_loader callback."""
     return User.get_by_id(int(user_id))
+
+
+# ── Email verification ───────────────────────────────────────────────────
+
+def _send_verification_email(email, token):
+    """Send verification email via Gmail SMTP."""
+    smtp_email = Config.SMTP_EMAIL
+    smtp_password = Config.SMTP_PASSWORD
+
+    if not smtp_email or not smtp_password:
+        logger.warning("SMTP not configured — skipping verification email")
+        return False
+
+    # Build verification URL
+    base_url = os.environ.get('BASE_URL', 'https://parramacro.com')
+    verify_url = f'{base_url}/auth/verify/{token}'
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = 'Verify your Parra Macro account'
+    msg['From'] = f'Parra Macro <{smtp_email}>'
+    msg['To'] = email
+
+    text = f"""Welcome to Parra Macro.
+
+Please verify your email by clicking the link below:
+
+{verify_url}
+
+If you did not create this account, you can safely ignore this email.
+"""
+
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #1e293b;">Welcome to Parra Macro</h2>
+        <p style="color: #475569;">Please verify your email to activate your account:</p>
+        <a href="{verify_url}" style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">Verify Email</a>
+        <p style="color: #94a3b8; font-size: 13px; margin-top: 24px;">If you did not create this account, you can safely ignore this email.</p>
+    </div>
+    """
+
+    msg.attach(MIMEText(text, 'plain'))
+    msg.attach(MIMEText(html, 'html'))
+
+    try:
+        with smtplib.SMTP_SSL(Config.SMTP_SERVER, Config.SMTP_PORT) as server:
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, email, msg.as_string())
+        logger.info(f"Verification email sent to {email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send verification email to {email}: {e}")
+        return False
 
 
 # ── Routes ───────────────────────────────────────────────────────────────
@@ -106,6 +227,8 @@ def login():
             user = User.get_by_email(email)
             if user and user.check_password(password):
                 login_user(user, remember=True)
+                if not user.email_verified:
+                    flash('Please check your email and verify your account.', 'error')
                 next_page = request.args.get('next', '/data')
                 return redirect(next_page)
 
@@ -131,16 +254,52 @@ def register():
                 flash('Passwords do not match.', 'error')
             elif len(password) < 8:
                 flash('Password must be at least 8 characters.', 'error')
-            elif User.create(email, password):
-                flash('Account created. Please log in.', 'success')
-                return redirect(url_for('auth.login'))
             else:
-                flash('An account with that email already exists.', 'error')
+                token = User.create(email, password)
+                if token:
+                    _send_verification_email(email, token)
+                    flash('Account created! Check your email for a verification link.', 'success')
+                    return redirect(url_for('auth.login'))
+                else:
+                    flash('An account with that email already exists.', 'error')
 
         return render_template('register.html', active_page='data')
     except Exception as e:
         logger.error(f"Register error: {e}", exc_info=True)
         return f"Register error: {e}", 500
+
+
+@auth_bp.route('/verify/<token>')
+def verify_email(token):
+    email = User.verify_token(token)
+    if email:
+        return render_template('verify_success.html', email=email, active_page='data')
+    else:
+        flash('Invalid or expired verification link.', 'error')
+        return redirect(url_for('auth.login'))
+
+
+@auth_bp.route('/admin/grant/<path:email>')
+@login_required
+def admin_grant_access(email):
+    """Grant insurance data access to a non-@aig.com user. Admin only."""
+    if not current_user.email or current_user.email != ADMIN_EMAIL:
+        return 'Unauthorized', 403
+    email = email.strip().lower()
+    if User.grant_access(email):
+        return f'Insurance access granted to {email}'
+    return f'User {email} not found', 404
+
+
+@auth_bp.route('/admin/revoke/<path:email>')
+@login_required
+def admin_revoke_access(email):
+    """Revoke insurance data access. Admin only."""
+    if not current_user.email or current_user.email != ADMIN_EMAIL:
+        return 'Unauthorized', 403
+    email = email.strip().lower()
+    User.revoke_access(email)
+    return f'Insurance access revoked for {email}'
 
 
 @auth_bp.route('/logout')

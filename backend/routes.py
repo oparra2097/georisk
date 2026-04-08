@@ -15,11 +15,26 @@ from backend.data_sources.world_bank import get_wb_data
 from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.data_sources.insurance_inflation import get_insurance_inflation_data
-from flask_login import login_required
+from flask_login import login_required, current_user
+from functools import wraps
 from backend.cache.database import get_country_history, get_all_history, detect_anomalies, get_score_count
 from config import Config
 
 api_bp = Blueprint('api', __name__)
+
+
+def insurance_access_required(f):
+    """Decorator: requires verified @aig.com email or admin-granted access."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Authentication required', 'login_url': '/auth/login'}), 401
+        if not current_user.email_verified:
+            return jsonify({'error': 'Please verify your email address first. Check your inbox for the verification link.'}), 403
+        if not current_user.has_insurance_access():
+            return jsonify({'error': 'Insurance data access requires an @aig.com email address. Contact the administrator for access.'}), 403
+        return f(*args, **kwargs)
+    return decorated
 
 
 @api_bp.route('/scores')
@@ -1504,21 +1519,21 @@ def export_fertilizer_em_inflation_excel():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# INSURANCE / REINSURANCE INFLATION (LOGIN REQUIRED)
+# INSURANCE / REINSURANCE INFLATION (VERIFIED @AIG.COM OR ADMIN GRANT)
 # ══════════════════════════════════════════════════════════════════════════════
 
 @api_bp.route('/insurance-inflation')
-@login_required
+@insurance_access_required
 def get_insurance_inflation():
-    """Return insurance/reinsurance inflation data (login required)."""
+    """Return insurance/reinsurance inflation data (verified @aig.com or admin grant)."""
     data = get_insurance_inflation_data()
     return jsonify(data)
 
 
 @api_bp.route('/insurance-inflation/export')
-@login_required
+@insurance_access_required
 def export_insurance_inflation_excel():
-    """Generate Excel file with insurance inflation data (login required)."""
+    """Generate Excel file with insurance inflation data (verified @aig.com or admin grant)."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
 
