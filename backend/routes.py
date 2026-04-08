@@ -1522,8 +1522,14 @@ def export_insurance_inflation_excel():
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment
 
+    from backend.data_sources.insurance_inflation import compute_qoq, aggregate_monthly_to_quarterly
+
+    freq = request.args.get('freq', 'quarterly')       # 'monthly' | 'quarterly'
+    comparison = request.args.get('comparison', 'yoy')  # 'yoy' | 'qoq'
+
     data = get_insurance_inflation_data()
     series = data.get('series', {})
+    series_raw = data.get('series_raw', {})
     categories = data.get('categories', {})
     meta = data.get('series_meta', {})
 
@@ -1533,6 +1539,9 @@ def export_insurance_inflation_excel():
     header_font = Font(bold=True, color='FFFFFF', size=11)
     header_fill = PatternFill(start_color='1F3864', end_color='1F3864', fill_type='solid')
     alt_fill = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
+
+    comp_label = 'QoQ % Change' if comparison == 'qoq' else 'YoY % Change'
+    freq_label = 'Quarterly' if freq == 'quarterly' else 'Monthly'
 
     wb = Workbook()
     first = True
@@ -1557,20 +1566,38 @@ def export_insurance_inflation_excel():
         # Title
         ws.cell(row=1, column=1, value=f'{cat_info["label"]} — Insurance Inflation Indicators')
         ws.cell(row=1, column=1).font = Font(bold=True, size=14, color='1F3864')
-        ws.cell(row=2, column=1, value='YoY % Change. Source: ONS, Eurostat. Auto-refreshes every 24h.')
+        ws.cell(row=2, column=1, value=f'{comp_label}, {freq_label}. Source: ONS, Eurostat. Auto-refreshes every 24h.')
         ws.cell(row=2, column=1).font = Font(italic=True, size=10, color='6B7280')
 
-        # Collect all unique dates across all series in this category
+        # Transform data based on freq/comparison params
+        transformed = {}
+        for s_key, s_meta in active_series:
+            is_quarterly = s_meta.get('freq') == 'Q'
+
+            if comparison == 'qoq':
+                raw = series_raw.get(s_key, [])
+                if raw:
+                    transformed[s_key] = compute_qoq(raw, is_quarterly)
+                else:
+                    transformed[s_key] = []
+            else:
+                pts = series.get(s_key, [])
+                if freq == 'quarterly' and not is_quarterly:
+                    transformed[s_key] = aggregate_monthly_to_quarterly(pts)
+                else:
+                    transformed[s_key] = pts
+
+        # Collect all unique dates
         all_dates = set()
         for s_key, _ in active_series:
-            for pt in series.get(s_key, []):
+            for pt in transformed.get(s_key, []):
                 all_dates.add(pt['date'])
         sorted_dates = sorted(all_dates)
 
         # Build lookup: {series_key: {date: value}}
         lookups = {}
         for s_key, _ in active_series:
-            lookups[s_key] = {pt['date']: pt['value'] for pt in series.get(s_key, [])}
+            lookups[s_key] = {pt['date']: pt['value'] for pt in transformed.get(s_key, [])}
 
         # Header row: Date | Series1 | Series2 | ...
         row_num = 4
@@ -1627,5 +1654,5 @@ def export_insurance_inflation_excel():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'insurance_inflation_{today}.xlsx'
+        download_name=f'insurance_inflation_{freq}_{comparison}_{today}.xlsx'
     )

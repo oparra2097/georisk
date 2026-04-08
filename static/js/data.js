@@ -2877,70 +2877,140 @@
     // INSURANCE / REINSURANCE INFLATION (LOGIN-GATED)
     // ══════════════════════════════════════════════════════
 
-    function renderInsuranceInflation(ds) {
-        const data = PD.getCached(ds.api);
-        if (!data || !data.series) {
-            // Check for 401
-            const panel = document.getElementById('active-panel');
-            if (panel) panel.innerHTML = '<div style="padding:40px;text-align:center;"><p style="color:#94a3b8;">Loading insurance inflation data...</p><p style="color:#64748b;font-size:12px;">If you are not logged in, <a href="/auth/login" style="color:#3b82f6;">sign in here</a>.</p></div>';
-            return;
+    // ── Insurance inflation helpers ────────────────────────────────────────
+
+    function _insAggregateToQuarterly(points) {
+        const buckets = {};
+        for (const p of points) {
+            const q = Math.ceil(p.month / 3);
+            const key = p.year + '-Q' + q;
+            if (!buckets[key]) buckets[key] = { year: p.year, quarter: q, values: [], date: key };
+            buckets[key].values.push(p.value);
+        }
+        return Object.values(buckets)
+            .map(b => ({ year: b.year, month: b.quarter * 3, quarter: 'Q' + b.quarter,
+                         value: Math.round((b.values.reduce((a, c) => a + c, 0) / b.values.length) * 100) / 100,
+                         date: b.date }))
+            .sort((a, b) => a.year - b.year || a.quarter - b.quarter);
+    }
+
+    function _insComputeQoQ(rawPoints, isQuarterlyNative) {
+        let qPoints;
+        if (isQuarterlyNative) {
+            qPoints = rawPoints.map(p => ({...p})).sort((a, b) => a.year - b.year || a.month - b.month);
+        } else {
+            // Aggregate monthly indices to quarterly averages
+            const buckets = {};
+            for (const p of rawPoints) {
+                const q = Math.ceil(p.month / 3);
+                const key = p.year + '-Q' + q;
+                if (!buckets[key]) buckets[key] = { year: p.year, quarter: q, values: [], date: key };
+                buckets[key].values.push(p.value);
+            }
+            qPoints = Object.values(buckets)
+                .map(b => ({ year: b.year, quarter: b.quarter, month: b.quarter * 3,
+                             value: b.values.reduce((a, c) => a + c, 0) / b.values.length,
+                             date: b.date }))
+                .sort((a, b) => a.year - b.year || a.quarter - b.quarter);
         }
 
-        const panel = document.getElementById('active-panel');
+        const byQ = {};
+        for (const p of qPoints) {
+            const q = p.quarter || Math.ceil(p.month / 3);
+            byQ[p.year + '-' + q] = p.value;
+        }
+
+        const result = [];
+        for (const p of qPoints) {
+            const q = typeof p.quarter === 'number' ? p.quarter : parseInt(String(p.quarter).replace('Q', ''));
+            let prevQ = q - 1, prevYear = p.year;
+            if (prevQ === 0) { prevQ = 4; prevYear--; }
+            const prevVal = byQ[prevYear + '-' + prevQ];
+            if (prevVal != null && prevVal !== 0) {
+                const qoq = ((p.value - prevVal) / Math.abs(prevVal)) * 100;
+                result.push({ ...p, value: Math.round(qoq * 100) / 100 });
+            }
+        }
+        return result;
+    }
+
+    function _insGetPoints(key, data, freq, comp) {
+        const seriesMeta = data.series_meta || {};
+        const meta = seriesMeta[key] || {};
+        const isQuarterly = meta.freq === 'Q';
+
+        if (comp === 'qoq') {
+            const raw = (data.series_raw || {})[key] || [];
+            return raw.length ? _insComputeQoQ(raw, isQuarterly) : [];
+        }
+        // YoY mode (or level fallback)
+        let points = (data.series || {})[key] || [];
+        if (freq === 'quarterly' && !isQuarterly && points.length) {
+            points = _insAggregateToQuarterly(points);
+        }
+        return points;
+    }
+
+    // ── Main insurance renderer ─────────────────────────────────────────────
+
+    function renderInsuranceInflation(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || !data.series) return;
+
         const subview = state.subview || 'medical';
         const categories = data.categories || {};
         const catInfo = categories[subview];
         if (!catInfo) return;
 
+        const freq = state.freq || 'quarterly';
+        const comp = state.view || 'yoy';
+        const compLabel = comp === 'qoq' ? 'QoQ %' : 'YoY %';
+        const freqLabel = freq === 'quarterly' ? 'Quarterly' : (freq === 'yearly' ? 'Yearly' : 'Monthly');
+
         const seriesKeys = catInfo.series || [];
-        const allSeries = data.series || {};
         const seriesMeta = data.series_meta || {};
 
-        // Header with export button
-        const exportBtn = ds.exportUrl
-            ? `<a href="${ds.exportUrl}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='#334155';this.style.color='#f1f5f9'" onmouseout="this.style.background='#1e293b';this.style.color='#94a3b8'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel</a>`
-            : '';
+        // Update title
+        const titleEl = document.getElementById('panel-title');
+        if (titleEl) titleEl.textContent = `${catInfo.label} — ${compLabel} Change (${freqLabel})`;
 
-        panel.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
-                <div>
-                    <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0;">${catInfo.label}</h2>
-                    <p style="color:#64748b;font-size:12px;margin:4px 0 0;">ONS & Eurostat — YoY % Change | ${seriesKeys.length} series</p>
-                </div>
-                ${exportBtn}
-            </div>
-            <div style="height:400px;position:relative;margin-bottom:20px;">
-                <canvas id="ins-chart"></canvas>
-            </div>
-            <div id="ins-table"></div>
-        `;
+        // Update export button URL with current params
+        const exportBtn = document.querySelector('.export-btn-data');
+        if (exportBtn && ds.exportUrl) {
+            exportBtn.href = `${ds.exportUrl}?freq=${freq}&comparison=${comp}`;
+        }
 
-        // Build Chart.js datasets
-        const COLORS_FALLBACK = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#06b6d4','#f97316','#e11d48','#84cc16','#64748b','#fbbf24','#a855f7'];
+        // Hide loading
+        const loadEl = document.getElementById('panel-loading');
+        if (loadEl) loadEl.style.display = 'none';
+
+        // Build chart datasets
+        const COLORS = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#06b6d4','#f97316','#e11d48','#84cc16','#64748b','#fbbf24','#a855f7'];
         const chartDatasets = [];
 
         seriesKeys.forEach((key, i) => {
-            const points = allSeries[key] || [];
             const meta = seriesMeta[key] || {};
+            const points = _insGetPoints(key, data, freq, comp);
             if (!points.length) return;
 
             chartDatasets.push({
                 label: meta.label || key,
                 data: points.map(p => ({ x: p.date, y: p.value })),
-                borderColor: meta.color || COLORS_FALLBACK[i % COLORS_FALLBACK.length],
+                borderColor: meta.color || COLORS[i % COLORS.length],
                 backgroundColor: 'transparent',
                 borderWidth: 2,
                 fill: false,
-                pointRadius: 0,
+                pointRadius: 1,
                 pointHitRadius: 8,
-                tension: 0.3,
+                tension: 0,
                 borderDash: meta.approximate ? [5, 5] : [],
             });
         });
 
-        const canvas = document.getElementById('ins-chart');
+        // Render chart
+        const canvas = document.getElementById('panel-chart');
         if (canvas && chartDatasets.length > 0) {
-            PD.destroyChart('insurance');
+            PD.destroyChart('main');
             const ctx = canvas.getContext('2d');
             const chart = new Chart(ctx, {
                 type: 'line',
@@ -2968,49 +3038,43 @@
                     scales: {
                         x: {
                             type: 'category',
-                            ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 20 },
+                            ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 24 },
                             grid: { color: '#1e293b' }
                         },
                         y: {
-                            ticks: {
-                                color: '#64748b',
-                                font: { size: 10 },
-                                callback: v => v.toFixed(0) + '%'
-                            },
+                            title: { display: true, text: compLabel, color: '#64748b', font: { size: 11 } },
+                            ticks: { color: '#64748b', font: { size: 10 }, callback: v => v.toFixed(0) + '%' },
                             grid: { color: '#1e293b' }
                         }
                     }
                 }
             });
             PD._charts = PD._charts || {};
-            PD._charts['insurance'] = chart;
+            PD._charts['main'] = chart;
         }
 
-        // Data table — latest values
-        let tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead>
-                <tr style="background:#1e293b;color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
-                    <th style="padding:10px 8px;text-align:left;">Series</th>
-                    <th style="padding:10px 8px;text-align:center;">Source</th>
-                    <th style="padding:10px 8px;text-align:center;">Freq</th>
-                    <th style="padding:10px 8px;text-align:center;">Latest</th>
-                    <th style="padding:10px 8px;text-align:center;">Date</th>
-                    <th style="padding:10px 8px;text-align:center;">Data Points</th>
-                </tr>
-            </thead>
-            <tbody>`;
+        // Render data table
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (!thead || !tbody) return;
 
+        thead.innerHTML = `<tr>
+            <th style="text-align:left;">Series</th><th>Source</th><th>Freq</th>
+            <th>Latest ${compLabel}</th><th>Date</th><th>Points</th>
+        </tr>`;
+
+        let tbHtml = '';
         seriesKeys.forEach((key, i) => {
-            const points = allSeries[key] || [];
             const meta = seriesMeta[key] || {};
+            const points = _insGetPoints(key, data, freq, comp);
             const latest = points.length ? points[points.length - 1] : null;
-            const approxTag = meta.approximate ? ' <span style="color:#eab308;font-size:10px;">(approx)</span>' : '';
-            const fill = i % 2 === 0 ? 'background:#0f172a44;' : '';
+            const approx = meta.approximate ? ' <span style="color:#eab308;font-size:10px;">(approx)</span>' : '';
+            const bg = i % 2 === 0 ? 'background:rgba(15,23,42,0.25);' : '';
 
-            tableHtml += `<tr style="border-bottom:1px solid #1e293b;${fill}">
+            tbHtml += `<tr style="border-bottom:1px solid #1e293b;${bg}">
                 <td style="padding:8px;color:#f1f5f9;">
                     <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${meta.color || '#94a3b8'};margin-right:8px;"></span>
-                    ${meta.label || key}${approxTag}
+                    ${meta.label || key}${approx}
                 </td>
                 <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${meta.source || ''}</td>
                 <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${meta.freq || 'M'}</td>
@@ -3019,10 +3083,7 @@
                 <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${points.length}</td>
             </tr>`;
         });
-
-        tableHtml += '</tbody></table>';
-        const tableEl = document.getElementById('ins-table');
-        if (tableEl) tableEl.innerHTML = tableHtml;
+        tbody.innerHTML = tbHtml;
     }
 
 })();

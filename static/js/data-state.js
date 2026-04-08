@@ -134,7 +134,8 @@ window.ParraData.navigate = function (categoryId, datasetId, subviewId) {
 
     // Reset controls when switching datasets
     if (prevDataset !== datasetId) {
-        state.freq = 'monthly';
+        // Default to quarterly for insurance inflation, monthly for everything else
+        state.freq = (datasetId === 'insurance-inflation') ? 'quarterly' : 'monthly';
         state.view = 'yoy';
         state.range = '10';
         state.scenario = 'Weighted Avg';

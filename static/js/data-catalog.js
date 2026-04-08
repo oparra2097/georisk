@@ -539,7 +539,7 @@ window.ParraData.CATALOG = {
                     api: '/api/insurance-inflation',
                     exportUrl: '/api/insurance-inflation/export',
                     type: 'insurance-inflation',
-                    controls: [],
+                    controls: ['freq', 'view'],
                     subviews: [
                         { id: 'medical',       label: 'Medical' },
                         { id: 'legal',         label: 'Legal' },

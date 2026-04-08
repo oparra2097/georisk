@@ -192,8 +192,9 @@ def _compute_yoy(points):
 
 
 def _fetch_ons_series():
-    """Fetch all ONS insurance series and compute YoY."""
-    series_data = {}
+    """Fetch all ONS insurance series. Returns (yoy_dict, raw_dict)."""
+    yoy_data = {}
+    raw_data = {}
     headers = {'User-Agent': USER_AGENT}
 
     for key, info in ONS_SERIES.items():
@@ -209,11 +210,12 @@ def _fetch_ons_series():
                 continue
             points = _parse_ons_json(resp.json())
             if points:
-                series_data[key] = _compute_yoy(points)
+                raw_data[key] = points
+                yoy_data[key] = _compute_yoy(points)
         except Exception as e:
             logger.warning(f"ONS fetch failed for {key}: {e}")
 
-    return series_data
+    return yoy_data, raw_data
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -422,17 +424,153 @@ def _fetch_construction_opi():
                 except (ValueError, TypeError):
                     pass
 
+        yoy_result = {}
+        raw_result = {}
         if new_points:
-            result['uk_opi_new'] = _compute_yoy(new_points)
+            raw_result['uk_opi_new'] = new_points
+            yoy_result['uk_opi_new'] = _compute_yoy(new_points)
         if repair_points:
-            result['uk_opi_repair'] = _compute_yoy(repair_points)
+            raw_result['uk_opi_repair'] = repair_points
+            yoy_result['uk_opi_repair'] = _compute_yoy(repair_points)
 
         wb.close()
-        return result
+        return yoy_result, raw_result
 
     except Exception as e:
         logger.warning(f"Construction OPI fetch failed: {e}")
-        return {}
+        return {}, {}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 4b — Eurostat index fetchers (raw indices for QoQ computation)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _fetch_eurostat_hicp_index():
+    """Fetch EU27 HICP monthly index (2015=100)."""
+    codes = '&'.join(f'coicop={info["coicop"]}' for info in EU_HICP_SERIES.values())
+    url = f'{EUROSTAT_BASE}/prc_hicp_midx?geo=EU27_2020&unit=I15&freq=M&sinceTimePeriod=2000-01&{codes}'
+    try:
+        resp = requests.get(url, timeout=60, headers={'User-Agent': USER_AGENT})
+        if resp.status_code == 200:
+            return _parse_eurostat_jsonstat(resp.json(), EU_HICP_SERIES, 'coicop')
+    except Exception as e:
+        logger.warning(f"Eurostat HICP index fetch failed: {e}")
+    return {}
+
+
+def _fetch_eurostat_legal_index(geo, series_map):
+    """Fetch country-specific HICP legal proxy index."""
+    codes = '&'.join(f'coicop={info["coicop"]}' for info in series_map.values())
+    url = f'{EUROSTAT_BASE}/prc_hicp_midx?geo={geo}&unit=I15&freq=M&sinceTimePeriod=2000-01&{codes}'
+    try:
+        resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
+        if resp.status_code == 200:
+            return _parse_eurostat_jsonstat(resp.json(), series_map, 'coicop')
+    except Exception as e:
+        logger.warning(f"Eurostat legal index ({geo}) fetch failed: {e}")
+    return {}
+
+
+def _fetch_eurostat_ppi_index():
+    """Fetch EU27 PPI monthly index (2015=100)."""
+    result = {}
+    for key, info in EU_PPI_SERIES.items():
+        url = f'{EUROSTAT_BASE}/{info["dataset"]}?geo=EU27_2020&nace_r2={info["nace"]}&s_adj=NSA&unit=I15&freq=M&sinceTimePeriod=2000-01'
+        try:
+            resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
+            if resp.status_code == 200:
+                parsed = _parse_eurostat_jsonstat(resp.json(), {key: info}, 'nace_r2')
+                result.update(parsed)
+        except Exception as e:
+            logger.warning(f"Eurostat PPI index ({key}) fetch failed: {e}")
+    return result
+
+
+def _fetch_eurostat_construction_index():
+    """Fetch EU27 construction quarterly index (2020=100)."""
+    indics = '&'.join(f'indic_bt={info["indic"]}' for info in EU_CONSTRUCTION.values())
+    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=I20&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
+    try:
+        resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
+        if resp.status_code == 200:
+            return _parse_eurostat_jsonstat(resp.json(), EU_CONSTRUCTION, 'indic_bt')
+    except Exception as e:
+        logger.warning(f"Eurostat construction index fetch failed: {e}")
+    return {}
+
+
+def _fetch_eurostat_lci_index():
+    """Fetch EU27 LCI quarterly index (2020=100)."""
+    naces = '&'.join(f'nace_r2={info["nace"]}' for info in EU_LCI.values())
+    url = f'{EUROSTAT_BASE}/lc_lci_r2_q?geo=EU27_2020&s_adj=SCA&lcstruct=D1_D4_MD5&unit=I20&freq=Q&sinceTimePeriod=2000-Q1&{naces}'
+    try:
+        resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
+        if resp.status_code == 200:
+            return _parse_eurostat_jsonstat(resp.json(), EU_LCI, 'nace_r2')
+    except Exception as e:
+        logger.warning(f"Eurostat LCI index fetch failed: {e}")
+    return {}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 4c — Shared helpers (QoQ computation, quarterly aggregation)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def aggregate_monthly_to_quarterly(points):
+    """Average monthly values into quarterly buckets. Works for both rates and indices."""
+    from collections import defaultdict
+    buckets = defaultdict(list)
+    for p in points:
+        q = (p['month'] - 1) // 3 + 1
+        key = (p['year'], q)
+        buckets[key].append(p['value'])
+    result = []
+    for (year, q), vals in sorted(buckets.items()):
+        avg = sum(vals) / len(vals)
+        result.append({
+            'year': year, 'month': q * 3, 'quarter': f'Q{q}',
+            'value': round(avg, 4), 'date': f'{year}-Q{q}'
+        })
+    return result
+
+
+def compute_qoq(raw_points, is_quarterly_native=False):
+    """Compute QoQ % change from raw index points.
+    Monthly → aggregate to quarterly first, then QoQ.
+    Quarterly → QoQ directly.
+    """
+    if not raw_points:
+        return []
+
+    if is_quarterly_native:
+        points = sorted(raw_points, key=lambda p: (p['year'], p['month']))
+    else:
+        points = aggregate_monthly_to_quarterly(raw_points)
+
+    # Build lookup by (year, quarter_num)
+    by_q = {}
+    for p in points:
+        q = int(p.get('quarter', f'Q{(p["month"] - 1) // 3 + 1}').replace('Q', ''))
+        by_q[(p['year'], q)] = p['value']
+
+    result = []
+    for p in points:
+        q = int(p.get('quarter', f'Q{(p["month"] - 1) // 3 + 1}').replace('Q', ''))
+        prev_q = q - 1
+        prev_year = p['year']
+        if prev_q == 0:
+            prev_q = 4
+            prev_year -= 1
+        prev_val = by_q.get((prev_year, prev_q))
+        if prev_val is not None and prev_val != 0:
+            qoq = ((p['value'] - prev_val) / abs(prev_val)) * 100
+            result.append({
+                'year': p['year'], 'month': p['month'],
+                'quarter': p.get('quarter', f'Q{q}'),
+                'value': round(qoq, 2),
+                'date': p.get('date', f'{p["year"]}-Q{q}'),
+            })
+    return result
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -442,39 +580,50 @@ def _fetch_construction_opi():
 def _fetch_all():
     """Fetch all insurance inflation series from ONS + Eurostat."""
     all_series = {}
+    all_series_raw = {}
     series_meta = {}
 
-    # ONS UK series
+    # ONS UK series (returns yoy + raw)
     logger.info("Fetching ONS insurance series...")
-    ons_data = _fetch_ons_series()
-    all_series.update(ons_data)
+    ons_yoy, ons_raw = _fetch_ons_series()
+    all_series.update(ons_yoy)
+    all_series_raw.update(ons_raw)
 
-    # ONS Construction OPI
+    # ONS Construction OPI (returns yoy + raw)
     logger.info("Fetching ONS Construction OPI...")
-    opi_data = _fetch_construction_opi()
-    all_series.update(opi_data)
+    opi_yoy, opi_raw = _fetch_construction_opi()
+    all_series.update(opi_yoy)
+    all_series_raw.update(opi_raw)
 
-    # Eurostat HICP
+    # Eurostat HICP (rates)
     logger.info("Fetching Eurostat HICP...")
-    hicp_data = _fetch_eurostat_hicp()
-    all_series.update(hicp_data)
+    all_series.update(_fetch_eurostat_hicp())
 
-    # Eurostat NL/IT legal
+    # Eurostat HICP (indices for QoQ)
+    logger.info("Fetching Eurostat HICP indices...")
+    all_series_raw.update(_fetch_eurostat_hicp_index())
+
+    # Eurostat NL/IT legal (rates + indices)
     logger.info("Fetching Eurostat NL/IT legal...")
     all_series.update(_fetch_eurostat_legal('NL', EU_LEGAL_NL))
     all_series.update(_fetch_eurostat_legal('IT', EU_LEGAL_IT))
+    all_series_raw.update(_fetch_eurostat_legal_index('NL', EU_LEGAL_NL))
+    all_series_raw.update(_fetch_eurostat_legal_index('IT', EU_LEGAL_IT))
 
-    # Eurostat PPI
+    # Eurostat PPI (rates + indices)
     logger.info("Fetching Eurostat PPI...")
     all_series.update(_fetch_eurostat_ppi())
+    all_series_raw.update(_fetch_eurostat_ppi_index())
 
-    # Eurostat Construction
+    # Eurostat Construction (rates + indices)
     logger.info("Fetching Eurostat Construction...")
     all_series.update(_fetch_eurostat_construction())
+    all_series_raw.update(_fetch_eurostat_construction_index())
 
-    # Eurostat LCI
+    # Eurostat LCI (rates + indices)
     logger.info("Fetching Eurostat LCI...")
     all_series.update(_fetch_eurostat_lci())
+    all_series_raw.update(_fetch_eurostat_lci_index())
 
     # Build series metadata
     all_defs = {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_PPI_SERIES}
@@ -513,6 +662,7 @@ def _fetch_all():
 
     return {
         'series': all_series,
+        'series_raw': all_series_raw,
         'categories': cats,
         'series_meta': series_meta,
         'meta': {
@@ -520,6 +670,7 @@ def _fetch_all():
             'description': 'Insurance/Reinsurance Inflation Indicators',
             'frequency': 'Monthly & Quarterly',
             'total_series': len(all_series),
+            'total_series_raw': len(all_series_raw),
             'last_updated': datetime.utcnow().isoformat(),
         }
     }
@@ -560,6 +711,7 @@ _cache = InsuranceInflationCache()
 def _empty_result():
     return {
         'series': {},
+        'series_raw': {},
         'categories': CATEGORY_MAP,
         'series_meta': {},
         'meta': {'source': 'ONS, Eurostat', 'error': 'No data available'},
