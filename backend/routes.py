@@ -1532,6 +1532,7 @@ def export_insurance_inflation_excel():
 
     header_font = Font(bold=True, color='FFFFFF', size=11)
     header_fill = PatternFill(start_color='1F3864', end_color='1F3864', fill_type='solid')
+    alt_fill = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
 
     wb = Workbook()
     first = True
@@ -1539,6 +1540,11 @@ def export_insurance_inflation_excel():
     for cat_key, cat_info in categories.items():
         cat_series = cat_info.get('series', [])
         if not cat_series:
+            continue
+
+        # Filter to series that actually have data
+        active_series = [(k, meta.get(k, {})) for k in cat_series if series.get(k)]
+        if not active_series:
             continue
 
         if first:
@@ -1551,41 +1557,66 @@ def export_insurance_inflation_excel():
         # Title
         ws.cell(row=1, column=1, value=f'{cat_info["label"]} — Insurance Inflation Indicators')
         ws.cell(row=1, column=1).font = Font(bold=True, size=14, color='1F3864')
-        ws.cell(row=2, column=1, value='YoY % Change. Source: ONS, Eurostat')
+        ws.cell(row=2, column=1, value='YoY % Change. Source: ONS, Eurostat. Auto-refreshes every 24h.')
         ws.cell(row=2, column=1).font = Font(italic=True, size=10, color='6B7280')
 
-        # One section per series
+        # Collect all unique dates across all series in this category
+        all_dates = set()
+        for s_key, _ in active_series:
+            for pt in series.get(s_key, []):
+                all_dates.add(pt['date'])
+        sorted_dates = sorted(all_dates)
+
+        # Build lookup: {series_key: {date: value}}
+        lookups = {}
+        for s_key, _ in active_series:
+            lookups[s_key] = {pt['date']: pt['value'] for pt in series.get(s_key, [])}
+
+        # Header row: Date | Series1 | Series2 | ...
         row_num = 4
-        for s_key in cat_series:
-            points = series.get(s_key, [])
-            s_meta = meta.get(s_key, {})
-            if not points:
-                continue
+        ws.cell(row=row_num, column=1, value='Date').font = header_font
+        ws.cell(row=row_num, column=1).fill = header_fill
+        for col, (s_key, s_meta) in enumerate(active_series, 2):
+            approx = ' *' if s_meta.get('approximate') else ''
+            cell = ws.cell(row=row_num, column=col, value=f'{s_meta.get("label", s_key)}{approx}')
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center', wrap_text=True)
 
-            ws.cell(row=row_num, column=1, value=s_meta.get('label', s_key))
-            ws.cell(row=row_num, column=1).font = Font(bold=True, size=11)
-            approx_note = ' (approximate)' if s_meta.get('approximate') else ''
-            ws.cell(row=row_num, column=2, value=f'{s_meta.get("source", "")} | {s_meta.get("freq", "M")}{approx_note}')
-            ws.cell(row=row_num, column=2).font = Font(italic=True, size=9, color='6B7280')
+        # Source row
+        row_num += 1
+        ws.cell(row=row_num, column=1, value='Source').font = Font(italic=True, size=9, color='6B7280')
+        for col, (s_key, s_meta) in enumerate(active_series, 2):
+            ws.cell(row=row_num, column=col, value=f'{s_meta.get("source", "")} ({s_meta.get("freq", "M")})').font = Font(italic=True, size=9, color='6B7280')
+
+        # Data rows: one row per date, all series as columns
+        row_num += 1
+        for i, date_str in enumerate(sorted_dates):
+            ws.cell(row=row_num, column=1, value=date_str)
+            fill = alt_fill if i % 2 == 0 else None
+            if fill:
+                ws.cell(row=row_num, column=1).fill = fill
+            for col, (s_key, _) in enumerate(active_series, 2):
+                val = lookups[s_key].get(date_str)
+                cell = ws.cell(row=row_num, column=col)
+                if val is not None:
+                    cell.value = val
+                    cell.number_format = '0.00'
+                if fill:
+                    cell.fill = fill
             row_num += 1
 
-            # Headers
-            for c, h in enumerate(['Date', 'YoY % Change'], 1):
-                cell = ws.cell(row=row_num, column=c, value=h)
-                cell.font = header_font
-                cell.fill = header_fill
+        # Column widths
+        ws.column_dimensions['A'].width = 12
+        from openpyxl.utils import get_column_letter
+        for col in range(2, len(active_series) + 2):
+            ws.column_dimensions[get_column_letter(col)].width = 22
+
+        # Footnote for approximate series
+        has_approx = any(m.get('approximate') for _, m in active_series)
+        if has_approx:
             row_num += 1
-
-            for pt in points:
-                ws.cell(row=row_num, column=1, value=pt['date'])
-                ws.cell(row=row_num, column=2, value=pt['value'])
-                ws.cell(row=row_num, column=2).number_format = '0.00'
-                row_num += 1
-
-            row_num += 1  # blank row between series
-
-        ws.column_dimensions['A'].width = 20
-        ws.column_dimensions['B'].width = 40
+            ws.cell(row=row_num, column=1, value='* Approximate proxy (nearest available COICOP code)').font = Font(italic=True, size=9, color='6B7280')
 
     output = BytesIO()
     wb.save(output)
