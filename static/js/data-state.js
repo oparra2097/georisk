@@ -130,7 +130,7 @@ window.ParraData.navigate = function (categoryId, datasetId, subviewId) {
 
     state.category = categoryId;
     state.dataset = datasetId;
-    state.subview = subviewId || null;
+    state.subview = subviewId || (datasetId === 'insurance-inflation' ? 'medical' : null);
 
     // Reset controls when switching datasets
     if (prevDataset !== datasetId) {

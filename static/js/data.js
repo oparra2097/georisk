@@ -3049,8 +3049,7 @@
                     }
                 }
             });
-            PD._charts = PD._charts || {};
-            PD._charts['main'] = chart;
+            PD.charts['main'] = chart;
         }
 
         // Render data table
@@ -3068,7 +3067,7 @@
             const meta = seriesMeta[key] || {};
             const points = _insGetPoints(key, data, freq, comp);
             const latest = points.length ? points[points.length - 1] : null;
-            const approx = meta.approximate ? ' <span style="color:#eab308;font-size:10px;">(approx)</span>' : '';
+            const approx = '';
             const bg = i % 2 === 0 ? 'background:rgba(15,23,42,0.25);' : '';
 
             tbHtml += `<tr style="border-bottom:1px solid #1e293b;${bg}">
