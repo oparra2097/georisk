@@ -76,7 +76,10 @@
             // Only show categories that have datasets
             if (!cat.datasets || cat.datasets.length === 0) continue;
 
-            html += '<div class="sidebar-category-heading">' + cat.icon + ' ' + cat.label + '</div>';
+            const lockIcon = cat.requiresAuth && !PD.isAuthenticated
+                ? ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;vertical-align:-1px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'
+                : '';
+            html += '<div class="sidebar-category-heading">' + cat.icon + ' ' + cat.label + lockIcon + '</div>';
             for (const ds of cat.datasets) {
                 const isActive = state.category === cat.id && state.dataset === ds.id;
                 html += '<button class="sidebar-item' + (isActive ? ' active' : '') +
@@ -366,6 +369,12 @@
 
         try {
             const resp = await fetch(url);
+            if (resp.status === 401) {
+                delete PD._fetching[url];
+                try { const body = await resp.json(); if (body.login_url) { window.location.href = body.login_url; return; } } catch(e) {}
+                window.location.href = '/auth/login';
+                return;
+            }
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
             PD.setCached(url, data);
@@ -403,6 +412,7 @@
             case 'sovereign-debt': renderSovereignDebt(ds); break;
             case 'fertilizer-em': renderFertilizerEM(ds); break;
             case 'cofer-nowcast': renderCoferNowcast(ds); break;
+            case 'insurance-inflation': renderInsuranceInflation(ds); break;
         }
     }
 
@@ -2862,5 +2872,157 @@
         panel.innerHTML = html;
     }
 
+
+    // ══════════════════════════════════════════════════════
+    // INSURANCE / REINSURANCE INFLATION (LOGIN-GATED)
+    // ══════════════════════════════════════════════════════
+
+    function renderInsuranceInflation(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || !data.series) {
+            // Check for 401
+            const panel = document.getElementById('active-panel');
+            if (panel) panel.innerHTML = '<div style="padding:40px;text-align:center;"><p style="color:#94a3b8;">Loading insurance inflation data...</p><p style="color:#64748b;font-size:12px;">If you are not logged in, <a href="/auth/login" style="color:#3b82f6;">sign in here</a>.</p></div>';
+            return;
+        }
+
+        const panel = document.getElementById('active-panel');
+        const subview = state.subview || 'medical';
+        const categories = data.categories || {};
+        const catInfo = categories[subview];
+        if (!catInfo) return;
+
+        const seriesKeys = catInfo.series || [];
+        const allSeries = data.series || {};
+        const seriesMeta = data.series_meta || {};
+
+        // Header with export button
+        const exportBtn = ds.exportUrl
+            ? `<a href="${ds.exportUrl}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='#334155';this.style.color='#f1f5f9'" onmouseout="this.style.background='#1e293b';this.style.color='#94a3b8'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel</a>`
+            : '';
+
+        panel.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
+                <div>
+                    <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0;">${catInfo.label}</h2>
+                    <p style="color:#64748b;font-size:12px;margin:4px 0 0;">ONS & Eurostat — YoY % Change | ${seriesKeys.length} series</p>
+                </div>
+                ${exportBtn}
+            </div>
+            <div style="height:400px;position:relative;margin-bottom:20px;">
+                <canvas id="ins-chart"></canvas>
+            </div>
+            <div id="ins-table"></div>
+        `;
+
+        // Build Chart.js datasets
+        const COLORS_FALLBACK = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#06b6d4','#f97316','#e11d48','#84cc16','#64748b','#fbbf24','#a855f7'];
+        const chartDatasets = [];
+
+        seriesKeys.forEach((key, i) => {
+            const points = allSeries[key] || [];
+            const meta = seriesMeta[key] || {};
+            if (!points.length) return;
+
+            chartDatasets.push({
+                label: meta.label || key,
+                data: points.map(p => ({ x: p.date, y: p.value })),
+                borderColor: meta.color || COLORS_FALLBACK[i % COLORS_FALLBACK.length],
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                fill: false,
+                pointRadius: 0,
+                pointHitRadius: 8,
+                tension: 0.3,
+                borderDash: meta.approximate ? [5, 5] : [],
+            });
+        });
+
+        const canvas = document.getElementById('ins-chart');
+        if (canvas && chartDatasets.length > 0) {
+            PD.destroyChart('insurance');
+            const ctx = canvas.getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'line',
+                data: { datasets: chartDatasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 20, padding: 12 }
+                        },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleColor: '#f1f5f9',
+                            bodyColor: '#94a3b8',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) + '%' : '—'}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 20 },
+                            grid: { color: '#1e293b' }
+                        },
+                        y: {
+                            ticks: {
+                                color: '#64748b',
+                                font: { size: 10 },
+                                callback: v => v.toFixed(0) + '%'
+                            },
+                            grid: { color: '#1e293b' }
+                        }
+                    }
+                }
+            });
+            PD._charts = PD._charts || {};
+            PD._charts['insurance'] = chart;
+        }
+
+        // Data table — latest values
+        let tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+                <tr style="background:#1e293b;color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
+                    <th style="padding:10px 8px;text-align:left;">Series</th>
+                    <th style="padding:10px 8px;text-align:center;">Source</th>
+                    <th style="padding:10px 8px;text-align:center;">Freq</th>
+                    <th style="padding:10px 8px;text-align:center;">Latest</th>
+                    <th style="padding:10px 8px;text-align:center;">Date</th>
+                    <th style="padding:10px 8px;text-align:center;">Data Points</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+        seriesKeys.forEach((key, i) => {
+            const points = allSeries[key] || [];
+            const meta = seriesMeta[key] || {};
+            const latest = points.length ? points[points.length - 1] : null;
+            const approxTag = meta.approximate ? ' <span style="color:#eab308;font-size:10px;">(approx)</span>' : '';
+            const fill = i % 2 === 0 ? 'background:#0f172a44;' : '';
+
+            tableHtml += `<tr style="border-bottom:1px solid #1e293b;${fill}">
+                <td style="padding:8px;color:#f1f5f9;">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${meta.color || '#94a3b8'};margin-right:8px;"></span>
+                    ${meta.label || key}${approxTag}
+                </td>
+                <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${meta.source || ''}</td>
+                <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${meta.freq || 'M'}</td>
+                <td style="padding:8px;text-align:center;color:${latest && latest.value > 0 ? '#ef4444' : '#10b981'};font-weight:600;">${latest ? latest.value.toFixed(1) + '%' : '—'}</td>
+                <td style="padding:8px;text-align:center;color:#94a3b8;font-size:12px;">${latest ? latest.date : '—'}</td>
+                <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${points.length}</td>
+            </tr>`;
+        });
+
+        tableHtml += '</tbody></table>';
+        const tableEl = document.getElementById('ins-table');
+        if (tableEl) tableEl.innerHTML = tableHtml;
+    }
 
 })();

@@ -525,6 +525,35 @@ window.ParraData.CATALOG = {
                 },
             ],
         },
+        {
+            id: 'insurance',
+            label: 'Insurance Inflation',
+            icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+            requiresAuth: true,
+            datasets: [
+                {
+                    id: 'insurance-inflation',
+                    label: 'Insurance / Reinsurance Inflation',
+                    source: 'ONS, Eurostat',
+                    sourceDetail: 'UK & EU Insurance Line Inflation Indicators (YoY %)',
+                    api: '/api/insurance-inflation',
+                    exportUrl: '/api/insurance-inflation/export',
+                    type: 'insurance-inflation',
+                    controls: [],
+                    subviews: [
+                        { id: 'medical',       label: 'Medical' },
+                        { id: 'legal',         label: 'Legal' },
+                        { id: 'insurance',     label: 'Insurance' },
+                        { id: 'bodily_injury', label: 'Bodily Injury' },
+                        { id: 'fire_allied',   label: 'Fire & Allied' },
+                        { id: 'auto_physical', label: 'Auto Phys. Damage' },
+                    ],
+                    searchTerms: ['insurance', 'reinsurance', 'bodily injury', 'fire', 'auto physical damage',
+                        'medical inflation', 'legal costs', 'claims inflation', 'loss cost',
+                        'CPIH', 'AWE', 'PPI', 'SPPI', 'HICP', 'LCI', 'Netherlands', 'Italy'],
+                },
+            ],
+        },
     ],
 };
 

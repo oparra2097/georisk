@@ -14,6 +14,8 @@ from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
 from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
+from backend.data_sources.insurance_inflation import get_insurance_inflation_data
+from flask_login import login_required
 from backend.cache.database import get_country_history, get_all_history, detect_anomalies, get_score_count
 from config import Config
 
@@ -1498,4 +1500,101 @@ def export_fertilizer_em_inflation_excel():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'fertilizer_em_inflation_{today}.xlsx'
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# INSURANCE / REINSURANCE INFLATION (LOGIN REQUIRED)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_bp.route('/insurance-inflation')
+@login_required
+def get_insurance_inflation():
+    """Return insurance/reinsurance inflation data (login required)."""
+    data = get_insurance_inflation_data()
+    return jsonify(data)
+
+
+@api_bp.route('/insurance-inflation/export')
+@login_required
+def export_insurance_inflation_excel():
+    """Generate Excel file with insurance inflation data (login required)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    data = get_insurance_inflation_data()
+    series = data.get('series', {})
+    categories = data.get('categories', {})
+    meta = data.get('series_meta', {})
+
+    if not series:
+        return jsonify({'error': 'No insurance inflation data available'}), 404
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F3864', end_color='1F3864', fill_type='solid')
+
+    wb = Workbook()
+    first = True
+
+    for cat_key, cat_info in categories.items():
+        cat_series = cat_info.get('series', [])
+        if not cat_series:
+            continue
+
+        if first:
+            ws = wb.active
+            ws.title = cat_info['label']
+            first = False
+        else:
+            ws = wb.create_sheet(cat_info['label'])
+
+        # Title
+        ws.cell(row=1, column=1, value=f'{cat_info["label"]} — Insurance Inflation Indicators')
+        ws.cell(row=1, column=1).font = Font(bold=True, size=14, color='1F3864')
+        ws.cell(row=2, column=1, value='YoY % Change. Source: ONS, Eurostat')
+        ws.cell(row=2, column=1).font = Font(italic=True, size=10, color='6B7280')
+
+        # One section per series
+        row_num = 4
+        for s_key in cat_series:
+            points = series.get(s_key, [])
+            s_meta = meta.get(s_key, {})
+            if not points:
+                continue
+
+            ws.cell(row=row_num, column=1, value=s_meta.get('label', s_key))
+            ws.cell(row=row_num, column=1).font = Font(bold=True, size=11)
+            approx_note = ' (approximate)' if s_meta.get('approximate') else ''
+            ws.cell(row=row_num, column=2, value=f'{s_meta.get("source", "")} | {s_meta.get("freq", "M")}{approx_note}')
+            ws.cell(row=row_num, column=2).font = Font(italic=True, size=9, color='6B7280')
+            row_num += 1
+
+            # Headers
+            for c, h in enumerate(['Date', 'YoY % Change'], 1):
+                cell = ws.cell(row=row_num, column=c, value=h)
+                cell.font = header_font
+                cell.fill = header_fill
+            row_num += 1
+
+            for pt in points:
+                ws.cell(row=row_num, column=1, value=pt['date'])
+                ws.cell(row=row_num, column=2, value=pt['value'])
+                ws.cell(row=row_num, column=2).number_format = '0.00'
+                row_num += 1
+
+            row_num += 1  # blank row between series
+
+        ws.column_dimensions['A'].width = 20
+        ws.column_dimensions['B'].width = 40
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'insurance_inflation_{today}.xlsx'
     )

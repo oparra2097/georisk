@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Login - Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+    .auth-container { display: flex; justify-content: center; align-items: center; min-height: 70vh; padding: 20px; }
+    .auth-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 40px; width: 100%; max-width: 400px; }
+    .auth-title { color: #f1f5f9; font-size: 24px; font-weight: 700; margin: 0 0 8px; }
+    .auth-subtitle { color: #64748b; font-size: 14px; margin: 0 0 24px; }
+    .auth-label { display: block; color: #94a3b8; font-size: 13px; margin-bottom: 6px; }
+    .auth-input { width: 100%; padding: 10px 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f1f5f9; font-size: 14px; margin-bottom: 16px; box-sizing: border-box; }
+    .auth-input:focus { outline: none; border-color: #3b82f6; }
+    .auth-btn { width: 100%; padding: 12px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .auth-btn:hover { background: #2563eb; }
+    .auth-link { color: #3b82f6; text-decoration: none; font-size: 13px; }
+    .auth-link:hover { text-decoration: underline; }
+    .auth-footer { text-align: center; margin-top: 16px; color: #64748b; font-size: 13px; }
+    .auth-flash { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+    .auth-flash.error { background: #ef444422; color: #fca5a5; border: 1px solid #ef444444; }
+    .auth-flash.success { background: #10b98122; color: #6ee7b7; border: 1px solid #10b98144; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <h1 class="auth-title">Sign In</h1>
+        <p class="auth-subtitle">Access insurance inflation data and analytics</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="auth-flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <label class="auth-label" for="email">Email</label>
+            <input class="auth-input" type="email" id="email" name="email" required autofocus>
+
+            <label class="auth-label" for="password">Password</label>
+            <input class="auth-input" type="password" id="password" name="password" required>
+
+            <button class="auth-btn" type="submit">Sign In</button>
+        </form>
+
+        <div class="auth-footer">
+            Don't have an account? <a href="/auth/register" class="auth-link">Register</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
