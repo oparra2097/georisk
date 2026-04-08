@@ -23,16 +23,23 @@ def _ensure_yfinance():
 
 
 SYMBOLS = {
-    '^GSPC':    {'name': 'S&P 500',        'type': 'index'},
-    '^IXIC':    {'name': 'NASDAQ',          'type': 'index'},
-    '^N225':    {'name': 'Nikkei 225',      'type': 'index'},
-    'GC=F':     {'name': 'Gold',            'type': 'commodity'},
-    'CL=F':     {'name': 'WTI Crude Oil',   'type': 'commodity'},
-    'NG=F':     {'name': 'Natural Gas',     'type': 'commodity'},
-    '^TNX':     {'name': 'US 10Y Treasury', 'type': 'bond'},
-    '^FVX':     {'name': 'US 5Y Treasury',  'type': 'bond'},
-    '^IRX':     {'name': 'US 3M Treasury', 'type': 'bond'},
-    'EURUSD=X': {'name': 'EUR/USD',         'type': 'fx'},
+    # Equity
+    '^GSPC':    {'name': 'S&P 500',          'type': 'equity'},
+    '^IXIC':    {'name': 'NASDAQ',            'type': 'equity'},
+    '^N225':    {'name': 'Nikkei 225',        'type': 'equity'},
+    # Commodities
+    'GC=F':     {'name': 'Gold',              'type': 'commodity'},
+    'CL=F':     {'name': 'WTI Crude',         'type': 'commodity'},
+    'BZ=F':     {'name': 'Brent Crude',       'type': 'commodity'},
+    'NG=F':     {'name': 'Natural Gas',       'type': 'commodity'},
+    # Fixed Income
+    '^TNX':     {'name': 'US 10Y Treasury',   'type': 'bond'},
+    '^FVX':     {'name': 'US 5Y Treasury',    'type': 'bond'},
+    '^IRX':     {'name': 'US 3M Treasury',    'type': 'bond'},
+    # FX
+    'EURUSD=X': {'name': 'EUR/USD',           'type': 'fx'},
+    # Indicators
+    '^VIX':     {'name': 'VIX',               'type': 'indicator'},
 }
 
 CACHE_TTL = 300  # 5 minutes

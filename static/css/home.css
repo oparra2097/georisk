@@ -126,6 +126,21 @@
     gap: 12px;
 }
 
+.market-category-label {
+    grid-column: 1 / -1;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    padding: 8px 0 2px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: -4px;
+}
+.market-category-label:first-child {
+    padding-top: 0;
+}
+
 .market-card {
     background: var(--bg-secondary);
     border: 1px solid var(--border);

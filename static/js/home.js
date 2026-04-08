@@ -79,22 +79,44 @@ function tickerItemHTML(m) {
 }
 
 
-// ===== Market Grid =====
+// ===== Market Grid (category-grouped) =====
+
+const MARKET_CATEGORIES = [
+    { key: 'equity',    label: 'Equity' },
+    { key: 'commodity', label: 'Commodities' },
+    { key: 'bond',      label: 'Fixed Income' },
+    { key: 'other',     label: 'Indicators' },
+];
 
 function renderMarketGrid(markets) {
     const grid = document.getElementById('market-grid');
     if (!grid) return;
 
     grid.innerHTML = '';
-    markets.forEach(m => {
-        const card = document.createElement('div');
-        card.className = 'market-card';
-        card.dataset.symbol = m.symbol;
-        card.innerHTML = marketCardHTML(m);
-        card.addEventListener('click', () => onMarketCardClick(m));
-        card.style.cursor = 'pointer';
-        grid.appendChild(card);
-    });
+
+    for (const cat of MARKET_CATEGORIES) {
+        const items = markets.filter(m =>
+            cat.key === 'other'
+                ? ['indicator', 'spread', 'fx'].includes(m.type)
+                : m.type === cat.key
+        );
+        if (items.length === 0) continue;
+
+        const label = document.createElement('div');
+        label.className = 'market-category-label';
+        label.textContent = cat.label;
+        grid.appendChild(label);
+
+        items.forEach(m => {
+            const card = document.createElement('div');
+            card.className = 'market-card';
+            card.dataset.symbol = m.symbol;
+            card.innerHTML = marketCardHTML(m);
+            card.addEventListener('click', () => onMarketCardClick(m));
+            card.style.cursor = 'pointer';
+            grid.appendChild(card);
+        });
+    }
 }
 
 function marketCardHTML(m) {
@@ -294,6 +316,7 @@ function renderHistoryChart(data) {
                             if (data.type === 'bond' || data.type === 'spread') return val.toFixed(3) + '%';
                             if (data.type === 'fx') return val.toFixed(4);
                             if (data.type === 'commodity') return '$' + val.toFixed(2);
+                            // equity, indicator, and anything else
                             return val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                         }
                     }
@@ -365,7 +388,8 @@ function formatPrice(price, type) {
     if (price === null || price === undefined) return '--';
 
     switch (type) {
-        case 'index':
+        case 'equity':
+        case 'indicator':
             return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         case 'commodity':
             return '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
