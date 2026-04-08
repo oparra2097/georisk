@@ -4,8 +4,14 @@ services:
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:create_app() --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    disk:
+      name: georisk-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: NEWSAPI_KEY
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: DATA_DIR
+        value: /data
