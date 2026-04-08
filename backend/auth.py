@@ -98,41 +98,49 @@ def user_loader(user_id):
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
+    try:
+        if request.method == 'POST':
+            email = request.form.get('email', '').strip().lower()
+            password = request.form.get('password', '')
 
-        user = User.get_by_email(email)
-        if user and user.check_password(password):
-            login_user(user, remember=True)
-            next_page = request.args.get('next', '/data')
-            return redirect(next_page)
+            user = User.get_by_email(email)
+            if user and user.check_password(password):
+                login_user(user, remember=True)
+                next_page = request.args.get('next', '/data')
+                return redirect(next_page)
 
-        flash('Invalid email or password.', 'error')
+            flash('Invalid email or password.', 'error')
 
-    return render_template('login.html', active_page='data')
+        return render_template('login.html', active_page='data')
+    except Exception as e:
+        logger.error(f"Login error: {e}", exc_info=True)
+        return f"Login error: {e}", 500
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        confirm = request.form.get('confirm', '')
+    try:
+        if request.method == 'POST':
+            email = request.form.get('email', '').strip().lower()
+            password = request.form.get('password', '')
+            confirm = request.form.get('confirm', '')
 
-        if not email or not password:
-            flash('Email and password are required.', 'error')
-        elif password != confirm:
-            flash('Passwords do not match.', 'error')
-        elif len(password) < 8:
-            flash('Password must be at least 8 characters.', 'error')
-        elif User.create(email, password):
-            flash('Account created. Please log in.', 'success')
-            return redirect(url_for('auth.login'))
-        else:
-            flash('An account with that email already exists.', 'error')
+            if not email or not password:
+                flash('Email and password are required.', 'error')
+            elif password != confirm:
+                flash('Passwords do not match.', 'error')
+            elif len(password) < 8:
+                flash('Password must be at least 8 characters.', 'error')
+            elif User.create(email, password):
+                flash('Account created. Please log in.', 'success')
+                return redirect(url_for('auth.login'))
+            else:
+                flash('An account with that email already exists.', 'error')
 
-    return render_template('register.html', active_page='data')
+        return render_template('register.html', active_page='data')
+    except Exception as e:
+        logger.error(f"Register error: {e}", exc_info=True)
+        return f"Register error: {e}", 500
 
 
 @auth_bp.route('/logout')
