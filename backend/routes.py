@@ -1614,7 +1614,8 @@ def export_insurance_inflation_excel():
         row_num += 1
         ws.cell(row=row_num, column=1, value='Source').font = Font(italic=True, size=9, color='6B7280')
         for col, (s_key, s_meta) in enumerate(active_series, 2):
-            ws.cell(row=row_num, column=col, value=f'{s_meta.get("source", "")} ({s_meta.get("freq", "M")})').font = Font(italic=True, size=9, color='6B7280')
+            display_freq = 'Q' if freq == 'quarterly' or comparison == 'qoq' else s_meta.get('freq', 'M')
+            ws.cell(row=row_num, column=col, value=f'{s_meta.get("source", "")} ({display_freq})').font = Font(italic=True, size=9, color='6B7280')
 
         # Data rows: one row per date, all series as columns
         row_num += 1

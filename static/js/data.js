@@ -3076,7 +3076,7 @@
                     ${meta.label || key}${approx}
                 </td>
                 <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${meta.source || ''}</td>
-                <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${meta.freq || 'M'}</td>
+                <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${(freq === 'quarterly' || comp === 'qoq') ? 'Q' : (meta.freq || 'M')}</td>
                 <td style="padding:8px;text-align:center;color:${latest && latest.value > 0 ? '#ef4444' : '#10b981'};font-weight:600;">${latest ? latest.value.toFixed(1) + '%' : '—'}</td>
                 <td style="padding:8px;text-align:center;color:#94a3b8;font-size:12px;">${latest ? latest.date : '—'}</td>
                 <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${points.length}</td>
