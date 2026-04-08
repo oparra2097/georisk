@@ -5,6 +5,12 @@ load_dotenv()
 
 
 class Config:
+    # --- Security ---
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'parra-macro-dev-key-change-in-production')
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+
     # --- API Keys (set as env vars on Render) ---
     NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY', '')
     NEWSDATA_KEY = os.environ.get('NEWSDATA_KEY', '')
