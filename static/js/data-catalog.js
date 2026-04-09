@@ -534,8 +534,8 @@ window.ParraData.CATALOG = {
                 {
                     id: 'insurance-inflation',
                     label: 'Insurance / Reinsurance Inflation',
-                    source: 'ONS, Eurostat',
-                    sourceDetail: 'UK & EU Insurance Line Inflation Indicators (YoY %)',
+                    source: 'BLS, ONS, Eurostat',
+                    sourceDetail: 'US, UK & EU Insurance Line Inflation Indicators',
                     api: '/api/insurance-inflation',
                     exportUrl: '/api/insurance-inflation/export',
                     type: 'insurance-inflation',

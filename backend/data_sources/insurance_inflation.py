@@ -105,6 +105,42 @@ EU_LCI = {
     'eu_lci_transport':    {'nace': 'H',   'label': 'EU LCI: Transport & Storage',    'color': '#d8b4fe', 'category': 'auto_physical'},
 }
 
+# ── US BLS series ────────────────────────────────────────────────────────────
+# CPI-U, PPI, and CES/AWE series from Bureau of Labor Statistics API v2
+# All return index values — YoY computed in backend via _compute_yoy()
+BLS_API_URL = 'https://api.bls.gov/publicAPI/v2/timeseries/data/'
+
+BLS_SERIES = {
+    # Medical (CPI-U)
+    'us_physicians':     {'bls_id': 'CUSR0000SEMC01', 'label': 'US CPI: Physicians\' Services',         'color': '#dc2626', 'category': 'medical'},
+    'us_hospital':       {'bls_id': 'CUSR0000SEMD01', 'label': 'US CPI: Hospital Services',              'color': '#b91c1c', 'category': 'medical'},
+    'us_drugs':          {'bls_id': 'CUSR0000SEMF',   'label': 'US CPI: Medicinal Drugs',                'color': '#991b1b', 'category': 'medical'},
+    'us_med_equip':      {'bls_id': 'CUUR0000SEMG',   'label': 'US CPI: Medical Equipment & Supplies',   'color': '#7f1d1d', 'category': 'medical'},
+    'us_dental':         {'bls_id': 'CUSR0000SEMC02', 'label': 'US CPI: Dental Services',                'color': '#450a0a', 'category': 'medical'},
+    'us_nursing':        {'bls_id': 'CUSR0000SEMD02', 'label': 'US CPI: Nursing Homes & Adult Daycare',  'color': '#fee2e2', 'category': 'medical'},
+    'us_other_med':      {'bls_id': 'CUSR0000SEMC04', 'label': 'US CPI: Other Medical Professionals',    'color': '#fecaca', 'category': 'medical'},
+    # Fire & Allied (CPI + PPI)
+    'us_household_ops':  {'bls_id': 'CUUR0000SEHP',   'label': 'US CPI: Household Operations',           'color': '#065f46', 'category': 'fire_allied'},
+    'us_ppi_cement':     {'bls_id': 'WPU1322',        'label': 'US PPI: Cement, Hydraulic',              'color': '#047857', 'category': 'fire_allied'},
+    'us_ppi_glass':      {'bls_id': 'WPU1311',        'label': 'US PPI: Flat Glass',                     'color': '#059669', 'category': 'fire_allied'},
+    'us_ppi_construction': {'bls_id': 'WPUFD43',      'label': 'US PPI: Final Demand Construction',      'color': '#0d9488', 'category': 'fire_allied'},
+    'us_ppi_bldg_maint': {'bls_id': 'PCU2381MR2381MR','label': 'US PPI: Nonresidential Bldg Maint & Repair', 'color': '#14b8a6', 'category': 'fire_allied'},
+    # Auto Physical Damage (CPI + PPI)
+    'us_vehicle_maint':  {'bls_id': 'CUSR0000SETD',   'label': 'US CPI: Motor Vehicle Maint & Repair',   'color': '#0e7490', 'category': 'auto_physical'},
+    'us_ppi_auto_parts': {'bls_id': 'WPU1412',        'label': 'US PPI: Motor Vehicle Parts',            'color': '#0891b2', 'category': 'auto_physical'},
+    # Bodily Injury / Workers Comp (CES AWE by industry)
+    'us_awe_total':      {'bls_id': 'CES0500000011',  'label': 'US AWE: Total Private',                  'color': '#1d4ed8', 'category': 'bodily_injury'},
+    'us_awe_mfg':        {'bls_id': 'CES3000000011',  'label': 'US AWE: Manufacturing',                  'color': '#2563eb', 'category': 'bodily_injury'},
+    'us_awe_construction': {'bls_id': 'CES2000000011', 'label': 'US AWE: Construction',                  'color': '#3b82f6', 'category': 'bodily_injury'},
+    'us_awe_transport':  {'bls_id': 'CES4300000011',  'label': 'US AWE: Transportation & Warehousing',   'color': '#60a5fa', 'category': 'bodily_injury'},
+    'us_awe_wholesale':  {'bls_id': 'CES4142000011',  'label': 'US AWE: Wholesale Trade',                'color': '#93c5fd', 'category': 'bodily_injury'},
+    'us_awe_finance':    {'bls_id': 'CES5500000011',  'label': 'US AWE: Financial Activities',           'color': '#7c3aed', 'category': 'insurance'},
+    'us_awe_prof_biz':   {'bls_id': 'CES6000000011',  'label': 'US AWE: Professional & Business Svcs',   'color': '#8b5cf6', 'category': 'legal'},
+    'us_awe_ed_health':  {'bls_id': 'CES6500000011',  'label': 'US AWE: Education & Health Services',    'color': '#a78bfa', 'category': 'bodily_injury'},
+    'us_awe_leisure':    {'bls_id': 'CES7000000011',  'label': 'US AWE: Leisure & Hospitality',          'color': '#c4b5fd', 'category': 'bodily_injury'},
+    'us_awe_other_svc':  {'bls_id': 'CES8000000011',  'label': 'US AWE: Other Services',                 'color': '#ddd6fe', 'category': 'auto_physical'},
+}
+
 # ── Category definitions ─────────────────────────────────────────────────────
 CATEGORIES = {
     'medical':        {'label': 'Medical',              'series': []},
@@ -118,7 +154,7 @@ CATEGORIES = {
 # Build category → series lists from all definitions
 def _build_category_map():
     cats = {k: {'label': v['label'], 'series': []} for k, v in CATEGORIES.items()}
-    for key, info in {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_PPI_SERIES, **EU_CONSTRUCTION, **EU_LCI}.items():
+    for key, info in {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_PPI_SERIES, **EU_CONSTRUCTION, **EU_LCI, **BLS_SERIES}.items():
         cat = info.get('category')
         if cat and cat in cats:
             cats[cat]['series'].append(key)
@@ -214,6 +250,86 @@ def _fetch_ons_series():
                 yoy_data[key] = _compute_yoy(points)
         except Exception as e:
             logger.warning(f"ONS fetch failed for {key}: {e}")
+
+    return yoy_data, raw_data
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 2b — US BLS fetching (CPI-U, PPI, CES/AWE)
+# ══════════════════════════════════════════════════════════════════════════════
+
+BLS_PERIOD_MAP = {f'M{str(i).zfill(2)}': i for i in range(1, 13)}
+
+
+def _fetch_bls_series():
+    """Fetch all US BLS insurance series via API v2. Returns (yoy_dict, raw_dict)."""
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    from config import Config
+    api_key = Config.BLS_API_KEY
+    current_year = datetime.utcnow().year
+    start_year = current_year - (20 if api_key else 10)
+
+    # Build list of all BLS series IDs
+    series_ids = [info['bls_id'] for info in BLS_SERIES.values()]
+    id_to_key = {info['bls_id']: key for key, info in BLS_SERIES.items()}
+
+    # BLS API allows max 50 series per request (we have ~25, fits in one call)
+    payload = {
+        'seriesid': series_ids,
+        'startyear': str(start_year),
+        'endyear': str(current_year),
+    }
+    if api_key:
+        payload['registrationkey'] = api_key
+
+    yoy_data = {}
+    raw_data = {}
+
+    try:
+        resp = requests.post(BLS_API_URL, json=payload,
+                             headers={'Content-Type': 'application/json'},
+                             timeout=60, verify=False)
+        resp.raise_for_status()
+        result = resp.json()
+
+        if result.get('status') != 'REQUEST_SUCCEEDED':
+            logger.warning(f"BLS API error: {result.get('message', 'Unknown')}")
+            return {}, {}
+
+        for series in result.get('Results', {}).get('series', []):
+            series_id = series.get('seriesID', '')
+            key = id_to_key.get(series_id)
+            if not key:
+                continue
+
+            points = []
+            for item in series.get('data', []):
+                period = item.get('period', '')
+                if period not in BLS_PERIOD_MAP:
+                    continue
+                value = item.get('value', '')
+                if value == '-' or value == '':
+                    continue
+                try:
+                    points.append({
+                        'year': int(item.get('year', '')),
+                        'month': BLS_PERIOD_MAP[period],
+                        'value': float(value),
+                        'date': f'{item["year"]}-{str(BLS_PERIOD_MAP[period]).zfill(2)}',
+                    })
+                except (ValueError, TypeError):
+                    continue
+
+            # BLS returns newest first — reverse to chronological
+            points.sort(key=lambda p: (p['year'], p['month']))
+            if points:
+                raw_data[key] = points
+                yoy_data[key] = _compute_yoy(points)
+
+    except Exception as e:
+        logger.warning(f"BLS insurance series fetch failed: {e}")
 
     return yoy_data, raw_data
 
@@ -578,7 +694,7 @@ def compute_qoq(raw_points, is_quarterly_native=False):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _fetch_all():
-    """Fetch all insurance inflation series from ONS + Eurostat."""
+    """Fetch all insurance inflation series from ONS + Eurostat + BLS."""
     all_series = {}
     all_series_raw = {}
     series_meta = {}
@@ -594,6 +710,12 @@ def _fetch_all():
     opi_yoy, opi_raw = _fetch_construction_opi()
     all_series.update(opi_yoy)
     all_series_raw.update(opi_raw)
+
+    # US BLS series (CPI-U, PPI, CES/AWE)
+    logger.info("Fetching US BLS insurance series...")
+    bls_yoy, bls_raw = _fetch_bls_series()
+    all_series.update(bls_yoy)
+    all_series_raw.update(bls_raw)
 
     # Eurostat HICP (rates)
     logger.info("Fetching Eurostat HICP...")
@@ -626,7 +748,7 @@ def _fetch_all():
     all_series_raw.update(_fetch_eurostat_lci_index())
 
     # Build series metadata
-    all_defs = {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_PPI_SERIES}
+    all_defs = {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_PPI_SERIES, **BLS_SERIES}
     # Add Construction OPI defs
     all_defs['uk_opi_new'] = {'label': 'UK Construction OPI: New Work', 'color': '#f97316', 'category': 'fire_allied'}
     all_defs['uk_opi_repair'] = {'label': 'UK Construction OPI: Repair & Maintenance', 'color': '#fb923c', 'category': 'fire_allied'}
@@ -637,7 +759,7 @@ def _fetch_all():
         all_defs[key] = info
 
     for key, info in all_defs.items():
-        source = 'ONS' if key.startswith('uk_') else 'Eurostat'
+        source = 'BLS' if key.startswith('us_') else ('ONS' if key.startswith('uk_') else 'Eurostat')
         freq = 'Q' if key in EU_CONSTRUCTION or key in EU_LCI or key in ('uk_opi_new', 'uk_opi_repair') or key == 'uk_sppi_legal' else 'M'
         meta = {
             'label': info.get('label', key),
@@ -666,7 +788,7 @@ def _fetch_all():
         'categories': cats,
         'series_meta': series_meta,
         'meta': {
-            'source': 'ONS, Eurostat',
+            'source': 'BLS, ONS, Eurostat',
             'description': 'Insurance/Reinsurance Inflation Indicators',
             'frequency': 'Monthly & Quarterly',
             'total_series': len(all_series),
@@ -714,7 +836,7 @@ def _empty_result():
         'series_raw': {},
         'categories': CATEGORY_MAP,
         'series_meta': {},
-        'meta': {'source': 'ONS, Eurostat', 'error': 'No data available'},
+        'meta': {'source': 'BLS, ONS, Eurostat', 'error': 'No data available'},
     }
 
 
