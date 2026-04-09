@@ -299,6 +299,14 @@
                 '<option value="gold"' + (state.reserveType === 'gold' ? ' selected' : '') + '>Gold Reserves</option>' +
                 '</select>';
         }
+        if (ds.controls.includes('ins-region')) {
+            html += '<select id="ctrl-ins-region" class="data-select">' +
+                '<option value="all"' + (state.insRegion === 'all' ? ' selected' : '') + '>All Regions</option>' +
+                '<option value="us"' + (state.insRegion === 'us' ? ' selected' : '') + '>US</option>' +
+                '<option value="uk"' + (state.insRegion === 'uk' ? ' selected' : '') + '>UK</option>' +
+                '<option value="eu"' + (state.insRegion === 'eu' ? ' selected' : '') + '>EU</option>' +
+                '</select>';
+        }
         if (ds.controls.includes('countries')) {
             html += '<select id="ctrl-countries" class="data-select" multiple>' +
                 '</select>';
@@ -318,6 +326,7 @@
         bind('ctrl-comm-freq', v => { state.commFreq = v; });
         bind('ctrl-region', v => { state.region = v; });
         bind('ctrl-reserve-type', v => { state.reserveType = v; });
+        bind('ctrl-ins-region', v => { state.insRegion = v; });
     }
 
     // ══════════════════════════════════════════════════════
@@ -2981,31 +2990,58 @@
         const compLabel = comp === 'qoq' ? 'QoQ %' : 'YoY %';
         const freqLabel = freq === 'quarterly' ? 'Quarterly' : (freq === 'yearly' ? 'Yearly' : 'Monthly');
 
-        const seriesKeys = catInfo.series || [];
+        const allSeriesKeys = catInfo.series || [];
         const seriesMeta = data.series_meta || {};
+        const insRegion = state.insRegion || 'all';
+
+        // Filter series by region
+        const seriesKeys = allSeriesKeys.filter(key => {
+            if (insRegion === 'all') return true;
+            if (insRegion === 'us') return key.startsWith('us_');
+            if (insRegion === 'uk') return key.startsWith('uk_');
+            if (insRegion === 'eu') return key.startsWith('eu_') || key.startsWith('nl_') || key.startsWith('it_');
+            return true;
+        });
+
+        const regionLabel = insRegion === 'all' ? 'All' : insRegion.toUpperCase();
 
         // Update title
         const titleEl = document.getElementById('panel-title');
-        if (titleEl) titleEl.textContent = `${catInfo.label} — ${compLabel} Change (${freqLabel})`;
+        if (titleEl) titleEl.textContent = `${catInfo.label} — ${compLabel} Change (${freqLabel}, ${regionLabel})`;
 
         // Update export button URL with current params
         const exportBtn = document.querySelector('.export-btn-data');
         if (exportBtn && ds.exportUrl) {
-            exportBtn.href = `${ds.exportUrl}?freq=${freq}&comparison=${comp}`;
+            exportBtn.href = `${ds.exportUrl}?freq=${freq}&comparison=${comp}&region=${insRegion}`;
         }
 
         // Hide loading
         const loadEl = document.getElementById('panel-loading');
         if (loadEl) loadEl.style.display = 'none';
 
-        // Build chart datasets
+        // Build chart datasets and collect all dates for chronological sorting
         const COLORS = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#06b6d4','#f97316','#e11d48','#84cc16','#64748b','#fbbf24','#a855f7'];
         const chartDatasets = [];
+        const allDates = new Set();
+
+        // Helper: convert date string to sortable number
+        function _dateSortKey(d) {
+            // "2024-03" → 202403, "2024-Q1" → 202403
+            const parts = d.split('-');
+            const year = parseInt(parts[0]) || 0;
+            const part2 = parts[1] || '';
+            if (part2.startsWith('Q')) {
+                return year * 100 + parseInt(part2.replace('Q', '')) * 3;
+            }
+            return year * 100 + (parseInt(part2) || 0);
+        }
 
         seriesKeys.forEach((key, i) => {
             const meta = seriesMeta[key] || {};
             const points = _insGetPoints(key, data, freq, comp);
             if (!points.length) return;
+
+            points.forEach(p => allDates.add(p.date));
 
             chartDatasets.push({
                 label: meta.label || key,
@@ -3021,6 +3057,9 @@
             });
         });
 
+        // Sort all dates chronologically
+        const sortedLabels = [...allDates].sort((a, b) => _dateSortKey(a) - _dateSortKey(b));
+
         // Render chart
         const canvas = document.getElementById('panel-chart');
         if (canvas && chartDatasets.length > 0) {
@@ -3028,7 +3067,7 @@
             const ctx = canvas.getContext('2d');
             const chart = new Chart(ctx, {
                 type: 'line',
-                data: { datasets: chartDatasets },
+                data: { labels: sortedLabels, datasets: chartDatasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,

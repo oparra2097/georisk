@@ -18,6 +18,7 @@ window.ParraData.state = {
     commFreq: 'quarterly',
     region: 'World',
     reserveType: 'total',
+    insRegion: 'all',
     countries: [],
 };
 
@@ -83,6 +84,7 @@ window.ParraData.parseUrl = function () {
     if (params.has('commFreq')) state.commFreq = params.get('commFreq');
     if (params.has('region')) state.region = params.get('region');
     if (params.has('type')) state.reserveType = params.get('type');
+    if (params.has('insRegion')) state.insRegion = params.get('insRegion');
     if (params.has('countries')) state.countries = params.get('countries').split(',').filter(Boolean);
 
     // Defaults if nothing in URL
@@ -111,6 +113,7 @@ window.ParraData.buildUrl = function () {
     if (ds.controls.includes('comm-freq') && state.commFreq !== 'quarterly') params.set('commFreq', state.commFreq);
     if (ds.controls.includes('region') && state.region !== 'World') params.set('region', state.region);
     if (ds.controls.includes('reserve-type') && state.reserveType !== 'total') params.set('type', state.reserveType);
+    if (ds.controls.includes('ins-region') && state.insRegion !== 'all') params.set('insRegion', state.insRegion);
     if (ds.controls.includes('countries') && state.countries.length > 0) params.set('countries', state.countries.join(','));
 
     const qs = params.toString();
@@ -141,6 +144,7 @@ window.ParraData.navigate = function (categoryId, datasetId, subviewId) {
         state.scenario = 'Weighted Avg';
         state.region = 'World';
         state.reserveType = 'total';
+        state.insRegion = 'all';
         state.countries = [];
     }
 
