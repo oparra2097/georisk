@@ -1,11 +1,11 @@
 import os
 from flask import Flask, render_template, redirect, url_for, request, jsonify
 from flask_cors import CORS
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager, current_user, login_required
 from config import Config
 from backend.routes import api_bp
 from backend.economist import economist_bp
-from backend.auth import auth_bp, user_loader, init_auth_db
+from backend.auth import auth_bp, user_loader, init_auth_db, ADMIN_EMAIL
 from backend.scheduler import init_scheduler
 
 
@@ -28,6 +28,11 @@ def create_app():
             return jsonify({'error': 'Authentication required', 'login_url': '/auth/login'}), 401
         return redirect(url_for('auth.login', next=request.url))
 
+    # Inject admin_email into all templates
+    @app.context_processor
+    def inject_admin():
+        return {'admin_email': ADMIN_EMAIL}
+
     # ── Blueprints ───────────────────────────────────────────────────────
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(economist_bp, url_prefix='/api')
@@ -39,8 +44,9 @@ def create_app():
         return render_template('home.html', active_page='home')
 
     @app.route('/georisk')
+    @login_required
     def georisk():
-        return render_template('georisk.html')
+        return render_template('georisk.html', active_page='georisk')
 
     @app.route('/about')
     def about():

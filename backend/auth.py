@@ -334,6 +334,30 @@ def verify_email(token):
         return redirect(url_for('auth.login'))
 
 
+@auth_bp.route('/resend-verification', methods=['GET', 'POST'])
+def resend_verification():
+    """Self-service resend verification email."""
+    try:
+        if request.method == 'POST':
+            email = request.form.get('email', '').strip().lower()
+            if not email:
+                flash('Please enter your email address.', 'error')
+            else:
+                user = User.get_by_email(email)
+                if user and not user.email_verified:
+                    _, token = User.get_verification_token(user.id)
+                    if token:
+                        _send_verification_email(email, token)
+                # Always show success to prevent email enumeration
+                flash('If an unverified account exists with that email, a verification link has been sent.', 'success')
+                return redirect(url_for('auth.login'))
+
+        return render_template('resend_verification.html', active_page='data')
+    except Exception as e:
+        logger.error(f"Resend verification error: {e}", exc_info=True)
+        return f"Error: {e}", 500
+
+
 # ── Admin Dashboard ──────────────────────────────────────────────────────
 
 @auth_bp.route('/admin')
