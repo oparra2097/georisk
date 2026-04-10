@@ -2,7 +2,7 @@
 GDELT DOC 2.0 API client — rate-limit aware, single-threaded.
 
 Two API calls per country:
-1. artlist — articles for NLP keyword analysis + source breadth
+1. artlist — up to 150 articles for NLP keyword analysis + source breadth
 2. timelinetone — average media tone
 
 Theme volumes are derived from keyword analysis of article titles
@@ -106,8 +106,8 @@ def _gdelt_request(params, timeout=15):
     return None
 
 
-def fetch_country_articles(country_alpha2, timespan=None, max_records=75):
-    """Fetch recent articles about a country from GDELT."""
+def fetch_country_articles(country_alpha2, timespan=None, max_records=150):
+    """Fetch recent articles about a country from GDELT (up to 250 max)."""
     if timespan is None:
         timespan = Config.GDELT_TIMESPAN
     search_name = _get_search_name(country_alpha2)

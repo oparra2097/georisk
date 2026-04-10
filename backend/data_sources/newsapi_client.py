@@ -51,8 +51,8 @@ def _get_key():
     return Config.NEWSAPI_KEY
 
 
-def fetch_headlines_for_country(country_alpha2, page_size=20):
-    """Fetch headlines for a specific country."""
+def fetch_headlines_for_country(country_alpha2, page_size=100):
+    """Fetch headlines for a specific country (free tier supports up to 100)."""
     key = _get_key()
     if not key or key == 'your_api_key_here':
         return []
