@@ -11,6 +11,7 @@ Multi-word phrases are split into individual words that each contribute.
 """
 
 import re
+import math
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 _vader = SentimentIntensityAnalyzer()
@@ -325,14 +326,29 @@ def analyze_articles(articles):
     final = {}
     for indicator, data in aggregated.items():
         if data['article_count'] > 0 and processed_articles > 0:
-            coverage = min(1.0, data['article_count'] / max(processed_articles, 1))
-            avg_score = data['total_score'] / data['article_count']
+            article_count = data['article_count']
+            avg_score = data['total_score'] / article_count
+            high_ratio = data['high_count'] / article_count
 
-            # High-severity bonus
-            high_ratio = data['high_count'] / data['article_count']
-            high_bonus = 1.0 + (high_ratio * 0.3)
+            # Absolute count scaling via log2 curve (not coverage ratio).
+            # 20 articles matching military keywords is a STRONG signal
+            # regardless of whether there were 75 or 200 total articles.
+            # 1->0.17, 3->0.33, 5->0.43, 10->0.58, 20->0.72, 40->0.88, 60+->~1.0
+            count_signal = min(1.0, math.log2(article_count + 1) / math.log2(65))
 
-            signal = coverage * avg_score * high_bonus
+            # High-severity boost: all high -> 1.5x, half -> 1.25x, none -> 1.0x
+            severity_boost = 1.0 + (high_ratio * 0.5)
+
+            # Coverage bonus: if this topic dominates the news, amplify
+            coverage = article_count / max(processed_articles, 1)
+            if coverage > 0.4:
+                coverage_bonus = 1.15
+            elif coverage > 0.25:
+                coverage_bonus = 1.08
+            else:
+                coverage_bonus = 1.0
+
+            signal = min(1.0, count_signal * avg_score * severity_boost * coverage_bonus)
             avg_sent = sum(data['sentiments']) / len(data['sentiments'])
         else:
             signal = 0.0

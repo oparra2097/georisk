@@ -41,12 +41,19 @@ COUNTRY_SEARCH_NAMES = {
     'BA': 'Bosnia',
     'AE': 'UAE',
     'SA': 'Saudi Arabia',
-    'PS': 'Palestine OR Gaza',
+    'PS': 'Gaza',
     'SS': 'South Sudan',
     'ZA': 'South Africa',
     'NZ': 'New Zealand',
     'TL': 'Timor-Leste OR East Timor',
     'MK': 'North Macedonia',
+}
+
+# Fallback search terms for countries where the primary query returns zero results
+COUNTRY_FALLBACK_TERMS = {
+    'PS': ['Palestinian', 'West Bank'],
+    'CD': ['DRC Congo Kinshasa'],
+    'SS': ['South Sudan Juba'],
 }
 
 
@@ -113,9 +120,36 @@ def fetch_country_articles(country_alpha2, timespan=None, max_records=75):
         'sort': 'datedesc'
     }
     data = _gdelt_request(params)
-    if data:
-        return data.get('articles', [])
-    return []
+    articles = data.get('articles', []) if data else []
+
+    # Fallback: if zero results and country has alternate search terms, retry
+    if not articles and country_alpha2 in COUNTRY_FALLBACK_TERMS:
+        for fallback_term in COUNTRY_FALLBACK_TERMS[country_alpha2]:
+            params['query'] = f'{fallback_term} sourcelang:english'
+            data = _gdelt_request(params)
+            if data:
+                articles = data.get('articles', [])
+                if articles:
+                    logger.debug(f"GDELT fallback '{fallback_term}' returned "
+                                 f"{len(articles)} articles for {country_alpha2}")
+                    break
+
+    return articles
+
+
+def _extract_tone(data):
+    """Extract average tone from GDELT timelinetone response."""
+    if not data:
+        return None
+    timeline = data.get('timeline', [])
+    if timeline and len(timeline) > 0:
+        series = timeline[0].get('data', [])
+        if series:
+            tones = [pt.get('value', 0) for pt in series
+                     if isinstance(pt.get('value'), (int, float))]
+            if tones:
+                return sum(tones) / len(tones)
+    return None
 
 
 def fetch_country_tone(country_alpha2, timespan=None):
@@ -133,16 +167,18 @@ def fetch_country_tone(country_alpha2, timespan=None):
         'format': 'json'
     }
     data = _gdelt_request(params)
-    if data:
-        timeline = data.get('timeline', [])
-        if timeline and len(timeline) > 0:
-            series = timeline[0].get('data', [])
-            if series:
-                tones = [pt.get('value', 0) for pt in series
-                         if isinstance(pt.get('value'), (int, float))]
-                if tones:
-                    return sum(tones) / len(tones)
-    return 0.0
+    tone = _extract_tone(data)
+
+    # Fallback: if no tone data and country has alternate search terms, retry
+    if tone is None and country_alpha2 in COUNTRY_FALLBACK_TERMS:
+        for fallback_term in COUNTRY_FALLBACK_TERMS[country_alpha2]:
+            params['query'] = f'{fallback_term} sourcelang:english'
+            data = _gdelt_request(params)
+            tone = _extract_tone(data)
+            if tone is not None:
+                break
+
+    return tone if tone is not None else 0.0
 
 
 def fetch_country_data(country_alpha2, timespan=None):

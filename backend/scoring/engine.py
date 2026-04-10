@@ -51,6 +51,7 @@ from backend.scoring.keyword_analyzer import analyze_articles
 from backend.scoring.indicator_calculators import calculate_indicator_score
 from backend.scoring.baselines import get_country_baseline
 from backend.scoring.normalizer import calculate_news_score, calculate_composite
+from backend.scoring.conflict_registry import get_conflict_floors, get_conflict_info
 from backend.cache.persistence import save_scores, save_daily_snapshot
 from config import Config
 
@@ -101,19 +102,26 @@ def _fetch_news_for_country(country_alpha2):
         return []
 
 
-def _ema_blend_indicator(fresh_value, previous_value, alpha=None):
-    """EMA blend a single indicator value."""
+def _ema_blend_indicator(fresh_value, previous_value, alpha=None, floor=None):
+    """EMA blend a single indicator value, respecting optional floor."""
     if alpha is None:
         alpha = Config.EMA_ALPHA
     if previous_value is None or previous_value == 0.0:
-        return fresh_value
-    return alpha * fresh_value + (1.0 - alpha) * previous_value
+        blended = fresh_value
+    else:
+        blended = alpha * fresh_value + (1.0 - alpha) * previous_value
+    # Enforce floor AFTER blending so conflicts don't decay below minimum
+    if floor is not None and blended < floor:
+        blended = floor
+    return blended
 
 
-def _ema_blend_indicators(fresh_indicators, previous_indicators, alpha=None):
+def _ema_blend_indicators(fresh_indicators, previous_indicators, alpha=None,
+                          conflict_floors=None):
     """
     EMA blend all 6 indicator scores.
     new = α * fresh + (1-α) * previous
+    Conflict floors (if provided) prevent blended values from decaying below minimums.
     """
     if alpha is None:
         alpha = Config.EMA_ALPHA
@@ -121,30 +129,37 @@ def _ema_blend_indicators(fresh_indicators, previous_indicators, alpha=None):
     if previous_indicators is None:
         return fresh_indicators
 
+    floors = conflict_floors or {}
     return IndicatorScore(
         political_stability=_ema_blend_indicator(
             fresh_indicators.political_stability,
-            previous_indicators.political_stability, alpha
+            previous_indicators.political_stability, alpha,
+            floor=floors.get('political_stability')
         ),
         military_conflict=_ema_blend_indicator(
             fresh_indicators.military_conflict,
-            previous_indicators.military_conflict, alpha
+            previous_indicators.military_conflict, alpha,
+            floor=floors.get('military_conflict')
         ),
         economic_sanctions=_ema_blend_indicator(
             fresh_indicators.economic_sanctions,
-            previous_indicators.economic_sanctions, alpha
+            previous_indicators.economic_sanctions, alpha,
+            floor=floors.get('economic_sanctions')
         ),
         protests_civil_unrest=_ema_blend_indicator(
             fresh_indicators.protests_civil_unrest,
-            previous_indicators.protests_civil_unrest, alpha
+            previous_indicators.protests_civil_unrest, alpha,
+            floor=floors.get('protests_civil_unrest')
         ),
         terrorism=_ema_blend_indicator(
             fresh_indicators.terrorism,
-            previous_indicators.terrorism, alpha
+            previous_indicators.terrorism, alpha,
+            floor=floors.get('terrorism')
         ),
         diplomatic_tensions=_ema_blend_indicator(
             fresh_indicators.diplomatic_tensions,
-            previous_indicators.diplomatic_tensions, alpha
+            previous_indicators.diplomatic_tensions, alpha,
+            floor=floors.get('diplomatic_tensions')
         ),
     )
 
@@ -219,6 +234,18 @@ def score_single_country(country_alpha2, use_news=False):
         except Exception as e:
             logger.debug(f"ACLED signal unavailable for {country_alpha2}: {e}")
 
+    # --- Apply active conflict floors to indicator scores ---
+    conflict_floors = get_conflict_floors(country_alpha2)
+    if conflict_floors:
+        for ind in INDICATORS:
+            floor = conflict_floors.get(ind, 0.0)
+            if floor > 0 and fresh_indicator_scores[ind] < floor:
+                logger.debug(
+                    f"{country_alpha2} {ind}: floor applied "
+                    f"{fresh_indicator_scores[ind]:.1f} -> {floor:.1f}"
+                )
+                fresh_indicator_scores[ind] = floor
+
     fresh_indicators = IndicatorScore(
         political_stability=fresh_indicator_scores.get('political_stability', 0),
         military_conflict=fresh_indicator_scores.get('military_conflict', 0),
@@ -234,13 +261,26 @@ def score_single_country(country_alpha2, use_news=False):
     if existing and existing.indicators:
         previous_indicators = existing.indicators
 
-    blended_indicators = _ema_blend_indicators(fresh_indicators, previous_indicators)
+    blended_indicators = _ema_blend_indicators(
+        fresh_indicators, previous_indicators,
+        conflict_floors=conflict_floors
+    )
 
     # --- Compute news score (weighted average of blended indicators) ---
     news_score = calculate_news_score(blended_indicators)
 
     # --- Two-tier composite ---
     composite = calculate_composite(base_score, news_score)
+
+    # --- Apply composite floor for active conflicts ---
+    if conflict_floors:
+        composite_floor = conflict_floors.get('composite_floor', 0.0)
+        if composite_floor > 0 and composite < composite_floor:
+            logger.debug(
+                f"{country_alpha2} composite floor applied: "
+                f"{composite:.1f} -> {composite_floor:.1f}"
+            )
+            composite = composite_floor
 
     # Maintain trend history (last 10 scores)
     trend = []
@@ -261,6 +301,19 @@ def score_single_country(country_alpha2, use_news=False):
         updated_at=datetime.utcnow(),
         trend=trend
     )
+
+    # Log conflict scoring diagnostics
+    if conflict_floors:
+        conflict_info = get_conflict_info(country_alpha2)
+        if conflict_info:
+            logger.info(
+                f"CONFLICT SCORE {country_alpha2} ({conflict_info['conflict']}): "
+                f"composite={composite:.1f} "
+                f"(floor={conflict_floors.get('composite_floor', 0):.0f}), "
+                f"military={blended_indicators.military_conflict:.1f} "
+                f"(floor={conflict_floors.get('military_conflict', 0):.0f}), "
+                f"articles={len(all_articles)}, tone={avg_tone:.2f}"
+            )
 
     headlines = []
     for art in news_articles[:10]:
