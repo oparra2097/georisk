@@ -37,17 +37,14 @@
     50% { opacity: 0.55; }
 }
 
-/* Active war zone — fast blink with red glow */
+/* Active war zone — blink effect, no red border */
 .warzone {
-    animation: warBlink 1s ease-in-out infinite;
-    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.7));
-    stroke: #ef4444 !important;
-    stroke-width: 1.2px !important;
+    animation: warBlink 1.2s ease-in-out infinite;
 }
 
 @keyframes warBlink {
-    0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.7)); }
-    50% { opacity: 0.4; filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.9)); }
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
 }
 
 #map-tooltip {
