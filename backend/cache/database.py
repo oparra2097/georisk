@@ -68,6 +68,27 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_daily_scores_country_date
             ON daily_scores(country_code, date);
 
+        CREATE TABLE IF NOT EXISTS article_archive (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            country_code TEXT NOT NULL,
+            title TEXT NOT NULL,
+            url TEXT,
+            source TEXT,
+            published_at TEXT,
+            sentiment REAL DEFAULT 0.0,
+            matched_indicators TEXT,
+            provider TEXT DEFAULT 'gdelt',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_article_country
+            ON article_archive(country_code);
+        CREATE INDEX IF NOT EXISTS idx_article_date
+            ON article_archive(date);
+        CREATE INDEX IF NOT EXISTS idx_article_country_date
+            ON article_archive(country_code, date);
+
         CREATE TABLE IF NOT EXISTS score_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT NOT NULL,
@@ -134,6 +155,75 @@ def save_daily_scores(store):
     logger.info(f"Daily scores saved to SQLite: {len(rows)} countries for {today}")
 
 
+def archive_articles(country_code, articles, analysis, provider='gdelt'):
+    """
+    Archive article titles + NLP match data for future model training.
+    Called during each scoring cycle. Stores title, source, sentiment,
+    and which indicators matched — building a labeled training dataset.
+
+    Only archives once per day per country (skips if already archived today).
+    """
+    conn = get_connection()
+    today = date.today().isoformat()
+
+    # Skip if we already archived articles for this country today
+    cursor = conn.execute(
+        "SELECT COUNT(*) as cnt FROM article_archive WHERE date = ? AND country_code = ?",
+        (today, country_code)
+    )
+    if cursor.fetchone()['cnt'] > 0:
+        return
+
+    rows = []
+    for art in articles:
+        title = ''
+        url = ''
+        source = provider
+        published = ''
+
+        if isinstance(art, dict):
+            title = (art.get('title', '') or '').strip()
+            url = art.get('url', '') or ''
+            source = art.get('source', '') or art.get('domain', provider)
+            published = art.get('publishedAt', '') or art.get('seendate', '') or ''
+
+        if not title:
+            continue
+
+        # Find which indicators this article matched
+        # (we don't re-analyze — just check via keyword presence from analysis)
+        matched = []
+        if analysis:
+            from backend.scoring.keyword_analyzer import analyze_text
+            text_result = analyze_text(title)
+            for ind, data in text_result.items():
+                if data.get('matches'):
+                    matched.append(ind)
+
+        sentiment = 0.0
+        if analysis:
+            from backend.scoring.keyword_analyzer import get_sentiment
+            sentiment = get_sentiment(title)
+
+        rows.append((
+            today, country_code, title, url, source, published,
+            round(sentiment, 3),
+            json.dumps(matched) if matched else None,
+            provider
+        ))
+
+    if rows:
+        with _write_lock:
+            conn.executemany("""
+                INSERT INTO article_archive
+                (date, country_code, title, url, source, published_at,
+                 sentiment, matched_indicators, provider)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, rows)
+            conn.commit()
+        logger.debug(f"Archived {len(rows)} articles for {country_code}")
+
+
 def cleanup_old_scores(max_days=None):
     """Delete scores older than max_days (default: HISTORY_RETENTION_DAYS)."""
     if max_days is None:
@@ -143,8 +233,9 @@ def cleanup_old_scores(max_days=None):
     with _write_lock:
         cursor = conn.execute("DELETE FROM daily_scores WHERE date < ?", (cutoff,))
         deleted = cursor.rowcount
-        # Also clean old events
+        # Also clean old events and archived articles
         conn.execute("DELETE FROM score_events WHERE date < ?", (cutoff,))
+        conn.execute("DELETE FROM article_archive WHERE date < ?", (cutoff,))
         conn.commit()
     if deleted > 0:
         logger.info(f"Cleaned up {deleted} old score rows (before {cutoff})")

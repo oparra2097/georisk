@@ -53,6 +53,7 @@ from backend.scoring.baselines import get_country_baseline
 from backend.scoring.normalizer import calculate_news_score, calculate_composite
 from backend.scoring.conflict_registry import get_conflict_floors, get_conflict_info
 from backend.cache.persistence import save_scores, save_daily_snapshot
+from backend.cache.database import archive_articles
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -206,6 +207,14 @@ def score_single_country(country_alpha2, use_news=False):
 
     all_articles = gdelt_article_dicts + news_articles
     analysis = analyze_articles(all_articles)
+
+    # Archive articles for historical training data (once per day per country)
+    try:
+        archive_articles(country_alpha2, gdelt_articles, analysis, provider='gdelt')
+        if news_articles:
+            archive_articles(country_alpha2, news_articles, analysis, provider='news')
+    except Exception as e:
+        logger.debug(f"Article archive failed for {country_alpha2}: {e}")
 
     avg_tone = gdelt_data.get('avg_tone', 0.0)
 

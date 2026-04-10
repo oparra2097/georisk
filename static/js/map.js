@@ -173,16 +173,16 @@ const MapModule = {
                 const alpha2 = this.countryCodeMap[String(d.id)];
                 const scoreData = this.scores[alpha2];
                 if (!scoreData || !scoreData.indicators) return false;
-                return scoreData.indicators.military_conflict > 85;
+                return scoreData.indicators.military_conflict > 70;
             })
             .classed('hotspot', d => {
                 const alpha2 = this.countryCodeMap[String(d.id)];
                 const scoreData = this.scores[alpha2];
                 if (!scoreData || !scoreData.indicators) return false;
                 // hotspot only if NOT already a warzone
-                if (scoreData.indicators.military_conflict > 85) return false;
+                if (scoreData.indicators.military_conflict > 70) return false;
                 const value = this.getScoreValue(scoreData);
-                return value !== undefined && value > 70;
+                return value !== undefined && value > 60;
             });
     },
 
