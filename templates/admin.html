@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard - Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .admin-title { color: #f1f5f9; font-size: 24px; font-weight: 700; margin: 0 0 20px; }
+    .admin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; text-align: center; }
+    .stat-value { color: #f1f5f9; font-size: 28px; font-weight: 700; }
+    .stat-label { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; background: #0f172a; border-radius: 8px; overflow: hidden; }
+    .admin-table thead th { background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 10px; text-align: left; border-bottom: 1px solid #334155; }
+    .admin-table tbody td { padding: 10px; border-bottom: 1px solid #1e293b; color: #e2e8f0; }
+    .admin-table tbody tr:hover { background: #1e293b44; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge-yes { background: #10b98122; color: #10b981; }
+    .badge-no { background: #ef444422; color: #ef4444; }
+    .badge-aig { background: #3b82f622; color: #3b82f6; }
+    .btn-sm { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #334155; background: #1e293b; color: #94a3b8; cursor: pointer; text-decoration: none; margin: 1px; }
+    .btn-sm:hover { background: #334155; color: #f1f5f9; }
+    .btn-grant { border-color: #10b981; color: #10b981; }
+    .btn-grant:hover { background: #10b98122; }
+    .btn-revoke { border-color: #f59e0b; color: #f59e0b; }
+    .btn-revoke:hover { background: #f59e0b22; }
+    .btn-danger { border-color: #ef4444; color: #ef4444; }
+    .btn-danger:hover { background: #ef444422; }
+    .btn-verify { border-color: #3b82f6; color: #3b82f6; }
+    .btn-verify:hover { background: #3b82f622; }
+    .flash-msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+    .flash-msg.success { background: #10b98122; color: #6ee7b7; border: 1px solid #10b98144; }
+    .flash-msg.error { background: #ef444422; color: #fca5a5; border: 1px solid #ef444444; }
+    .admin-link { color: #64748b; font-size: 12px; margin-bottom: 16px; display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-container">
+    <h1 class="admin-title">Admin Dashboard</h1>
+    <a href="/data" class="admin-link">&larr; Back to Data</a>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="flash-msg {{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    <div class="admin-stats">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total }}</div>
+            <div class="stat-label">Total Users</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.verified }}</div>
+            <div class="stat-label">Verified</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.insurance }}</div>
+            <div class="stat-label">Insurance Access</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.aig }}</div>
+            <div class="stat-label">@aig.com</div>
+        </div>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Verified</th>
+                <th>Insurance Access</th>
+                <th>Last Login</th>
+                <th>Registered</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>
+                    {{ user.email }}
+                    {% if user.email.endswith('@aig.com') %}
+                    <span class="badge badge-aig">AIG</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if user.email_verified %}
+                    <span class="badge badge-yes">Verified</span>
+                    {% else %}
+                    <span class="badge badge-no">Unverified</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if user.email.endswith('@aig.com') %}
+                    <span class="badge badge-aig">AIG (auto)</span>
+                    {% elif user.insurance_access %}
+                    <span class="badge badge-yes">Granted</span>
+                    {% else %}
+                    <span class="badge badge-no">No</span>
+                    {% endif %}
+                </td>
+                <td style="color: #64748b; font-size: 12px;">{{ user.last_login or '—' }}</td>
+                <td style="color: #64748b; font-size: 12px;">{{ user.created_at or '—' }}</td>
+                <td>
+                    <form method="POST" action="/auth/admin/toggle-verify/{{ user.id }}" style="display:inline;">
+                        <button type="submit" class="btn-sm btn-verify">
+                            {% if user.email_verified %}Unverify{% else %}Verify{% endif %}
+                        </button>
+                    </form>
+                    <form method="POST" action="/auth/admin/toggle-access/{{ user.id }}" style="display:inline;">
+                        <button type="submit" class="btn-sm {% if user.insurance_access %}btn-revoke{% else %}btn-grant{% endif %}">
+                            {% if user.insurance_access %}Revoke{% else %}Grant{% endif %}
+                        </button>
+                    </form>
+                    <form method="POST" action="/auth/admin/resend/{{ user.id }}" style="display:inline;">
+                        <button type="submit" class="btn-sm">Resend</button>
+                    </form>
+                    <form method="POST" action="/auth/admin/delete/{{ user.id }}" style="display:inline;" onsubmit="return confirm('Delete {{ user.email }}?')">
+                        <button type="submit" class="btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
