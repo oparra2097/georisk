@@ -44,8 +44,8 @@ const MapModule = {
         this.pathGenerator = d3.geoPath().projection(this.projection);
 
         this.colorScale = d3.scaleLinear()
-            .domain([0, 25, 50, 75, 100])
-            .range(['#10b981', '#10b981', '#f59e0b', '#f97316', '#ef4444'])
+            .domain([0, 15, 35, 60, 100])
+            .range(['#10b981', '#22c55e', '#f59e0b', '#f97316', '#ef4444'])
             .clamp(true);
 
         // Setup zoom behavior
@@ -273,9 +273,9 @@ const MapModule = {
                 <div class="legend-bar"></div>
                 <div class="legend-labels">
                     <span>0</span>
-                    <span>25</span>
-                    <span>50</span>
-                    <span>75</span>
+                    <span>15</span>
+                    <span>35</span>
+                    <span>60</span>
                     <span>100</span>
                 </div>
                 <div class="legend-title">${title}</div>

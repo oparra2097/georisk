@@ -1,22 +1,22 @@
 const Utils = {
     riskColor(score) {
-        if (score <= 25) return '#10b981';
-        if (score <= 50) return '#f59e0b';
-        if (score <= 75) return '#f97316';
+        if (score <= 15) return '#10b981';
+        if (score <= 35) return '#f59e0b';
+        if (score <= 60) return '#f97316';
         return '#ef4444';
     },
 
     riskBg(score) {
-        if (score <= 25) return 'rgba(16, 185, 129, 0.15)';
-        if (score <= 50) return 'rgba(245, 158, 11, 0.15)';
-        if (score <= 75) return 'rgba(249, 115, 22, 0.15)';
+        if (score <= 15) return 'rgba(16, 185, 129, 0.15)';
+        if (score <= 35) return 'rgba(245, 158, 11, 0.15)';
+        if (score <= 60) return 'rgba(249, 115, 22, 0.15)';
         return 'rgba(239, 68, 68, 0.15)';
     },
 
     riskLabel(score) {
-        if (score <= 25) return 'Low';
-        if (score <= 50) return 'Moderate';
-        if (score <= 75) return 'High';
+        if (score <= 15) return 'Low';
+        if (score <= 35) return 'Moderate';
+        if (score <= 60) return 'High';
         return 'Critical';
     },
 
