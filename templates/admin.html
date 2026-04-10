@@ -123,6 +123,9 @@
                         <form method="POST" action="/auth/admin/resend/{{ user.id }}" style="display:inline;">
                             <button type="submit" class="act-btn">Resend</button>
                         </form>
+                        <form method="POST" action="/auth/admin/send-reset/{{ user.id }}" style="display:inline;">
+                            <button type="submit" class="act-btn">Reset PW</button>
+                        </form>
                         <form method="POST" action="/auth/admin/delete/{{ user.id }}" style="display:inline;" onsubmit="return confirm('Delete {{ user.email }}?')">
                             <button type="submit" class="act-btn act-del">Delete</button>
                         </form>

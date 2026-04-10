@@ -66,6 +66,7 @@ def init_auth_db():
         ('verification_token', 'TEXT'),
         ('insurance_access', 'BOOLEAN DEFAULT 0'),
         ('last_login', 'TIMESTAMP'),
+        ('reset_token', 'TEXT'),
     ]:
         try:
             conn.execute(f'ALTER TABLE users ADD COLUMN {col} {definition}')
@@ -210,6 +211,34 @@ class User(UserMixin):
         conn.close()
         return row['email'], token
 
+    @staticmethod
+    def set_reset_token(email):
+        """Generate and store a password reset token. Returns token or None."""
+        conn = _get_db()
+        row = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
+        if not row:
+            conn.close()
+            return None
+        token = secrets.token_urlsafe(32)
+        conn.execute('UPDATE users SET reset_token = ? WHERE id = ?', (token, row['id']))
+        conn.commit()
+        conn.close()
+        return token
+
+    @staticmethod
+    def reset_password(token, new_password):
+        """Reset password using token. Returns email or None."""
+        conn = _get_db()
+        row = conn.execute('SELECT id, email FROM users WHERE reset_token = ?', (token,)).fetchone()
+        if not row:
+            conn.close()
+            return None
+        pw_hash = generate_password_hash(new_password)
+        conn.execute('UPDATE users SET password_hash = ?, reset_token = NULL WHERE id = ?', (pw_hash, row['id']))
+        conn.commit()
+        conn.close()
+        return row['email']
+
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
@@ -266,6 +295,48 @@ def _send_verification_email(email, token):
         return True
     except Exception as e:
         logger.error(f"Failed to send verification email to {email}: {e}")
+        return False
+
+
+def _send_reset_email(email, token):
+    """Send password reset email via Gmail SMTP."""
+    smtp_email = Config.SMTP_EMAIL
+    smtp_password = Config.SMTP_PASSWORD
+
+    if not smtp_email or not smtp_password:
+        logger.warning("SMTP not configured — skipping reset email")
+        return False
+
+    base_url = os.environ.get('BASE_URL', 'https://parramacro.com')
+    reset_url = f'{base_url}/auth/reset-password/{token}'
+
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = 'Reset your Parra Macro password'
+    msg['From'] = f'Parra Macro <{smtp_email}>'
+    msg['To'] = email
+
+    text = f"Reset your password by clicking this link:\n{reset_url}\n\nIf you did not request this, ignore this email."
+
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #1e293b;">Reset Your Password</h2>
+        <p style="color: #475569;">Click the button below to set a new password:</p>
+        <a href="{reset_url}" style="display: inline-block; padding: 12px 24px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-weight: 600;">Reset Password</a>
+        <p style="color: #94a3b8; font-size: 13px; margin-top: 24px;">If you did not request a password reset, you can safely ignore this email.</p>
+    </div>
+    """
+
+    msg.attach(MIMEText(text, 'plain'))
+    msg.attach(MIMEText(html, 'html'))
+
+    try:
+        with smtplib.SMTP_SSL(Config.SMTP_SERVER, Config.SMTP_PORT) as server:
+            server.login(smtp_email, smtp_password)
+            server.sendmail(smtp_email, email, msg.as_string())
+        logger.info(f"Password reset email sent to {email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send reset email to {email}: {e}")
         return False
 
 
@@ -358,6 +429,57 @@ def resend_verification():
         return f"Error: {e}", 500
 
 
+@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Request a password reset link."""
+    try:
+        if request.method == 'POST':
+            email = request.form.get('email', '').strip().lower()
+            if not email:
+                flash('Please enter your email address.', 'error')
+            else:
+                token = User.set_reset_token(email)
+                if token:
+                    _send_reset_email(email, token)
+                # Always show success to prevent email enumeration
+                flash('If an account exists with that email, a password reset link has been sent.', 'success')
+                return redirect(url_for('auth.login'))
+
+        return render_template('forgot_password.html', active_page='data')
+    except Exception as e:
+        logger.error(f"Forgot password error: {e}", exc_info=True)
+        return f"Error: {e}", 500
+
+
+@auth_bp.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    """Reset password using token from email."""
+    try:
+        if request.method == 'POST':
+            password = request.form.get('password', '')
+            confirm = request.form.get('confirm', '')
+
+            if not password:
+                flash('Password is required.', 'error')
+            elif password != confirm:
+                flash('Passwords do not match.', 'error')
+            elif len(password) < 8:
+                flash('Password must be at least 8 characters.', 'error')
+            else:
+                email = User.reset_password(token, password)
+                if email:
+                    flash('Password reset successfully. Please log in.', 'success')
+                    return redirect(url_for('auth.login'))
+                else:
+                    flash('Invalid or expired reset link.', 'error')
+                    return redirect(url_for('auth.forgot_password'))
+
+        return render_template('reset_password.html', token=token, active_page='data')
+    except Exception as e:
+        logger.error(f"Reset password error: {e}", exc_info=True)
+        return f"Error: {e}", 500
+
+
 # ── Admin Dashboard ──────────────────────────────────────────────────────
 
 @auth_bp.route('/admin')
@@ -428,6 +550,23 @@ def admin_resend_verification(user_id):
         flash(f'Verification email resent to {email}', 'success')
     else:
         flash('User not found', 'error')
+    return redirect(url_for('auth.admin_dashboard'))
+
+
+@auth_bp.route('/admin/send-reset/<int:user_id>', methods=['POST'])
+@login_required
+def admin_send_reset(user_id):
+    """Send password reset email to a user from admin dashboard."""
+    if not _is_admin():
+        return jsonify({'error': 'Unauthorized'}), 403
+    user = User.get_by_id(user_id)
+    if not user:
+        flash('User not found', 'error')
+        return redirect(url_for('auth.admin_dashboard'))
+    token = User.set_reset_token(user.email)
+    if token:
+        _send_reset_email(user.email, token)
+        flash(f'Password reset email sent to {user.email}', 'success')
     return redirect(url_for('auth.admin_dashboard'))
 
 
