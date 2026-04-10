@@ -945,10 +945,10 @@ th.col-actual {
     width: 150px;
     height: 8px;
     border-radius: 4px;
-    background: linear-gradient(to right, #1e3a5f, #2563eb, #f59e0b, #f97316, #dc2626);
+    background: linear-gradient(to right, #10b981, #22c55e, #f59e0b, #f97316, #dc2626);
 }
 
-/* Download map button */
+/* Download map button (absolute, overlay on map) */
 .sd-download-btn {
     position: absolute;
     top: 12px;
@@ -972,6 +972,27 @@ th.col-actual {
     color: #e5e7eb;
     background: rgba(0, 0, 0, 0.85);
     border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Download button (inline, for charts) */
+.sd-download-btn-inline {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: #9ca3af;
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.sd-download-btn-inline:hover {
+    color: #e5e7eb;
+    background: var(--accent-dim);
 }
 
 /* Bar chart below map */

@@ -2271,7 +2271,16 @@
                 </button>
             </div>
             <div class="sd-map-below">
-                <h3>Top 20 — Largest Shadow Debt Gaps</h3>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                    <h3>Top 20 — Largest Shadow Debt Gaps</h3>
+                    <button id="sd-download-chart" class="sd-download-btn-inline" title="Download chart as PNG">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+                            <path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                        PNG
+                    </button>
+                </div>
                 <div id="sd-top-chart-wrap"><canvas id="sd-top-chart"></canvas></div>
             </div>
         `;
@@ -2284,8 +2293,9 @@
         }
         _drawDebtTopChart(entries);
 
-        // Wire download button
+        // Wire download buttons
         document.getElementById('sd-download-map')?.addEventListener('click', _downloadDebtMap);
+        document.getElementById('sd-download-chart')?.addEventListener('click', _downloadDebtChart);
     }
 
     async function _drawDebtChoropleth(data, regionFilter, tierFilter) {
@@ -2330,7 +2340,7 @@
 
         const colorScale = d3.scaleLinear()
             .domain([0, 5, 15, 30, 50])
-            .range(['#1e3a5f', '#2563eb', '#f59e0b', '#f97316', '#dc2626'])
+            .range(['#10b981', '#22c55e', '#f59e0b', '#f97316', '#dc2626'])
             .clamp(true);
 
         // Build a Set of currently filtered ISO3 codes
@@ -2483,7 +2493,7 @@
 
         // Legend at bottom
         const ly = height - 25;
-        const colors = ['#1e3a5f', '#2563eb', '#f59e0b', '#f97316', '#dc2626'];
+        const colors = ['#10b981', '#22c55e', '#f59e0b', '#f97316', '#dc2626'];
         const sw = 30;
         const lx = width / 2 - (sw * colors.length) / 2;
         colors.forEach(function (c, i) {
@@ -2530,6 +2540,38 @@
             }, 'image/png');
         };
         img.src = url;
+    }
+
+    function _downloadDebtChart() {
+        var chartCanvas = document.getElementById('sd-top-chart');
+        if (!chartCanvas) return;
+
+        var pad = 50;
+        var canvas = document.createElement('canvas');
+        canvas.width = chartCanvas.width;
+        canvas.height = chartCanvas.height + pad;
+        var ctx = canvas.getContext('2d');
+
+        // Dark background
+        ctx.fillStyle = '#0a0e1a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Title
+        ctx.fillStyle = '#e5e7eb';
+        ctx.font = 'bold 24px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Top 20 Shadow Debt Gaps \u2014 ParraMacro', canvas.width / 2, 32);
+
+        // Draw chart below title
+        ctx.drawImage(chartCanvas, 0, pad);
+
+        canvas.toBlob(function (blob) {
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'shadow_debt_top20.png';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }, 'image/png');
     }
 
     function _drawDebtTopChart(entries) {
