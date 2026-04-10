@@ -945,7 +945,7 @@ th.col-actual {
     width: 150px;
     height: 8px;
     border-radius: 4px;
-    background: linear-gradient(to right, #10b981, #22c55e, #f59e0b, #f97316, #dc2626);
+    background: linear-gradient(to right, #059669, #eab308, #ea580c, #dc2626);
 }
 
 /* Download map button (absolute, overlay on map) */

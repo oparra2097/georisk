@@ -2339,8 +2339,8 @@
         }
 
         const colorScale = d3.scaleLinear()
-            .domain([0, 5, 15, 30, 50])
-            .range(['#10b981', '#22c55e', '#f59e0b', '#f97316', '#dc2626'])
+            .domain([0, 10, 25, 50])
+            .range(['#059669', '#eab308', '#ea580c', '#dc2626'])
             .clamp(true);
 
         // Build a Set of currently filtered ISO3 codes
@@ -2493,7 +2493,7 @@
 
         // Legend at bottom
         const ly = height - 25;
-        const colors = ['#10b981', '#22c55e', '#f59e0b', '#f97316', '#dc2626'];
+        const colors = ['#059669', '#eab308', '#ea580c', '#dc2626'];
         const sw = 30;
         const lx = width / 2 - (sw * colors.length) / 2;
         colors.forEach(function (c, i) {
