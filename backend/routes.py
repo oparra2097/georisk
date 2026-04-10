@@ -1541,6 +1541,7 @@ def export_insurance_inflation_excel():
 
     freq = request.args.get('freq', 'quarterly')       # 'monthly' | 'quarterly'
     comparison = request.args.get('comparison', 'yoy')  # 'yoy' | 'qoq'
+    region = request.args.get('region', 'all')           # 'all' | 'us' | 'uk' | 'eu'
 
     data = get_insurance_inflation_data()
     series = data.get('series', {})
@@ -1566,8 +1567,12 @@ def export_insurance_inflation_excel():
         if not cat_series:
             continue
 
-        # Filter to series that actually have data
+        # Filter to series that actually have data + region filter
         active_series = [(k, meta.get(k, {})) for k in cat_series if series.get(k)]
+        if region != 'all':
+            prefix_map = {'us': ('us_',), 'uk': ('uk_',), 'eu': ('eu_', 'nl_', 'it_')}
+            prefixes = prefix_map.get(region, ())
+            active_series = [(k, m) for k, m in active_series if any(k.startswith(p) for p in prefixes)]
         if not active_series:
             continue
 
@@ -1670,5 +1675,5 @@ def export_insurance_inflation_excel():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'insurance_inflation_{freq}_{comparison}_{today}.xlsx'
+        download_name=f'insurance_inflation_{region}_{freq}_{comparison}_{today}.xlsx'
     )

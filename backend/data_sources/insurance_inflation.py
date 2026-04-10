@@ -119,25 +119,29 @@ BLS_SERIES = {
     'us_dental':         {'bls_id': 'CUSR0000SEMC02', 'label': 'US CPI: Dental Services',                'color': '#450a0a', 'category': 'medical'},
     'us_nursing':        {'bls_id': 'CUSR0000SEMD02', 'label': 'US CPI: Nursing Homes & Adult Daycare',  'color': '#fee2e2', 'category': 'medical'},
     'us_other_med':      {'bls_id': 'CUSR0000SEMC04', 'label': 'US CPI: Other Medical Professionals',    'color': '#fecaca', 'category': 'medical'},
-    # Fire & Allied (CPI + PPI)
-    'us_household_ops':  {'bls_id': 'CUUR0000SEHP',   'label': 'US CPI: Household Operations',           'color': '#065f46', 'category': 'fire_allied'},
+    # Fire & Allied (PPI + AWE)
+    'us_ppi_res_constr': {'bls_id': 'WPUIP2311001',   'label': 'US PPI: Inputs to Residential Construction', 'color': '#065f46', 'category': 'fire_allied'},
     'us_ppi_cement':     {'bls_id': 'WPU1322',        'label': 'US PPI: Cement, Hydraulic',              'color': '#047857', 'category': 'fire_allied'},
     'us_ppi_glass':      {'bls_id': 'WPU1311',        'label': 'US PPI: Flat Glass',                     'color': '#059669', 'category': 'fire_allied'},
     'us_ppi_construction': {'bls_id': 'WPUFD43',      'label': 'US PPI: Final Demand Construction',      'color': '#0d9488', 'category': 'fire_allied'},
     'us_ppi_bldg_maint': {'bls_id': 'PCU2381MR2381MR','label': 'US PPI: Nonresidential Bldg Maint & Repair', 'color': '#14b8a6', 'category': 'fire_allied'},
-    # Auto Physical Damage (CPI + PPI)
-    'us_vehicle_maint':  {'bls_id': 'CUSR0000SETD',   'label': 'US CPI: Motor Vehicle Maint & Repair',   'color': '#0e7490', 'category': 'auto_physical'},
-    'us_ppi_auto_parts': {'bls_id': 'WPU1412',        'label': 'US PPI: Motor Vehicle Parts',            'color': '#0891b2', 'category': 'auto_physical'},
+    'us_awe_specialty_trade': {'bls_id': 'CES2023800011', 'label': 'US AWE: Specialty Trade Contractors', 'color': '#2dd4bf', 'category': 'fire_allied'},
+    # Auto Physical Damage (CPI + PPI + AWE) — 3 separate CPI vehicle series
+    'us_vehicle_servicing': {'bls_id': 'CUUR0000SETD02', 'label': 'US CPI: Vehicle Maintenance & Servicing', 'color': '#0e7490', 'category': 'auto_physical'},
+    'us_vehicle_repair':    {'bls_id': 'CUUR0000SETD03', 'label': 'US CPI: Vehicle Repair',                  'color': '#0891b2', 'category': 'auto_physical'},
+    'us_vehicle_bodywork':  {'bls_id': 'CUUR0000SETD01', 'label': 'US CPI: Vehicle Body Work',               'color': '#06b6d4', 'category': 'auto_physical'},
+    'us_ppi_auto_parts': {'bls_id': 'WPU1412',        'label': 'US PPI: Motor Vehicle Parts',            'color': '#22d3ee', 'category': 'auto_physical'},
     # Bodily Injury / Workers Comp (CES AWE by industry)
     'us_awe_total':      {'bls_id': 'CES0500000011',  'label': 'US AWE: Total Private',                  'color': '#1d4ed8', 'category': 'bodily_injury'},
     'us_awe_mfg':        {'bls_id': 'CES3000000011',  'label': 'US AWE: Manufacturing',                  'color': '#2563eb', 'category': 'bodily_injury'},
     'us_awe_construction': {'bls_id': 'CES2000000011', 'label': 'US AWE: Construction',                  'color': '#3b82f6', 'category': 'bodily_injury'},
     'us_awe_transport':  {'bls_id': 'CES4300000011',  'label': 'US AWE: Transportation & Warehousing',   'color': '#60a5fa', 'category': 'bodily_injury'},
     'us_awe_wholesale':  {'bls_id': 'CES4142000011',  'label': 'US AWE: Wholesale Trade',                'color': '#93c5fd', 'category': 'bodily_injury'},
-    'us_awe_finance':    {'bls_id': 'CES5500000011',  'label': 'US AWE: Financial Activities',           'color': '#7c3aed', 'category': 'insurance'},
-    'us_awe_prof_biz':   {'bls_id': 'CES6000000011',  'label': 'US AWE: Professional & Business Svcs',   'color': '#8b5cf6', 'category': 'legal'},
     'us_awe_ed_health':  {'bls_id': 'CES6500000011',  'label': 'US AWE: Education & Health Services',    'color': '#a78bfa', 'category': 'bodily_injury'},
     'us_awe_leisure':    {'bls_id': 'CES7000000011',  'label': 'US AWE: Leisure & Hospitality',          'color': '#c4b5fd', 'category': 'bodily_injury'},
+    # Insurance + Legal (AWE)
+    'us_awe_finance':    {'bls_id': 'CES5500000011',  'label': 'US AWE: Financial Activities',           'color': '#7c3aed', 'category': 'insurance'},
+    'us_awe_prof_biz':   {'bls_id': 'CES6000000011',  'label': 'US AWE: Professional & Business Svcs',   'color': '#8b5cf6', 'category': 'legal'},
     'us_awe_other_svc':  {'bls_id': 'CES8000000011',  'label': 'US AWE: Other Services',                 'color': '#ddd6fe', 'category': 'auto_physical'},
 }
 
@@ -262,75 +266,94 @@ BLS_PERIOD_MAP = {f'M{str(i).zfill(2)}': i for i in range(1, 13)}
 
 
 def _fetch_bls_series():
-    """Fetch all US BLS insurance series via API v2. Returns (yoy_dict, raw_dict)."""
+    """Fetch all US BLS insurance series via API v2. Returns (yoy_dict, raw_dict).
+    Makes multiple requests to get maximum historical data (BLS allows 20yr per request with key).
+    """
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     from config import Config
     api_key = Config.BLS_API_KEY
     current_year = datetime.utcnow().year
-    start_year = current_year - (20 if api_key else 10)
 
     # Build list of all BLS series IDs
     series_ids = [info['bls_id'] for info in BLS_SERIES.values()]
     id_to_key = {info['bls_id']: key for key, info in BLS_SERIES.items()}
 
-    # BLS API allows max 50 series per request (we have ~25, fits in one call)
-    payload = {
-        'seriesid': series_ids,
-        'startyear': str(start_year),
-        'endyear': str(current_year),
-    }
+    # BLS API allows max 20-year range per request with key, 10 without
+    # Make multiple requests to go back as far as possible
     if api_key:
-        payload['registrationkey'] = api_key
+        ranges = [(2000, 2019), (2020, current_year)]
+    else:
+        ranges = [(current_year - 10, current_year)]
 
-    yoy_data = {}
-    raw_data = {}
+    # Accumulate points per series across all requests
+    all_points = {key: [] for key in BLS_SERIES}
 
-    try:
-        resp = requests.post(BLS_API_URL, json=payload,
-                             headers={'Content-Type': 'application/json'},
-                             timeout=60, verify=False)
-        resp.raise_for_status()
-        result = resp.json()
+    for start_yr, end_yr in ranges:
+        payload = {
+            'seriesid': series_ids,
+            'startyear': str(start_yr),
+            'endyear': str(end_yr),
+        }
+        if api_key:
+            payload['registrationkey'] = api_key
 
-        if result.get('status') != 'REQUEST_SUCCEEDED':
-            logger.warning(f"BLS API error: {result.get('message', 'Unknown')}")
-            return {}, {}
+        try:
+            resp = requests.post(BLS_API_URL, json=payload,
+                                 headers={'Content-Type': 'application/json'},
+                                 timeout=60, verify=False)
+            resp.raise_for_status()
+            result = resp.json()
 
-        for series in result.get('Results', {}).get('series', []):
-            series_id = series.get('seriesID', '')
-            key = id_to_key.get(series_id)
-            if not key:
+            if result.get('status') != 'REQUEST_SUCCEEDED':
+                logger.warning(f"BLS API error ({start_yr}-{end_yr}): {result.get('message', 'Unknown')}")
                 continue
 
-            points = []
-            for item in series.get('data', []):
-                period = item.get('period', '')
-                if period not in BLS_PERIOD_MAP:
-                    continue
-                value = item.get('value', '')
-                if value == '-' or value == '':
-                    continue
-                try:
-                    points.append({
-                        'year': int(item.get('year', '')),
-                        'month': BLS_PERIOD_MAP[period],
-                        'value': float(value),
-                        'date': f'{item["year"]}-{str(BLS_PERIOD_MAP[period]).zfill(2)}',
-                    })
-                except (ValueError, TypeError):
+            for series in result.get('Results', {}).get('series', []):
+                series_id = series.get('seriesID', '')
+                key = id_to_key.get(series_id)
+                if not key:
                     continue
 
-            # BLS returns newest first — reverse to chronological
-            points.sort(key=lambda p: (p['year'], p['month']))
-            if points:
-                raw_data[key] = points
-                yoy_data[key] = _compute_yoy(points)
+                for item in series.get('data', []):
+                    period = item.get('period', '')
+                    if period not in BLS_PERIOD_MAP:
+                        continue
+                    value = item.get('value', '')
+                    if value == '-' or value == '':
+                        continue
+                    try:
+                        all_points[key].append({
+                            'year': int(item.get('year', '')),
+                            'month': BLS_PERIOD_MAP[period],
+                            'value': float(value),
+                            'date': f'{item["year"]}-{str(BLS_PERIOD_MAP[period]).zfill(2)}',
+                        })
+                    except (ValueError, TypeError):
+                        continue
 
-    except Exception as e:
-        logger.warning(f"BLS insurance series fetch failed: {e}")
+        except Exception as e:
+            logger.warning(f"BLS fetch failed ({start_yr}-{end_yr}): {e}")
 
+    # Deduplicate and sort
+    yoy_data = {}
+    raw_data = {}
+    for key, points in all_points.items():
+        # Deduplicate by (year, month)
+        seen = set()
+        unique = []
+        for p in points:
+            k = (p['year'], p['month'])
+            if k not in seen:
+                seen.add(k)
+                unique.append(p)
+        unique.sort(key=lambda p: (p['year'], p['month']))
+        if unique:
+            raw_data[key] = unique
+            yoy_data[key] = _compute_yoy(unique)
+
+    logger.info(f"BLS: fetched {len(raw_data)} series with data")
     return yoy_data, raw_data
 
 
