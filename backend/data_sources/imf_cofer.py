@@ -1,12 +1,18 @@
 """
 Central Bank Reserves data client.
 
-Primary: DBnomics IMF/IRFCL (monthly, ~94 countries, free, no auth)
-  - RAFA_USD  = Total official reserve assets (USD millions)
+Primary: IMF SDMX Central (monthly, live, authoritative)
+  - sdmxcentral.imf.org replaced the retired dataservices.imf.org on 2025-11-05
+  - RAFA_USD   = Total official reserve assets (USD millions)
   - RAFAFX_USD = Foreign currency reserves (USD millions)
   - Gold = Total - FX
 
-Fallback: World Bank API (annual, ~180 countries)
+Fallback 1: DBnomics IMF/IRFCL mirror (monthly, may be stale)
+  - DBnomics' mirror was frozen on 2025-08-31 and has not yet been
+    rewritten for the new IMF API. Kept as a secondary in case IMF
+    SDMX Central is temporarily unreachable.
+
+Fallback 2: World Bank API (annual, ~180 countries)
   - FI.RES.TOTL.CD = Total reserves including gold (current US$)
   - FI.RES.XGLD.CD = Foreign exchange reserves excluding gold (current US$)
 
@@ -23,7 +29,22 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL = 86400  # 24 hours
 
-# ── DBnomics / IMF IRFCL (primary — monthly) ──────────────────────────────
+# ── IMF SDMX Central (primary — live monthly) ────────────────────────────
+#
+# DBnomics' IRFCL mirror was frozen on 2025-08-31 because the legacy IMF API
+# (dataservices.imf.org) was retired on 2025-11-05 and DBnomics has not yet
+# rewritten its IMF fetcher for the new SDMX Central API. To keep the data
+# page current, we query IMF SDMX Central directly and only fall back to
+# the DBnomics snapshot / World Bank annual data on failure.
+#
+# See: https://git.nomics.world/dbnomics-fetchers/imf-fetcher/-/issues/4
+IMF_SDMX_BASE = 'https://sdmxcentral.imf.org/sdmx/v2'
+IMF_SDMX_HEADERS = {
+    'Accept': 'application/vnd.sdmx.data+json;version=2.0.0',
+    'User-Agent': 'georisk/1.0 (reserves refresh)',
+}
+
+# ── DBnomics / IMF IRFCL (fallback — monthly mirror) ──────────────────────
 
 DBNOMICS_BASE = 'https://api.db.nomics.world/v22'
 
@@ -149,7 +170,252 @@ def _empty_result():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# PRIMARY: DBnomics IMF/IRFCL (monthly)
+# Shared result builder (used by all monthly sources)
+# ══════════════════════════════════════════════════════════════════════════
+
+def _usd_millions_to_billions(value):
+    """Convert a raw USD-millions observation to USD-billions (or None)."""
+    if value is None:
+        return None
+    try:
+        return round(float(value) / 1000, 2)
+    except (ValueError, TypeError):
+        return None
+
+
+def _build_reserves_result(total_by_country, fx_by_country, source_label, frequency='Monthly'):
+    """Assemble the unified reserves payload from parsed country dicts.
+
+    Inputs are mappings of ``{iso2: {period: value_in_usd_millions}}``.
+    Returns the standard result dict consumed by /api/cofer, or ``None`` if
+    there is no usable data.
+    """
+    if not total_by_country:
+        return None
+
+    all_periods = set()
+    for cd in list(total_by_country.values()) + list(fx_by_country.values()):
+        all_periods.update(cd.keys())
+
+    periods = sorted(p for p in all_periods if p >= '2000-01')
+    if not periods:
+        return None
+
+    countries = []
+    for iso2 in total_by_country:
+        iso3 = ISO2_TO_ISO3.get(iso2)
+        if not iso3:
+            continue  # Skip countries not in our display mapping
+
+        total_data = total_by_country.get(iso2, {})
+        fx_data = fx_by_country.get(iso2, {})
+
+        total_values = []
+        fx_values = []
+        gold_values = []
+
+        for period in periods:
+            total_b = _usd_millions_to_billions(total_data.get(period))
+            fx_b = _usd_millions_to_billions(fx_data.get(period))
+            gold_b = round(total_b - fx_b, 2) if (total_b is not None and fx_b is not None) else None
+
+            total_values.append(total_b)
+            fx_values.append(fx_b)
+            gold_values.append(gold_b)
+
+        # Skip countries with no usable total reserves at all
+        if not any(v is not None for v in total_values):
+            continue
+
+        display_name = COUNTRY_NAMES.get(iso3, iso3)
+        countries.append({
+            'iso3': iso3,
+            'name': display_name,
+            'total_reserves': total_values,
+            'fx_reserves': fx_values,
+            'gold_reserves': gold_values,
+        })
+
+    if not countries:
+        return None
+
+    def latest_val(c):
+        for v in reversed(c['total_reserves']):
+            if v is not None:
+                return v
+        return 0
+    countries.sort(key=latest_val, reverse=True)
+
+    return {
+        'years': periods,
+        'countries': countries,
+        'regions': list(RESERVES_REGIONS.keys()),
+        'region_members': RESERVES_REGIONS,
+        'meta': {
+            'source': source_label,
+            'frequency': frequency,
+            'country_count': len(countries),
+            'period_range': f'{periods[0]} to {periods[-1]}',
+        }
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PRIMARY: IMF SDMX Central (live monthly data)
+# ══════════════════════════════════════════════════════════════════════════
+
+def _fetch_imf_sdmx_indicator(indicator_code):
+    """Fetch one IRFCL indicator for all countries from IMF SDMX Central.
+
+    The IRFCL series key is ``FREQ.REF_AREA.INDICATOR.REF_SECTOR``; we
+    wildcard ``REF_AREA`` (empty slot) so a single request covers every
+    reporter. ``REF_SECTOR=S1X`` matches the "monetary authorities" rollup
+    that IRFCL uses for per-country headline reserves.
+    """
+    key = f'M..{indicator_code}.S1X'
+    url = f'{IMF_SDMX_BASE}/data/dataflow/IMF.STA/IRFCL/+/{key}'
+    params = {
+        'format': 'jsondata',
+        'startPeriod': '2000-01',
+        'dimensionAtObservation': 'TIME_PERIOD',
+    }
+    resp = requests.get(url, params=params, headers=IMF_SDMX_HEADERS, timeout=120)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _parse_imf_sdmx_series(doc):
+    """Parse an SDMX-JSON 2.0 data message into ``{iso2: {period: value}}``.
+
+    Handles the nested ``data.dataSets[0].series`` / ``data.structures[0]``
+    layout returned by ``sdmxcentral.imf.org``. Series keys like
+    ``"0:12:0:0"`` index into ``structures[0].dimensions.series``; observation
+    keys index into ``structures[0].dimensions.observation``.
+    """
+    if not doc:
+        return {}
+
+    # SDMX-JSON 2.0 wraps the payload in a top-level "data" object; 1.0 does not.
+    data = doc.get('data') if isinstance(doc.get('data'), dict) else doc
+    datasets = data.get('dataSets') or []
+    structures = data.get('structures') or data.get('structure') or []
+    if not datasets or not structures:
+        return {}
+
+    structure = structures[0] if isinstance(structures, list) else structures
+    dims = structure.get('dimensions', {}) if structure else {}
+    series_dims = dims.get('series') or []
+    obs_dims = dims.get('observation') or []
+
+    # Locate REF_AREA in the series dimension list
+    ref_area_pos = None
+    ref_area_values = []
+    for i, dim in enumerate(series_dims):
+        if dim.get('id') == 'REF_AREA':
+            ref_area_pos = i
+            ref_area_values = dim.get('values', [])
+            break
+    if ref_area_pos is None:
+        return {}
+
+    # Locate TIME_PERIOD in the observation dimension list
+    time_pos = None
+    time_values = []
+    for i, dim in enumerate(obs_dims):
+        if dim.get('id') == 'TIME_PERIOD':
+            time_pos = i
+            time_values = dim.get('values', [])
+            break
+    if time_pos is None:
+        return {}
+
+    all_periods = [v.get('id', '') for v in time_values]
+
+    result = {}
+    series_obj = datasets[0].get('series', {}) or {}
+    for series_key, series_data in series_obj.items():
+        parts = series_key.split(':')
+        if ref_area_pos >= len(parts):
+            continue
+        try:
+            ra_idx = int(parts[ref_area_pos])
+        except ValueError:
+            continue
+        if ra_idx < 0 or ra_idx >= len(ref_area_values):
+            continue
+
+        iso2 = ref_area_values[ra_idx].get('id', '')
+        if not iso2:
+            continue
+
+        period_values = {}
+        for obs_key, obs_arr in (series_data.get('observations') or {}).items():
+            obs_parts = obs_key.split(':')
+            if time_pos >= len(obs_parts):
+                continue
+            try:
+                t_idx = int(obs_parts[time_pos])
+            except ValueError:
+                continue
+            if t_idx < 0 or t_idx >= len(all_periods):
+                continue
+            period = all_periods[t_idx]
+            if isinstance(obs_arr, list) and obs_arr and obs_arr[0] is not None:
+                period_values[period] = obs_arr[0]
+
+        if period_values:
+            # Multiple series could exist per country (e.g. different
+            # REF_SECTOR buckets); merge observations so the most complete
+            # time series wins.
+            if iso2 in result:
+                result[iso2].update(period_values)
+            else:
+                result[iso2] = period_values
+
+    return result
+
+
+def _fetch_reserves_imf_sdmx():
+    """Fetch monthly reserves from IMF SDMX Central (primary source)."""
+    try:
+        logger.info("Fetching reserves from IMF SDMX Central (live)...")
+
+        total_doc = _fetch_imf_sdmx_indicator('RAFA_USD')
+        fx_doc = _fetch_imf_sdmx_indicator('RAFAFX_USD')
+
+        total_by_country = _parse_imf_sdmx_series(total_doc)
+        fx_by_country = _parse_imf_sdmx_series(fx_doc)
+
+        if not total_by_country:
+            logger.warning("IMF SDMX Central returned no total reserves data")
+            return None
+
+        result = _build_reserves_result(
+            total_by_country,
+            fx_by_country,
+            source_label='IMF IRFCL (sdmxcentral.imf.org)',
+        )
+
+        if result:
+            logger.info(
+                "IMF SDMX reserves loaded: %d months, %d countries, latest %s",
+                len(result['years']), len(result['countries']), result['years'][-1],
+            )
+        return result
+
+    except requests.exceptions.Timeout:
+        logger.error("IMF SDMX Central timeout")
+        return None
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"IMF SDMX Central HTTP error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"IMF SDMX Central fetch failed: {e}")
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# FALLBACK: DBnomics IMF/IRFCL mirror (monthly, may be stale)
 # ══════════════════════════════════════════════════════════════════════════
 
 def _fetch_dbnomics_indicator(indicator_code):
@@ -172,11 +438,10 @@ def _fetch_dbnomics_indicator(indicator_code):
 
 
 def _fetch_reserves_dbnomics():
-    """Fetch monthly reserves from DBnomics IMF/IRFCL for all countries."""
+    """Fetch monthly reserves from DBnomics IMF/IRFCL (fallback mirror)."""
     try:
         logger.info("Fetching reserves from DBnomics IMF/IRFCL (monthly)...")
 
-        # Fetch both indicators (2 requests for all countries)
         total_docs = _fetch_dbnomics_indicator('RAFA_USD')
         fx_docs = _fetch_dbnomics_indicator('RAFAFX_USD')
 
@@ -184,112 +449,29 @@ def _fetch_reserves_dbnomics():
             logger.warning("DBnomics returned no total reserves data")
             return None
 
-        # Parse total reserves: {iso2: {period: value_millions}}
-        total_by_country = {}
-        for doc in total_docs:
-            iso2 = doc.get('dimensions', {}).get('REF_AREA', '')
-            periods = doc.get('period', [])
-            values = doc.get('value', [])
-            if iso2 and periods:
-                total_by_country[iso2] = dict(zip(periods, values))
+        def _parse(docs):
+            by_country = {}
+            for doc in docs:
+                iso2 = doc.get('dimensions', {}).get('REF_AREA', '')
+                periods = doc.get('period', [])
+                values = doc.get('value', [])
+                if iso2 and periods:
+                    by_country[iso2] = dict(zip(periods, values))
+            return by_country
 
-        # Parse FX reserves
-        fx_by_country = {}
-        for doc in fx_docs:
-            iso2 = doc.get('dimensions', {}).get('REF_AREA', '')
-            periods = doc.get('period', [])
-            values = doc.get('value', [])
-            if iso2 and periods:
-                fx_by_country[iso2] = dict(zip(periods, values))
+        total_by_country = _parse(total_docs)
+        fx_by_country = _parse(fx_docs)
 
-        # Build unified period list (from all countries, both indicators)
-        all_periods = set()
-        for country_data in list(total_by_country.values()) + list(fx_by_country.values()):
-            all_periods.update(country_data.keys())
-
-        # Filter to periods >= 2000-01 and sort
-        periods = sorted(p for p in all_periods if p >= '2000-01')
-
-        if not periods:
-            logger.warning("No periods found in IRFCL data")
-            return None
-
-        # Build country series
-        countries = []
-        for iso2 in total_by_country:
-            iso3 = ISO2_TO_ISO3.get(iso2)
-            if not iso3:
-                continue  # Skip countries not in our mapping
-
-            total_data = total_by_country.get(iso2, {})
-            fx_data = fx_by_country.get(iso2, {})
-
-            total_values = []
-            fx_values = []
-            gold_values = []
-
-            for period in periods:
-                raw_total = total_data.get(period)
-                raw_fx = fx_data.get(period)
-
-                # Convert from millions to billions, handle non-numeric
-                total_b = None
-                fx_b = None
-                gold_b = None
-
-                if raw_total is not None:
-                    try:
-                        total_b = round(float(raw_total) / 1000, 2)
-                    except (ValueError, TypeError):
-                        total_b = None
-
-                if raw_fx is not None:
-                    try:
-                        fx_b = round(float(raw_fx) / 1000, 2)
-                    except (ValueError, TypeError):
-                        fx_b = None
-
-                if total_b is not None and fx_b is not None:
-                    gold_b = round(total_b - fx_b, 2)
-
-                total_values.append(total_b)
-                fx_values.append(fx_b)
-                gold_values.append(gold_b)
-
-            display_name = COUNTRY_NAMES.get(iso3, iso3)
-
-            countries.append({
-                'iso3': iso3,
-                'name': display_name,
-                'total_reserves': total_values,
-                'fx_reserves': fx_values,
-                'gold_reserves': gold_values,
-            })
-
-        # Sort by latest total reserves descending
-        def latest_val(c):
-            for v in reversed(c['total_reserves']):
-                if v is not None:
-                    return v
-            return 0
-        countries.sort(key=latest_val, reverse=True)
-
-        result = {
-            'years': periods,
-            'countries': countries,
-            'regions': list(RESERVES_REGIONS.keys()),
-            'region_members': RESERVES_REGIONS,
-            'meta': {
-                'source': 'IMF IRFCL (via DBnomics)',
-                'frequency': 'Monthly',
-                'country_count': len(countries),
-                'period_range': f'{periods[0]} to {periods[-1]}' if periods else '',
-            }
-        }
-
-        logger.info(
-            f"IRFCL reserves loaded: {len(periods)} months, {len(countries)} countries"
+        result = _build_reserves_result(
+            total_by_country,
+            fx_by_country,
+            source_label='IMF IRFCL (via DBnomics mirror)',
         )
+        if result:
+            logger.info(
+                "DBnomics IRFCL reserves loaded: %d months, %d countries, latest %s",
+                len(result['years']), len(result['countries']), result['years'][-1],
+            )
         return result
 
     except requests.exceptions.Timeout:
@@ -433,11 +615,22 @@ def _fetch_reserves_wb():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ORCHESTRATOR: try DBnomics first, fall back to World Bank
+# ORCHESTRATOR: IMF SDMX Central → DBnomics mirror → World Bank annual
 # ══════════════════════════════════════════════════════════════════════════
 
 def _fetch_reserves():
-    """Fetch reserves: DBnomics IRFCL monthly first, World Bank annual fallback."""
+    """Fetch reserves from the freshest source available.
+
+    Order:
+      1. IMF SDMX Central (live monthly, authoritative)
+      2. DBnomics IRFCL mirror (may be stale while their fetcher is rewritten)
+      3. World Bank annual (last-resort fallback)
+    """
+    result = _fetch_reserves_imf_sdmx()
+    if result:
+        return result
+    logger.warning("IMF SDMX Central failed — falling back to DBnomics IRFCL mirror")
+
     result = _fetch_reserves_dbnomics()
     if result:
         return result
