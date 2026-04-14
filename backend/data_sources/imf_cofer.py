@@ -1,22 +1,23 @@
 """
 Central Bank Reserves data client.
 
-Primary: IMF SDMX Central (monthly, live, authoritative)
-  - sdmxcentral.imf.org replaced the retired dataservices.imf.org on 2025-11-05
+Primary: IMF Data API (api.imf.org/external/sdmx/3.0, live monthly)
+  - Replaced the retired dataservices.imf.org on 2025-11-05.
   - RAFA_USD   = Total official reserve assets (USD millions)
   - RAFAFX_USD = Foreign currency reserves (USD millions)
   - Gold = Total - FX
 
 Fallback 1: DBnomics IMF/IRFCL mirror (monthly, may be stale)
   - DBnomics' mirror was frozen on 2025-08-31 and has not yet been
-    rewritten for the new IMF API. Kept as a secondary in case IMF
-    SDMX Central is temporarily unreachable.
+    rewritten for the new IMF API. Kept as a secondary in case
+    api.imf.org is temporarily unreachable.
 
 Fallback 2: World Bank API (annual, ~180 countries)
   - FI.RES.TOTL.CD = Total reserves including gold (current US$)
   - FI.RES.XGLD.CD = Foreign exchange reserves excluding gold (current US$)
 
-Thread-safe cache with 24-hour TTL.
+Thread-safe cache with 24-hour TTL. Use refresh_cache() to force a
+re-fetch (wired up to /api/cofer/refresh in backend.routes).
 """
 
 import json
@@ -29,18 +30,31 @@ logger = logging.getLogger(__name__)
 
 CACHE_TTL = 86400  # 24 hours
 
-# ── IMF SDMX Central (primary — live monthly) ────────────────────────────
+# ── IMF Data API (primary — live monthly) ────────────────────────────────
 #
 # DBnomics' IRFCL mirror was frozen on 2025-08-31 because the legacy IMF API
 # (dataservices.imf.org) was retired on 2025-11-05 and DBnomics has not yet
 # rewritten its IMF fetcher for the new SDMX Central API. To keep the data
-# page current, we query IMF SDMX Central directly and only fall back to
-# the DBnomics snapshot / World Bank annual data on failure.
+# page current we query the new IMF Data API (api.imf.org) directly and
+# only fall back to the DBnomics snapshot / World Bank annual data on
+# failure.
 #
-# See: https://git.nomics.world/dbnomics-fetchers/imf-fetcher/-/issues/4
-IMF_SDMX_BASE = 'https://sdmxcentral.imf.org/sdmx/v2'
-IMF_SDMX_HEADERS = {
-    'Accept': 'application/vnd.sdmx.data+json;version=2.0.0',
+# NB: sdmxcentral.imf.org is the IMF Fusion Metadata Registry and only
+# serves *structures*, not data. Actual observations live on
+# api.imf.org/external/sdmx/{2.1,3.0}. The 3.0 endpoint is the current
+# recommended one and natively returns SDMX-JSON 2.0.0.
+#
+# See:
+#   - https://git.nomics.world/dbnomics-fetchers/imf-fetcher/-/issues/4
+#   - https://github.com/Teal-Insights/r-imfapi (reference implementation)
+IMF_DATA_BASE_V3 = 'https://api.imf.org/external/sdmx/3.0'
+IMF_DATA_BASE_V21 = 'https://api.imf.org/external/sdmx/2.1'
+IMF_DATA_HEADERS_V3 = {
+    'Accept': 'application/json, application/vnd.sdmx.data+json;version=2.0.0',
+    'User-Agent': 'georisk/1.0 (reserves refresh)',
+}
+IMF_DATA_HEADERS_V21 = {
+    'Accept': 'application/vnd.sdmx.data+json;version=1.0.0',
     'User-Agent': 'georisk/1.0 (reserves refresh)',
 }
 
@@ -261,27 +275,63 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# PRIMARY: IMF SDMX Central (live monthly data)
+# PRIMARY: IMF Data API (live monthly data)
 # ══════════════════════════════════════════════════════════════════════════
 
-def _fetch_imf_sdmx_indicator(indicator_code):
-    """Fetch one IRFCL indicator for all countries from IMF SDMX Central.
+def _fetch_imf_data_indicator(indicator_code):
+    """Fetch one IRFCL indicator for all countries from the IMF Data API.
 
     The IRFCL series key is ``FREQ.REF_AREA.INDICATOR.REF_SECTOR``; we
-    wildcard ``REF_AREA`` (empty slot) so a single request covers every
-    reporter. ``REF_SECTOR=S1X`` matches the "monetary authorities" rollup
-    that IRFCL uses for per-country headline reserves.
+    wildcard ``REF_AREA`` (``*``) so a single request covers every reporter.
+    ``REF_SECTOR=S1X`` matches the "monetary authorities" rollup that IRFCL
+    uses for per-country headline reserves.
+
+    We try the SDMX 3.0 endpoint first (current recommended) and fall back
+    to SDMX 2.1 REST 1.x if it's unavailable. On every failure we surface
+    the HTTP status / body in the log so future breakages are diagnosable.
     """
-    key = f'M..{indicator_code}.S1X'
-    url = f'{IMF_SDMX_BASE}/data/dataflow/IMF.STA/IRFCL/+/{key}'
-    params = {
-        'format': 'jsondata',
-        'startPeriod': '2000-01',
+    # Primary: SDMX 3.0 REST 2.x (native SDMX-JSON 2.0.0). Key uses ``*``
+    # for wildcarded dimensions per the SDMX 3.0 conventions.
+    v3_key = f'M.*.{indicator_code}.S1X'
+    v3_url = f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/{v3_key}'
+    v3_params = {
         'dimensionAtObservation': 'TIME_PERIOD',
+        'attributes': 'dsd',
+        'measures': 'all',
     }
-    resp = requests.get(url, params=params, headers=IMF_SDMX_HEADERS, timeout=120)
-    resp.raise_for_status()
-    return resp.json()
+
+    try:
+        resp = requests.get(v3_url, params=v3_params, headers=IMF_DATA_HEADERS_V3, timeout=180)
+        if resp.status_code == 200:
+            return resp.json()
+        logger.warning(
+            "IMF Data 3.0 %s returned HTTP %s: %s",
+            indicator_code, resp.status_code, resp.text[:300],
+        )
+    except requests.exceptions.RequestException as e:
+        logger.warning("IMF Data 3.0 %s request failed: %s", indicator_code, e)
+
+    # Fallback: SDMX 2.1 REST 1.x. Key uses empty slots for wildcards per
+    # the older SDMX 2.1 conventions.
+    v21_key = f'M..{indicator_code}.S1X'
+    v21_url = f'{IMF_DATA_BASE_V21}/data/IMF.STA,IRFCL,1.0/{v21_key}'
+    v21_params = {
+        'format': 'sdmx-json',
+        'startPeriod': '2000-01',
+    }
+
+    try:
+        resp = requests.get(v21_url, params=v21_params, headers=IMF_DATA_HEADERS_V21, timeout=180)
+        if resp.status_code == 200:
+            return resp.json()
+        logger.warning(
+            "IMF Data 2.1 %s returned HTTP %s: %s",
+            indicator_code, resp.status_code, resp.text[:300],
+        )
+    except requests.exceptions.RequestException as e:
+        logger.warning("IMF Data 2.1 %s request failed: %s", indicator_code, e)
+
+    return None
 
 
 def _parse_imf_sdmx_series(doc):
@@ -376,41 +426,38 @@ def _parse_imf_sdmx_series(doc):
 
 
 def _fetch_reserves_imf_sdmx():
-    """Fetch monthly reserves from IMF SDMX Central (primary source)."""
+    """Fetch monthly reserves from the IMF Data API (primary source)."""
     try:
-        logger.info("Fetching reserves from IMF SDMX Central (live)...")
+        logger.info("Fetching reserves from IMF Data API (live)...")
 
-        total_doc = _fetch_imf_sdmx_indicator('RAFA_USD')
-        fx_doc = _fetch_imf_sdmx_indicator('RAFAFX_USD')
+        total_doc = _fetch_imf_data_indicator('RAFA_USD')
+        fx_doc = _fetch_imf_data_indicator('RAFAFX_USD')
 
         total_by_country = _parse_imf_sdmx_series(total_doc)
         fx_by_country = _parse_imf_sdmx_series(fx_doc)
 
         if not total_by_country:
-            logger.warning("IMF SDMX Central returned no total reserves data")
+            logger.warning("IMF Data API returned no total reserves data")
             return None
 
         result = _build_reserves_result(
             total_by_country,
             fx_by_country,
-            source_label='IMF IRFCL (sdmxcentral.imf.org)',
+            source_label='IMF IRFCL (api.imf.org)',
         )
 
         if result:
             logger.info(
-                "IMF SDMX reserves loaded: %d months, %d countries, latest %s",
+                "IMF Data API reserves loaded: %d months, %d countries, latest %s",
                 len(result['years']), len(result['countries']), result['years'][-1],
             )
         return result
 
     except requests.exceptions.Timeout:
-        logger.error("IMF SDMX Central timeout")
-        return None
-    except requests.exceptions.HTTPError as e:
-        logger.error(f"IMF SDMX Central HTTP error: {e}")
+        logger.error("IMF Data API timeout")
         return None
     except Exception as e:
-        logger.error(f"IMF SDMX Central fetch failed: {e}")
+        logger.error(f"IMF Data API fetch failed: {e}")
         return None
 
 
@@ -615,21 +662,21 @@ def _fetch_reserves_wb():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# ORCHESTRATOR: IMF SDMX Central → DBnomics mirror → World Bank annual
+# ORCHESTRATOR: IMF Data API → DBnomics mirror → World Bank annual
 # ══════════════════════════════════════════════════════════════════════════
 
 def _fetch_reserves():
     """Fetch reserves from the freshest source available.
 
     Order:
-      1. IMF SDMX Central (live monthly, authoritative)
+      1. IMF Data API (api.imf.org, live monthly, authoritative)
       2. DBnomics IRFCL mirror (may be stale while their fetcher is rewritten)
       3. World Bank annual (last-resort fallback)
     """
     result = _fetch_reserves_imf_sdmx()
     if result:
         return result
-    logger.warning("IMF SDMX Central failed — falling back to DBnomics IRFCL mirror")
+    logger.warning("IMF Data API failed — falling back to DBnomics IRFCL mirror")
 
     result = _fetch_reserves_dbnomics()
     if result:
@@ -640,4 +687,14 @@ def _fetch_reserves():
 
 def get_cofer_data():
     """Public API: returns cached reserves data."""
+    return _cache.get()
+
+
+def refresh_cache():
+    """Clear the cache and force an immediate re-fetch.
+
+    Returns the freshly-fetched data so callers can surface the new
+    ``meta.source`` / ``meta.period_range`` without a second round-trip.
+    """
+    _cache.clear()
     return _cache.get()

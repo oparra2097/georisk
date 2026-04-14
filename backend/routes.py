@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, send_file, request
 from backend.cache.store import store
 from backend.data_sources.market_data import get_market_data, get_market_history
-from backend.data_sources.imf_cofer import get_cofer_data
+from backend.data_sources.imf_cofer import get_cofer_data, refresh_cache as refresh_cofer_cache
 from backend.data_sources.reserves_nowcast import get_nowcast_data
 from backend.data_sources.bls_cpi import get_bls_cpi_data, get_bls_components, clear_bls_caches
 from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
@@ -203,6 +203,23 @@ def get_cofer():
     """Return central bank reserves data (cached 24 hours)."""
     data = get_cofer_data()
     return jsonify(data)
+
+
+@api_bp.route('/cofer/refresh', methods=['POST', 'GET'])
+def refresh_cofer():
+    """Force-clear the reserves cache and return freshly-fetched data.
+
+    Useful when the upstream data provider releases a new period and you
+    don't want to wait for the 24-hour TTL to expire.
+    """
+    data = refresh_cofer_cache()
+    return jsonify({
+        'ok': True,
+        'source': data.get('meta', {}).get('source', 'unknown'),
+        'period_range': data.get('meta', {}).get('period_range', ''),
+        'latest_period': (data.get('years') or [''])[-1],
+        'country_count': len(data.get('countries') or []),
+    })
 
 
 @api_bp.route('/cofer/nowcast')
