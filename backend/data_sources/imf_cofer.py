@@ -265,20 +265,48 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 
         total_values = []
         fx_values = []
-        gold_values = []
 
         for period in periods:
             total_b = _usd_millions_to_billions(total_data.get(period))
             fx_b = _usd_millions_to_billions(fx_data.get(period))
-            gold_b = round(total_b - fx_b, 2) if (total_b is not None and fx_b is not None) else None
-
             total_values.append(total_b)
             fx_values.append(fx_b)
-            gold_values.append(gold_b)
 
         # Skip countries with no usable total reserves at all
         if not any(v is not None for v in total_values):
             continue
+
+        # Forward-fill trailing nulls within the display window.
+        # IMF IRFCL reporting gaps — e.g. USA stopped publishing this
+        # dataflow in 2024-01, CHN in 2024-12 — would otherwise leave
+        # big reserve holders as broken lines on the chart. We hold the
+        # last known value flat until the end of the display range and
+        # record the country's last *real* reported period so the
+        # frontend can mark forward-filled segments as stale.
+        def _forward_fill(arr):
+            last_real_idx = -1
+            last_val = None
+            for i, v in enumerate(arr):
+                if v is not None:
+                    last_real_idx = i
+                    last_val = v
+                elif last_val is not None:
+                    arr[i] = last_val
+            return last_real_idx
+        total_last_idx = _forward_fill(total_values)
+        _forward_fill(fx_values)
+
+        # Recompute gold from the (possibly forward-filled) series.
+        gold_values = []
+        for t, f in zip(total_values, fx_values):
+            if t is not None and f is not None:
+                gold_values.append(round(t - f, 2))
+            else:
+                gold_values.append(None)
+
+        latest_real_period = (
+            periods[total_last_idx] if total_last_idx >= 0 else None
+        )
 
         display_name = COUNTRY_NAMES.get(iso3, iso3)
         countries.append({
@@ -287,6 +315,7 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
             'total_reserves': total_values,
             'fx_reserves': fx_values,
             'gold_reserves': gold_values,
+            'latest_real_period': latest_real_period,
         })
 
     if not countries:
@@ -461,6 +490,48 @@ def _probe_irfcl_catalog(attempt_log=None):
             if attempt_log is not None:
                 attempt_log.append(f'catalog probe {country}: {type(e).__name__}: {str(e)[:200]}')
     return None
+
+
+def _probe_country_sectors(country, attempt_log=None):
+    """Small probe reporting which SECTOR codes a country has available.
+
+    Returns just the SECTOR dimension codes + observation counts so we
+    can see whether HKG/CHN report under the same sector as USA. Short
+    output so we can afford to probe multiple countries.
+    """
+    url = f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/{country}.*.*.M'
+    params = {'detail': 'serieskeysonly'}
+    try:
+        resp = requests.get(url, params=params, headers=IMF_DATA_HEADERS_V3, timeout=60)
+        if resp.status_code != 200:
+            if attempt_log is not None:
+                attempt_log.append(
+                    f'sector probe {country}: HTTP {resp.status_code}'
+                )
+            return None
+        doc = resp.json()
+        data = doc.get('data') if isinstance(doc.get('data'), dict) else doc
+        structures = data.get('structures') or []
+        if not structures:
+            return None
+        dims = (structures[0] or {}).get('dimensions', {}).get('series') or []
+        codes = {}
+        for dim in dims:
+            dim_id = dim.get('id')
+            values = [v.get('id', '') or v.get('value', '') for v in (dim.get('values') or [])]
+            codes[dim_id] = values
+        if attempt_log is not None:
+            attempt_log.append(
+                f'sector probe {country}: SECTOR={codes.get("SECTOR")}, '
+                f'INDICATOR count={len(codes.get("INDICATOR") or [])}'
+            )
+        return codes
+    except requests.exceptions.RequestException as e:
+        if attempt_log is not None:
+            attempt_log.append(
+                f'sector probe {country}: {type(e).__name__}: {str(e)[:200]}'
+            )
+        return None
 
 
 def _probe_irfcl_sample(attempt_log=None):
@@ -831,6 +902,13 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
         # IMF to populate the dimension value arrays with the real
         # codelist entries that downstream fetches need to match.
         _probe_irfcl_catalog(attempt_log)
+        # Sector probes for specific large-holder countries that were
+        # showing stale data in the previous diagnostic round. If HKG
+        # or CHN publish under a sector other than ``S1XS1311`` we'll
+        # see it here.
+        if attempt_log is not None:
+            for probe_country in ('CHN', 'HKG', 'JPN'):
+                _probe_country_sectors(probe_country, attempt_log)
         # Sample probe: fetch one real observation for USA to verify
         # the key format works end-to-end and eyeball the scale.
         _probe_irfcl_sample(attempt_log)
@@ -1231,6 +1309,7 @@ def diagnose_fetch():
     # so the /api/cofer/refresh endpoint can verify period order and
     # country coverage without scraping server logs.
     sample_periods = []
+    stale_countries = []
     if result and result.get('years'):
         years = result['years']
         last3 = years[-3:]
@@ -1243,6 +1322,16 @@ def diagnose_fetch():
             )
             sample_periods.append({'period': p, 'coverage': coverage})
 
+        # Report the top 15 countries' latest real reporting month so we
+        # can see which countries are being forward-filled (and by how
+        # much) on the frontend chart.
+        for c in countries[:15]:
+            stale_countries.append({
+                'iso3': c.get('iso3'),
+                'name': c.get('name'),
+                'latest_real_period': c.get('latest_real_period'),
+            })
+
     return {
         'attempts': attempts,
         'source': source,
@@ -1250,5 +1339,6 @@ def diagnose_fetch():
         'period_range': (result or {}).get('meta', {}).get('period_range', ''),
         'country_count': len((result or {}).get('countries') or []),
         'sample_periods': sample_periods,
+        'top15_latest_real': stale_countries,
         'today': _dt.date.today().isoformat(),
     }
