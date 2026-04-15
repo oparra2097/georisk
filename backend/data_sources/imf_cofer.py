@@ -548,13 +548,20 @@ def _fetch_imf_data_indicator(indicator_code, attempt_log=None):
     return None
 
 
-def _parse_imf_sdmx_series(doc):
+def _parse_imf_sdmx_series(doc, attempt_log=None):
     """Parse an SDMX-JSON 2.0 data message into ``{iso2: {period: value}}``.
 
     Handles the nested ``data.dataSets[0].series`` / ``data.structures[0]``
     layout returned by ``sdmxcentral.imf.org``. Series keys like
-    ``"0:12:0:0"`` index into ``structures[0].dimensions.series``; observation
-    keys index into ``structures[0].dimensions.observation``.
+    ``"0:12:0:0"`` index into ``structures[0].dimensions.series``.
+
+    Observation keys vary by SDMX-JSON version and ``dimensionAtObservation``
+    setting:
+      - SDMX-JSON 1.0: numeric index like ``"0"`` into
+        ``structures[0].dimensions.observation[0].values`` (indexed).
+      - SDMX-JSON 2.0 w/ ``dimensionAtObservation=TIME_PERIOD``: the key IS
+        the time period string directly, like ``"2025-M07"`` (keyed).
+    We try the indexed path first and fall back to the keyed path.
     """
     if not doc:
         return {}
@@ -611,6 +618,23 @@ def _parse_imf_sdmx_series(doc):
 
     result = {}
     series_obj = datasets[0].get('series', {}) or {}
+
+    # Diagnostic dump of the raw observation structure. Only runs when
+    # a caller passes attempt_log (diagnose_fetch path) and only for the
+    # very first series so we don't spam hundreds of log lines.
+    if attempt_log is not None and series_obj:
+        first_series_key = next(iter(series_obj))
+        first_series = series_obj[first_series_key]
+        first_obs = list((first_series.get('observations') or {}).items())[:3]
+        attempt_log.append(
+            f'  parser: time_values len={len(time_values)}, '
+            f'first3={time_values[:3]}'
+        )
+        attempt_log.append(
+            f'  parser: first series key={first_series_key}, '
+            f'first3 obs items={first_obs}'
+        )
+
     for series_key, series_data in series_obj.items():
         parts = series_key.split(':')
         if ref_area_pos >= len(parts):
@@ -641,18 +665,38 @@ def _parse_imf_sdmx_series(doc):
 
         period_values = {}
         for obs_key, obs_arr in (series_data.get('observations') or {}).items():
-            obs_parts = obs_key.split(':')
-            if time_pos >= len(obs_parts):
-                continue
+            # Two SDMX-JSON observation-key conventions; try both.
+            period = None
+            # Indexed form: obs_key is a numeric index into time_values.
             try:
-                t_idx = int(obs_parts[time_pos])
-            except ValueError:
+                obs_parts = obs_key.split(':')
+                idx_str = obs_parts[time_pos] if time_pos < len(obs_parts) else obs_parts[0]
+                t_idx = int(idx_str)
+                if 0 <= t_idx < len(all_periods):
+                    candidate = all_periods[t_idx]
+                    if candidate:
+                        period = candidate
+            except (ValueError, IndexError):
+                pass
+            # Keyed form: obs_key IS the time period string directly
+            # (e.g., "2025-M07"). SDMX-JSON 2.0 w/ dimensionAtObservation
+            # =TIME_PERIOD emits this shape.
+            if not period:
+                period = _norm_period(obs_key)
+            if not period:
                 continue
-            if t_idx < 0 or t_idx >= len(all_periods):
+
+            # Extract the primary measure value. With ``measures=all`` and
+            # ``attributes=dsd`` the obs array has shape [value, ...attrs].
+            value = None
+            if isinstance(obs_arr, list) and obs_arr:
+                value = obs_arr[0]
+            elif isinstance(obs_arr, (int, float)):
+                value = obs_arr
+            if value is None:
                 continue
-            period = all_periods[t_idx]
-            if isinstance(obs_arr, list) and obs_arr and obs_arr[0] is not None:
-                period_values[period] = obs_arr[0]
+
+            period_values[period] = value
 
         if period_values:
             # Multiple series could exist per country (e.g. different
@@ -684,7 +728,9 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
         total_doc = _fetch_imf_data_indicator('RAFA_USD', attempt_log)
         fx_doc = _fetch_imf_data_indicator('RAFAFX_USD', attempt_log)
 
-        total_by_country = _parse_imf_sdmx_series(total_doc)
+        # Pass attempt_log for the first parse so we dump a sample of
+        # the raw observation shape when diagnose_fetch is running.
+        total_by_country = _parse_imf_sdmx_series(total_doc, attempt_log)
         fx_by_country = _parse_imf_sdmx_series(fx_doc)
 
         if attempt_log is not None:
