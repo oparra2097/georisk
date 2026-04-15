@@ -702,24 +702,40 @@ def _parse_imf_sdmx_series(doc, attempt_log=None):
             # arrays normally have shape ``[OBS_VALUE, ...obs_attrs]``, but
             # api.imf.org sometimes prepends series-level attributes when
             # asked for them. Scan the array for the first real number.
+            # Skip integer 0 since some obs attributes encode as int 0
+            # ("SCALE" / "OBS_STATUS"); a 0-scale of "0 USD millions"
+            # doesn't make sense for reserves data anyway.
             value = None
-            if isinstance(obs_arr, (int, float)):
+            if isinstance(obs_arr, (int, float)) and obs_arr != 0:
                 value = obs_arr
             elif isinstance(obs_arr, list):
                 for item in obs_arr:
                     if isinstance(item, (int, float)):
+                        if item == 0:
+                            continue
                         value = item
                         break
                     if isinstance(item, str):
                         try:
-                            value = float(item)
-                            break
+                            n = float(item)
                         except (TypeError, ValueError):
                             continue
+                        if n == 0:
+                            continue
+                        value = n
+                        break
             if value is None:
                 continue
 
-            period_values[period] = value
+            # api.imf.org IRFCL ``*_USD`` indicators return values in
+            # plain US dollars — for instance USA total reserves came
+            # back as 242_257_289_682. The rest of our pipeline
+            # (builder, DBnomics path, frontend) works in USD millions,
+            # so normalize here by dividing by 1e6. Chain:
+            #   IMF raw         242_257_289_682  (USD)
+            #   ÷ 1e6    →         242_257.29     (USD millions, stored)
+            #   ÷ 1000   →             242.26     (USD billions, rendered)
+            period_values[period] = value / 1_000_000
 
         if period_values:
             # Multiple series could exist per country (e.g. different
