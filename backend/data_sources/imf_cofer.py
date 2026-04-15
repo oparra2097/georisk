@@ -927,6 +927,46 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
         total_by_country = _parse_imf_sdmx_series(total_doc, attempt_log)
         fx_by_country = _parse_imf_sdmx_series(fx_doc)
 
+        # IRFCL FX coverage is typically sparse (~10 countries). If we
+        # got good total data but poor FX, REPLACE the entire FX dataset
+        # with DBnomics IFS RAXGFX_USD which has ~140 countries. The IRFCL
+        # FX values for the few countries it does cover are often wrong
+        # (e.g. India showing -$0.61B), so a full replacement is safer
+        # than a selective backfill.
+        if total_by_country and len(fx_by_country) < len(total_by_country) * 0.5:
+            if attempt_log is not None:
+                attempt_log.append(
+                    f'IRFCL FX sparse ({len(fx_by_country)} vs {len(total_by_country)} total) '
+                    f'— replacing FX with DBnomics IFS (RAXGFX_USD)'
+                )
+            try:
+                ifs_fx_docs = _fetch_ifs_indicator('RAXGFX_USD')
+                ifs_fx = {}
+                for doc in ifs_fx_docs:
+                    code = doc.get('series_code', '')
+                    parts = code.split('.')
+                    iso2 = parts[1] if len(parts) >= 2 else ''
+                    if not iso2 or len(iso2) != 2 or not iso2.isalpha() or not iso2.isupper():
+                        continue
+                    # Match against total_by_country keys (ISO3 from api.imf.org)
+                    iso3 = ISO2_TO_ISO3.get(iso2)
+                    key = iso3 if iso3 and iso3 in total_by_country else iso2
+                    if key not in total_by_country and iso2 not in total_by_country:
+                        continue
+                    periods = doc.get('period', [])
+                    values = doc.get('value', [])
+                    if periods:
+                        ifs_fx[key] = dict(zip(periods, values))
+                if ifs_fx:
+                    fx_by_country = ifs_fx
+                if attempt_log is not None:
+                    attempt_log.append(
+                        f'After IFS replacement: fx={len(fx_by_country)} countries'
+                    )
+            except Exception as e:
+                if attempt_log is not None:
+                    attempt_log.append(f'IFS FX replacement failed: {e}')
+
         if attempt_log is not None:
             attempt_log.append(
                 f'parser extracted: total={len(total_by_country)} countries, '
