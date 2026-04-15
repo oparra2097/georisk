@@ -297,27 +297,24 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 # from the next diagnostic round.
 IMF_IRFCL_INDICATOR_CANDIDATES = {
     'RAFA_USD': (
-        # First-alphabetical numeric codes from the catalog probe; one of
-        # these is very likely to be the total-reserves headline indicator.
-        'IRFCLDT1_IRFCL121_USD',
-        'IRFCLDT1_IRFCL31_BOFIORC_USD',
-        'IRFCLDT1_IRFCL31_BOFIORCLA_USD',
-        'IRFCLDT1_IRFCL32_USD',
-        'IRFCLDT1_IRFCL34_USD',
-        'IRFCLDT1_IRFCL37_USD',
-        'IRFCLDT1_IRFCL40_USD',
-        # legacy codes in case the old naming ever comes back
-        'RAFA_USD',
-        'RAFA',
+        # Data Template 4 Row 11 = "Official reserve assets" (Section I.A
+        # subtotal) — this is the headline total reserves line in the
+        # IRFCL template. DT1 only has sub-items rows 31-65 and CDCFC.
+        'IRFCLDT4_IRFCL11_DIC_GROUP_USD',
+        'IRFCLDT4_IRFCL11_DIC_XDRB_USD',
+        'IRFCLDT4_IRFCL11_DIC_XXDR_USD',
+        # Row 1 "Official reserve assets and other foreign currency assets"
+        # (grand total of Sections I.A + I.B)
+        'IRFCLDT4_IRFCL1_LP_USD',
     ),
     'RAFAFX_USD': (
-        # Currency-and-deposits / foreign currency reserves candidates
+        # Row 12 = "Foreign currency reserves" (Section I.A.1) — the FX
+        # reserves headline line
+        'IRFCLDT4_IRFCL12_USD',
+        'IRFCLDT4_IRFCL12_LP_USD',
+        # DT1 candidates as fallback (these are sub-items but some
+        # countries only report at the detailed level)
         'IRFCLDT1_IRFCLCDCFC_USD',
-        'IRFCLDT1_IRFCLCDCFCU_USD',
-        'IRFCLDT1_IRFCL31_BOFIRC_USD',
-        'IRFCLDT1_IRFCL31_BOFIRCLA_USD',
-        'RAFAFX_USD',
-        'RAFAFX',
     ),
 }
 
@@ -337,10 +334,15 @@ def _imf_data_attempt_urls(indicator_code):
     ``IRFCLDT1_IRFCL121_USD``. We walk the candidate list declared in
     :data:`IMF_IRFCL_INDICATOR_CANDIDATES` for each internal label.
     """
+    # Minimal params: NO ``attributes=dsd`` and NO ``measures=all``.
+    # Those are the defaults on some SDMX 3.0 servers but on
+    # api.imf.org they cause observation arrays to come back shaped
+    # like ``['0', None, 0, None]`` (status + series attributes
+    # embedded) instead of the plain ``[value]`` the SDMX-JSON 2.0
+    # spec describes. Leaving the params minimal gives us the clean
+    # single-element observation arrays the parser expects.
     v3_params = {
         'dimensionAtObservation': 'TIME_PERIOD',
-        'attributes': 'dsd',
-        'measures': 'all',
     }
 
     candidates = IMF_IRFCL_INDICATOR_CANDIDATES.get(
@@ -614,7 +616,17 @@ def _parse_imf_sdmx_series(doc, attempt_log=None):
         if len(p) == 7 and p[4] == 'M':
             return p[:4] + '-' + p[5:]
         return p
-    all_periods = [_norm_period(v.get('id', '')) for v in time_values]
+
+    # api.imf.org returns dimension ``values`` entries keyed as
+    # ``{"value": "USA"}`` rather than ``{"id": "USA"}`` even though
+    # the SDMX-JSON spec uses ``id``. Accept either for every
+    # dimension-value lookup in this parser.
+    def _val_id(entry):
+        if not isinstance(entry, dict):
+            return ''
+        return entry.get('id') or entry.get('value') or entry.get('name') or ''
+
+    all_periods = [_norm_period(_val_id(v)) for v in time_values]
 
     result = {}
     series_obj = datasets[0].get('series', {}) or {}
@@ -646,7 +658,7 @@ def _parse_imf_sdmx_series(doc, attempt_log=None):
         if ra_idx < 0 or ra_idx >= len(ref_area_values):
             continue
 
-        country_code = ref_area_values[ra_idx].get('id', '')
+        country_code = _val_id(ref_area_values[ra_idx])
         if not country_code:
             continue
         # Normalize to the ISO3 representation that COUNTRY_NAMES and
@@ -686,13 +698,24 @@ def _parse_imf_sdmx_series(doc, attempt_log=None):
             if not period:
                 continue
 
-            # Extract the primary measure value. With ``measures=all`` and
-            # ``attributes=dsd`` the obs array has shape [value, ...attrs].
+            # Extract the primary measure value. SDMX-JSON 2.0 observation
+            # arrays normally have shape ``[OBS_VALUE, ...obs_attrs]``, but
+            # api.imf.org sometimes prepends series-level attributes when
+            # asked for them. Scan the array for the first real number.
             value = None
-            if isinstance(obs_arr, list) and obs_arr:
-                value = obs_arr[0]
-            elif isinstance(obs_arr, (int, float)):
+            if isinstance(obs_arr, (int, float)):
                 value = obs_arr
+            elif isinstance(obs_arr, list):
+                for item in obs_arr:
+                    if isinstance(item, (int, float)):
+                        value = item
+                        break
+                    if isinstance(item, str):
+                        try:
+                            value = float(item)
+                            break
+                        except (TypeError, ValueError):
+                            continue
             if value is None:
                 continue
 
@@ -791,6 +814,41 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
                 f'total={len(total_by_country)}, fx={len(fx_by_country)} — '
                 'probably all codes were filtered out or period format mismatch'
             )
+            return None
+
+        # Plausibility sanity check. If we guessed the wrong indicator
+        # code (e.g. a sub-item that's ~$0 for most countries), the
+        # builder will happily produce a result with bogus numbers and
+        # negative gold = total - fx. Before shipping anything to the
+        # frontend, verify USA's latest total reserves is within a
+        # plausible range (US typically reports ~$240-280B in IRFCL).
+        # If not, reject the result so the orchestrator falls through
+        # to the DBnomics mirror instead of shipping garbage.
+        if result:
+            usa = next((c for c in result['countries'] if c['iso3'] == 'USA'), None)
+            usa_latest_total = None
+            if usa:
+                for v in reversed(usa['total_reserves']):
+                    if v is not None:
+                        usa_latest_total = v
+                        break
+            # Expected range: $50B–$1.5T. USA is normally ~$250B.
+            plausible = (
+                usa_latest_total is not None
+                and 50.0 <= usa_latest_total <= 1500.0
+            )
+            if attempt_log is not None:
+                attempt_log.append(
+                    f'  plausibility check: USA latest total = '
+                    f'{usa_latest_total} B USD '
+                    f'(plausible range 50-1500) => {"OK" if plausible else "REJECTED"}'
+                )
+            if not plausible:
+                logger.warning(
+                    "IMF Data API result rejected by plausibility check: "
+                    "USA latest total = %s B USD", usa_latest_total,
+                )
+                return None
 
         if result:
             logger.info(
