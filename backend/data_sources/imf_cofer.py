@@ -287,6 +287,11 @@ def _imf_data_attempt_urls(indicator_code):
     (``FREQ.REF_AREA.INDICATOR.REF_SECTOR``) so queries built for the
     old API silently match zero series against the new one. Keys below
     use the new order with ``*`` wildcards.
+
+    The new DSD also exposes ``CURRENCY`` and ``UNIT`` as *attributes*
+    of INDICATOR rather than baking them into the indicator code, which
+    strongly suggests the indicator code may have dropped the ``_USD``
+    suffix from the legacy ``RAFA_USD``. We try both forms.
     """
     v3_params = {
         'dimensionAtObservation': 'TIME_PERIOD',
@@ -294,86 +299,155 @@ def _imf_data_attempt_urls(indicator_code):
         'measures': 'all',
     }
 
-    # Primary: COUNTRY=*, INDICATOR=code, SECTOR=S1X (monetary authorities), FREQUENCY=M
+    bare_indicator = indicator_code.replace('_USD', '')
+    # Order: indicator variants × sector variants. Stop at the first
+    # variant that actually returns data (the fetcher keeps iterating
+    # on empty 200 responses now, so all of these will be tried if
+    # earlier ones don't match anything).
+    variants = [
+        (indicator_code, 'S1X'),
+        (indicator_code, '*'),
+    ]
+    if bare_indicator != indicator_code:
+        variants += [
+            (bare_indicator, 'S1X'),
+            (bare_indicator, '*'),
+        ]
+
+    for ind, sector in variants:
+        yield (
+            f'v3 IMF.STA *.{ind}.{sector}.M',
+            f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{ind}.{sector}.M',
+            v3_params,
+            IMF_DATA_HEADERS_V3,
+        )
+
+    # Wildcard agency fallback
     yield (
-        'v3 IMF.STA/IRFCL *.X.S1X.M',
-        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{indicator_code}.S1X.M',
-        v3_params,
-        IMF_DATA_HEADERS_V3,
-    )
-    # Wildcard sector in case the IRFCL sector codelist changed from S1X
-    yield (
-        'v3 IMF.STA/IRFCL *.X.*.M',
-        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{indicator_code}.*.M',
-        v3_params,
-        IMF_DATA_HEADERS_V3,
-    )
-    # Wildcard agency in case the dataflow is registered under a different owner
-    yield (
-        'v3 all/IRFCL *.X.*.M',
+        f'v3 all *.{indicator_code}.*.M',
         f'{IMF_DATA_BASE_V3}/data/dataflow/all/IRFCL/+/*.{indicator_code}.*.M',
         v3_params,
         IMF_DATA_HEADERS_V3,
     )
 
-    # SDMX 2.1 REST 1.x fallback. Same key order, empty slots for wildcards.
+    # SDMX 2.1 REST 1.x fallback with the new key order
     v21_params = {
         'format': 'sdmx-json',
         'startPeriod': '2000-01',
     }
     yield (
-        'v21 IMF.STA,IRFCL,1.0',
+        f'v21 IMF.STA,IRFCL .{indicator_code}.S1X.M',
         f'{IMF_DATA_BASE_V21}/data/IMF.STA,IRFCL,1.0/.{indicator_code}.S1X.M',
         v21_params,
         IMF_DATA_HEADERS_V21,
     )
-    yield (
-        'v21 IRFCL short',
-        f'{IMF_DATA_BASE_V21}/data/IRFCL/.{indicator_code}.S1X.M',
-        v21_params,
-        IMF_DATA_HEADERS_V21,
-    )
+
+
+def _probe_irfcl_catalog(attempt_log=None):
+    """Query IRFCL with a narrow wildcard key to discover valid codelists.
+
+    The trick: ``US.*.*.M?detail=serieskeysonly`` asks IMF for every
+    indicator+sector combination available for the US at monthly
+    frequency, without returning any observation values. The response
+    is small but includes populated ``values`` arrays for every series
+    dimension — so we see the actual INDICATOR and SECTOR codes the
+    new DSD uses. We log the first 30 values of each dimension into
+    ``attempt_log`` so the /api/cofer/refresh diagnostic can expose
+    them if the main fetches still fail.
+    """
+    # Try a couple of country codes in case the new codelist uses ISO3
+    for country in ('US', 'USA'):
+        url = f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/{country}.*.*.M'
+        params = {'detail': 'serieskeysonly'}
+        try:
+            resp = requests.get(url, params=params, headers=IMF_DATA_HEADERS_V3, timeout=120)
+            if resp.status_code != 200:
+                if attempt_log is not None:
+                    attempt_log.append(
+                        f'catalog probe {country}: HTTP {resp.status_code} ({len(resp.content)} bytes)'
+                    )
+                continue
+            doc = resp.json()
+            data = doc.get('data') if isinstance(doc.get('data'), dict) else doc
+            structures = data.get('structures') or []
+            if not structures:
+                if attempt_log is not None:
+                    attempt_log.append(f'catalog probe {country}: 200 but no structures in response')
+                continue
+            dims = (structures[0] or {}).get('dimensions', {}).get('series') or []
+            codes = {}
+            for dim in dims:
+                dim_id = dim.get('id')
+                values = [v.get('id', '') for v in (dim.get('values') or [])]
+                codes[dim_id] = values
+            # If any dimension has populated values, we found real data
+            any_populated = any(v for v in codes.values())
+            if attempt_log is not None:
+                summary = ', '.join(f'{k}={len(v)}' for k, v in codes.items())
+                attempt_log.append(f'catalog probe {country}: 200 OK, dims: {summary}')
+                for dim_id, values in codes.items():
+                    if values:
+                        attempt_log.append(f'  {dim_id} sample: {values[:30]}')
+            if any_populated:
+                return codes
+        except requests.exceptions.RequestException as e:
+            if attempt_log is not None:
+                attempt_log.append(f'catalog probe {country}: {type(e).__name__}: {str(e)[:200]}')
+    return None
 
 
 def _fetch_imf_data_indicator(indicator_code, attempt_log=None):
     """Fetch one IRFCL indicator from the IMF Data API.
 
     Tries each URL in :func:`_imf_data_attempt_urls` and returns the
-    first successful SDMX-JSON document. Appends a short summary of
-    each attempt to ``attempt_log`` (if provided) so /api/cofer/refresh
-    can report exactly which endpoints worked or failed.
+    first document whose parser yields at least one country. A 200
+    response that parses to zero series is treated as "no match" and
+    falls through to the next variant (this is what the new IMF API
+    returns when the SDMX key positions are right but the *values*
+    don't match any catalog codes — e.g. ``RAFA_USD`` vs ``RAFA``).
+    Appends a short summary of each attempt to ``attempt_log``.
     """
     for label, url, params, headers in _imf_data_attempt_urls(indicator_code):
         try:
             resp = requests.get(url, params=params, headers=headers, timeout=180)
             status = resp.status_code
             size = len(resp.content)
-            if status == 200:
-                try:
-                    doc = resp.json()
-                except ValueError:
-                    note = f'{indicator_code} {label}: 200 but body is not JSON ({size} bytes)'
-                    if size < 5000:
-                        note += f' | body: {resp.text[:1500]}'
-                    logger.warning(note)
-                    if attempt_log is not None:
-                        attempt_log.append(note)
-                    continue
-                note = f'{indicator_code} {label}: 200 OK ({size} bytes)'
-                # Suspiciously small payloads usually indicate an empty
-                # result set or a structure-only message. Include a body
-                # sample so the /api/cofer/refresh diagnostic can show
-                # exactly what IMF returned.
+            if status != 200:
+                note = (
+                    f'{indicator_code} {label}: HTTP {status} '
+                    f'({size} bytes) — {resp.text[:200]}'
+                )
+                logger.warning(note)
+                if attempt_log is not None:
+                    attempt_log.append(note)
+                continue
+            try:
+                doc = resp.json()
+            except ValueError:
+                note = f'{indicator_code} {label}: 200 but body is not JSON ({size} bytes)'
                 if size < 5000:
-                    note += f' | body: {resp.text[:2000]}'
+                    note += f' | body: {resp.text[:1500]}'
+                logger.warning(note)
+                if attempt_log is not None:
+                    attempt_log.append(note)
+                continue
+
+            parsed_sample = _parse_imf_sdmx_series(doc)
+            if parsed_sample:
+                note = (
+                    f'{indicator_code} {label}: 200 OK ({size} bytes), '
+                    f'{len(parsed_sample)} countries parsed'
+                )
                 logger.info(note)
                 if attempt_log is not None:
                     attempt_log.append(note)
                 return doc
-            note = (
-                f'{indicator_code} {label}: HTTP {status} '
-                f'({size} bytes) — {resp.text[:200]}'
-            )
+
+            # 200 but empty — probably a code mismatch. Log body for
+            # diagnosis and fall through to the next variant.
+            note = f'{indicator_code} {label}: 200 OK ({size} bytes) but 0 series parsed'
+            if size < 5000:
+                note += f' | body: {resp.text[:1500]}'
             logger.warning(note)
             if attempt_log is not None:
                 attempt_log.append(note)
@@ -482,6 +556,13 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
     """Fetch monthly reserves from the IMF Data API (primary source)."""
     try:
         logger.info("Fetching reserves from IMF Data API (live)...")
+
+        # Probe the IRFCL catalog first to discover valid indicator and
+        # sector codes. This is a narrow query against one country with
+        # ``detail=serieskeysonly`` — small response, but enough for
+        # IMF to populate the dimension value arrays with the real
+        # codelist entries that downstream fetches need to match.
+        _probe_irfcl_catalog(attempt_log)
 
         total_doc = _fetch_imf_data_indicator('RAFA_USD', attempt_log)
         fx_doc = _fetch_imf_data_indicator('RAFAFX_USD', attempt_log)
