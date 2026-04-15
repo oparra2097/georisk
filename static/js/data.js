@@ -1855,24 +1855,24 @@
         if (summary) {
             const latestSrc = data.latest_source || '';
             summary.innerHTML = `
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
+                <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:12px;margin-bottom:20px;width:100%;">
+                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Current Rate</div>
                         <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">${latestVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">as of ${latestDate}</div>
-                        ${latestSrc ? '<div style="color:#64748b;font-size:10px;margin-top:2px;">' + latestSrc + '</div>' : ''}
+                        ${latestSrc ? '<div style="color:#64748b;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + latestSrc + '</div>' : ''}
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak</div>
                         <div style="color:#ef4444;font-size:28px;font-weight:700;margin-top:4px;">${peakVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">${peakDate}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Trade-War Low</div>
                         <div style="color:#10b981;font-size:28px;font-weight:700;margin-top:4px;">${minVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">${minDate}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Pre-Trade-War Baseline</div>
                         <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">2.40%</div>
                         <div style="color:#64748b;font-size:11px;">early Jan 2025</div>
