@@ -436,6 +436,7 @@
             case 'fertilizer-em': renderFertilizerEM(ds); break;
             case 'cofer-nowcast': renderCoferNowcast(ds); break;
             case 'insurance-inflation': renderInsuranceInflation(ds); break;
+            case 'yale-tariff': renderYaleTariff(ds); break;
         }
     }
 
@@ -1818,6 +1819,177 @@
             parts.push(countries.length + ' countries');
             if (meta.last_updated) parts.push('Updated: ' + meta.last_updated);
             metaEl.textContent = parts.join(' \u00b7 ');
+        }
+
+        // Hide history section
+        const histSection = document.getElementById('panel-history-section');
+        if (histSection) histSection.style.display = 'none';
+    }
+
+    // ══════════════════════════════════════════════════════
+    // YALE BUDGET LAB — AVERAGE EFFECTIVE TARIFF RATE
+    // ══════════════════════════════════════════════════════
+
+    function renderYaleTariff(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || !Array.isArray(data.points) || data.points.length === 0) return;
+
+        const points = data.points.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
+        const labels = points.map(p => p.date);
+        const values = points.map(p => p.value);
+
+        // Summary card — latest value, peak, min
+        const latestVal = data.latest_value != null ? data.latest_value : values[values.length - 1];
+        const peakVal = Math.max.apply(null, values);
+        const minVal = Math.min.apply(null, values);
+        const peakIdx = values.indexOf(peakVal);
+        const peakDate = points[peakIdx] ? points[peakIdx].date : '';
+        const latestDate = points[points.length - 1].date;
+
+        const summary = document.getElementById('panel-summary');
+        if (summary) {
+            summary.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Latest Rate</div>
+                        <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">${latestVal.toFixed(2)}%</div>
+                        <div style="color:#64748b;font-size:11px;">as of ${latestDate}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak (2025)</div>
+                        <div style="color:#ef4444;font-size:28px;font-weight:700;margin-top:4px;">${peakVal.toFixed(2)}%</div>
+                        <div style="color:#64748b;font-size:11px;">${peakDate}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Low (2025)</div>
+                        <div style="color:#10b981;font-size:28px;font-weight:700;margin-top:4px;">${minVal.toFixed(2)}%</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Pre-Trade-War Baseline</div>
+                        <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">~2.4%</div>
+                        <div style="color:#64748b;font-size:11px;">early Jan 2025</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Chart
+        PD.destroyChart('main');
+        const canvasEl = document.getElementById('panel-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        const color = '#1e3a8a';
+        const fillColor = 'rgba(59, 130, 246, 0.15)';
+
+        PD.setChart('main', new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Effective Tariff Rate (%)',
+                    data: values,
+                    borderColor: color,
+                    backgroundColor: fillColor,
+                    borderWidth: 2.5,
+                    fill: true,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: color,
+                    pointHoverBorderColor: '#ffffff',
+                    pointHoverBorderWidth: 2,
+                    tension: 0,  // stepped feel: keep lines straight between policy events
+                    stepped: 'before',
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        bodyFont: { size: 12 },
+                        callbacks: {
+                            label: (tooltipCtx) => {
+                                const val = tooltipCtx.parsed.y;
+                                return val == null ? 'N/A' : 'Tariff Rate: ' + val.toFixed(2) + '%';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: {
+                            color: '#9ca3af',
+                            font: { size: 11 },
+                            maxRotation: 0,
+                            autoSkip: true,
+                            maxTicksLimit: 10,
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                    },
+                    y: {
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            callback: (val) => val.toFixed(0) + '%',
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        beginAtZero: true,
+                        suggestedMax: 30,
+                    }
+                }
+            },
+        }));
+
+        // Table
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            thead.innerHTML = '<tr><th>Date</th><th>Effective Tariff Rate</th><th>Change vs. Prior</th></tr>';
+            let rows = '';
+            const reversed = points.slice().reverse();
+            reversed.forEach((p, i) => {
+                const prior = reversed[i + 1];
+                let delta = '';
+                if (prior) {
+                    const d = p.value - prior.value;
+                    const sign = d > 0 ? '+' : '';
+                    const col = d > 0 ? '#ef4444' : (d < 0 ? '#10b981' : '#64748b');
+                    delta = '<span style="color:' + col + ';">' + sign + d.toFixed(2) + ' pp</span>';
+                } else {
+                    delta = '<span style="color:#64748b;">—</span>';
+                }
+                rows += '<tr><td>' + p.date + '</td><td>' + p.value.toFixed(2) + '%</td><td>' + delta + '</td></tr>';
+            });
+            tbody.innerHTML = rows;
+        }
+
+        // Meta
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            const parts = [];
+            if (data.source) parts.push(data.source);
+            if (data.unit) parts.push(data.unit);
+            if (data.frequency) parts.push(data.frequency);
+            if (data.last_updated) parts.push('Last updated: ' + data.last_updated);
+            let metaHtml = '<div>' + parts.join(' \u00b7 ') + '</div>';
+            if (Array.isArray(data.notes) && data.notes.length) {
+                metaHtml += '<ul style="margin-top:8px;padding-left:18px;color:#64748b;font-size:12px;line-height:1.6;">';
+                data.notes.forEach(n => { metaHtml += '<li>' + n + '</li>'; });
+                metaHtml += '</ul>';
+            }
+            metaEl.innerHTML = metaHtml;
         }
 
         // Hide history section

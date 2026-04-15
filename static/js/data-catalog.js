@@ -181,6 +181,17 @@ window.ParraData.CATALOG = {
             icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 7V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v3"/></svg>',
             datasets: [
                 {
+                    id: 'yale-tariff',
+                    label: 'US Effective Tariff Rate',
+                    source: 'Yale Budget Lab',
+                    sourceDetail: 'Average Effective Tariff Rate — Policy through Nov 17, 2025 (Pre-Substitution)',
+                    api: '/api/yale-tariff',
+                    type: 'yale-tariff',
+                    controls: [],
+                    subviews: [],
+                    searchTerms: ['tariff', 'tariffs', 'Yale', 'Yale Budget Lab', 'trade', 'trade policy', 'effective tariff rate', 'import duty', 'protectionism', 'Trump tariffs', 'liberation day'],
+                },
+                {
                     id: 'cofer',
                     label: 'Central Bank Reserves',
                     source: 'IMF IRFCL',

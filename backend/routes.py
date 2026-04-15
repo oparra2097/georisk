@@ -18,6 +18,7 @@ from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
 from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
+from backend.data_sources.yale_tariff import get_yale_tariff_data
 from backend.data_sources.insurance_inflation import get_insurance_inflation_data
 from flask_login import login_required, current_user
 from functools import wraps
@@ -1416,6 +1417,17 @@ def export_sovereign_debt_excel():
 def get_fertilizer_em_inflation():
     """Return fertilizer price forecasts and EM inflation impact estimates."""
     data = get_fertilizer_em_data()
+    return jsonify(data)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# YALE BUDGET LAB — AVERAGE EFFECTIVE TARIFF RATE
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_bp.route('/yale-tariff')
+def get_yale_tariff():
+    """Return Yale Budget Lab average effective US tariff rate series."""
+    data = get_yale_tariff_data()
     return jsonify(data)
 
 
