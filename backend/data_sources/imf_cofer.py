@@ -245,6 +245,11 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
     if not periods:
         return None
 
+    # Truncate to last 60 months. 25 years of monthly history compresses
+    # recent variation into <2% of the x-axis, making charts look flat.
+    if len(periods) > 60:
+        periods = periods[-60:]
+
     countries = []
     for code in total_by_country:
         # Accept both ISO2 (DBnomics / legacy) and ISO3 (new api.imf.org).
@@ -982,37 +987,52 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
             )
             return None
 
-        # Plausibility sanity check. If we guessed the wrong indicator
-        # code (e.g. a sub-item that's ~$0 for most countries), the
-        # builder will happily produce a result with bogus numbers and
-        # negative gold = total - fx. Before shipping anything to the
-        # frontend, verify USA's latest total reserves is within a
-        # plausible range (US typically reports ~$240-280B in IRFCL).
-        # If not, reject the result so the orchestrator falls through
-        # to the DBnomics mirror instead of shipping garbage.
+        # Plausibility sanity check. Reject if:
+        #  (a) USA total is outside $50B-$1.5T (wrong indicator code), OR
+        #  (b) FX data is mostly empty (IRFCL FX indicator not working) —
+        #      fewer than 20% of countries have any FX data means the gold
+        #      column will be all-None and the chart is broken.
         if result:
-            usa = next((c for c in result['countries'] if c['iso3'] == 'USA'), None)
+            countries_list = result.get('countries', [])
+
+            # Check USA total
+            usa = next((c for c in countries_list if c['iso3'] == 'USA'), None)
             usa_latest_total = None
             if usa:
                 for v in reversed(usa['total_reserves']):
                     if v is not None:
                         usa_latest_total = v
                         break
-            # Expected range: $50B–$1.5T. USA is normally ~$250B.
-            plausible = (
+            usa_ok = (
                 usa_latest_total is not None
                 and 50.0 <= usa_latest_total <= 1500.0
             )
+
+            # Check FX coverage
+            fx_countries = sum(
+                1 for c in countries_list
+                if any(v is not None for v in c.get('fx_reserves', []))
+            )
+            fx_coverage_pct = (fx_countries / len(countries_list) * 100) if countries_list else 0
+            fx_ok = fx_coverage_pct >= 20
+
+            plausible = usa_ok and fx_ok
+
             if attempt_log is not None:
                 attempt_log.append(
-                    f'  plausibility check: USA latest total = '
-                    f'{usa_latest_total} B USD '
-                    f'(plausible range 50-1500) => {"OK" if plausible else "REJECTED"}'
+                    f'  plausibility: USA total={usa_latest_total} B USD '
+                    f'(range 50-1500 => {"OK" if usa_ok else "FAIL"}), '
+                    f'FX coverage={fx_countries}/{len(countries_list)} '
+                    f'({fx_coverage_pct:.0f}%, need >=20% => {"OK" if fx_ok else "FAIL"})'
                 )
             if not plausible:
+                reasons = []
+                if not usa_ok:
+                    reasons.append(f'USA total={usa_latest_total}')
+                if not fx_ok:
+                    reasons.append(f'FX coverage={fx_coverage_pct:.0f}%')
                 logger.warning(
-                    "IMF Data API result rejected by plausibility check: "
-                    "USA latest total = %s B USD", usa_latest_total,
+                    "IMF Data API result rejected: %s", ', '.join(reasons),
                 )
                 return None
 
