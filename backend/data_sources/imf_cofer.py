@@ -278,59 +278,98 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 # PRIMARY: IMF Data API (live monthly data)
 # ══════════════════════════════════════════════════════════════════════════
 
-def _fetch_imf_data_indicator(indicator_code):
-    """Fetch one IRFCL indicator for all countries from the IMF Data API.
+def _imf_data_attempt_urls(indicator_code):
+    """Yield (label, url, params, headers) tuples to try in order.
 
-    The IRFCL series key is ``FREQ.REF_AREA.INDICATOR.REF_SECTOR``; we
-    wildcard ``REF_AREA`` (``*``) so a single request covers every reporter.
-    ``REF_SECTOR=S1X`` matches the "monetary authorities" rollup that IRFCL
-    uses for per-country headline reserves.
-
-    We try the SDMX 3.0 endpoint first (current recommended) and fall back
-    to SDMX 2.1 REST 1.x if it's unavailable. On every failure we surface
-    the HTTP status / body in the log so future breakages are diagnosable.
+    We try several known-good URL patterns for the new IMF Data API.
+    The SDMX 3.0 endpoint is preferred; SDMX 2.1 REST 1.x is the
+    fallback. Each variant also tries a looser key (wildcard REF_SECTOR)
+    in case IRFCL ever stops exposing data at ``S1X``.
     """
-    # Primary: SDMX 3.0 REST 2.x (native SDMX-JSON 2.0.0). Key uses ``*``
-    # for wildcarded dimensions per the SDMX 3.0 conventions.
-    v3_key = f'M.*.{indicator_code}.S1X'
-    v3_url = f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/{v3_key}'
+    # SDMX 3.0 REST 2.x (current recommended, native SDMX-JSON 2.0.0).
+    # Key format FREQ.REF_AREA.INDICATOR.REF_SECTOR with ``*`` wildcards.
     v3_params = {
         'dimensionAtObservation': 'TIME_PERIOD',
         'attributes': 'dsd',
         'measures': 'all',
     }
+    yield (
+        'v3 IMF.STA/IRFCL S1X',
+        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/M.*.{indicator_code}.S1X',
+        v3_params,
+        IMF_DATA_HEADERS_V3,
+    )
+    yield (
+        'v3 IMF.STA/IRFCL *',
+        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/M.*.{indicator_code}.*',
+        v3_params,
+        IMF_DATA_HEADERS_V3,
+    )
+    yield (
+        'v3 all/IRFCL *',
+        f'{IMF_DATA_BASE_V3}/data/dataflow/all/IRFCL/+/M.*.{indicator_code}.*',
+        v3_params,
+        IMF_DATA_HEADERS_V3,
+    )
 
-    try:
-        resp = requests.get(v3_url, params=v3_params, headers=IMF_DATA_HEADERS_V3, timeout=180)
-        if resp.status_code == 200:
-            return resp.json()
-        logger.warning(
-            "IMF Data 3.0 %s returned HTTP %s: %s",
-            indicator_code, resp.status_code, resp.text[:300],
-        )
-    except requests.exceptions.RequestException as e:
-        logger.warning("IMF Data 3.0 %s request failed: %s", indicator_code, e)
-
-    # Fallback: SDMX 2.1 REST 1.x. Key uses empty slots for wildcards per
-    # the older SDMX 2.1 conventions.
-    v21_key = f'M..{indicator_code}.S1X'
-    v21_url = f'{IMF_DATA_BASE_V21}/data/IMF.STA,IRFCL,1.0/{v21_key}'
+    # SDMX 2.1 REST 1.x fallback. Key format uses empty slots for wildcards.
     v21_params = {
         'format': 'sdmx-json',
         'startPeriod': '2000-01',
     }
+    yield (
+        'v21 IMF.STA,IRFCL,1.0',
+        f'{IMF_DATA_BASE_V21}/data/IMF.STA,IRFCL,1.0/M..{indicator_code}.S1X',
+        v21_params,
+        IMF_DATA_HEADERS_V21,
+    )
+    yield (
+        'v21 IRFCL short',
+        f'{IMF_DATA_BASE_V21}/data/IRFCL/M..{indicator_code}.S1X',
+        v21_params,
+        IMF_DATA_HEADERS_V21,
+    )
 
-    try:
-        resp = requests.get(v21_url, params=v21_params, headers=IMF_DATA_HEADERS_V21, timeout=180)
-        if resp.status_code == 200:
-            return resp.json()
-        logger.warning(
-            "IMF Data 2.1 %s returned HTTP %s: %s",
-            indicator_code, resp.status_code, resp.text[:300],
-        )
-    except requests.exceptions.RequestException as e:
-        logger.warning("IMF Data 2.1 %s request failed: %s", indicator_code, e)
 
+def _fetch_imf_data_indicator(indicator_code, attempt_log=None):
+    """Fetch one IRFCL indicator from the IMF Data API.
+
+    Tries each URL in :func:`_imf_data_attempt_urls` and returns the
+    first successful SDMX-JSON document. Appends a short summary of
+    each attempt to ``attempt_log`` (if provided) so /api/cofer/refresh
+    can report exactly which endpoints worked or failed.
+    """
+    for label, url, params, headers in _imf_data_attempt_urls(indicator_code):
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=180)
+            status = resp.status_code
+            size = len(resp.content)
+            if status == 200:
+                try:
+                    doc = resp.json()
+                except ValueError:
+                    note = f'{indicator_code} {label}: 200 but body is not JSON ({size} bytes)'
+                    logger.warning(note)
+                    if attempt_log is not None:
+                        attempt_log.append(note)
+                    continue
+                note = f'{indicator_code} {label}: 200 OK ({size} bytes)'
+                logger.info(note)
+                if attempt_log is not None:
+                    attempt_log.append(note)
+                return doc
+            note = (
+                f'{indicator_code} {label}: HTTP {status} '
+                f'({size} bytes) — {resp.text[:200]}'
+            )
+            logger.warning(note)
+            if attempt_log is not None:
+                attempt_log.append(note)
+        except requests.exceptions.RequestException as e:
+            note = f'{indicator_code} {label}: request error — {type(e).__name__}: {str(e)[:200]}'
+            logger.warning(note)
+            if attempt_log is not None:
+                attempt_log.append(note)
     return None
 
 
@@ -425,19 +464,19 @@ def _parse_imf_sdmx_series(doc):
     return result
 
 
-def _fetch_reserves_imf_sdmx():
+def _fetch_reserves_imf_sdmx(attempt_log=None):
     """Fetch monthly reserves from the IMF Data API (primary source)."""
     try:
         logger.info("Fetching reserves from IMF Data API (live)...")
 
-        total_doc = _fetch_imf_data_indicator('RAFA_USD')
-        fx_doc = _fetch_imf_data_indicator('RAFAFX_USD')
+        total_doc = _fetch_imf_data_indicator('RAFA_USD', attempt_log)
+        fx_doc = _fetch_imf_data_indicator('RAFAFX_USD', attempt_log)
 
         total_by_country = _parse_imf_sdmx_series(total_doc)
         fx_by_country = _parse_imf_sdmx_series(fx_doc)
 
         if not total_by_country:
-            logger.warning("IMF Data API returned no total reserves data")
+            logger.warning("IMF Data API returned no parseable total reserves data")
             return None
 
         result = _build_reserves_result(
@@ -698,3 +737,48 @@ def refresh_cache():
     """
     _cache.clear()
     return _cache.get()
+
+
+def diagnose_fetch():
+    """Run the full fetch chain with per-attempt logging (bypasses cache).
+
+    Returns a dict containing:
+      - ``attempts``: list of short strings describing each HTTP attempt
+      - ``source``: which source ultimately succeeded (or None)
+      - ``latest_period``: most recent period in the returned payload
+      - ``country_count``: how many countries made it through
+      - ``period_range``: human-readable range string
+
+    Intended for the /api/cofer/refresh endpoint so the user can verify
+    the fix worked without having to scrape server logs.
+    """
+    attempts = []
+
+    result = _fetch_reserves_imf_sdmx(attempts)
+    source = None
+    if result:
+        source = result.get('meta', {}).get('source')
+    else:
+        attempts.append('IMF Data API chain failed — trying DBnomics mirror')
+        result = _fetch_reserves_dbnomics()
+        if result:
+            source = result.get('meta', {}).get('source')
+        else:
+            attempts.append('DBnomics mirror failed — falling back to World Bank annual')
+            result = _fetch_reserves_wb()
+            if result:
+                source = result.get('meta', {}).get('source')
+
+    if result:
+        # Store in cache so subsequent /api/cofer calls see the same data
+        with _cache._lock:
+            _cache._data = result
+            _cache._last_fetch = time.time()
+
+    return {
+        'attempts': attempts,
+        'source': source,
+        'latest_period': (result.get('years') if result else [''])[-1] if result and result.get('years') else '',
+        'period_range': (result or {}).get('meta', {}).get('period_range', ''),
+        'country_count': len((result or {}).get('countries') or []),
+    }

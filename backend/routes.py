@@ -3,7 +3,11 @@ from datetime import datetime
 from flask import Blueprint, jsonify, send_file, request
 from backend.cache.store import store
 from backend.data_sources.market_data import get_market_data, get_market_history
-from backend.data_sources.imf_cofer import get_cofer_data, refresh_cache as refresh_cofer_cache
+from backend.data_sources.imf_cofer import (
+    get_cofer_data,
+    refresh_cache as refresh_cofer_cache,
+    diagnose_fetch as diagnose_cofer_fetch,
+)
 from backend.data_sources.reserves_nowcast import get_nowcast_data
 from backend.data_sources.bls_cpi import get_bls_cpi_data, get_bls_components, clear_bls_caches
 from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
@@ -207,19 +211,17 @@ def get_cofer():
 
 @api_bp.route('/cofer/refresh', methods=['POST', 'GET'])
 def refresh_cofer():
-    """Force-clear the reserves cache and return freshly-fetched data.
+    """Force-clear the reserves cache and return a detailed diagnostic.
 
-    Useful when the upstream data provider releases a new period and you
-    don't want to wait for the 24-hour TTL to expire.
+    Runs the full fetch chain (IMF Data API → DBnomics → World Bank)
+    with per-attempt logging, stores the result in the cache, and
+    returns a JSON diagnostic so you can see exactly which endpoint
+    served the data (and why the others failed). Useful when the
+    upstream data provider releases a new period and you don't want
+    to wait for the 24-hour TTL to expire.
     """
-    data = refresh_cofer_cache()
-    return jsonify({
-        'ok': True,
-        'source': data.get('meta', {}).get('source', 'unknown'),
-        'period_range': data.get('meta', {}).get('period_range', ''),
-        'latest_period': (data.get('years') or [''])[-1],
-        'country_count': len(data.get('countries') or []),
-    })
+    diagnostic = diagnose_cofer_fetch()
+    return jsonify({'ok': bool(diagnostic.get('source')), **diagnostic})
 
 
 @api_bp.route('/cofer/nowcast')
