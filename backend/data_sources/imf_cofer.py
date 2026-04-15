@@ -349,11 +349,19 @@ def _fetch_imf_data_indicator(indicator_code, attempt_log=None):
                     doc = resp.json()
                 except ValueError:
                     note = f'{indicator_code} {label}: 200 but body is not JSON ({size} bytes)'
+                    if size < 5000:
+                        note += f' | body: {resp.text[:1500]}'
                     logger.warning(note)
                     if attempt_log is not None:
                         attempt_log.append(note)
                     continue
                 note = f'{indicator_code} {label}: 200 OK ({size} bytes)'
+                # Suspiciously small payloads usually indicate an empty
+                # result set or a structure-only message. Include a body
+                # sample so the /api/cofer/refresh diagnostic can show
+                # exactly what IMF returned.
+                if size < 5000:
+                    note += f' | body: {resp.text[:2000]}'
                 logger.info(note)
                 if attempt_log is not None:
                     attempt_log.append(note)
@@ -474,6 +482,26 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
 
         total_by_country = _parse_imf_sdmx_series(total_doc)
         fx_by_country = _parse_imf_sdmx_series(fx_doc)
+
+        if attempt_log is not None:
+            attempt_log.append(
+                f'parser extracted: total={len(total_by_country)} countries, '
+                f'fx={len(fx_by_country)} countries'
+            )
+            # If the parser got nothing, surface the top-level shape of the
+            # documents so we can tell what IMF actually sent us.
+            if not total_by_country and isinstance(total_doc, dict):
+                top_keys = list(total_doc.keys())
+                data_obj = total_doc.get('data') if isinstance(total_doc.get('data'), dict) else total_doc
+                data_keys = list(data_obj.keys()) if isinstance(data_obj, dict) else []
+                datasets = data_obj.get('dataSets') if isinstance(data_obj, dict) else None
+                structures = (data_obj.get('structures') or data_obj.get('structure')) if isinstance(data_obj, dict) else None
+                attempt_log.append(
+                    f'total_doc shape: top_keys={top_keys}, '
+                    f'data_keys={data_keys}, '
+                    f'dataSets_len={len(datasets) if datasets else 0}, '
+                    f'structures_len={len(structures) if isinstance(structures, list) else (1 if structures else 0)}'
+                )
 
         if not total_by_country:
             logger.warning("IMF Data API returned no parseable total reserves data")
