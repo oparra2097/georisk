@@ -281,51 +281,55 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 def _imf_data_attempt_urls(indicator_code):
     """Yield (label, url, params, headers) tuples to try in order.
 
-    We try several known-good URL patterns for the new IMF Data API.
-    The SDMX 3.0 endpoint is preferred; SDMX 2.1 REST 1.x is the
-    fallback. Each variant also tries a looser key (wildcard REF_SECTOR)
-    in case IRFCL ever stops exposing data at ``S1X``.
+    The new IRFCL DSD on api.imf.org (``DSD_IRFCL_PUB(12.0.0)``) uses
+    dimension IDs ``COUNTRY.INDICATOR.SECTOR.FREQUENCY`` in that order.
+    This is different from the legacy dataservices.imf.org convention
+    (``FREQ.REF_AREA.INDICATOR.REF_SECTOR``) so queries built for the
+    old API silently match zero series against the new one. Keys below
+    use the new order with ``*`` wildcards.
     """
-    # SDMX 3.0 REST 2.x (current recommended, native SDMX-JSON 2.0.0).
-    # Key format FREQ.REF_AREA.INDICATOR.REF_SECTOR with ``*`` wildcards.
     v3_params = {
         'dimensionAtObservation': 'TIME_PERIOD',
         'attributes': 'dsd',
         'measures': 'all',
     }
+
+    # Primary: COUNTRY=*, INDICATOR=code, SECTOR=S1X (monetary authorities), FREQUENCY=M
     yield (
-        'v3 IMF.STA/IRFCL S1X',
-        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/M.*.{indicator_code}.S1X',
+        'v3 IMF.STA/IRFCL *.X.S1X.M',
+        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{indicator_code}.S1X.M',
         v3_params,
         IMF_DATA_HEADERS_V3,
     )
+    # Wildcard sector in case the IRFCL sector codelist changed from S1X
     yield (
-        'v3 IMF.STA/IRFCL *',
-        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/M.*.{indicator_code}.*',
+        'v3 IMF.STA/IRFCL *.X.*.M',
+        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{indicator_code}.*.M',
         v3_params,
         IMF_DATA_HEADERS_V3,
     )
+    # Wildcard agency in case the dataflow is registered under a different owner
     yield (
-        'v3 all/IRFCL *',
-        f'{IMF_DATA_BASE_V3}/data/dataflow/all/IRFCL/+/M.*.{indicator_code}.*',
+        'v3 all/IRFCL *.X.*.M',
+        f'{IMF_DATA_BASE_V3}/data/dataflow/all/IRFCL/+/*.{indicator_code}.*.M',
         v3_params,
         IMF_DATA_HEADERS_V3,
     )
 
-    # SDMX 2.1 REST 1.x fallback. Key format uses empty slots for wildcards.
+    # SDMX 2.1 REST 1.x fallback. Same key order, empty slots for wildcards.
     v21_params = {
         'format': 'sdmx-json',
         'startPeriod': '2000-01',
     }
     yield (
         'v21 IMF.STA,IRFCL,1.0',
-        f'{IMF_DATA_BASE_V21}/data/IMF.STA,IRFCL,1.0/M..{indicator_code}.S1X',
+        f'{IMF_DATA_BASE_V21}/data/IMF.STA,IRFCL,1.0/.{indicator_code}.S1X.M',
         v21_params,
         IMF_DATA_HEADERS_V21,
     )
     yield (
         'v21 IRFCL short',
-        f'{IMF_DATA_BASE_V21}/data/IRFCL/M..{indicator_code}.S1X',
+        f'{IMF_DATA_BASE_V21}/data/IRFCL/.{indicator_code}.S1X.M',
         v21_params,
         IMF_DATA_HEADERS_V21,
     )
@@ -404,11 +408,13 @@ def _parse_imf_sdmx_series(doc):
     series_dims = dims.get('series') or []
     obs_dims = dims.get('observation') or []
 
-    # Locate REF_AREA in the series dimension list
+    # Locate the country dimension. The legacy IMF SDMX endpoints called
+    # it ``REF_AREA`` but the new api.imf.org DSD (``DSD_IRFCL_PUB``) calls
+    # it ``COUNTRY``. Accept either.
     ref_area_pos = None
     ref_area_values = []
     for i, dim in enumerate(series_dims):
-        if dim.get('id') == 'REF_AREA':
+        if dim.get('id') in ('REF_AREA', 'COUNTRY'):
             ref_area_pos = i
             ref_area_values = dim.get('values', [])
             break
