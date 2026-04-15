@@ -1838,35 +1838,43 @@
         const labels = points.map(p => p.date);
         const values = points.map(p => p.value);
 
-        // Summary card — latest value, peak, min
+        // Summary card — latest value, peak, min (post-baseline)
         const latestVal = data.latest_value != null ? data.latest_value : values[values.length - 1];
         const peakVal = Math.max.apply(null, values);
-        const minVal = Math.min.apply(null, values);
+        // Exclude the pre-trade-war baseline (index 0) from the "Low" stat,
+        // since we already display it separately as "Pre-Trade-War Baseline".
+        const postBaseline = points.slice(1);
+        const minPoint = postBaseline.reduce((acc, p) => (p.value < acc.value ? p : acc), postBaseline[0] || { value: 0, date: '' });
+        const minVal = minPoint.value;
+        const minDate = minPoint.date;
         const peakIdx = values.indexOf(peakVal);
         const peakDate = points[peakIdx] ? points[peakIdx].date : '';
         const latestDate = points[points.length - 1].date;
 
         const summary = document.getElementById('panel-summary');
         if (summary) {
+            const latestSrc = data.latest_source || '';
             summary.innerHTML = `
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
                     <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Latest Rate</div>
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Current Rate</div>
                         <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">${latestVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">as of ${latestDate}</div>
+                        ${latestSrc ? '<div style="color:#64748b;font-size:10px;margin-top:2px;">' + latestSrc + '</div>' : ''}
                     </div>
                     <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak (2025)</div>
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak</div>
                         <div style="color:#ef4444;font-size:28px;font-weight:700;margin-top:4px;">${peakVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">${peakDate}</div>
                     </div>
                     <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Low (2025)</div>
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Trade-War Low</div>
                         <div style="color:#10b981;font-size:28px;font-weight:700;margin-top:4px;">${minVal.toFixed(2)}%</div>
+                        <div style="color:#64748b;font-size:11px;">${minDate}</div>
                     </div>
                     <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Pre-Trade-War Baseline</div>
-                        <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">~2.4%</div>
+                        <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">2.40%</div>
                         <div style="color:#64748b;font-size:11px;">early Jan 2025</div>
                     </div>
                 </div>

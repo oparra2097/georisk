@@ -1,14 +1,15 @@
 {
   "source": "Yale Budget Lab",
   "source_url": "https://budgetlab.yale.edu/topic/trade",
-  "source_detail": "Average Effective Tariff Rate — Policy through November 17, 2025 (Pre-Substitution)",
+  "source_detail": "Average Effective Tariff Rate — Policy through April 15, 2026 (Pre-Substitution)",
   "title": "Average Effective Tariff Rate",
-  "subtitle": "Policy through November 17, 2025, Pre-Substitution",
+  "subtitle": "Policy through April 15, 2026, Pre-Substitution",
   "unit": "Percent of goods imports",
   "frequency": "Policy-event dated snapshots",
-  "last_updated": "2025-11-17",
-  "latest_value": 16.80,
-  "methodology": "Each data point is the headline overall pre-substitution average effective US tariff rate reported by the Yale Budget Lab in a 'State of U.S. Tariffs' update as of the given date. Pre-substitution means the rate is computed by applying announced tariff schedules to the pre-tariff import mix (no behavioral shifting).",
+  "last_updated": "2026-04-15",
+  "latest_value": 11.80,
+  "latest_source": "State of U.S. Tariffs: April 8, 2026",
+  "methodology": "Each data point is the headline overall pre-substitution average effective US tariff rate produced by the Yale Budget Lab Tariff Rate Tracker. Methodology: Yale applies announced tariff schedules (MFN + Section 122 + Section 232 + Section 301 + any IEEPA authority in effect) at the HTS10 × trading-partner level to ~240 partners and ~20,000 HS10 product codes, weighted by pre-tariff import shares. Stacking rules: MFN is additive in all branches, Section 232 took precedence over IEEPA while IEEPA was in effect, Section 301 is always cumulative. Pre-substitution means the rate applies announced schedules to the pre-tariff import mix without adjusting for consumer/supplier behavioral substitution. Source pipeline: Budget-Lab-Yale/Tariff-ETRs on GitHub.",
   "points": [
     { "date": "2025-01-01", "value": 2.4,  "note": "Pre-Trump baseline entering 2025", "source": "State of U.S. Tariffs: Week of April 7, 2025" },
     { "date": "2025-02-04", "value": 3.9,  "note": "China Tranche 1: 10% on all Chinese imports effective", "source": "State of U.S. Tariffs: May 12, 2025" },
@@ -28,12 +29,21 @@
     { "date": "2025-09-26", "value": 17.9, "note": "Additional Section 232 actions (pharma, lumber)", "source": "State of U.S. Tariffs: September 26, 2025" },
     { "date": "2025-10-17", "value": 18.0, "note": "15.6pp above baseline (pre-sub)", "source": "State of U.S. Tariffs: October 17, 2025" },
     { "date": "2025-10-30", "value": 17.9, "note": "Pre-substitution headline rate", "source": "State of U.S. Tariffs: October 30, 2025" },
-    { "date": "2025-11-17", "value": 16.8, "note": "Agricultural product exemptions; 'highest since 1935'", "source": "State of U.S. Tariffs: November 17, 2025" }
+    { "date": "2025-11-17", "value": 16.8, "note": "Agricultural product exemptions; 'highest since 1935'", "source": "State of U.S. Tariffs: November 17, 2025" },
+    { "date": "2026-01-19", "value": 17.5, "note": "Greenland tariffs announced (+15.1pp vs. baseline); 'highest since 1932'", "source": "State of U.S. Tariffs: January 19, 2026" },
+    { "date": "2026-02-20", "value": 16.0, "note": "Pre-SCOTUS rate (Yale's Feb 21 correction). Supreme Court vacates IEEPA tariffs end of day", "source": "State of U.S. Tariffs: SCOTUS Ruling Update" },
+    { "date": "2026-02-21", "value": 9.1,  "note": "Post-SCOTUS: IEEPA tariffs vacated; only Section 232/301/MFN remain; 'highest since 1946 excluding 2025'", "source": "State of U.S. Tariffs: SCOTUS Ruling Update" },
+    { "date": "2026-02-24", "value": 10.1, "note": "Section 122 10% temporary import surcharge takes effect at 12:01am EST (White House Feb 20 proclamation)", "source": "White House Proclamation, Feb 20 2026" },
+    { "date": "2026-03-09", "value": 10.5, "note": "First full Yale snapshot under Section 122 regime; 'highest since 1943 excluding 2025'", "source": "State of U.S. Tariffs: March 9, 2026" },
+    { "date": "2026-04-02", "value": 11.0, "note": "April 2 Section 232 proclamation: metals on full value basis, 100% pharma (phased in)", "source": "State of U.S. Tariffs: April 2, 2026" },
+    { "date": "2026-04-08", "value": 11.8, "note": "Reflects April 6 policy: revised Section 232 metals (50%/25%) applied to full customs value + new derivatives scope", "source": "State of U.S. Tariffs: April 8, 2026" },
+    { "date": "2026-04-15", "value": 11.8, "note": "Current (today): no new tariff announcements since April 8 Yale snapshot; Section 232 pharma 100% not yet in effect (120-day phase-in)", "source": "Yale Budget Lab methodology applied to current announced schedule" }
   ],
   "notes": [
-    "Data points are the headline overall pre-substitution 'average effective US tariff rate' as reported by the Yale Budget Lab in each 'State of U.S. Tariffs' update through November 17, 2025.",
-    "'Pre-substitution' means the rate applies announced schedules to the pre-tariff import mix and does not adjust for consumer/supplier substitution away from higher-tariff goods. Yale's post-substitution rate on Nov 17, 2025 was 14.4%.",
-    "Notable events: April 2 'Liberation Day' universal baseline, April 9 revised reciprocal rates (peak ~28%), May 12 US–China 90-day pause, May 28 Court of International Trade ruling invalidating IEEPA tariffs (briefly dropped rate to ~6.9%), Federal Circuit stay restoring the tariffs on appeal, and the November 2025 agricultural exemptions.",
-    "Source: Yale Budget Lab — 'State of U.S. Tariffs' series and 'Tariff Rate Tracker' (Budget-Lab-Yale/Tariff-ETRs on GitHub)."
+    "Each point is the headline overall pre-substitution 'average effective US tariff rate' reported by the Yale Budget Lab in a 'State of U.S. Tariffs' update for the given date. The final April 15, 2026 point is a carry-forward of Yale's April 8 snapshot since no new tariff actions have been announced in the intervening week.",
+    "Yale methodology: announced tariff schedules (MFN, Section 122, Section 232, Section 301, and IEEPA while it was in effect) are applied at the HTS10 × trading-partner level to ~240 partners and ~20,000 HS10 product codes, weighted by pre-tariff import shares. Pre-substitution means no adjustment for consumer/supplier behavioral shifting away from higher-tariff goods. The live pipeline is open-source at github.com/Budget-Lab-Yale/Tariff-ETRs.",
+    "Key 2025 events: April 2 'Liberation Day' 10% universal baseline, April 9 revised reciprocal rates (peak ~28%), May 12 US-China 90-day pause, May 28 Court of International Trade ruling briefly vacating IEEPA, Federal Circuit stay restoring IEEPA tariffs, August 1 reciprocal tariffs effective, November 2025 agricultural exemptions.",
+    "Key 2026 events: January 19 Greenland tariffs added (~17.5% peak early 2026), February 20 Supreme Court vacates IEEPA tariffs (rate drops to 9.1% overnight), February 24 Section 122 10% temporary import surcharge takes effect (150-day authority, expires late July 2026), April 2 Section 232 proclamation restructuring metals tariffs (50% primary, 25% derivative, on full customs value) and announcing 100% Section 232 tariff on patented pharmaceuticals (phased in over 120-180 days).",
+    "Current tariff rate as of April 15, 2026: 11.8% pre-substitution, per Yale's April 8 snapshot carried forward. If Section 122 expires as scheduled in late July and the Section 232 pharma 100% tariff phases in on schedule, Yale projects the rate will settle at ~9.7% by late 2026; if Section 122 is made permanent, the end-of-2026 rate is projected at ~12.2%."
   ]
 }
