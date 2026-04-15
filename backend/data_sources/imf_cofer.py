@@ -216,13 +216,19 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
         return None
 
     countries = []
-    for iso2 in total_by_country:
-        iso3 = ISO2_TO_ISO3.get(iso2)
+    for code in total_by_country:
+        # Accept both ISO2 (DBnomics / legacy) and ISO3 (new api.imf.org)
+        if len(code) == 2:
+            iso3 = ISO2_TO_ISO3.get(code)
+        elif len(code) == 3 and code in COUNTRY_NAMES:
+            iso3 = code
+        else:
+            iso3 = None
         if not iso3:
             continue  # Skip countries not in our display mapping
 
-        total_data = total_by_country.get(iso2, {})
-        fx_data = fx_by_country.get(iso2, {})
+        total_data = total_by_country.get(code, {})
+        fx_data = fx_by_country.get(code, {})
 
         total_values = []
         fx_values = []
@@ -278,20 +284,54 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 # PRIMARY: IMF Data API (live monthly data)
 # ══════════════════════════════════════════════════════════════════════════
 
+# Mapping of our internal labels to candidate IMF indicator codes.
+# The legacy DBnomics labels ``RAFA_USD`` / ``RAFAFX_USD`` don't exist on
+# api.imf.org — the new DSD uses codes shaped like ``IRFCLDT1_IRFCL{N}_{CCY}``
+# where N is a row number in the IRFCL template. We try the first-alphabetical
+# candidates (which the catalog probe revealed) in order. The catalog probe
+# logs all 257 codes, so if none of these are right we can update this list
+# from the next diagnostic round.
+IMF_IRFCL_INDICATOR_CANDIDATES = {
+    'RAFA_USD': (
+        # First-alphabetical numeric codes from the catalog probe; one of
+        # these is very likely to be the total-reserves headline indicator.
+        'IRFCLDT1_IRFCL121_USD',
+        'IRFCLDT1_IRFCL31_BOFIORC_USD',
+        'IRFCLDT1_IRFCL31_BOFIORCLA_USD',
+        'IRFCLDT1_IRFCL32_USD',
+        'IRFCLDT1_IRFCL34_USD',
+        'IRFCLDT1_IRFCL37_USD',
+        'IRFCLDT1_IRFCL40_USD',
+        # legacy codes in case the old naming ever comes back
+        'RAFA_USD',
+        'RAFA',
+    ),
+    'RAFAFX_USD': (
+        # Currency-and-deposits / foreign currency reserves candidates
+        'IRFCLDT1_IRFCLCDCFC_USD',
+        'IRFCLDT1_IRFCLCDCFCU_USD',
+        'IRFCLDT1_IRFCL31_BOFIRC_USD',
+        'IRFCLDT1_IRFCL31_BOFIRCLA_USD',
+        'RAFAFX_USD',
+        'RAFAFX',
+    ),
+}
+
+# Sector code discovered via the catalog probe. The legacy REF_SECTOR
+# was ``S1X`` (Monetary authorities); the new DSD_IRFCL_PUB combines
+# S1X with S1311 (Central government sub-sector) into ``S1XS1311``.
+IMF_IRFCL_DEFAULT_SECTOR = 'S1XS1311'
+
+
 def _imf_data_attempt_urls(indicator_code):
     """Yield (label, url, params, headers) tuples to try in order.
 
     The new IRFCL DSD on api.imf.org (``DSD_IRFCL_PUB(12.0.0)``) uses
     dimension IDs ``COUNTRY.INDICATOR.SECTOR.FREQUENCY`` in that order.
-    This is different from the legacy dataservices.imf.org convention
-    (``FREQ.REF_AREA.INDICATOR.REF_SECTOR``) so queries built for the
-    old API silently match zero series against the new one. Keys below
-    use the new order with ``*`` wildcards.
-
-    The new DSD also exposes ``CURRENCY`` and ``UNIT`` as *attributes*
-    of INDICATOR rather than baking them into the indicator code, which
-    strongly suggests the indicator code may have dropped the ``_USD``
-    suffix from the legacy ``RAFA_USD``. We try both forms.
+    ``COUNTRY`` is ISO3 (USA, not US), ``SECTOR`` is ``S1XS1311`` (not
+    ``S1X``), and indicator codes are row-number based like
+    ``IRFCLDT1_IRFCL121_USD``. We walk the candidate list declared in
+    :data:`IMF_IRFCL_INDICATOR_CANDIDATES` for each internal label.
     """
     v3_params = {
         'dimensionAtObservation': 'TIME_PERIOD',
@@ -299,64 +339,42 @@ def _imf_data_attempt_urls(indicator_code):
         'measures': 'all',
     }
 
-    bare_indicator = indicator_code.replace('_USD', '')
-    # Order: indicator variants × sector variants. Stop at the first
-    # variant that actually returns data (the fetcher keeps iterating
-    # on empty 200 responses now, so all of these will be tried if
-    # earlier ones don't match anything).
-    variants = [
-        (indicator_code, 'S1X'),
-        (indicator_code, '*'),
-    ]
-    if bare_indicator != indicator_code:
-        variants += [
-            (bare_indicator, 'S1X'),
-            (bare_indicator, '*'),
-        ]
-
-    for ind, sector in variants:
+    candidates = IMF_IRFCL_INDICATOR_CANDIDATES.get(
+        indicator_code, (indicator_code,)
+    )
+    for ind in candidates:
+        # Primary: known sector
         yield (
-            f'v3 IMF.STA *.{ind}.{sector}.M',
-            f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{ind}.{sector}.M',
+            f'v3 IMF.STA *.{ind}.{IMF_IRFCL_DEFAULT_SECTOR}.M',
+            f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{ind}.{IMF_IRFCL_DEFAULT_SECTOR}.M',
             v3_params,
             IMF_DATA_HEADERS_V3,
         )
-
-    # Wildcard agency fallback
+    # Looser fallback: wildcard sector on the first candidate, in case
+    # S1XS1311 isn't quite right for every indicator.
+    first_candidate = candidates[0]
     yield (
-        f'v3 all *.{indicator_code}.*.M',
-        f'{IMF_DATA_BASE_V3}/data/dataflow/all/IRFCL/+/*.{indicator_code}.*.M',
+        f'v3 IMF.STA *.{first_candidate}.*.M',
+        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{first_candidate}.*.M',
         v3_params,
         IMF_DATA_HEADERS_V3,
-    )
-
-    # SDMX 2.1 REST 1.x fallback with the new key order
-    v21_params = {
-        'format': 'sdmx-json',
-        'startPeriod': '2000-01',
-    }
-    yield (
-        f'v21 IMF.STA,IRFCL .{indicator_code}.S1X.M',
-        f'{IMF_DATA_BASE_V21}/data/IMF.STA,IRFCL,1.0/.{indicator_code}.S1X.M',
-        v21_params,
-        IMF_DATA_HEADERS_V21,
     )
 
 
 def _probe_irfcl_catalog(attempt_log=None):
     """Query IRFCL with a narrow wildcard key to discover valid codelists.
 
-    The trick: ``US.*.*.M?detail=serieskeysonly`` asks IMF for every
-    indicator+sector combination available for the US at monthly
-    frequency, without returning any observation values. The response
-    is small but includes populated ``values`` arrays for every series
-    dimension — so we see the actual INDICATOR and SECTOR codes the
-    new DSD uses. We log the first 30 values of each dimension into
+    ``USA.*.*.M?detail=serieskeysonly`` asks IMF for every indicator+
+    sector combination available for the USA at monthly frequency,
+    without returning any observation values. The response is small
+    but includes populated ``values`` arrays for every series
+    dimension — so we see the actual INDICATOR, SECTOR, etc. codes
+    the new DSD uses. All codelist entries are logged into
     ``attempt_log`` so the /api/cofer/refresh diagnostic can expose
     them if the main fetches still fail.
     """
     # Try a couple of country codes in case the new codelist uses ISO3
-    for country in ('US', 'USA'):
+    for country in ('USA', 'US'):
         url = f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/{country}.*.*.M'
         params = {'detail': 'serieskeysonly'}
         try:
@@ -380,19 +398,83 @@ def _probe_irfcl_catalog(attempt_log=None):
                 dim_id = dim.get('id')
                 values = [v.get('id', '') for v in (dim.get('values') or [])]
                 codes[dim_id] = values
-            # If any dimension has populated values, we found real data
             any_populated = any(v for v in codes.values())
             if attempt_log is not None:
                 summary = ', '.join(f'{k}={len(v)}' for k, v in codes.items())
                 attempt_log.append(f'catalog probe {country}: 200 OK, dims: {summary}')
+                # Dump the whole INDICATOR list so we can pick the right
+                # code for total reserves and FX reserves (chunked to keep
+                # individual log entries readable).
                 for dim_id, values in codes.items():
-                    if values:
-                        attempt_log.append(f'  {dim_id} sample: {values[:30]}')
+                    if not values:
+                        continue
+                    if dim_id == 'INDICATOR':
+                        # chunk long indicator list into 20-code groups
+                        for i in range(0, len(values), 20):
+                            chunk = values[i:i + 20]
+                            attempt_log.append(f'  INDICATOR[{i}:{i+len(chunk)}]: {chunk}')
+                    else:
+                        attempt_log.append(f'  {dim_id}: {values}')
             if any_populated:
                 return codes
         except requests.exceptions.RequestException as e:
             if attempt_log is not None:
                 attempt_log.append(f'catalog probe {country}: {type(e).__name__}: {str(e)[:200]}')
+    return None
+
+
+def _probe_irfcl_sample(attempt_log=None):
+    """Fetch one real observation for USA to verify the key format works
+    end-to-end and sanity-check the data scale.
+
+    Uses a specific guess for the "total reserves" indicator. If it
+    returns numeric data, we know the sector code, indicator code,
+    and key layout are all correct. The ``attempt_log`` gets the last
+    observation value so we can eyeball whether it looks like
+    ~$900B (USA total reserves as of mid-2025).
+    """
+    # Best guess: IRFCLDT1_IRFCL121_USD is first in the alphabetical
+    # catalog sort. In IRFCL templates, row summaries often come first.
+    # We'll fetch a short recent window for USA only.
+    for ind_code in ('IRFCLDT1_IRFCL121_USD', 'IRFCLDT1_IRFCLCDCFCU_USD'):
+        url = f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/USA.{ind_code}.S1XS1311.M'
+        params = {
+            'dimensionAtObservation': 'TIME_PERIOD',
+            'attributes': 'dsd',
+            'measures': 'all',
+            'c[TIME_PERIOD]': 'ge:2025-01',
+        }
+        try:
+            resp = requests.get(url, params=params, headers=IMF_DATA_HEADERS_V3, timeout=60)
+            if resp.status_code != 200:
+                if attempt_log is not None:
+                    attempt_log.append(
+                        f'sample probe {ind_code}: HTTP {resp.status_code} ({len(resp.content)} bytes)'
+                    )
+                continue
+            doc = resp.json()
+            parsed = _parse_imf_sdmx_series(doc)
+            if parsed:
+                # Get the last value
+                sample_obs = {}
+                for iso, periods in parsed.items():
+                    if periods:
+                        last_period = max(periods.keys())
+                        sample_obs[iso] = (last_period, periods[last_period])
+                if attempt_log is not None:
+                    attempt_log.append(
+                        f'sample probe {ind_code}: 200 OK ({len(resp.content)} bytes), '
+                        f'parsed={len(parsed)} countries, latest: {sample_obs}'
+                    )
+                return ind_code
+            else:
+                if attempt_log is not None:
+                    attempt_log.append(
+                        f'sample probe {ind_code}: 200 OK ({len(resp.content)} bytes) but 0 series parsed'
+                    )
+        except requests.exceptions.RequestException as e:
+            if attempt_log is not None:
+                attempt_log.append(f'sample probe {ind_code}: {type(e).__name__}: {str(e)[:200]}')
     return None
 
 
@@ -521,8 +603,21 @@ def _parse_imf_sdmx_series(doc):
         if ra_idx < 0 or ra_idx >= len(ref_area_values):
             continue
 
-        iso2 = ref_area_values[ra_idx].get('id', '')
-        if not iso2:
+        country_code = ref_area_values[ra_idx].get('id', '')
+        if not country_code:
+            continue
+        # Normalize to the ISO3 representation that COUNTRY_NAMES and
+        # the rest of the pipeline use. Legacy DBnomics returned ISO2;
+        # the new api.imf.org uses ISO3 directly.
+        if len(country_code) == 2:
+            iso2 = country_code
+        elif len(country_code) == 3:
+            # Walk the ISO2→ISO3 map to synthesize a fake "iso2" key so
+            # downstream _build_reserves_result (which still reads ISO2
+            # keys for the DBnomics path) can recognize it. We use the
+            # ISO3 as the key directly and handle it in the builder.
+            iso2 = country_code
+        else:
             continue
 
         period_values = {}
@@ -563,6 +658,9 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
         # IMF to populate the dimension value arrays with the real
         # codelist entries that downstream fetches need to match.
         _probe_irfcl_catalog(attempt_log)
+        # Sample probe: fetch one real observation for USA to verify
+        # the key format works end-to-end and eyeball the scale.
+        _probe_irfcl_sample(attempt_log)
 
         total_doc = _fetch_imf_data_indicator('RAFA_USD', attempt_log)
         fx_doc = _fetch_imf_data_indicator('RAFAFX_USD', attempt_log)
