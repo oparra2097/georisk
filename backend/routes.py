@@ -1431,6 +1431,156 @@ def get_yale_tariff():
     return jsonify(data)
 
 
+@api_bp.route('/yale-tariff/export')
+def export_yale_tariff_excel():
+    """Generate Excel file with the Yale Budget Lab tariff rate time series."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_yale_tariff_data()
+    points = data.get('points', [])
+
+    if not points:
+        return jsonify({'error': 'No Yale tariff data available'}), 404
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1E3A8A', end_color='1E3A8A', fill_type='solid')
+    title_font = Font(bold=True, size=14, color='1E3A8A')
+    label_font = Font(bold=True, size=11, color='1E3A8A')
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1'),
+    )
+
+    wb = Workbook()
+
+    # ── Sheet 1: Time Series ────────────────────────────────────────────
+    ws = wb.active
+    ws.title = 'Effective Tariff Rate'
+
+    ws.cell(row=1, column=1, value='Yale Budget Lab — US Average Effective Tariff Rate')
+    ws.cell(row=1, column=1).font = title_font
+    ws.merge_cells('A1:D1')
+
+    ws.cell(row=2, column=1, value=data.get('subtitle', ''))
+    ws.cell(row=2, column=1).font = Font(italic=True, size=10, color='64748B')
+    ws.merge_cells('A2:D2')
+
+    headers = ['Date', 'Effective Tariff Rate (%)', 'Change vs. Prior (pp)', 'Policy Event']
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=c, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.border = thin_border
+
+    prior_value = None
+    for i, p in enumerate(points):
+        row = i + 5
+        date = p.get('date', '')
+        value = p.get('value')
+        note = p.get('note', '')
+        delta = (value - prior_value) if (value is not None and prior_value is not None) else None
+
+        ws.cell(row=row, column=1, value=date).alignment = Alignment(horizontal='center')
+        c2 = ws.cell(row=row, column=2, value=value)
+        c2.alignment = Alignment(horizontal='center')
+        c2.number_format = '0.00'
+        c3 = ws.cell(row=row, column=3, value=delta)
+        c3.alignment = Alignment(horizontal='center')
+        c3.number_format = '+0.00;-0.00;0.00'
+        if delta is not None:
+            if delta > 0:
+                c3.font = Font(color='B91C1C')
+            elif delta < 0:
+                c3.font = Font(color='047857')
+        c4 = ws.cell(row=row, column=4, value=note)
+        c4.alignment = Alignment(horizontal='left', wrap_text=True)
+        for col in range(1, 5):
+            ws.cell(row=row, column=col).border = thin_border
+        prior_value = value
+
+    ws.column_dimensions['A'].width = 14
+    ws.column_dimensions['B'].width = 22
+    ws.column_dimensions['C'].width = 22
+    ws.column_dimensions['D'].width = 80
+
+    # ── Sheet 2: Summary & Methodology ──────────────────────────────────
+    ws2 = wb.create_sheet('Summary & Methodology')
+
+    ws2.cell(row=1, column=1, value='Yale Budget Lab — Tariff Rate Tracker').font = title_font
+    ws2.merge_cells('A1:B1')
+
+    summary_rows = [
+        ('Source', data.get('source', '')),
+        ('Source URL', data.get('source_url', '')),
+        ('Series', data.get('source_detail', '')),
+        ('Unit', data.get('unit', '')),
+        ('Frequency', data.get('frequency', '')),
+        ('Last Updated', data.get('last_updated', '')),
+        ('Latest Value', data.get('latest_value')),
+        ('Latest Source', data.get('latest_source', '')),
+    ]
+    for i, (label, val) in enumerate(summary_rows):
+        ws2.cell(row=3 + i, column=1, value=label).font = label_font
+        ws2.cell(row=3 + i, column=2, value=val)
+
+    # Peak / trough stats
+    values = [p.get('value') for p in points if p.get('value') is not None]
+    if values:
+        peak = max(values)
+        trough = min(values)
+        peak_date = next(p.get('date') for p in points if p.get('value') == peak)
+        trough_date = next(p.get('date') for p in points if p.get('value') == trough)
+        post_baseline = points[1:] if len(points) > 1 else points
+        pb_min = min(p.get('value') for p in post_baseline)
+        pb_min_date = next(p.get('date') for p in post_baseline if p.get('value') == pb_min)
+
+        stats_row = 3 + len(summary_rows) + 1
+        ws2.cell(row=stats_row, column=1, value='Peak rate').font = label_font
+        ws2.cell(row=stats_row, column=2, value=f'{peak:.2f}% on {peak_date}')
+        ws2.cell(row=stats_row + 1, column=1, value='Trough (post-baseline)').font = label_font
+        ws2.cell(row=stats_row + 1, column=2, value=f'{pb_min:.2f}% on {pb_min_date}')
+        ws2.cell(row=stats_row + 2, column=1, value='Pre-trade-war baseline').font = label_font
+        ws2.cell(row=stats_row + 2, column=2, value=f'{trough:.2f}% on {trough_date}')
+
+    methodology = data.get('methodology', '')
+    if methodology:
+        meth_row = 3 + len(summary_rows) + 5
+        ws2.cell(row=meth_row, column=1, value='Methodology').font = label_font
+        ws2.cell(row=meth_row, column=2, value=methodology).alignment = Alignment(wrap_text=True, vertical='top')
+        ws2.merge_cells(start_row=meth_row, start_column=2, end_row=meth_row + 6, end_column=4)
+        ws2.row_dimensions[meth_row].height = 100
+
+    notes = data.get('notes', [])
+    if notes:
+        notes_row = 3 + len(summary_rows) + 13
+        ws2.cell(row=notes_row, column=1, value='Notes').font = label_font
+        for i, note in enumerate(notes):
+            ws2.cell(row=notes_row + i, column=2, value='• ' + note).alignment = Alignment(wrap_text=True, vertical='top')
+            ws2.merge_cells(start_row=notes_row + i, start_column=2, end_row=notes_row + i, end_column=4)
+            ws2.row_dimensions[notes_row + i].height = 45
+
+    ws2.column_dimensions['A'].width = 24
+    ws2.column_dimensions['B'].width = 60
+    ws2.column_dimensions['C'].width = 20
+    ws2.column_dimensions['D'].width = 20
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'yale_tariff_rates_{today}.xlsx'
+    )
+
+
 @api_bp.route('/fertilizer-em-inflation/export')
 def export_fertilizer_em_inflation_excel():
     """Generate Excel file with fertilizer forecast and EM inflation impact data."""

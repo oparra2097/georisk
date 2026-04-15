@@ -1964,6 +1964,41 @@
             },
         }));
 
+        // Inject "Download PNG" button next to the Excel export button.
+        // Re-inserted on every render so it survives panel rebuilds.
+        const controlsBar = document.getElementById('panel-controls');
+        const existingPng = controlsBar && controlsBar.querySelector('#yale-tariff-png-btn');
+        if (controlsBar && !existingPng) {
+            const pngBtn = document.createElement('button');
+            pngBtn.id = 'yale-tariff-png-btn';
+            pngBtn.type = 'button';
+            pngBtn.className = 'export-btn-data';
+            pngBtn.title = 'Download chart as PNG';
+            pngBtn.style.background = 'transparent';
+            pngBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>PNG';
+            pngBtn.addEventListener('click', () => {
+                const canvas = document.getElementById('panel-chart');
+                if (!canvas) return;
+                // Composite onto a white background so the dark-theme transparent canvas is readable.
+                const tmp = document.createElement('canvas');
+                tmp.width = canvas.width;
+                tmp.height = canvas.height;
+                const tctx = tmp.getContext('2d');
+                tctx.fillStyle = '#ffffff';
+                tctx.fillRect(0, 0, tmp.width, tmp.height);
+                tctx.drawImage(canvas, 0, 0);
+                const dataUrl = tmp.toDataURL('image/png');
+                const link = document.createElement('a');
+                const today = new Date().toISOString().slice(0, 10);
+                link.download = 'yale_tariff_rate_' + today + '.png';
+                link.href = dataUrl;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+            controlsBar.appendChild(pngBtn);
+        }
+
         // Table
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
