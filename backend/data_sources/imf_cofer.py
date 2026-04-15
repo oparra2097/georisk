@@ -7,10 +7,11 @@ Primary: IMF Data API (api.imf.org/external/sdmx/3.0, live monthly)
   - RAFAFX_USD = Foreign currency reserves (USD millions)
   - Gold = Total - FX
 
-Fallback 1: DBnomics IMF/IRFCL mirror (monthly, may be stale)
-  - DBnomics' mirror was frozen on 2025-08-31 and has not yet been
-    rewritten for the new IMF API. Kept as a secondary in case
-    api.imf.org is temporarily unreachable.
+Fallback 1: DBnomics IMF/IFS (monthly, ~140 countries, reliable mirror)
+  - RAFA_USD   = Total reserves incl. gold (USD millions)
+  - RAXGFX_USD = FX reserves excl. gold (USD millions)
+  - IFS is the canonical IMF macro dataflow; the old IRFCL mirror was
+    frozen and returned empty results due to REF_SECTOR mismatch.
 
 Fallback 2: World Bank API (annual, ~180 countries)
   - FI.RES.TOTL.CD = Total reserves including gold (current US$)
@@ -1031,47 +1032,72 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# FALLBACK: DBnomics IMF/IRFCL mirror (monthly, may be stale)
+# FALLBACK: DBnomics IMF/IFS (monthly, reliable mirror)
 # ══════════════════════════════════════════════════════════════════════════
+#
+# The old IRFCL mirror on DBnomics used REF_SECTOR='S1X' which returns
+# empty results. IFS is the canonical IMF macro dataflow for reserves
+# and has ~140 countries with RAFA_USD (total) and RAXGFX_USD (FX only).
 
-def _fetch_dbnomics_indicator(indicator_code):
-    """Fetch one IRFCL indicator for all countries from DBnomics."""
-    url = f'{DBNOMICS_BASE}/series/IMF/IRFCL'
-    params = {
-        'dimensions': json.dumps({
-            'FREQ': ['M'],
-            'INDICATOR': [indicator_code],
-            'REF_SECTOR': ['S1X'],
-        }),
-        'observations': '1',
-        'limit': '200',
-        'metadata': 'false',
-    }
-    resp = requests.get(url, params=params, timeout=120)
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get('series', {}).get('docs', [])
+def _fetch_ifs_indicator(indicator_code):
+    """Fetch one IFS indicator for all countries from DBnomics, paging."""
+    all_docs = []
+    offset = 0
+    page_size = 50
+
+    while True:
+        url = f'{DBNOMICS_BASE}/series/IMF/IFS'
+        params = {
+            'dimensions': json.dumps({
+                'FREQ': ['M'],
+                'INDICATOR': [indicator_code],
+            }),
+            'observations': '1',
+            'limit': str(page_size),
+            'offset': str(offset),
+            'metadata': 'false',
+        }
+        resp = requests.get(url, params=params, timeout=120)
+        resp.raise_for_status()
+        data = resp.json()
+        docs = data.get('series', {}).get('docs', [])
+        num_found = data.get('series', {}).get('num_found', 0)
+
+        if not docs:
+            break
+        all_docs.extend(docs)
+
+        offset += page_size
+        if offset >= num_found:
+            break
+
+    return all_docs
 
 
 def _fetch_reserves_dbnomics():
-    """Fetch monthly reserves from DBnomics IMF/IRFCL (fallback mirror)."""
+    """Fetch monthly reserves from DBnomics IMF/IFS (fallback)."""
     try:
-        logger.info("Fetching reserves from DBnomics IMF/IRFCL (monthly)...")
+        logger.info("Fetching reserves from DBnomics IMF/IFS (monthly)...")
 
-        total_docs = _fetch_dbnomics_indicator('RAFA_USD')
-        fx_docs = _fetch_dbnomics_indicator('RAFAFX_USD')
+        total_docs = _fetch_ifs_indicator('RAFA_USD')
+        fx_docs = _fetch_ifs_indicator('RAXGFX_USD')
 
         if not total_docs:
-            logger.warning("DBnomics returned no total reserves data")
+            logger.warning("DBnomics IFS returned no total reserves data")
             return None
 
         def _parse(docs):
             by_country = {}
             for doc in docs:
-                iso2 = doc.get('dimensions', {}).get('REF_AREA', '')
+                code = doc.get('series_code', '')
+                parts = code.split('.')
+                iso2 = parts[1] if len(parts) >= 2 else ''
+                # Skip aggregate/regional codes
+                if not iso2 or len(iso2) != 2 or not iso2.isalpha() or not iso2.isupper():
+                    continue
                 periods = doc.get('period', [])
                 values = doc.get('value', [])
-                if iso2 and periods:
+                if periods:
                     by_country[iso2] = dict(zip(periods, values))
             return by_country
 
@@ -1081,11 +1107,11 @@ def _fetch_reserves_dbnomics():
         result = _build_reserves_result(
             total_by_country,
             fx_by_country,
-            source_label='IMF IRFCL (via DBnomics mirror)',
+            source_label='IMF IFS (via DBnomics)',
         )
         if result:
             logger.info(
-                "DBnomics IRFCL reserves loaded: %d months, %d countries, latest %s",
+                "DBnomics IFS reserves loaded: %d months, %d countries, latest %s",
                 len(result['years']), len(result['countries']), result['years'][-1],
             )
         return result
@@ -1239,13 +1265,13 @@ def _fetch_reserves():
 
     Order:
       1. IMF Data API (api.imf.org, live monthly, authoritative)
-      2. DBnomics IRFCL mirror (may be stale while their fetcher is rewritten)
+      2. DBnomics IFS mirror (reliable, ~140 countries)
       3. World Bank annual (last-resort fallback)
     """
     result = _fetch_reserves_imf_sdmx()
     if result:
         return result
-    logger.warning("IMF Data API failed — falling back to DBnomics IRFCL mirror")
+    logger.warning("IMF Data API failed — falling back to DBnomics IFS mirror")
 
     result = _fetch_reserves_dbnomics()
     if result:
@@ -1289,12 +1315,12 @@ def diagnose_fetch():
     if result:
         source = result.get('meta', {}).get('source')
     else:
-        attempts.append('IMF Data API chain failed — trying DBnomics mirror')
+        attempts.append('IMF Data API chain failed — trying DBnomics IFS mirror')
         result = _fetch_reserves_dbnomics()
         if result:
             source = result.get('meta', {}).get('source')
         else:
-            attempts.append('DBnomics mirror failed — falling back to World Bank annual')
+            attempts.append('DBnomics IFS mirror failed — falling back to World Bank annual')
             result = _fetch_reserves_wb()
             if result:
                 source = result.get('meta', {}).get('source')
