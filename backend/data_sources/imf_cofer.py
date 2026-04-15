@@ -20,6 +20,7 @@ Thread-safe cache with 24-hour TTL. Use refresh_cache() to force a
 re-fetch (wired up to /api/cofer/refresh in backend.routes).
 """
 
+import datetime as _dt
 import json
 import threading
 import time
@@ -211,7 +212,35 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
     for cd in list(total_by_country.values()) + list(fx_by_country.values()):
         all_periods.update(cd.keys())
 
-    periods = sorted(p for p in all_periods if p >= '2000-01')
+    # Defensive cutoff: drop any period strictly later than the current
+    # month. IMF IRFCL codelists sometimes include future months (the
+    # template pre-declares them) and a parser misalignment could
+    # otherwise bleed real values into future columns like ``2026-08``.
+    # We also drop anything before 2000 as a sanity floor.
+    today = _dt.date.today()
+    cutoff = f'{today.year:04d}-{today.month:02d}'
+    periods = sorted(
+        p for p in all_periods
+        if isinstance(p, str) and p >= '2000-01' and p <= cutoff
+    )
+    if not periods:
+        return None
+
+    # Drop "mostly empty" columns. IMF reporting has a lag — only a
+    # handful of countries report within the current month — so the
+    # latest columns can appear visually empty in the frontend table.
+    # Require at least 5 countries (scaled down for small samples) to
+    # have a total-reserves value before we show the column. This
+    # keeps the latest useful column visible while hiding placeholder
+    # months that would appear empty to the user.
+    total_country_count = len(total_by_country)
+    min_coverage = max(3, min(5, total_country_count // 10))
+    def _coverage(period):
+        return sum(
+            1 for cd in total_by_country.values()
+            if cd.get(period) is not None
+        )
+    periods = [p for p in periods if _coverage(p) >= min_coverage]
     if not periods:
         return None
 
@@ -637,14 +666,20 @@ def _parse_imf_sdmx_series(doc, attempt_log=None):
     if attempt_log is not None and series_obj:
         first_series_key = next(iter(series_obj))
         first_series = series_obj[first_series_key]
-        first_obs = list((first_series.get('observations') or {}).items())[:3]
+        first_obs = list((first_series.get('observations') or {}).items())[:5]
+        last_obs = list((first_series.get('observations') or {}).items())[-3:]
+        # Dump first AND last 3 entries of the time dimension values so
+        # we can tell whether IMF sorts them ascending or descending.
+        tv_first3 = [_val_id(v) for v in time_values[:3]]
+        tv_last3 = [_val_id(v) for v in time_values[-3:]]
         attempt_log.append(
             f'  parser: time_values len={len(time_values)}, '
-            f'first3={time_values[:3]}'
+            f'first3={tv_first3}, last3={tv_last3}'
         )
         attempt_log.append(
             f'  parser: first series key={first_series_key}, '
-            f'first3 obs items={first_obs}'
+            f'obs_count={len(first_series.get("observations") or {})}, '
+            f'first5={first_obs}, last3={last_obs}'
         )
 
     for series_key, series_data in series_obj.items():
@@ -1156,10 +1191,28 @@ def diagnose_fetch():
             _cache._data = result
             _cache._last_fetch = time.time()
 
+    # Surface a small sample of the last 3 periods + per-period coverage
+    # so the /api/cofer/refresh endpoint can verify period order and
+    # country coverage without scraping server logs.
+    sample_periods = []
+    if result and result.get('years'):
+        years = result['years']
+        last3 = years[-3:]
+        countries = result.get('countries') or []
+        for p in last3:
+            idx = years.index(p)
+            coverage = sum(
+                1 for c in countries
+                if (c.get('total_reserves') or [None] * len(years))[idx] is not None
+            )
+            sample_periods.append({'period': p, 'coverage': coverage})
+
     return {
         'attempts': attempts,
         'source': source,
         'latest_period': (result.get('years') if result else [''])[-1] if result and result.get('years') else '',
         'period_range': (result or {}).get('meta', {}).get('period_range', ''),
         'country_count': len((result or {}).get('countries') or []),
+        'sample_periods': sample_periods,
+        'today': _dt.date.today().isoformat(),
     }
