@@ -229,12 +229,12 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
     # Drop "mostly empty" columns. IMF reporting has a lag — only a
     # handful of countries report within the current month — so the
     # latest columns can appear visually empty in the frontend table.
-    # Require at least 5 countries (scaled down for small samples) to
-    # have a total-reserves value before we show the column. This
-    # keeps the latest useful column visible while hiding placeholder
-    # months that would appear empty to the user.
+    # Require each column to have total-reserves data for at least
+    # 25% of all countries (with a floor of 5). This hides placeholder
+    # months while still showing the most-recent *useful* month at the
+    # right edge of the table.
     total_country_count = len(total_by_country)
-    min_coverage = max(3, min(5, total_country_count // 10))
+    min_coverage = max(5, total_country_count // 4)
     def _coverage(period):
         return sum(
             1 for cd in total_by_country.values()
@@ -378,19 +378,24 @@ def _imf_data_attempt_urls(indicator_code):
         indicator_code, (indicator_code,)
     )
     for ind in candidates:
-        # Primary: known sector
+        # Primary: wildcard sector. Different countries report under
+        # different SECTOR codes (S1X vs S1XS1311), and the previous
+        # ``S1XS1311`` filter dropped countries that only publish
+        # under the pure monetary-authorities sector S1X. Using ``*``
+        # lets the parser merge all sector series per country.
         yield (
-            f'v3 IMF.STA *.{ind}.{IMF_IRFCL_DEFAULT_SECTOR}.M',
-            f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{ind}.{IMF_IRFCL_DEFAULT_SECTOR}.M',
+            f'v3 IMF.STA *.{ind}.*.M',
+            f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{ind}.*.M',
             v3_params,
             IMF_DATA_HEADERS_V3,
         )
-    # Looser fallback: wildcard sector on the first candidate, in case
-    # S1XS1311 isn't quite right for every indicator.
+    # Belt-and-suspenders: also try the legacy known sector in case the
+    # wildcard variant returns 0 (some flavors of the SDMX service
+    # require an explicit dimension value at position 3).
     first_candidate = candidates[0]
     yield (
-        f'v3 IMF.STA *.{first_candidate}.*.M',
-        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{first_candidate}.*.M',
+        f'v3 IMF.STA *.{first_candidate}.{IMF_IRFCL_DEFAULT_SECTOR}.M',
+        f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/*.{first_candidate}.{IMF_IRFCL_DEFAULT_SECTOR}.M',
         v3_params,
         IMF_DATA_HEADERS_V3,
     )
@@ -661,26 +666,57 @@ def _parse_imf_sdmx_series(doc, attempt_log=None):
     series_obj = datasets[0].get('series', {}) or {}
 
     # Diagnostic dump of the raw observation structure. Only runs when
-    # a caller passes attempt_log (diagnose_fetch path) and only for the
-    # very first series so we don't spam hundreds of log lines.
+    # a caller passes attempt_log (diagnose_fetch path).
     if attempt_log is not None and series_obj:
-        first_series_key = next(iter(series_obj))
-        first_series = series_obj[first_series_key]
-        first_obs = list((first_series.get('observations') or {}).items())[:5]
-        last_obs = list((first_series.get('observations') or {}).items())[-3:]
-        # Dump first AND last 3 entries of the time dimension values so
-        # we can tell whether IMF sorts them ascending or descending.
-        tv_first3 = [_val_id(v) for v in time_values[:3]]
-        tv_last3 = [_val_id(v) for v in time_values[-3:]]
+        # Dump time dimension values at several positions so we can tell
+        # whether IMF orders them ascending, descending, encounter-order,
+        # or something else entirely.
+        tv_ids = [_val_id(v) for v in time_values]
+        def _sample(idx):
+            return tv_ids[idx] if 0 <= idx < len(tv_ids) else '-'
         attempt_log.append(
             f'  parser: time_values len={len(time_values)}, '
-            f'first3={tv_first3}, last3={tv_last3}'
+            f'[0]={_sample(0)}, [1]={_sample(1)}, [26]={_sample(26)}, '
+            f'[52]={_sample(52)}, [-1]={_sample(len(tv_ids) - 1)}'
         )
+
+        # Dump a sample observation for the first series AND for USA,
+        # CHN specifically (the two countries that were showing stale
+        # data in the previous diagnostic round).
+        series_items = list(series_obj.items())
+        first_series_key, first_series = series_items[0]
+        first_obs = list((first_series.get('observations') or {}).items())[:3]
+        last_obs = list((first_series.get('observations') or {}).items())[-3:]
         attempt_log.append(
             f'  parser: first series key={first_series_key}, '
             f'obs_count={len(first_series.get("observations") or {})}, '
-            f'first5={first_obs}, last3={last_obs}'
+            f'first3={first_obs}, last3={last_obs}'
         )
+
+        # Find USA / CHN in ref_area_values to dump their series
+        target_countries = {'USA', 'CHN'}
+        for i, v in enumerate(ref_area_values):
+            code = _val_id(v)
+            if code not in target_countries:
+                continue
+            # Match any series whose REF_AREA index == i
+            for sk, sd in series_obj.items():
+                parts = sk.split(':')
+                if ref_area_pos < len(parts):
+                    try:
+                        if int(parts[ref_area_pos]) != i:
+                            continue
+                    except ValueError:
+                        continue
+                obs_items = list((sd.get('observations') or {}).items())
+                if not obs_items:
+                    continue
+                attempt_log.append(
+                    f'  parser: {code} series_key={sk} '
+                    f'obs_count={len(obs_items)} '
+                    f'first2={obs_items[:2]} last2={obs_items[-2:]}'
+                )
+                break
 
     for series_key, series_data in series_obj.items():
         parts = series_key.split(':')
