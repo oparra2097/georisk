@@ -1921,7 +1921,11 @@
                         callbacks: {
                             label: (tooltipCtx) => {
                                 const val = tooltipCtx.parsed.y;
-                                return val == null ? 'N/A' : 'Tariff Rate: ' + val.toFixed(2) + '%';
+                                if (val == null) return 'N/A';
+                                const out = ['Tariff Rate: ' + val.toFixed(2) + '%'];
+                                const p = points[tooltipCtx.dataIndex];
+                                if (p && p.note) out.push(p.note);
+                                return out;
                             }
                         }
                     }
@@ -1956,7 +1960,7 @@
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
-            thead.innerHTML = '<tr><th>Date</th><th>Effective Tariff Rate</th><th>Change vs. Prior</th></tr>';
+            thead.innerHTML = '<tr><th>Date</th><th>Effective Tariff Rate</th><th>Change vs. Prior</th><th>Policy Event</th></tr>';
             let rows = '';
             const reversed = points.slice().reverse();
             reversed.forEach((p, i) => {
@@ -1970,7 +1974,10 @@
                 } else {
                     delta = '<span style="color:#64748b;">—</span>';
                 }
-                rows += '<tr><td>' + p.date + '</td><td>' + p.value.toFixed(2) + '%</td><td>' + delta + '</td></tr>';
+                const noteHtml = p.note
+                    ? '<span style="color:#94a3b8;font-size:12px;">' + p.note + '</span>'
+                    : '<span style="color:#64748b;">—</span>';
+                rows += '<tr><td>' + p.date + '</td><td>' + p.value.toFixed(2) + '%</td><td>' + delta + '</td><td style="max-width:320px;">' + noteHtml + '</td></tr>';
             });
             tbody.innerHTML = rows;
         }
