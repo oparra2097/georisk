@@ -217,15 +217,19 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 
     countries = []
     for code in total_by_country:
-        # Accept both ISO2 (DBnomics / legacy) and ISO3 (new api.imf.org)
-        if len(code) == 2:
-            iso3 = ISO2_TO_ISO3.get(code)
-        elif len(code) == 3 and code in COUNTRY_NAMES:
-            iso3 = code
+        # Accept both ISO2 (DBnomics / legacy) and ISO3 (new api.imf.org).
+        # For ISO3 we don't require COUNTRY_NAMES membership — the
+        # display_name fallback below handles unknown codes by using
+        # the code itself as the label.
+        code_stripped = (code or '').strip().upper()
+        if len(code_stripped) == 2:
+            iso3 = ISO2_TO_ISO3.get(code_stripped)
+        elif len(code_stripped) == 3 and code_stripped.isalpha():
+            iso3 = code_stripped
         else:
             iso3 = None
         if not iso3:
-            continue  # Skip countries not in our display mapping
+            continue
 
         total_data = total_by_country.get(code, {})
         fx_data = fx_by_country.get(code, {})
@@ -436,13 +440,16 @@ def _probe_irfcl_sample(attempt_log=None):
     # Best guess: IRFCLDT1_IRFCL121_USD is first in the alphabetical
     # catalog sort. In IRFCL templates, row summaries often come first.
     # We'll fetch a short recent window for USA only.
-    for ind_code in ('IRFCLDT1_IRFCL121_USD', 'IRFCLDT1_IRFCLCDCFCU_USD'):
+    for ind_code in ('IRFCLDT1_IRFCL121_USD', 'IRFCLDT1_IRFCLCDCFC_USD'):
         url = f'{IMF_DATA_BASE_V3}/data/dataflow/IMF.STA/IRFCL/+/USA.{ind_code}.S1XS1311.M'
+        # No time filter — SDMX 3.0 c[TIME_PERIOD] syntax silently
+        # matched zero series here even though the unfiltered query
+        # returned ~260KB of data. Accept the extra bytes; this probe
+        # only runs when the main path is in trouble anyway.
         params = {
             'dimensionAtObservation': 'TIME_PERIOD',
             'attributes': 'dsd',
             'measures': 'all',
-            'c[TIME_PERIOD]': 'ge:2025-01',
         }
         try:
             resp = requests.get(url, params=params, headers=IMF_DATA_HEADERS_V3, timeout=60)
@@ -588,7 +595,19 @@ def _parse_imf_sdmx_series(doc):
     if time_pos is None:
         return {}
 
-    all_periods = [v.get('id', '') for v in time_values]
+    # Normalize period format. SDMX 3.0 convention is '2025-M07' for
+    # monthly periods; our downstream pipeline (and DBnomics path) uses
+    # plain '2025-07'. Convert M-dates to hyphen form up front.
+    def _norm_period(p):
+        if not isinstance(p, str):
+            return p
+        # '2025-M07' -> '2025-07'; '2025M07' -> '2025-07'
+        if '-M' in p:
+            return p.replace('-M', '-')
+        if len(p) == 7 and p[4] == 'M':
+            return p[:4] + '-' + p[5:]
+        return p
+    all_periods = [_norm_period(v.get('id', '')) for v in time_values]
 
     result = {}
     series_obj = datasets[0].get('series', {}) or {}
@@ -673,6 +692,29 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
                 f'parser extracted: total={len(total_by_country)} countries, '
                 f'fx={len(fx_by_country)} countries'
             )
+            # Show sample codes + periods + values so we can eyeball
+            # (a) what code format IMF returned and (b) scale sanity
+            # for the indicator we picked. If CHN shows up around
+            # $3T it's total reserves; if it's $50B it's a sub-item.
+            sample_codes = list(total_by_country.keys())[:10]
+            attempt_log.append(f'  total_by_country first 10 keys: {sample_codes}')
+            if total_by_country:
+                first_key = sample_codes[0]
+                first_periods = total_by_country[first_key]
+                if first_periods:
+                    max_p = max(first_periods.keys())
+                    attempt_log.append(
+                        f'  {first_key} latest: {max_p} = {first_periods[max_p]} (USD millions)'
+                    )
+            # Check known large countries
+            for probe_key in ('CHN', 'USA', 'JPN', 'DEU'):
+                if probe_key in total_by_country:
+                    tdata = total_by_country[probe_key]
+                    if tdata:
+                        max_p = max(tdata.keys())
+                        attempt_log.append(
+                            f'  {probe_key} latest: {max_p} = {tdata[max_p]} (USD millions)'
+                        )
             # If the parser got nothing, surface the top-level shape of the
             # documents so we can tell what IMF actually sent us.
             if not total_by_country and isinstance(total_doc, dict):
@@ -697,6 +739,12 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
             fx_by_country,
             source_label='IMF IRFCL (api.imf.org)',
         )
+        if result is None and attempt_log is not None:
+            attempt_log.append(
+                '_build_reserves_result returned None despite '
+                f'total={len(total_by_country)}, fx={len(fx_by_country)} — '
+                'probably all codes were filtered out or period format mismatch'
+            )
 
         if result:
             logger.info(
