@@ -245,10 +245,10 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
     if not periods:
         return None
 
-    # Truncate to last 60 months. 25 years of monthly history compresses
-    # recent variation into <2% of the x-axis, making charts look flat.
-    if len(periods) > 60:
-        periods = periods[-60:]
+    # Keep history from 2004 onward (~250 months). This captures the
+    # dramatic reserve buildup period (China $600B→$4T) while still
+    # excluding the sparse pre-2004 data.
+    periods = [p for p in periods if p >= '2004-01']
 
     countries = []
     for code in total_by_country:
