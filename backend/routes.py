@@ -509,8 +509,6 @@ def get_forecasts():
 def gdp_nowcast():
     """Return US GDP nowcast estimate (cached 6 hours)."""
     data = get_gdp_nowcast()
-    if 'error' in data:
-        return jsonify(data), 503
     return jsonify(data)
 
 

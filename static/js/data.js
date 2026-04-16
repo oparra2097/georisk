@@ -2061,9 +2061,12 @@
 
     function renderGdpNowcast(ds) {
         const data = PD.getCached(ds.api);
-        if (!data || data.error) {
+        if (!data) return;
+        if (data.error) {
             const summary = document.getElementById('panel-summary');
-            if (summary) summary.innerHTML = '<div style="color:#ef4444;padding:20px;">FRED API key not configured. Add FRED_API_KEY to your environment variables.</div>';
+            if (summary) summary.innerHTML = '<div style="color:#f59e0b;padding:30px;text-align:center;"><div style="font-size:15px;font-weight:600;">GDP Nowcast Unavailable</div><div style="color:#64748b;font-size:13px;margin-top:8px;">' + data.error + '</div></div>';
+            const loadEl = document.getElementById('panel-loading');
+            if (loadEl) loadEl.style.display = 'none';
             return;
         }
 
@@ -2072,7 +2075,7 @@
         const contributions = data.contributions || [];
         const history = data.history || [];
 
-        const estimate = nowcast.estimate;
+        const estimate = nowcast.estimate != null ? nowcast.estimate : 0;
         const estColor = estimate >= 0 ? '#10b981' : '#ef4444';
         const estSign = estimate >= 0 ? '+' : '';
         const priorActual = prior.actual;
