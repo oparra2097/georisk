@@ -598,9 +598,15 @@
                     return ctx.dataset.label + ': $' + val.toFixed(1) + 'B';
                 },
                 yCallback: (val) => '$' + val.toLocaleString() + 'B',
+                xCallback: function(value, index) {
+                    // Show year labels only (every January) to keep axis clean
+                    const label = years[index] || '';
+                    if (label.endsWith('-01') || label.endsWith('-12')) return label.slice(0, 4);
+                    return '';
+                },
                 beginAtZero: true,
-                maxRotation: 45,
-                maxTicksLimitX: 12,
+                maxRotation: 0,
+                maxTicksLimitX: 24,
             }),
         }));
 
@@ -2075,12 +2081,13 @@
             },
             scales: {
                 x: {
-                    type: opts.xType || undefined,
+                    type: opts.xType || 'category',
                     ticks: {
                         color: '#6b7280', font: { size: 10 },
                         maxRotation: opts.maxRotation || 0,
                         autoSkip: true,
                         maxTicksLimit: opts.maxTicksLimitX || 12,
+                        callback: opts.xCallback || undefined,
                     },
                     grid: { color: 'rgba(55,65,81,0.3)' }
                 },
