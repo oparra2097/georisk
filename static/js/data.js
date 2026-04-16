@@ -599,6 +599,8 @@
                 },
                 yCallback: (val) => '$' + val.toLocaleString() + 'B',
                 beginAtZero: true,
+                maxRotation: 45,
+                maxTicksLimitX: 12,
             }),
         }));
 
