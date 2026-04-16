@@ -1321,22 +1321,28 @@ def _fetch_reserves_wb():
 # ══════════════════════════════════════════════════════════════════════════
 
 def _fetch_reserves():
-    """Fetch reserves from the freshest source available.
+    """Fetch reserves from the best available source.
 
     Order:
-      1. IMF Data API (api.imf.org, live monthly, authoritative)
-      2. DBnomics IFS mirror (reliable, ~140 countries)
+      1. DBnomics IFS (dense monthly data, ~90 countries, all 3 columns)
+      2. IMF Data API / IRFCL (fresher but very sparse — most countries
+         have <10 observations across 60 months, making charts flat lines)
       3. World Bank annual (last-resort fallback)
-    """
-    result = _fetch_reserves_imf_sdmx()
-    if result:
-        return result
-    logger.warning("IMF Data API failed — falling back to DBnomics IFS mirror")
 
+    IFS is preferred over IRFCL because IRFCL's total reserves indicator
+    (IRFCLDT4_IRFCL11) has only ~4 observations per country since 2021
+    for major holders (CHN, JPN, SAU). The forward-fill makes every
+    country look like a flat line. IFS has 60/60 dense monthly data.
+    """
     result = _fetch_reserves_dbnomics()
     if result:
         return result
-    logger.warning("DBnomics IRFCL failed — falling back to World Bank annual data")
+    logger.warning("DBnomics IFS failed — falling back to IMF Data API (IRFCL)")
+
+    result = _fetch_reserves_imf_sdmx()
+    if result:
+        return result
+    logger.warning("IMF Data API failed — falling back to World Bank annual data")
     return _fetch_reserves_wb()
 
 
@@ -1370,17 +1376,19 @@ def diagnose_fetch():
     """
     attempts = []
 
-    result = _fetch_reserves_imf_sdmx(attempts)
+    # Try DBnomics IFS first (dense monthly data)
+    result = _fetch_reserves_dbnomics()
     source = None
     if result:
         source = result.get('meta', {}).get('source')
+        attempts.append(f'DBnomics IFS succeeded: {source}')
     else:
-        attempts.append('IMF Data API chain failed — trying DBnomics IFS mirror')
-        result = _fetch_reserves_dbnomics()
+        attempts.append('DBnomics IFS failed — trying IMF Data API (IRFCL)')
+        result = _fetch_reserves_imf_sdmx(attempts)
         if result:
             source = result.get('meta', {}).get('source')
         else:
-            attempts.append('DBnomics IFS mirror failed — falling back to World Bank annual')
+            attempts.append('IMF Data API failed — falling back to World Bank annual')
             result = _fetch_reserves_wb()
             if result:
                 source = result.get('meta', {}).get('source')
