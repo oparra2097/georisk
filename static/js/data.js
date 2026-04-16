@@ -437,6 +437,7 @@
             case 'cofer-nowcast': renderCoferNowcast(ds); break;
             case 'insurance-inflation': renderInsuranceInflation(ds); break;
             case 'yale-tariff': renderYaleTariff(ds); break;
+            case 'gdp-nowcast': renderGdpNowcast(ds); break;
         }
     }
 
@@ -2054,6 +2055,189 @@
         const histSection = document.getElementById('panel-history-section');
         if (histSection) histSection.style.display = 'none';
     }
+
+    // ══════════════════════════════════════════════════════
+    // GDP NOWCAST RENDERER
+    // ══════════════════════════════════════════════════════
+
+    function renderGdpNowcast(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || data.error) {
+            const summary = document.getElementById('panel-summary');
+            if (summary) summary.innerHTML = '<div style="color:#ef4444;padding:20px;">FRED API key not configured. Add FRED_API_KEY to your environment variables.</div>';
+            return;
+        }
+
+        const nowcast = data.nowcast || {};
+        const prior = data.prior_quarter || {};
+        const contributions = data.contributions || [];
+        const history = data.history || [];
+
+        const estimate = nowcast.estimate;
+        const estColor = estimate >= 0 ? '#10b981' : '#ef4444';
+        const estSign = estimate >= 0 ? '+' : '';
+        const priorActual = prior.actual;
+        const priorColor = priorActual != null ? (priorActual >= 0 ? '#10b981' : '#ef4444') : '#64748b';
+        const priorSign = priorActual != null && priorActual >= 0 ? '+' : '';
+
+        // Summary cards
+        const summary = document.getElementById('panel-summary');
+        if (summary) {
+            summary.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:12px;margin-bottom:20px;width:100%;">
+                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Nowcast</div>
+                        <div style="color:${estColor};font-size:36px;font-weight:700;margin-top:6px;">${estSign}${estimate.toFixed(1)}%</div>
+                        <div style="color:#64748b;font-size:12px;margin-top:4px;">${nowcast.quarter} (annualized)</div>
+                        <div style="color:#475569;font-size:11px;">as of ${nowcast.as_of}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Prior Quarter</div>
+                        <div style="color:${priorColor};font-size:36px;font-weight:700;margin-top:6px;">${priorActual != null ? priorSign + priorActual.toFixed(1) + '%' : 'N/A'}</div>
+                        <div style="color:#64748b;font-size:12px;margin-top:4px;">${prior.quarter || ''} (actual)</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Indicators</div>
+                        <div style="color:#e2e8f0;font-size:36px;font-weight:700;margin-top:6px;">${contributions.filter(c => c.signal !== 'unavailable').length}<span style="font-size:18px;color:#64748b;">/${contributions.length}</span></div>
+                        <div style="color:#64748b;font-size:12px;margin-top:4px;">reporting this quarter</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Chart: contributions horizontal bar
+        const canvasEl = document.getElementById('panel-chart');
+        if (canvasEl) {
+            const ctx = canvasEl.getContext('2d');
+            const validContribs = contributions.filter(c => c.signal !== 'unavailable');
+            const labels = validContribs.map(c => c.label);
+            const values = validContribs.map(c => c.contribution);
+            const colors = values.map(v => v >= 0 ? '#10b981' : '#ef4444');
+
+            PD.setChart('main', new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: colors,
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: {
+                            display: true,
+                            text: 'Indicator Contributions to GDP Nowcast (pp)',
+                            color: '#94a3b8',
+                            font: { size: 13, weight: '500' },
+                            padding: { bottom: 16 },
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#d1d5db',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1,
+                            callbacks: {
+                                label: function(ctx) {
+                                    const c = validContribs[ctx.dataIndex];
+                                    const sign = c.contribution >= 0 ? '+' : '';
+                                    const parts = [sign + c.contribution.toFixed(2) + ' pp'];
+                                    if (c.pct_change != null) parts.push('QoQ: ' + (c.pct_change >= 0 ? '+' : '') + c.pct_change.toFixed(1) + '%');
+                                    parts.push('Weight: ' + (c.weight * 100).toFixed(0) + '%');
+                                    return parts;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#6b7280', font: { size: 10 }, callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) },
+                            grid: { color: 'rgba(55,65,81,0.3)' },
+                        },
+                        y: {
+                            ticks: { color: '#94a3b8', font: { size: 11 } },
+                            grid: { display: false },
+                        }
+                    }
+                }
+            }));
+        }
+
+        // Table: indicator details
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            thead.innerHTML = '<tr><th>Indicator</th><th>Latest</th><th>QoQ Change</th><th>Contribution</th><th>Signal</th></tr>';
+            let rows = '';
+            contributions.forEach(c => {
+                const signalColors = { positive: '#10b981', negative: '#ef4444', neutral: '#94a3b8', unavailable: '#475569' };
+                const signalColor = signalColors[c.signal] || '#64748b';
+                const contribSign = c.contribution >= 0 ? '+' : '';
+                const qoqStr = c.pct_change != null ? (c.pct_change >= 0 ? '+' : '') + c.pct_change.toFixed(1) + '%' : '—';
+                const latestStr = c.latest_value != null ? c.latest_value.toLocaleString() : '—';
+                const dateStr = c.latest_date ? ' <span style="color:#475569;font-size:11px;">(' + c.latest_date + ')</span>' : '';
+                rows += '<tr>' +
+                    '<td>' + c.label + '</td>' +
+                    '<td>' + latestStr + dateStr + '</td>' +
+                    '<td>' + qoqStr + '</td>' +
+                    '<td style="color:' + signalColor + ';font-weight:600;">' + contribSign + c.contribution.toFixed(2) + ' pp</td>' +
+                    '<td><span style="color:' + signalColor + ';text-transform:capitalize;">' + c.signal + '</span></td>' +
+                    '</tr>';
+            });
+            tbody.innerHTML = rows;
+        }
+
+        // Meta
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            metaEl.innerHTML = '<div>Source: FRED (Federal Reserve Economic Data) · Parra Macro bridge equation model</div>' +
+                '<div style="color:#475569;font-size:11px;margin-top:4px;">' + (data.methodology || '') + '</div>';
+        }
+
+        // History section — show actual GDP history
+        const histSection = document.getElementById('panel-history-section');
+        if (histSection && history.length > 0) {
+            histSection.style.display = 'block';
+            histSection.innerHTML = `
+                <h3 style="color:#e2e8f0;font-size:14px;font-weight:600;margin-bottom:12px;">Actual GDP Growth (Recent Quarters)</h3>
+                <div style="height:250px;"><canvas id="gdp-history-chart"></canvas></div>
+            `;
+            const hCtx = document.getElementById('gdp-history-chart').getContext('2d');
+            const hLabels = history.map(h => h.quarter);
+            const hValues = history.map(h => h.actual);
+            const hColors = hValues.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)');
+
+            new Chart(hCtx, {
+                type: 'bar',
+                data: {
+                    labels: hLabels,
+                    datasets: [{
+                        data: hValues,
+                        backgroundColor: hColors,
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(55,65,81,0.3)' } },
+                        y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => v.toFixed(0) + '%' }, grid: { color: 'rgba(55,65,81,0.3)' } }
+                    }
+                }
+            });
+        } else if (histSection) {
+            histSection.style.display = 'none';
+        }
+    }
+
 
     // ══════════════════════════════════════════════════════
     // CHART OPTIONS HELPERS

@@ -14,6 +14,7 @@ from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
 from backend.data_sources.eurostat_hicp import get_eurostat_cpi_data, get_eurostat_components
 from backend.data_sources.substack_feed import get_substack_posts
 from backend.data_sources.commodities_forecast import get_forecast_data
+from backend.data_sources.gdp_nowcast import get_gdp_nowcast
 from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
 from backend.data_sources.sovereign_debt import get_sovereign_debt_data
@@ -501,6 +502,15 @@ def export_markets_excel():
 def get_forecasts():
     """Return commodities forecast data (cached 24 hours)."""
     data = get_forecast_data()
+    return jsonify(data)
+
+
+@api_bp.route('/gdp-nowcast')
+def gdp_nowcast():
+    """Return US GDP nowcast estimate (cached 6 hours)."""
+    data = get_gdp_nowcast()
+    if 'error' in data:
+        return jsonify(data), 503
     return jsonify(data)
 
 

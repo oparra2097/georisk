@@ -16,7 +16,7 @@ window.ParraData.CATALOG = {
                     id: 'us-cpi',
                     label: 'US CPI',
                     source: 'Bureau of Labor Statistics',
-                    sourceDetail: 'CPI-U, Seasonally Adjusted',
+                    sourceDetail: 'CPI-U, Not Seasonally Adjusted',
                     api: '/api/cpi/us',
                     componentApi: '/api/cpi/us/components',
                     exportUrl: '/api/cpi/us/export',
@@ -350,6 +350,17 @@ window.ParraData.CATALOG = {
             label: 'Growth & Output',
             icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
             datasets: [
+                {
+                    id: 'us-gdp-nowcast',
+                    label: 'US GDP Nowcast',
+                    source: 'FRED + Parra Macro',
+                    sourceDetail: 'Real-time GDP growth estimate using high-frequency indicators',
+                    api: '/api/gdp-nowcast',
+                    type: 'gdp-nowcast',
+                    controls: [],
+                    subviews: ['overview', 'contributions', 'history'],
+                    searchTerms: ['GDP', 'nowcast', 'GDPNow', 'Atlanta Fed', 'growth', 'real-time', 'FRED'],
+                },
                 {
                     id: 'weo-gdp',
                     label: 'GDP Growth',

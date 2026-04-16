@@ -20,6 +20,7 @@ class Config:
     ACLED_PASSWORD = os.environ.get('ACLED_PASSWORD', '')
     ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
     ANTHROPIC_MODEL = 'claude-sonnet-4-20250514'
+    FRED_API_KEY = os.environ.get('FRED_API_KEY', '')
 
     # --- Email verification (Gmail SMTP) ---
     SMTP_SERVER = 'smtp.gmail.com'

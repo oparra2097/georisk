@@ -71,33 +71,65 @@ a:hover {
     color: #fff;
 }
 
-.nav-links {
+.nav-tabs {
     display: flex;
-    gap: 8px;
+    gap: 0;
+    height: 100%;
+    align-items: stretch;
 }
 
-.nav-link {
-    padding: 6px 14px;
-    border-radius: 6px;
-    font-size: 14px;
+.nav-tab {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font-size: 13px;
     font-weight: 500;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+.nav-tab:hover {
+    color: var(--text-primary);
+    text-decoration: none;
+}
+.nav-tab.active {
+    color: #fff;
+    border-bottom-color: var(--accent);
+}
+
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-auth {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.auth-link {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+.auth-link:hover {
     color: var(--text-secondary);
     text-decoration: none;
-    transition: color 0.15s, background 0.15s;
 }
-.nav-link:hover {
-    color: var(--text-primary);
-    background: var(--bg-tertiary);
-    text-decoration: none;
-}
-.nav-link.active {
-    color: var(--text-primary);
-    background: var(--accent-dim);
+
+.nav-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
 }
 
 .nav-social {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     align-items: center;
 }
 
@@ -254,19 +286,25 @@ a:hover {
     .nav-brand {
         font-size: 16px;
     }
-    .nav-links {
+    .nav-tabs {
         order: 3;
         width: 100%;
-        gap: 2px;
         justify-content: center;
-        padding-bottom: 2px;
+        height: auto;
+        padding-bottom: 4px;
     }
-    .nav-link {
-        padding: 5px 10px;
-        font-size: 12px;
+    .nav-tab {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+    .nav-right {
+        gap: 8px;
+    }
+    .nav-divider {
+        display: none;
     }
     .nav-social {
-        gap: 10px;
+        gap: 8px;
     }
     .footer-inner {
         flex-direction: column;
@@ -289,9 +327,12 @@ a:hover {
     .nav-inner {
         padding: 6px 12px;
     }
-    .nav-link {
+    .nav-tab {
         padding: 4px 7px;
-        font-size: 11px;
+        font-size: 10px;
+    }
+    .auth-link {
+        font-size: 10px;
     }
     .site-footer {
         padding: 16px 12px;
