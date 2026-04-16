@@ -277,13 +277,19 @@ def compute_nowcast():
     # Fetch actual GDP history
     history = _fetch_gdp_history()
 
-    # Get prior quarter actual if available
+    # Get prior quarter actual — use most recent quarter with data
+    # (the immediately prior quarter may not be released yet due to BEA lag)
     prior_actual = None
     prior_label = _quarter_label(prev_year, prev_q)
     for h in history:
         if h['quarter'] == prior_label:
             prior_actual = h['actual']
             break
+    # If prior quarter not yet released, use the latest available
+    if prior_actual is None and history:
+        latest_h = history[-1]
+        prior_actual = latest_h['actual']
+        prior_label = latest_h['quarter'] + ' (latest)'
 
     # Sort contributions by absolute contribution (largest impact first)
     contributions.sort(key=lambda x: abs(x['contribution']), reverse=True)
