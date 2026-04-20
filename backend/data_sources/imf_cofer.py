@@ -23,10 +23,13 @@ re-fetch (wired up to /api/cofer/refresh in backend.routes).
 
 import datetime as _dt
 import json
+import os
 import threading
 import time
 import logging
 import requests
+
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -145,16 +148,52 @@ COUNTRY_COLORS = [
 
 # ── Cache ──────────────────────────────────────────────────────────────────
 
+RESERVES_CACHE_FILE = os.path.join(Config.DATA_DIR, 'reserves_cache.json')
+
+
 class ReservesCache:
-    """Thread-safe cache for reserves data."""
+    """File-backed cache for reserves data.
+
+    Gunicorn on Render runs multiple workers, each with its own process
+    memory. A pure in-memory cache isn't shared — worker A could have
+    fresh IMF data (from /api/cofer/refresh) while worker B still has
+    stale DBnomics data from the previous deploy, making requests
+    round-robin between fresh and stale answers. Persisting to
+    ``${DATA_DIR}/reserves_cache.json`` (which is a mounted disk on
+    Render) means every worker reads from the same source of truth.
+    """
 
     def __init__(self):
         self._lock = threading.RLock()
         self._data = None
         self._last_fetch = 0
+        self._load_from_disk()
+
+    def _load_from_disk(self):
+        if not os.path.exists(RESERVES_CACHE_FILE):
+            return
+        try:
+            with open(RESERVES_CACHE_FILE, 'r') as f:
+                wrapper = json.load(f)
+            self._data = wrapper.get('data')
+            self._last_fetch = float(wrapper.get('fetched_at', 0))
+        except (OSError, ValueError, json.JSONDecodeError):
+            logger.warning("Failed to load reserves cache from disk; ignoring")
+
+    def _save_to_disk(self, data):
+        try:
+            os.makedirs(Config.DATA_DIR, exist_ok=True)
+            tmp = RESERVES_CACHE_FILE + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump({'fetched_at': time.time(), 'data': data}, f)
+            os.replace(tmp, RESERVES_CACHE_FILE)
+        except OSError as e:
+            logger.warning(f"Failed to persist reserves cache: {e}")
 
     def get(self):
         with self._lock:
+            # Re-read from disk first — another worker may have fetched.
+            self._load_from_disk()
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
         data = _fetch_reserves()
@@ -162,6 +201,7 @@ class ReservesCache:
             with self._lock:
                 self._data = data
                 self._last_fetch = time.time()
+                self._save_to_disk(data)
             return data
         with self._lock:
             return self._data or _empty_result()
@@ -170,6 +210,11 @@ class ReservesCache:
         with self._lock:
             self._data = None
             self._last_fetch = 0
+            try:
+                if os.path.exists(RESERVES_CACHE_FILE):
+                    os.remove(RESERVES_CACHE_FILE)
+            except OSError:
+                pass
 
 
 _cache = ReservesCache()
@@ -271,48 +316,28 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 
         total_values = []
         fx_values = []
+        gold_values = []
+        latest_real_idx = -1
 
-        for period in periods:
+        for i, period in enumerate(periods):
             total_b = _usd_millions_to_billions(total_data.get(period))
             fx_b = _usd_millions_to_billions(fx_data.get(period))
+            gold_b = (
+                round(total_b - fx_b, 2)
+                if (total_b is not None and fx_b is not None)
+                else None
+            )
             total_values.append(total_b)
             fx_values.append(fx_b)
+            gold_values.append(gold_b)
+            if total_b is not None:
+                latest_real_idx = i
 
         # Skip countries with no usable total reserves at all
-        if not any(v is not None for v in total_values):
+        if latest_real_idx < 0:
             continue
 
-        # Forward-fill trailing nulls within the display window.
-        # IMF IRFCL reporting gaps — e.g. USA stopped publishing this
-        # dataflow in 2024-01, CHN in 2024-12 — would otherwise leave
-        # big reserve holders as broken lines on the chart. We hold the
-        # last known value flat until the end of the display range and
-        # record the country's last *real* reported period so the
-        # frontend can mark forward-filled segments as stale.
-        def _forward_fill(arr):
-            last_real_idx = -1
-            last_val = None
-            for i, v in enumerate(arr):
-                if v is not None:
-                    last_real_idx = i
-                    last_val = v
-                elif last_val is not None:
-                    arr[i] = last_val
-            return last_real_idx
-        total_last_idx = _forward_fill(total_values)
-        _forward_fill(fx_values)
-
-        # Recompute gold from the (possibly forward-filled) series.
-        gold_values = []
-        for t, f in zip(total_values, fx_values):
-            if t is not None and f is not None:
-                gold_values.append(round(t - f, 2))
-            else:
-                gold_values.append(None)
-
-        latest_real_period = (
-            periods[total_last_idx] if total_last_idx >= 0 else None
-        )
+        latest_real_period = periods[latest_real_idx]
 
         display_name = COUNTRY_NAMES.get(iso3, iso3)
         countries.append({
@@ -902,22 +927,16 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
     try:
         logger.info("Fetching reserves from IMF Data API (live)...")
 
-        # Probe the IRFCL catalog first to discover valid indicator and
-        # sector codes. This is a narrow query against one country with
-        # ``detail=serieskeysonly`` — small response, but enough for
-        # IMF to populate the dimension value arrays with the real
-        # codelist entries that downstream fetches need to match.
-        _probe_irfcl_catalog(attempt_log)
-        # Sector probes for specific large-holder countries that were
-        # showing stale data in the previous diagnostic round. If HKG
-        # or CHN publish under a sector other than ``S1XS1311`` we'll
-        # see it here.
+        # Diagnostic probes only run when a caller passes ``attempt_log``
+        # (i.e. /api/cofer/refresh). They add ~3-5 extra HTTP round-trips
+        # before the main fetch and they only serve to log codelist info
+        # into the attempt_log, so they shouldn't slow down every
+        # /api/cofer request.
         if attempt_log is not None:
+            _probe_irfcl_catalog(attempt_log)
             for probe_country in ('CHN', 'HKG', 'JPN'):
                 _probe_country_sectors(probe_country, attempt_log)
-        # Sample probe: fetch one real observation for USA to verify
-        # the key format works end-to-end and eyeball the scale.
-        _probe_irfcl_sample(attempt_log)
+            _probe_irfcl_sample(attempt_log)
 
         total_doc = _fetch_imf_data_indicator('RAFA_USD', attempt_log)
         fx_doc = _fetch_imf_data_indicator('RAFAFX_USD', attempt_log)
@@ -1331,8 +1350,8 @@ def _fetch_reserves():
 
     IFS is preferred over IRFCL because IRFCL's total reserves indicator
     (IRFCLDT4_IRFCL11) has only ~4 observations per country since 2021
-    for major holders (CHN, JPN, SAU). The forward-fill makes every
-    country look like a flat line. IFS has 60/60 dense monthly data.
+    for major holders (CHN, JPN, SAU) — the lines would be steppy/flat
+    on the chart. IFS has 60/60 dense monthly data.
     """
     result = _fetch_reserves_dbnomics()
     if result:
@@ -1416,9 +1435,10 @@ def diagnose_fetch():
             )
             sample_periods.append({'period': p, 'coverage': coverage})
 
-        # Report the top 15 countries' latest real reporting month so we
-        # can see which countries are being forward-filled (and by how
-        # much) on the frontend chart.
+        # Report the top 15 countries' latest real reporting month so
+        # we can see which big holders have stopped reporting recently
+        # (their lines on the chart will show NAs from that month
+        # forward).
         for c in countries[:15]:
             stale_countries.append({
                 'iso3': c.get('iso3'),
