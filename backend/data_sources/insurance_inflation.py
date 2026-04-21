@@ -76,14 +76,19 @@ EU_HICP_SERIES = {
     'eu_pharma':        {'coicop': 'CP0611', 'label': 'EU HICP: Pharmaceutical Products',        'color': '#fca5a5', 'category': 'medical'},
     'eu_med_equip':     {'coicop': 'CP0613', 'label': 'EU HICP: Therapeutic Appliances & Equip', 'color': '#fb923c', 'category': 'medical'},
     'eu_dental':        {'coicop': 'CP0622', 'label': 'EU HICP: Dental Services',                'color': '#fdba74', 'category': 'medical'},
+    'eu_insurance_svc': {'coicop': 'CP125',  'label': 'EU HICP: Insurance Services',              'color': '#a855f7', 'category': 'insurance'},
+    'eu_financial_svc': {'coicop': 'CP126',  'label': 'EU HICP: Financial Services n.e.c.',       'color': '#9333ea', 'category': 'insurance'},
     'eu_maint_repair':  {'coicop': 'CP043',  'label': 'EU HICP: Maintenance & Repair of Dwelling','color': '#10b981', 'category': 'fire_allied'},
     'eu_vehicle_maint': {'coicop': 'CP0723', 'label': 'EU HICP: Vehicle Maintenance & Repairs',  'color': '#06b6d4', 'category': 'auto_physical'},
     'eu_vehicle_parts': {'coicop': 'CP0721', 'label': 'EU HICP: Spare Parts & Accessories',      'color': '#22d3ee', 'category': 'auto_physical'},
 }
 
-# NL/IT legal (approximate)
+# Country-specific legal proxies (approximate — CP127 "Other Services n.e.c."
+# is the closest HICP category to legal services costs)
 EU_LEGAL_NL = {'nl_legal': {'coicop': 'CP127', 'label': 'NL HICP: Other Services (legal proxy)', 'color': '#eab308', 'category': 'legal', 'approximate': True}}
 EU_LEGAL_IT = {'it_legal': {'coicop': 'CP127', 'label': 'IT HICP: Other Services (legal proxy)',  'color': '#ca8a04', 'category': 'legal', 'approximate': True}}
+EU_LEGAL_DE = {'de_legal': {'coicop': 'CP127', 'label': 'DE HICP: Other Services (legal proxy)',  'color': '#f59e0b', 'category': 'legal', 'approximate': True}}
+EU_LEGAL_FR = {'fr_legal': {'coicop': 'CP127', 'label': 'FR HICP: Other Services (legal proxy)',  'color': '#d97706', 'category': 'legal', 'approximate': True}}
 
 # PPI — use annual rate of change (unit=PCH_PRE for YoY)
 EU_PPI_SERIES = {
@@ -99,10 +104,11 @@ EU_CONSTRUCTION = {
 
 # Labour Cost Index — quarterly
 EU_LCI = {
-    'eu_lci_finance':      {'nace': 'K',   'label': 'EU LCI: Finance & Insurance',   'color': '#8b5cf6', 'category': 'insurance'},
-    'eu_lci_total':        {'nace': 'B-S', 'label': 'EU LCI: Total Business Economy', 'color': '#a78bfa', 'category': 'bodily_injury'},
-    'eu_lci_construction': {'nace': 'F',   'label': 'EU LCI: Construction',           'color': '#c084fc', 'category': 'fire_allied'},
-    'eu_lci_transport':    {'nace': 'H',   'label': 'EU LCI: Transport & Storage',    'color': '#d8b4fe', 'category': 'auto_physical'},
+    'eu_lci_finance':       {'nace': 'K',   'label': 'EU LCI: Finance & Insurance',           'color': '#8b5cf6', 'category': 'insurance'},
+    'eu_lci_total':         {'nace': 'B-S', 'label': 'EU LCI: Total Business Economy',        'color': '#a78bfa', 'category': 'bodily_injury'},
+    'eu_lci_construction':  {'nace': 'F',   'label': 'EU LCI: Construction',                   'color': '#c084fc', 'category': 'fire_allied'},
+    'eu_lci_transport':     {'nace': 'H',   'label': 'EU LCI: Transport & Storage',            'color': '#d8b4fe', 'category': 'auto_physical'},
+    'eu_lci_prof_services': {'nace': 'M',   'label': 'EU LCI: Professional & Scientific Svcs', 'color': '#fbbf24', 'category': 'legal'},
 }
 
 # ── US BLS series ────────────────────────────────────────────────────────────
@@ -112,13 +118,13 @@ BLS_API_URL = 'https://api.bls.gov/publicAPI/v2/timeseries/data/'
 
 BLS_SERIES = {
     # Medical (CPI-U)
-    'us_physicians':     {'bls_id': 'CUSR0000SEMC01', 'label': 'US CPI: Physicians\' Services',         'color': '#dc2626', 'category': 'medical'},
-    'us_hospital':       {'bls_id': 'CUSR0000SEMD01', 'label': 'US CPI: Hospital Services',              'color': '#b91c1c', 'category': 'medical'},
-    'us_drugs':          {'bls_id': 'CUSR0000SEMF',   'label': 'US CPI: Medicinal Drugs',                'color': '#991b1b', 'category': 'medical'},
+    'us_physicians':     {'bls_id': 'CUUR0000SEMC01', 'label': 'US CPI: Physicians\' Services',         'color': '#dc2626', 'category': 'medical'},
+    'us_hospital':       {'bls_id': 'CUUR0000SEMD01', 'label': 'US CPI: Hospital Services',              'color': '#b91c1c', 'category': 'medical'},
+    'us_drugs':          {'bls_id': 'CUUR0000SEMF',   'label': 'US CPI: Medicinal Drugs',                'color': '#991b1b', 'category': 'medical'},
     'us_med_equip':      {'bls_id': 'CUUR0000SEMG',   'label': 'US CPI: Medical Equipment & Supplies',   'color': '#7f1d1d', 'category': 'medical'},
-    'us_dental':         {'bls_id': 'CUSR0000SEMC02', 'label': 'US CPI: Dental Services',                'color': '#450a0a', 'category': 'medical'},
-    'us_nursing':        {'bls_id': 'CUSR0000SEMD02', 'label': 'US CPI: Nursing Homes & Adult Daycare',  'color': '#fee2e2', 'category': 'medical'},
-    'us_other_med':      {'bls_id': 'CUSR0000SEMC04', 'label': 'US CPI: Other Medical Professionals',    'color': '#fecaca', 'category': 'medical'},
+    'us_dental':         {'bls_id': 'CUUR0000SEMC02', 'label': 'US CPI: Dental Services',                'color': '#450a0a', 'category': 'medical'},
+    'us_nursing':        {'bls_id': 'CUUR0000SEMD02', 'label': 'US CPI: Nursing Homes & Adult Daycare',  'color': '#fee2e2', 'category': 'medical'},
+    'us_other_med':      {'bls_id': 'CUUR0000SEMC04', 'label': 'US CPI: Other Medical Professionals',    'color': '#fecaca', 'category': 'medical'},
     # Fire & Allied (PPI + AWE)
     'us_ppi_res_constr': {'bls_id': 'WPUIP2311001',   'label': 'US PPI: Inputs to Residential Construction', 'color': '#065f46', 'category': 'fire_allied'},
     'us_ppi_cement':     {'bls_id': 'WPU1322',        'label': 'US PPI: Cement, Hydraulic',              'color': '#047857', 'category': 'fire_allied'},
@@ -143,6 +149,15 @@ BLS_SERIES = {
     'us_awe_finance':    {'bls_id': 'CES5500000011',  'label': 'US AWE: Financial Activities',           'color': '#7c3aed', 'category': 'insurance'},
     'us_awe_prof_biz':   {'bls_id': 'CES6000000011',  'label': 'US AWE: Professional & Business Svcs',   'color': '#8b5cf6', 'category': 'legal'},
     'us_awe_other_svc':  {'bls_id': 'CES8000000011',  'label': 'US AWE: Other Services',                 'color': '#ddd6fe', 'category': 'auto_physical'},
+    # Legal (AWE)
+    'us_awe_legal':      {'bls_id': 'CES5541100011',  'label': 'US AWE: Legal Services',                 'color': '#d97706', 'category': 'legal'},
+    # Insurance (AWE)
+    'us_awe_claims_adj': {'bls_id': 'CES5524200011',  'label': 'US AWE: Insurance Agencies & Brokerages','color': '#9333ea', 'category': 'insurance'},
+    'us_awe_direct_ins': {'bls_id': 'CES5524120011',  'label': 'US AWE: Direct Insurance (exc Life/Health)','color': '#c084fc', 'category': 'insurance'},
+    # Bodily Injury (AWE)
+    'us_awe_info':       {'bls_id': 'CES5000000011',  'label': 'US AWE: Information',                    'color': '#0ea5e9', 'category': 'bodily_injury'},
+    'us_awe_mining':     {'bls_id': 'CES1000000011',  'label': 'US AWE: Mining & Logging',               'color': '#475569', 'category': 'bodily_injury'},
+    'us_awe_finance_bi': {'bls_id': 'CES5500000011',  'label': 'US AWE: Financial Activities',           'color': '#6366f1', 'category': 'bodily_injury'},
 }
 
 # ── Category definitions ─────────────────────────────────────────────────────
@@ -158,7 +173,7 @@ CATEGORIES = {
 # Build category → series lists from all definitions
 def _build_category_map():
     cats = {k: {'label': v['label'], 'series': []} for k, v in CATEGORIES.items()}
-    for key, info in {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_PPI_SERIES, **EU_CONSTRUCTION, **EU_LCI, **BLS_SERIES}.items():
+    for key, info in {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_LEGAL_DE, **EU_LEGAL_FR, **EU_PPI_SERIES, **EU_CONSTRUCTION, **EU_LCI, **BLS_SERIES}.items():
         cat = info.get('category')
         if cat and cat in cats:
             cats[cat]['series'].append(key)
@@ -276,9 +291,11 @@ def _fetch_bls_series():
     api_key = Config.BLS_API_KEY
     current_year = datetime.utcnow().year
 
-    # Build list of all BLS series IDs
-    series_ids = [info['bls_id'] for info in BLS_SERIES.values()]
-    id_to_key = {info['bls_id']: key for key, info in BLS_SERIES.items()}
+    # Build list of all BLS series IDs (deduplicated for API request)
+    series_ids = list(set(info['bls_id'] for info in BLS_SERIES.values()))
+    id_to_keys = {}
+    for key, info in BLS_SERIES.items():
+        id_to_keys.setdefault(info['bls_id'], []).append(key)
 
     # BLS API allows max 20-year range per request with key, 10 without
     # Make multiple requests to go back as far as possible
@@ -312,8 +329,8 @@ def _fetch_bls_series():
 
             for series in result.get('Results', {}).get('series', []):
                 series_id = series.get('seriesID', '')
-                key = id_to_key.get(series_id)
-                if not key:
+                keys = id_to_keys.get(series_id, [])
+                if not keys:
                     continue
 
                 for item in series.get('data', []):
@@ -324,12 +341,14 @@ def _fetch_bls_series():
                     if value == '-' or value == '':
                         continue
                     try:
-                        all_points[key].append({
+                        point = {
                             'year': int(item.get('year', '')),
                             'month': BLS_PERIOD_MAP[period],
                             'value': float(value),
                             'date': f'{item["year"]}-{str(BLS_PERIOD_MAP[period]).zfill(2)}',
-                        })
+                        }
+                        for key in keys:
+                            all_points[key].append(dict(point))
                     except (ValueError, TypeError):
                         continue
 
@@ -748,12 +767,16 @@ def _fetch_all():
     logger.info("Fetching Eurostat HICP indices...")
     all_series_raw.update(_fetch_eurostat_hicp_index())
 
-    # Eurostat NL/IT legal (rates + indices)
-    logger.info("Fetching Eurostat NL/IT legal...")
+    # Eurostat NL/IT/DE/FR legal (rates + indices)
+    logger.info("Fetching Eurostat legal proxies (NL/IT/DE/FR)...")
     all_series.update(_fetch_eurostat_legal('NL', EU_LEGAL_NL))
     all_series.update(_fetch_eurostat_legal('IT', EU_LEGAL_IT))
+    all_series.update(_fetch_eurostat_legal('DE', EU_LEGAL_DE))
+    all_series.update(_fetch_eurostat_legal('FR', EU_LEGAL_FR))
     all_series_raw.update(_fetch_eurostat_legal_index('NL', EU_LEGAL_NL))
     all_series_raw.update(_fetch_eurostat_legal_index('IT', EU_LEGAL_IT))
+    all_series_raw.update(_fetch_eurostat_legal_index('DE', EU_LEGAL_DE))
+    all_series_raw.update(_fetch_eurostat_legal_index('FR', EU_LEGAL_FR))
 
     # Eurostat PPI (rates + indices)
     logger.info("Fetching Eurostat PPI...")
@@ -771,7 +794,7 @@ def _fetch_all():
     all_series_raw.update(_fetch_eurostat_lci_index())
 
     # Build series metadata
-    all_defs = {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_PPI_SERIES, **BLS_SERIES}
+    all_defs = {**ONS_SERIES, **EU_HICP_SERIES, **EU_LEGAL_NL, **EU_LEGAL_IT, **EU_LEGAL_DE, **EU_LEGAL_FR, **EU_PPI_SERIES, **BLS_SERIES}
     # Add Construction OPI defs
     all_defs['uk_opi_new'] = {'label': 'UK Construction OPI: New Work', 'color': '#f97316', 'category': 'fire_allied'}
     all_defs['uk_opi_repair'] = {'label': 'UK Construction OPI: Repair & Maintenance', 'color': '#fb923c', 'category': 'fire_allied'}
