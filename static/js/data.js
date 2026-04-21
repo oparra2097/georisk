@@ -311,6 +311,15 @@
             html += '<select id="ctrl-countries" class="data-select" multiple>' +
                 '</select>';
         }
+        if (ds.controls.includes('em-universe')) {
+            const u = state.emUniverse || 'em40';
+            html += '<select id="ctrl-em-universe" class="data-select">' +
+                '<option value="em40"' + (u === 'em40' ? ' selected' : '') + '>Top 40 EM (default)</option>' +
+                '<option value="em"' + (u === 'em' ? ' selected' : '') + '>All EMs</option>' +
+                '<option value="all"' + (u === 'all' ? ' selected' : '') + '>All Countries</option>' +
+                '<option value="custom"' + (u === 'custom' ? ' selected' : '') + '>Custom Selection</option>' +
+                '</select>';
+        }
         return html;
     }
 
@@ -327,6 +336,7 @@
         bind('ctrl-region', v => { state.region = v; });
         bind('ctrl-reserve-type', v => { state.reserveType = v; });
         bind('ctrl-ins-region', v => { state.insRegion = v; });
+        bind('ctrl-em-universe', v => { state.emUniverse = v; });
     }
 
     // ══════════════════════════════════════════════════════
@@ -438,6 +448,7 @@
             case 'insurance-inflation': renderInsuranceInflation(ds); break;
             case 'yale-tariff': renderYaleTariff(ds); break;
             case 'gdp-nowcast': renderGdpNowcast(ds); break;
+            case 'em-vulnerability': renderEmVulnerability(ds); break;
         }
     }
 
@@ -3595,6 +3606,393 @@
             </tr>`;
         });
         tbody.innerHTML = tbHtml;
+    }
+
+    // ══════════════════════════════════════════════════════
+    // EM EXTERNAL VULNERABILITY METRICS — Bubble Chart
+    // ══════════════════════════════════════════════════════
+    //
+    // X: Foreign Reserves / Short-Term External Debt (%)
+    // Y: Basic Balance = Current Account + Net FDI (% of GDP)
+    // Bubble size: Nominal GDP (USD)
+    // Color: EM (red) vs. non-EM (blue)
+    // Selection: Top 40 EM default; all EMs / all countries / custom toggle.
+
+    function _emSelectedISO(data) {
+        const mode = state.emUniverse || 'em40';
+        const all = data.countries || {};
+        if (mode === 'custom' && state.countries && state.countries.length) {
+            return state.countries.filter(i => all[i]);
+        }
+        if (mode === 'all') {
+            return Object.keys(all);
+        }
+        if (mode === 'em') {
+            return (data.em_countries || []).filter(i => all[i]);
+        }
+        // em40 default
+        return (data.default_em_countries || []).filter(i => all[i]);
+    }
+
+    function _emFormatUsd(v) {
+        if (v == null) return '—';
+        const abs = Math.abs(v);
+        if (abs >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+        if (abs >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
+        if (abs >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+        return '$' + v.toFixed(0);
+    }
+
+    function renderEmVulnerability(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || !data.countries) return;
+
+        const panel = document.getElementById('active-panel');
+        if (!panel) return;
+
+        // Pick countries to plot
+        const allCountries = data.countries;
+        let selected = _emSelectedISO(data);
+        // Drop any country missing the reserves/ST debt ratio (can't place on X axis)
+        const plottable = selected.filter(iso => {
+            const c = allCountries[iso];
+            return c && c.reserves_to_st_debt_pct != null && c.basic_balance_pct_gdp != null;
+        });
+        const missing = selected.length - plottable.length;
+
+        // Bubble scaling — radius proportional to sqrt(GDP) so that area ~ GDP
+        const gdpValues = plottable.map(i => allCountries[i].gdp_usd || 0).filter(v => v > 0);
+        const maxGdp = gdpValues.length ? Math.max(...gdpValues) : 1;
+        const minR = 6;
+        const maxR = 42;
+
+        function radiusFor(gdp) {
+            if (!gdp || gdp <= 0) return minR;
+            const norm = Math.sqrt(gdp / maxGdp);
+            return Math.max(minR, Math.min(maxR, minR + (maxR - minR) * norm));
+        }
+
+        // Build Chart.js datasets — split EM vs. non-EM for color coding
+        const emColor = 'rgba(239, 68, 68, 0.55)';      // red/salmon (EM) like the AIG chart
+        const emBorder = 'rgba(220, 38, 38, 1)';
+        const dmColor = 'rgba(59, 130, 246, 0.55)';     // blue (non-EM)
+        const dmBorder = 'rgba(37, 99, 235, 1)';
+
+        function pointFor(iso) {
+            const c = allCountries[iso];
+            return {
+                x: c.reserves_to_st_debt_pct,
+                y: c.basic_balance_pct_gdp,
+                r: radiusFor(c.gdp_usd),
+                iso: iso,
+                name: c.name || iso,
+                ca: c.ca_pct_gdp,
+                fdi: c.fdi_pct_gdp,
+                basic: c.basic_balance_pct_gdp,
+                ratio: c.reserves_to_st_debt_pct,
+                gdp: c.gdp_usd,
+                reserves: c.reserves_usd,
+                stDebt: c.st_debt_usd,
+                year: c.year,
+                isEm: !!c.is_em,
+            };
+        }
+
+        const emPoints = plottable.filter(i => allCountries[i].is_em).map(pointFor);
+        const dmPoints = plottable.filter(i => !allCountries[i].is_em).map(pointFor);
+
+        const chartDatasets = [
+            {
+                label: 'Emerging Markets',
+                data: emPoints,
+                backgroundColor: emColor,
+                borderColor: emBorder,
+                borderWidth: 1,
+            },
+            {
+                label: 'Advanced / Other',
+                data: dmPoints,
+                backgroundColor: dmColor,
+                borderColor: dmBorder,
+                borderWidth: 1,
+            },
+        ];
+
+        // Build panel HTML
+        const controlsHtml = buildControlsHtml(ds);
+        const exportBtn = ds.exportUrl
+            ? '<a href="' + ds.exportUrl + '" class="export-btn-data" title="Download Excel">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+              '<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>' +
+              '<polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' +
+              '</svg>Excel</a>'
+            : '';
+
+        panel.innerHTML = `
+            <div class="data-section-header">
+                <div>
+                    <h1 class="data-title" id="panel-title">${ds.label}</h1>
+                    <p class="data-source">${ds.source} &mdash; ${ds.sourceDetail || ''}</p>
+                </div>
+                <div class="data-controls" id="panel-controls">
+                    ${controlsHtml}
+                    ${exportBtn}
+                </div>
+            </div>
+            <div class="em-vuln-legend" id="em-vuln-legend">
+                <span class="em-vuln-swatch" style="background:${emColor};border:1px solid ${emBorder};"></span>
+                <span class="em-vuln-legend-label">Emerging Markets</span>
+                <span class="em-vuln-swatch" style="background:${dmColor};border:1px solid ${dmBorder};"></span>
+                <span class="em-vuln-legend-label">Advanced / Other</span>
+                <span class="em-vuln-legend-label em-vuln-legend-note">Bubble size &#8776; nominal GDP (USD)</span>
+            </div>
+            <div class="chart-container em-vuln-chart-container">
+                <canvas id="panel-chart"></canvas>
+            </div>
+            <div class="em-vuln-picker" id="em-vuln-picker-wrap" style="display:none;">
+                <div class="em-vuln-picker-head">
+                    <span>Custom selection</span>
+                    <button type="button" class="em-vuln-btn" id="em-vuln-selall">Select All Shown</button>
+                    <button type="button" class="em-vuln-btn" id="em-vuln-selem">Top 40 EM</button>
+                    <button type="button" class="em-vuln-btn" id="em-vuln-selclear">Clear</button>
+                    <input type="text" class="em-vuln-search" id="em-vuln-search" placeholder="Filter countries…">
+                </div>
+                <div class="em-vuln-picker-grid" id="em-vuln-picker"></div>
+            </div>
+            <div class="data-table-container">
+                <table class="data-table" id="panel-table">
+                    <thead id="panel-thead"></thead>
+                    <tbody id="panel-tbody"></tbody>
+                </table>
+            </div>
+            <div class="data-meta" id="panel-meta"></div>
+        `;
+
+        bindControlListeners(ds);
+        _emBindExtraControls(ds, data);
+
+        // Render chart
+        PD.destroyChart('main');
+        const ctx = document.getElementById('panel-chart').getContext('2d');
+
+        PD.setChart('main', new Chart(ctx, {
+            type: 'bubble',
+            data: { datasets: chartDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { top: 8, right: 18, bottom: 8, left: 8 } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            title: items => items.length ? items[0].raw.name + ' (' + items[0].raw.iso + ')' : '',
+                            label: ctx2 => {
+                                const p = ctx2.raw;
+                                const lines = [];
+                                lines.push('Basic Balance: ' + (p.basic != null ? p.basic.toFixed(2) : '—') + '% GDP');
+                                lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
+                                lines.push('Reserves / ST Debt: ' + (p.ratio != null ? p.ratio.toFixed(0) + '%' : '—'));
+                                lines.push('Reserves: ' + _emFormatUsd(p.reserves));
+                                lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt));
+                                lines.push('GDP: ' + _emFormatUsd(p.gdp) + '  ·  Year: ' + (p.year || '—'));
+                                return lines;
+                            },
+                        },
+                    },
+                    datalabelsShim: false,
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: 'Foreign Reserves / Short-Term External Debt (%)',
+                            color: '#9ca3af',
+                            font: { size: 11 },
+                        },
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            callback: v => v + '%',
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        min: 0,
+                    },
+                    y: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: 'Basic Balance (C/A + Net FDI), % GDP',
+                            color: '#9ca3af',
+                            font: { size: 11 },
+                        },
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            callback: v => v + '%',
+                        },
+                        grid: {
+                            color: ctx2 => (ctx2.tick.value === 0 ? 'rgba(148,163,184,0.6)' : 'rgba(55,65,81,0.3)'),
+                            lineWidth: ctx2 => (ctx2.tick.value === 0 ? 1.2 : 1),
+                        },
+                    },
+                },
+            },
+            plugins: [_emLabelsPlugin()],
+        }));
+
+        // Table rows — sorted by GDP descending
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            thead.innerHTML =
+                '<tr>' +
+                '<th>Country</th>' +
+                '<th>EM</th>' +
+                '<th>Year</th>' +
+                '<th>Basic Bal. (% GDP)</th>' +
+                '<th>C/A (% GDP)</th>' +
+                '<th>Net FDI (% GDP)</th>' +
+                '<th>Reserves / ST Debt</th>' +
+                '<th>Reserves</th>' +
+                '<th>ST Ext. Debt</th>' +
+                '<th>GDP</th>' +
+                '</tr>';
+            const rows = selected
+                .map(i => allCountries[i])
+                .filter(Boolean)
+                .sort((a, b) => (b.gdp_usd || 0) - (a.gdp_usd || 0));
+            tbody.innerHTML = rows.map(r => {
+                const ratio = r.reserves_to_st_debt_pct;
+                return '<tr>' +
+                    '<td>' + (r.name || r.iso3) + '</td>' +
+                    '<td>' + (r.is_em ? 'Yes' : '—') + '</td>' +
+                    '<td>' + (r.year || '—') + '</td>' +
+                    '<td>' + (r.basic_balance_pct_gdp != null ? r.basic_balance_pct_gdp.toFixed(2) + '%' : '—') + '</td>' +
+                    '<td>' + (r.ca_pct_gdp != null ? r.ca_pct_gdp.toFixed(2) + '%' : '—') + '</td>' +
+                    '<td>' + (r.fdi_pct_gdp != null ? r.fdi_pct_gdp.toFixed(2) + '%' : '—') + '</td>' +
+                    '<td>' + (ratio != null ? ratio.toFixed(0) + '%' : '—') + '</td>' +
+                    '<td>' + _emFormatUsd(r.reserves_usd) + '</td>' +
+                    '<td>' + _emFormatUsd(r.st_debt_usd) + '</td>' +
+                    '<td>' + _emFormatUsd(r.gdp_usd) + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        // Meta
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            const m = data.meta || {};
+            const parts = [];
+            if (m.source) parts.push(m.source);
+            parts.push(plottable.length + ' countries plotted');
+            if (missing > 0) parts.push(missing + ' selected w/o short-term debt data');
+            if (m.latest_data_year) parts.push('Latest year: ' + m.latest_data_year);
+            if (m.last_updated) parts.push('Updated: ' + m.last_updated);
+            metaEl.textContent = parts.join(' · ');
+        }
+    }
+
+    function _emBindExtraControls(ds, data) {
+        // Show/hide custom picker when universe = custom
+        const wrap = document.getElementById('em-vuln-picker-wrap');
+        if (!wrap) return;
+        const mode = state.emUniverse || 'em40';
+        wrap.style.display = mode === 'custom' ? '' : 'none';
+
+        if (mode !== 'custom') return;
+
+        // Seed state.countries with defaults if empty
+        if (!state.countries || state.countries.length === 0) {
+            state.countries = (data.default_em_countries || []).slice();
+        }
+
+        const grid = document.getElementById('em-vuln-picker');
+        if (!grid) return;
+
+        const allCountries = data.countries || {};
+        const sorted = Object.values(allCountries)
+            .slice()
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        function renderPicker(filter) {
+            const f = (filter || '').toLowerCase().trim();
+            const selected = new Set(state.countries);
+            grid.innerHTML = sorted
+                .filter(c => !f || (c.name || '').toLowerCase().includes(f) || c.iso3.toLowerCase().includes(f))
+                .map(c => {
+                    const checked = selected.has(c.iso3) ? 'checked' : '';
+                    const tag = c.is_em ? '<span class="em-vuln-em-tag">EM</span>' : '';
+                    return '<label class="em-vuln-opt"><input type="checkbox" value="' + c.iso3 + '" ' + checked + '>' +
+                        '<span class="em-vuln-opt-name">' + (c.name || c.iso3) + '</span>' + tag + '</label>';
+                }).join('');
+        }
+
+        renderPicker('');
+
+        grid.addEventListener('change', (e) => {
+            const t = e.target;
+            if (!t || t.tagName !== 'INPUT') return;
+            const iso = t.value;
+            const set = new Set(state.countries);
+            if (t.checked) set.add(iso); else set.delete(iso);
+            state.countries = Array.from(set);
+            PD.pushState();
+            renderCurrentDataset();
+        });
+
+        const search = document.getElementById('em-vuln-search');
+        if (search) search.addEventListener('input', e => renderPicker(e.target.value));
+
+        const bSelAll = document.getElementById('em-vuln-selall');
+        const bEm = document.getElementById('em-vuln-selem');
+        const bClr = document.getElementById('em-vuln-selclear');
+        if (bSelAll) bSelAll.addEventListener('click', () => {
+            state.countries = Object.keys(allCountries);
+            PD.pushState();
+            renderCurrentDataset();
+        });
+        if (bEm) bEm.addEventListener('click', () => {
+            state.countries = (data.default_em_countries || []).slice();
+            PD.pushState();
+            renderCurrentDataset();
+        });
+        if (bClr) bClr.addEventListener('click', () => {
+            state.countries = [];
+            PD.pushState();
+            renderCurrentDataset();
+        });
+    }
+
+    function _emLabelsPlugin() {
+        // Draws an ISO3 label centered on every bubble when it's big enough.
+        return {
+            id: 'emBubbleLabels',
+            afterDatasetsDraw(chart) {
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+                chart.data.datasets.forEach((dataset, dsi) => {
+                    const meta = chart.getDatasetMeta(dsi);
+                    meta.data.forEach((el, i) => {
+                        const pt = dataset.data[i];
+                        if (!pt || !pt.iso) return;
+                        if (el.options.radius < 10) return;
+                        ctx.fillText(pt.iso, el.x, el.y);
+                    });
+                });
+                ctx.restore();
+            },
+        };
     }
 
 })();

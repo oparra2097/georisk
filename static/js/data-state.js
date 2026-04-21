@@ -20,6 +20,7 @@ window.ParraData.state = {
     reserveType: 'total',
     insRegion: 'all',
     countries: [],
+    emUniverse: 'em40',
 };
 
 // ── Data Cache (with TTL) ─────────────────────────────────────────────────
@@ -86,6 +87,7 @@ window.ParraData.parseUrl = function () {
     if (params.has('type')) state.reserveType = params.get('type');
     if (params.has('insRegion')) state.insRegion = params.get('insRegion');
     if (params.has('countries')) state.countries = params.get('countries').split(',').filter(Boolean);
+    if (params.has('emUniverse')) state.emUniverse = params.get('emUniverse');
 
     // Defaults if nothing in URL
     if (!state.category || !state.dataset) {
@@ -115,6 +117,7 @@ window.ParraData.buildUrl = function () {
     if (ds.controls.includes('reserve-type') && state.reserveType !== 'total') params.set('type', state.reserveType);
     if (ds.controls.includes('ins-region') && state.insRegion !== 'all') params.set('insRegion', state.insRegion);
     if (ds.controls.includes('countries') && state.countries.length > 0) params.set('countries', state.countries.join(','));
+    if (ds.controls.includes('em-universe') && state.emUniverse && state.emUniverse !== 'em40') params.set('emUniverse', state.emUniverse);
 
     const qs = params.toString();
     return qs ? path + '?' + qs : path;
@@ -146,6 +149,7 @@ window.ParraData.navigate = function (categoryId, datasetId, subviewId) {
         state.reserveType = 'total';
         state.insRegion = 'all';
         state.countries = [];
+        state.emUniverse = 'em40';
     }
 
     window.ParraData.pushState();
