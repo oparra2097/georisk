@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#0b1220"/>
+  <text x="50%" y="50%" dy=".08em" text-anchor="middle" dominant-baseline="middle"
+        font-family="'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="30" fill="#e5e7eb" letter-spacing="-1">PM</text>
+</svg>
