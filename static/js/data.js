@@ -3897,6 +3897,37 @@
             if (m.last_updated) parts.push('Updated: ' + m.last_updated);
             metaEl.textContent = parts.join(' · ');
         }
+
+        // Empty-state banner — surfaces backend state (vs. silent blank chart)
+        if (plottable.length === 0) {
+            const m = data.meta || {};
+            const totalCountries = Object.keys(allCountries).length;
+            let reason;
+            if (totalCountries === 0) {
+                const errs = m.fetch_errors
+                    ? ' (' + Object.entries(m.fetch_errors).map(([k, v]) => k + ': ' + v).join('; ') + ')'
+                    : '';
+                reason = 'World Bank fetch is still warming up or failed' + errs +
+                    '. Wait ~15–30 seconds and refresh — data caches for 24 h after first load.';
+            } else if (selected.length === 0) {
+                reason = 'No countries selected. Pick a universe or open "Custom Selection".';
+            } else {
+                reason = selected.length + ' countries selected but none have the required World Bank series for this year.';
+            }
+            const container = document.querySelector('.em-vuln-chart-container');
+            if (container && !container.querySelector('.em-vuln-empty-banner')) {
+                const banner = document.createElement('div');
+                banner.className = 'em-vuln-empty-banner';
+                banner.innerHTML = '<strong>No data to plot.</strong><br><span>' + reason + '</span>' +
+                    '<br><button type="button" class="em-vuln-btn" id="em-vuln-retry" style="margin-top:10px;">Retry</button>';
+                container.appendChild(banner);
+                const btn = banner.querySelector('#em-vuln-retry');
+                if (btn) btn.addEventListener('click', () => {
+                    PD.clearCache(ds.api);
+                    loadAndRender();
+                });
+            }
+        }
     }
 
     function _emBindExtraControls(ds, data) {

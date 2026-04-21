@@ -99,3 +99,15 @@ def init_scheduler(app):
         thread = threading.Thread(target=_startup_with_persisted, daemon=True)
         thread.start()
         logger.info("Persisted data loaded. Background WGI + GDELT refresh started.")
+
+    # Pre-warm the EM external vulnerability dataset so the first user
+    # hit is cache-served (5 World Bank fetches, ~15s in parallel).
+    def _warm_em_vuln():
+        try:
+            from backend.data_sources.em_vulnerability import get_em_vulnerability_data
+            get_em_vulnerability_data()
+            logger.info("EM vulnerability cache warmed.")
+        except Exception as e:
+            logger.error(f"EM vulnerability warmup failed: {e}")
+
+    threading.Thread(target=_warm_em_vuln, daemon=True).start()
