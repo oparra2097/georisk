@@ -16,11 +16,16 @@ Groups & Scenarios:
   Metals — Speculative/Macro: Bear 25% | Base 50% | Bull 25%
 """
 
+import json
+import os
 import threading
 import time
 import logging
 import calendar
+import copy
 from datetime import datetime, date, timedelta
+
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -28,71 +33,10 @@ CACHE_TTL = 86400   # 24 hours
 RETRY_BACKOFF = 3600  # 1 hour after failure
 HISTORY_YEARS = 10   # years of historical quarterly data
 
-# ── Per-Group Scenario Configuration ───────────────────────────────────────
-# Each group has its own scenario names, weights, labels, and colors.
-
-GROUP_SCENARIOS = {
-    'Oil & Gas': {
-        'weights': {
-            'Worst Case': 0.10,
-            'Severe Case': 0.20,
-            'Base Case': 0.70,
-        },
-        'labels': {
-            'Base Case':   'Gradual de-escalation · OPEC+ holds discipline · Brent normalises toward $72-78 by year-end',
-            'Severe Case': 'Strait of Hormuz disruption persists · No ceasefire · Brent $95-110 sustained into 2027',
-            'Worst Case':  'Iran targets critical ME production · Brent spikes >$130 then settles $105-112',
-        },
-        'colors': {
-            'Actual':       '#94a3b8',
-            'Base Case':    '#3b82f6',
-            'Severe Case':  '#f59e0b',
-            'Worst Case':   '#ef4444',
-            'Weighted Avg': '#10b981',
-        },
-        'scenario_order': ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'],
-    },
-    'Agriculture': {
-        'weights': {
-            'Bear': 0.25,
-            'Base': 0.50,
-            'Bull': 0.25,
-        },
-        'labels': {
-            'Bear':  'Favourable weather globally · Bumper harvests · Ample supply depresses prices through 2027',
-            'Base':  'Normal seasonal patterns · Trend-line yields · Steady demand · Gradual recovery',
-            'Bull':  'El Niño drought in key growing regions · Supply shock · Export restrictions tighten',
-        },
-        'colors': {
-            'Actual':       '#94a3b8',
-            'Bear':         '#3b82f6',
-            'Base':         '#10b981',
-            'Bull':         '#ef4444',
-            'Weighted Avg': '#f59e0b',
-        },
-        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull', 'Weighted Avg'],
-    },
-    'Metals': {
-        'weights': {
-            'Bear': 0.25,
-            'Base': 0.50,
-            'Bull': 0.25,
-        },
-        'labels': {
-            'Bear':  'Risk-off pivot · Dollar strength · Demand slowdown · De-leveraging into 2027',
-            'Base':  'Steady macro · Moderate central bank buying · Gradual industrial recovery',
-            'Bull':  'Flight to safety · Speculative inflows · Central bank accumulation accelerates',
-        },
-        'colors': {
-            'Actual':       '#94a3b8',
-            'Bear':         '#3b82f6',
-            'Base':         '#10b981',
-            'Bull':         '#ef4444',
-            'Weighted Avg': '#f59e0b',
-        },
-        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull', 'Weighted Avg'],
-    },
-}
+# Seed file ships with the repo; override file is written by the admin UI and
+# lives in DATA_DIR so it survives deploys on Render.
+_SEED_SCENARIO_FILE = os.path.join(os.path.dirname(__file__), 'scenario_targets.json')
+_OVERRIDE_SCENARIO_FILE = os.path.join(Config.DATA_DIR, 'scenario_targets.json')
 
 # (display_name, yfinance_ticker, unit, group)
 COMMODITIES = {
@@ -109,82 +53,132 @@ COMMODITIES = {
 }
 
 # ── Scenario Price Targets ──────────────────────────────────────────────────
-# Absolute quarterly price targets per scenario.
-# Q1 values: None = use live YTD actual (current quarter only);
-#            number = used for next-year Q1 forecasts.
-# When Q1 is the current quarter the engine auto-fills from live data.
-# Scenario NAMES must match the keys in GROUP_SCENARIOS[group]['weights'].
+# GROUP_SCENARIOS and SCENARIO_TARGETS are loaded from scenario_targets.json
+# (override in DATA_DIR takes precedence over the shipped seed file).
+# The admin UI at /auth/admin edits the override file live; see
+# load_scenario_config() / save_scenario_config() below.
+_config_lock = threading.RLock()
+GROUP_SCENARIOS = {}
+SCENARIO_TARGETS = {}
 
-SCENARIO_TARGETS = {
-    # ═══════════════════════════════════════════════════════════════════════════
-    # OIL & GAS — Geopolitical scenarios
-    # Brent: Base → $95-100 Q2, reverts to $75-80 Q4
-    # WTI tracks Brent with ~$5-7 discount
-    # TTF: Elevated due to Qatar bombing / longer-term production loss
-    # ═══════════════════════════════════════════════════════════════════════════
-    'WTI Crude': {
-        'Base Case':   {'Q1': 68,  'Q2': 95,  'Q3': 83,  'Q4': 72},
-        'Severe Case': {'Q1': 90,  'Q2': 108, 'Q3': 104, 'Q4': 94},
-        'Worst Case':  {'Q1': 102, 'Q2': 124, 'Q3': 117, 'Q4': 107},
-    },
-    'Brent Crude': {
-        'Base Case':   {'Q1': 74,  'Q2': 100, 'Q3': 87,  'Q4': 78},
-        'Severe Case': {'Q1': 96,  'Q2': 113, 'Q3': 110, 'Q4': 99},
-        'Worst Case':  {'Q1': 108, 'Q2': 130, 'Q3': 121, 'Q4': 112},
-    },
-    'Natural Gas (HH)': {
-        'Base Case':   {'Q1': 3.80, 'Q2': 3.20, 'Q3': 3.40, 'Q4': 3.60},
-        'Severe Case': {'Q1': 4.50, 'Q2': 4.00, 'Q3': 4.40, 'Q4': 4.25},
-        'Worst Case':  {'Q1': 5.70, 'Q2': 4.90, 'Q3': 5.80, 'Q4': 5.50},
-    },
-    'TTF Gas': {
-        # Elevated — Qatar production loss, structural supply deficit
-        'Base Case':   {'Q1': 68,  'Q2': 60,  'Q3': 64,  'Q4': 66},
-        'Severe Case': {'Q1': 84,  'Q2': 76,  'Q3': 87,  'Q4': 81},
-        'Worst Case':  {'Q1': 112, 'Q2': 98,  'Q3': 119, 'Q4': 108},
-    },
-    # ═══════════════════════════════════════════════════════════════════════════
-    # AGRICULTURE — Supply / Weather scenarios
-    # Bear = bumper harvest, oversupply depresses prices
-    # Bull = drought in key regions, supply shock, export restrictions
-    # ═══════════════════════════════════════════════════════════════════════════
-    'Cocoa': {
-        'Bear':  {'Q1': 2650, 'Q2': 2780, 'Q3': 2590, 'Q4': 2690},
-        'Base':  {'Q1': 3050, 'Q2': 3065, 'Q3': 3000, 'Q4': 3100},
-        'Bull':  {'Q1': 4100, 'Q2': 3475, 'Q3': 3790, 'Q4': 3950},
-    },
-    'Wheat': {
-        'Bear':  {'Q1': 535, 'Q2': 555, 'Q3': 530, 'Q4': 545},
-        'Base':  {'Q1': 620, 'Q2': 615, 'Q3': 622, 'Q4': 628},
-        'Bull':  {'Q1': 700, 'Q2': 676, 'Q3': 736, 'Q4': 712},
-    },
-    'Soybeans': {
-        'Bear':  {'Q1': 1055, 'Q2': 1090, 'Q3': 1045, 'Q4': 1070},
-        'Base':  {'Q1': 1200, 'Q2': 1185, 'Q3': 1195, 'Q4': 1207},
-        'Bull':  {'Q1': 1320, 'Q2': 1277, 'Q3': 1370, 'Q4': 1335},
-    },
-    'Coffee': {
-        'Bear':  {'Q1': 265, 'Q2': 277, 'Q3': 259, 'Q4': 271},
-        'Base':  {'Q1': 305, 'Q2': 307, 'Q3': 304, 'Q4': 310},
-        'Bull':  {'Q1': 400, 'Q2': 346, 'Q3': 376, 'Q4': 391},
-    },
-    # ═══════════════════════════════════════════════════════════════════════════
-    # METALS — Speculative / Macro scenarios
-    # Bear = risk-off, dollar strength, demand slowdown
-    # Bull = flight to safety, speculative inflows, CB accumulation
-    # Gold Base: $5600 year-end, Bull: $6200 year-end
-    # ═══════════════════════════════════════════════════════════════════════════
-    'Copper': {
-        'Bear':  {'Q1': 4.85, 'Q2': 5.03, 'Q3': 4.81, 'Q4': 4.92},
-        'Base':  {'Q1': 5.75, 'Q2': 5.63, 'Q3': 5.74, 'Q4': 5.80},
-        'Bull':  {'Q1': 6.80, 'Q2': 6.02, 'Q3': 6.45, 'Q4': 6.67},
-    },
-    'Gold': {
-        'Bear':  {'Q1': 4400, 'Q2': 4550, 'Q3': 4380, 'Q4': 4500},
-        'Base':  {'Q1': 5700, 'Q2': 5100, 'Q3': 5350, 'Q4': 5600},
-        'Bull':  {'Q1': 6400, 'Q2': 5450, 'Q3': 5800, 'Q4': 6200},
-    },
-}
+
+def _load_scenario_file(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def _active_scenario_path():
+    """Prefer the override file in DATA_DIR if it exists; else the seed file."""
+    if os.path.exists(_OVERRIDE_SCENARIO_FILE):
+        return _OVERRIDE_SCENARIO_FILE
+    return _SEED_SCENARIO_FILE
+
+
+def load_scenario_config():
+    """
+    (Re)load GROUP_SCENARIOS + SCENARIO_TARGETS from disk.
+    Falls back to the seed file if the override is missing or malformed.
+    """
+    global GROUP_SCENARIOS, SCENARIO_TARGETS
+    path = _active_scenario_path()
+    try:
+        cfg = _load_scenario_file(path)
+    except Exception as e:
+        logger.error(f"Failed to load scenario config from {path}: {e}")
+        if path != _SEED_SCENARIO_FILE:
+            logger.warning("Falling back to seed scenario_targets.json")
+            cfg = _load_scenario_file(_SEED_SCENARIO_FILE)
+        else:
+            raise
+    with _config_lock:
+        GROUP_SCENARIOS = cfg.get('groups', {})
+        SCENARIO_TARGETS = cfg.get('targets', {})
+    logger.info(f"Loaded scenario config from {path}")
+    return {'groups': GROUP_SCENARIOS, 'targets': SCENARIO_TARGETS, 'source': path}
+
+
+def get_scenario_config():
+    """Return a deep copy of the current scenario config (safe for editing)."""
+    with _config_lock:
+        return {
+            'groups': copy.deepcopy(GROUP_SCENARIOS),
+            'targets': copy.deepcopy(SCENARIO_TARGETS),
+            'source': _active_scenario_path(),
+            'using_override': os.path.exists(_OVERRIDE_SCENARIO_FILE),
+        }
+
+
+def save_scenario_config(new_cfg):
+    """
+    Persist a new scenario config to the override file, reload, bust cache.
+    Validates weights sum to 1.0 per group and every weighted scenario has
+    Q1-Q4 numeric targets for every commodity in that group.
+    """
+    if not isinstance(new_cfg, dict):
+        raise ValueError('Config must be a dict')
+    if 'groups' not in new_cfg or 'targets' not in new_cfg:
+        raise ValueError('Config must contain "groups" and "targets" keys')
+
+    groups = new_cfg['groups']
+    targets = new_cfg['targets']
+    if not isinstance(groups, dict) or not isinstance(targets, dict):
+        raise ValueError('"groups" and "targets" must be objects')
+
+    for group_name, gcfg in groups.items():
+        weights = gcfg.get('weights', {})
+        if weights:
+            total = sum(float(w) for w in weights.values())
+            if abs(total - 1.0) > 0.01:
+                raise ValueError(
+                    f'Group "{group_name}" weights sum to {total:.3f}, must equal 1.0'
+                )
+        for scenario_name in weights.keys():
+            for comm_name, (_ticker, _unit, comm_group) in COMMODITIES.items():
+                if comm_group != group_name:
+                    continue
+                sc_targets = (targets.get(comm_name, {}) or {}).get(scenario_name)
+                if sc_targets is None:
+                    raise ValueError(
+                        f'Missing targets for {comm_name} / {scenario_name}'
+                    )
+                for q in ('Q1', 'Q2', 'Q3', 'Q4'):
+                    if q not in sc_targets:
+                        raise ValueError(
+                            f'Missing {q} target for {comm_name} / {scenario_name}'
+                        )
+                    try:
+                        float(sc_targets[q])
+                    except (TypeError, ValueError):
+                        raise ValueError(
+                            f'Target for {comm_name} / {scenario_name} / {q} is not numeric'
+                        )
+
+    os.makedirs(Config.DATA_DIR, exist_ok=True)
+    tmp = _OVERRIDE_SCENARIO_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump({'groups': groups, 'targets': targets}, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, _OVERRIDE_SCENARIO_FILE)
+
+    load_scenario_config()
+    _cache.clear()
+    logger.info(
+        f"Saved scenario overrides to {_OVERRIDE_SCENARIO_FILE} and cleared forecast cache"
+    )
+    return get_scenario_config()
+
+
+def reset_scenario_config():
+    """Delete the override file, revert to the seed, and bust the cache."""
+    if os.path.exists(_OVERRIDE_SCENARIO_FILE):
+        os.remove(_OVERRIDE_SCENARIO_FILE)
+        logger.info(f"Removed scenario override {_OVERRIDE_SCENARIO_FILE}")
+    load_scenario_config()
+    _cache.clear()
+    return get_scenario_config()
+
+
+# Initial load at import time
+load_scenario_config()
 
 # Group colors for commodity lines in group overview
 GROUP_COMMODITY_COLORS = {
