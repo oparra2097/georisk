@@ -1369,6 +1369,22 @@ def _fetch_reserves_wb():
 # ORCHESTRATOR: IMF Data API → DBnomics mirror → World Bank annual
 # ══════════════════════════════════════════════════════════════════════════
 
+def _is_stale(result, max_months=6):
+    """Return True if the result's latest period is too old to use."""
+    years = result.get('years', []) if result else []
+    if not years:
+        return True
+    latest = years[-1]  # e.g. '2025-06'
+    today = _dt.date.today()
+    try:
+        parts = latest.split('-')
+        latest_year, latest_month = int(parts[0]), int(parts[1])
+        months_behind = (today.year - latest_year) * 12 + (today.month - latest_month)
+        return months_behind > max_months
+    except (ValueError, IndexError):
+        return True
+
+
 def _fetch_reserves():
     """Fetch reserves from the best available source.
 
@@ -1378,20 +1394,29 @@ def _fetch_reserves():
          have <10 observations across 60 months, making charts flat lines)
       3. World Bank annual (last-resort fallback)
 
-    IFS is preferred over IRFCL because IRFCL's total reserves indicator
-    (IRFCLDT4_IRFCL11) has only ~4 observations per country since 2021
-    for major holders (CHN, JPN, SAU) — the lines would be steppy/flat
-    on the chart. IFS has 60/60 dense monthly data.
+    Each source is rejected if its latest period is more than 6 months
+    stale — DBnomics mirrors can freeze for months when their upstream
+    fetcher breaks, and we don't want to silently serve year-old data.
     """
     result = _fetch_reserves_dbnomics()
-    if result:
+    if result and not _is_stale(result):
         return result
-    logger.warning("DBnomics IFS failed — falling back to IMF Data API (IRFCL)")
+    if result:
+        logger.warning(
+            "DBnomics IFS data is stale (latest=%s), skipping",
+            (result.get('years') or ['?'])[-1],
+        )
 
     result = _fetch_reserves_imf_sdmx()
-    if result:
+    if result and not _is_stale(result):
         return result
-    logger.warning("IMF Data API failed — falling back to World Bank annual data")
+    if result:
+        logger.warning(
+            "IMF Data API data is stale (latest=%s), skipping",
+            (result.get('years') or ['?'])[-1],
+        )
+
+    logger.warning("All monthly sources stale or failed — falling back to World Bank annual")
     return _fetch_reserves_wb()
 
 
@@ -1428,16 +1453,24 @@ def diagnose_fetch():
     # Try DBnomics IFS first (dense monthly data)
     result = _fetch_reserves_dbnomics()
     source = None
-    if result:
+    if result and not _is_stale(result):
         source = result.get('meta', {}).get('source')
         attempts.append(f'DBnomics IFS succeeded: {source}')
     else:
-        attempts.append('DBnomics IFS failed — trying IMF Data API (IRFCL)')
+        latest_ifs = (result.get('years') or ['?'])[-1] if result else 'N/A'
+        attempts.append(
+            f'DBnomics IFS {"stale (latest=" + latest_ifs + ")" if result else "failed"}'
+            ' — trying IMF Data API (IRFCL)'
+        )
         result = _fetch_reserves_imf_sdmx(attempts)
-        if result:
+        if result and not _is_stale(result):
             source = result.get('meta', {}).get('source')
         else:
-            attempts.append('IMF Data API failed — falling back to World Bank annual')
+            if result:
+                latest_irfcl = (result.get('years') or ['?'])[-1]
+                attempts.append(f'IMF IRFCL stale (latest={latest_irfcl}) — trying World Bank')
+            else:
+                attempts.append('IMF Data API failed — falling back to World Bank annual')
             result = _fetch_reserves_wb()
             if result:
                 source = result.get('meta', {}).get('source')
