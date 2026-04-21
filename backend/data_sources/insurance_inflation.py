@@ -824,16 +824,33 @@ def _fetch_all():
             meta['approximate'] = True
         series_meta[key] = meta
 
-    # Update category map with construction OPI
+    # Update category map with construction OPI — insert with UK series (before EU)
     cats = {k: dict(v) for k, v in CATEGORY_MAP.items()}
-    if 'uk_opi_new' in all_series:
-        cats['fire_allied']['series'].append('uk_opi_new')
-    if 'uk_opi_repair' in all_series:
-        cats['fire_allied']['series'].append('uk_opi_repair')
+    fa = cats['fire_allied']['series']
+    # Find insertion point: after last uk_ series in fire_allied
+    insert_idx = 0
+    for i, s in enumerate(fa):
+        if s.startswith('uk_'):
+            insert_idx = i + 1
+    opi_keys = [k for k in ('uk_opi_new', 'uk_opi_repair') if k in all_series]
+    for j, k in enumerate(opi_keys):
+        fa.insert(insert_idx + j, k)
 
-    # Filter to only include series that actually have data
+    # Filter to only include series that actually have data, ordered UK → EU → US
+    def _region_key(s):
+        if s.startswith('uk_'):
+            return 0
+        elif s.startswith('eu_') or s.startswith('nl_') or s.startswith('it_') or s.startswith('de_') or s.startswith('fr_'):
+            return 1
+        elif s.startswith('us_'):
+            return 2
+        return 3
+
     for cat_key, cat_info in cats.items():
-        cat_info['series'] = [s for s in cat_info['series'] if s in all_series]
+        cat_info['series'] = sorted(
+            [s for s in cat_info['series'] if s in all_series],
+            key=_region_key,
+        )
 
     return {
         'series': all_series,
