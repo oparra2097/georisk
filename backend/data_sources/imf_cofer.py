@@ -239,7 +239,10 @@ def _usd_millions_to_billions(value):
     if value is None:
         return None
     try:
-        return round(float(value) / 1000, 2)
+        v = float(value)
+        if v != v:  # NaN check
+            return None
+        return round(v / 1000, 2)
     except (ValueError, TypeError):
         return None
 
@@ -336,6 +339,33 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
         # Skip countries with no usable total reserves at all
         if latest_real_idx < 0:
             continue
+
+        # Capped forward-fill: smooth over short reporting gaps (≤3
+        # months) to keep chart lines continuous across normal delays,
+        # but do NOT propagate stale values more than 3 months so
+        # countries that genuinely stopped reporting show a break.
+        def _capped_fill(arr, max_gap=3):
+            last_val = None
+            gap = 0
+            for i, v in enumerate(arr):
+                if v is not None:
+                    last_val = v
+                    gap = 0
+                elif last_val is not None:
+                    gap += 1
+                    if gap <= max_gap:
+                        arr[i] = last_val
+        _capped_fill(total_values)
+        _capped_fill(fx_values)
+
+        # Recompute gold after filling so short fx gaps don't create
+        # spurious null gold entries.
+        gold_values = []
+        for t, f in zip(total_values, fx_values):
+            if t is not None and f is not None:
+                gold_values.append(round(t - f, 2))
+            else:
+                gold_values.append(None)
 
         latest_real_period = periods[latest_real_idx]
 
