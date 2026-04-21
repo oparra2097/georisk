@@ -1389,35 +1389,104 @@ def _is_stale(result, max_months=6):
 def _fetch_reserves():
     """Fetch reserves from the best available source.
 
-    Order:
-      1. DBnomics IFS (dense monthly data, ~90 countries, all 3 columns)
-      2. IMF Data API / IRFCL (fresher but very sparse — most countries
-         have <10 observations across 60 months, making charts flat lines)
-      3. World Bank annual (last-resort fallback)
+    Strategy: merge DBnomics IFS (dense history, may be stale) with the
+    live IMF IRFCL API (sparse but current). IFS provides a smooth
+    monthly backbone for every country back to 2004. IRFCL overlays the
+    latest months where IFS has stopped updating.
 
-    Each source is rejected if its latest period is more than 6 months
-    stale — DBnomics mirrors can freeze for months when their upstream
-    fetcher breaks, and we don't want to silently serve year-old data.
+    For each country and period, IRFCL takes precedence over IFS (it's
+    the more authoritative source for recent data). IFS fills historical
+    gaps that IRFCL doesn't cover.
     """
-    result = _fetch_reserves_dbnomics()
-    if result and not _is_stale(result):
-        return result
-    if result:
-        logger.warning(
-            "DBnomics IFS data is stale (latest=%s), skipping",
-            (result.get('years') or ['?'])[-1],
-        )
+    # ── Fetch both sources in sequence ──────────────────────────────
+    ifs_total, ifs_fx = {}, {}
+    try:
+        ifs_docs_total = _fetch_ifs_indicator('RAFA_USD')
+        ifs_docs_fx = _fetch_ifs_indicator('RAXGFX_USD')
 
-    result = _fetch_reserves_imf_sdmx()
-    if result and not _is_stale(result):
-        return result
-    if result:
-        logger.warning(
-            "IMF Data API data is stale (latest=%s), skipping",
-            (result.get('years') or ['?'])[-1],
-        )
+        def _parse_ifs(docs):
+            by_country = {}
+            for doc in docs or []:
+                code = doc.get('series_code', '')
+                parts = code.split('.')
+                iso2 = parts[1] if len(parts) >= 2 else ''
+                if not iso2 or len(iso2) != 2 or not iso2.isalpha() or not iso2.isupper():
+                    continue
+                periods = doc.get('period', [])
+                values = doc.get('value', [])
+                if periods:
+                    by_country[iso2] = dict(zip(periods, values))
+            return by_country
 
-    logger.warning("All monthly sources stale or failed — falling back to World Bank annual")
+        ifs_total = _parse_ifs(ifs_docs_total)
+        ifs_fx = _parse_ifs(ifs_docs_fx)
+        logger.info("DBnomics IFS loaded: total=%d, fx=%d countries", len(ifs_total), len(ifs_fx))
+    except Exception as e:
+        logger.warning(f"DBnomics IFS fetch failed: {e}")
+
+    irfcl_total, irfcl_fx = {}, {}
+    try:
+        total_doc = _fetch_imf_data_indicator('RAFA_USD')
+        fx_doc = _fetch_imf_data_indicator('RAFAFX_USD')
+        if total_doc:
+            irfcl_total = _parse_imf_sdmx_series(total_doc)
+        if fx_doc:
+            irfcl_fx = _parse_imf_sdmx_series(fx_doc)
+        logger.info("IMF IRFCL loaded: total=%d, fx=%d countries", len(irfcl_total), len(irfcl_fx))
+    except Exception as e:
+        logger.warning(f"IMF IRFCL fetch failed: {e}")
+
+    # ── Merge: IFS base + IRFCL overlay ─────────────────────────────
+    # Collect all country codes (union of both sources)
+    all_codes = set(ifs_total) | set(irfcl_total)
+    if not all_codes:
+        logger.warning("Both IFS and IRFCL returned no data — falling back to World Bank")
+        return _fetch_reserves_wb()
+
+    merged_total = {}
+    merged_fx = {}
+
+    for code in all_codes:
+        # Start with IFS history (dense), then overlay IRFCL (current)
+        periods_total = {}
+        if code in ifs_total:
+            periods_total.update(ifs_total[code])
+        # ISO2 ↔ ISO3 bridge: IRFCL uses ISO3, IFS uses ISO2
+        iso3 = ISO2_TO_ISO3.get(code, code) if len(code) == 2 else code
+        iso2 = next((k for k, v in ISO2_TO_ISO3.items() if v == code), code) if len(code) == 3 else code
+        for irfcl_code in (code, iso3, iso2):
+            if irfcl_code in irfcl_total:
+                periods_total.update(irfcl_total[irfcl_code])
+                break
+        if periods_total:
+            merged_total[code] = periods_total
+
+        periods_fx = {}
+        if code in ifs_fx:
+            periods_fx.update(ifs_fx[code])
+        for irfcl_code in (code, iso3, iso2):
+            if irfcl_code in irfcl_fx:
+                periods_fx.update(irfcl_fx[irfcl_code])
+                break
+        if periods_fx:
+            merged_fx[code] = periods_fx
+
+    source_parts = []
+    if ifs_total:
+        source_parts.append('IFS')
+    if irfcl_total:
+        source_parts.append('IRFCL')
+    source_label = 'IMF ' + '+'.join(source_parts) + ' (merged)'
+
+    result = _build_reserves_result(merged_total, merged_fx, source_label)
+    if result:
+        logger.info(
+            "Merged reserves: %d months, %d countries, latest %s",
+            len(result['years']), len(result['countries']), result['years'][-1],
+        )
+        return result
+
+    logger.warning("Merged result empty — falling back to World Bank annual")
     return _fetch_reserves_wb()
 
 
@@ -1451,30 +1520,13 @@ def diagnose_fetch():
     """
     attempts = []
 
-    # Try DBnomics IFS first (dense monthly data)
-    result = _fetch_reserves_dbnomics()
-    source = None
-    if result and not _is_stale(result):
-        source = result.get('meta', {}).get('source')
-        attempts.append(f'DBnomics IFS succeeded: {source}')
+    # Use the same merged strategy as _fetch_reserves()
+    result = _fetch_reserves()
+    source = result.get('meta', {}).get('source') if result else None
+    if source:
+        attempts.append(f'Merged fetch succeeded: {source}')
     else:
-        latest_ifs = (result.get('years') or ['?'])[-1] if result else 'N/A'
-        attempts.append(
-            f'DBnomics IFS {"stale (latest=" + latest_ifs + ")" if result else "failed"}'
-            ' — trying IMF Data API (IRFCL)'
-        )
-        result = _fetch_reserves_imf_sdmx(attempts)
-        if result and not _is_stale(result):
-            source = result.get('meta', {}).get('source')
-        else:
-            if result:
-                latest_irfcl = (result.get('years') or ['?'])[-1]
-                attempts.append(f'IMF IRFCL stale (latest={latest_irfcl}) — trying World Bank')
-            else:
-                attempts.append('IMF Data API failed — falling back to World Bank annual')
-            result = _fetch_reserves_wb()
-            if result:
-                source = result.get('meta', {}).get('source')
+        attempts.append('All sources failed')
 
     if result:
         # Store in cache AND persist to disk so ALL workers (not just the
