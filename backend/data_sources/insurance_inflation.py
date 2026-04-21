@@ -485,7 +485,7 @@ def _fetch_eurostat_ppi():
 def _fetch_eurostat_construction():
     """Fetch EU27 construction price indices (quarterly)."""
     indics = '&'.join(f'indic_bt={info["indic"]}' for info in EU_CONSTRUCTION.values())
-    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=PCH_Q4&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
+    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=PCH_SM&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
         if resp.status_code == 200:
@@ -651,9 +651,9 @@ def _fetch_eurostat_ppi_index():
 
 
 def _fetch_eurostat_construction_index():
-    """Fetch EU27 construction quarterly index (2020=100)."""
+    """Fetch EU27 construction quarterly index (2021=100)."""
     indics = '&'.join(f'indic_bt={info["indic"]}' for info in EU_CONSTRUCTION.values())
-    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=I20&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
+    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=I21&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
         if resp.status_code == 200:
