@@ -192,10 +192,11 @@ class ReservesCache:
 
     def get(self):
         with self._lock:
-            # Re-read from disk first — another worker may have fetched.
             self._load_from_disk()
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
-                return self._data
+                if not _is_stale(self._data):
+                    return self._data
+                logger.info("Cached reserves data is stale, re-fetching")
         data = _fetch_reserves()
         if data:
             with self._lock:
@@ -1476,10 +1477,12 @@ def diagnose_fetch():
                 source = result.get('meta', {}).get('source')
 
     if result:
-        # Store in cache so subsequent /api/cofer calls see the same data
+        # Store in cache AND persist to disk so ALL workers (not just the
+        # one serving this request) see the fresh data immediately.
         with _cache._lock:
             _cache._data = result
             _cache._last_fetch = time.time()
+            _cache._save_to_disk(result)
 
     # Surface a small sample of the last 3 periods + per-period coverage
     # so the /api/cofer/refresh endpoint can verify period order and
