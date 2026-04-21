@@ -4,9 +4,13 @@ Fetches indicator data (e.g. NE.EXP.GNFS.ZS = exports % GDP) for all countries.
 Uses the World Bank API v2 (no API key required).
 """
 
+import json
+import os
 import time
 import threading
 import requests
+
+from config import Config
 
 _cache = {}
 _cache_lock = threading.Lock()
@@ -18,6 +22,42 @@ _WB_API = 'https://api.worldbank.org/v2'
 # giving up so a single 502 doesn't wipe the chart on cold start.
 _RETRY_BACKOFFS = (1, 3, 9)  # seconds between attempts 1→2, 2→3, 3→4
 _RETRY_STATUS = {500, 502, 503, 504}
+
+# Disk-backed cache survives restarts and sustained WB outages. Once any
+# successful fetch lands here, /api/em-vulnerability stays healthy for days
+# even if api.worldbank.org is down on cold start.
+_DISK_CACHE_DIR = os.path.join(Config.DATA_DIR, 'wb_cache')
+
+
+def _disk_path(indicator):
+    safe = indicator.replace('/', '_')
+    return os.path.join(_DISK_CACHE_DIR, f'{safe}.json')
+
+
+def _load_from_disk(indicator):
+    """Return (data, ts) from disk cache or (None, 0) if absent/corrupt."""
+    path = _disk_path(indicator)
+    if not os.path.exists(path):
+        return None, 0
+    try:
+        with open(path, 'r') as f:
+            wrapper = json.load(f)
+        return wrapper.get('data'), float(wrapper.get('ts', 0))
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        print(f'[WorldBank] disk cache read failed for {indicator}: {e}')
+        return None, 0
+
+
+def _save_to_disk(indicator, data, ts):
+    try:
+        os.makedirs(_DISK_CACHE_DIR, exist_ok=True)
+        path = _disk_path(indicator)
+        tmp = path + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump({'ts': ts, 'data': data}, f)
+        os.replace(tmp, path)
+    except OSError as e:
+        print(f'[WorldBank] disk cache write failed for {indicator}: {e}')
 
 # Aggregate / regional codes to exclude from country-level data
 _AGGREGATE_CODES = {
@@ -38,25 +78,42 @@ def get_wb_data(indicator):
         if entry and time.time() - entry['ts'] < _CACHE_TTL:
             return entry['data']
 
+    # In-memory miss: try disk before going to the network. Render runs
+    # multiple gunicorn workers, so the disk file may have been written by a
+    # sibling worker, and it survives restarts/redeploys.
+    disk_data, disk_ts = _load_from_disk(indicator)
+    if disk_data and disk_data.get('countries') and (time.time() - disk_ts) < _CACHE_TTL:
+        with _cache_lock:
+            _cache[cache_key] = {'data': disk_data, 'ts': disk_ts}
+        return disk_data
+
     data = _fetch_wb(indicator)
 
-    # If the fetch failed but we have a prior successful payload, serve stale
-    # rather than wiping the chart. Only overwrite cache on success.
+    # If the fetch failed but we have a prior successful payload (memory or
+    # disk), serve stale rather than wiping the chart. Only overwrite cache
+    # on success.
     if (data.get('meta') or {}).get('error') and not data.get('countries'):
+        fallback, fallback_ts = None, 0
         with _cache_lock:
             entry = _cache.get(cache_key)
         if entry and entry['data'].get('countries'):
-            stale = dict(entry['data'])
+            fallback, fallback_ts = entry['data'], entry['ts']
+        elif disk_data and disk_data.get('countries'):
+            fallback, fallback_ts = disk_data, disk_ts
+        if fallback:
+            stale = dict(fallback)
             stale_meta = dict(stale.get('meta') or {})
             stale_meta['stale'] = True
-            stale_meta['stale_age_s'] = int(time.time() - entry['ts'])
+            stale_meta['stale_age_s'] = int(time.time() - fallback_ts)
             stale_meta['error'] = data['meta'].get('error')
             stale['meta'] = stale_meta
             return stale
         return data
 
+    now = time.time()
     with _cache_lock:
-        _cache[cache_key] = {'data': data, 'ts': time.time()}
+        _cache[cache_key] = {'data': data, 'ts': now}
+    _save_to_disk(indicator, data, now)
 
     return data
 
