@@ -1296,3 +1296,22 @@ th.col-actual {
     border-radius: 3px;
     letter-spacing: 0.5px;
 }
+
+.em-vuln-empty-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    padding: 18px 24px;
+    text-align: center;
+    max-width: 520px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.em-vuln-empty-banner strong {
+    color: var(--text-primary);
+}
