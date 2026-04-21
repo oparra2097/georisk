@@ -14,6 +14,11 @@ _CACHE_TTL = 86400  # 24 hours
 
 _WB_API = 'https://api.worldbank.org/v2'
 
+# Transient upstream failures are common on api.worldbank.org; retry before
+# giving up so a single 502 doesn't wipe the chart on cold start.
+_RETRY_BACKOFFS = (1, 3, 9)  # seconds between attempts 1→2, 2→3, 3→4
+_RETRY_STATUS = {500, 502, 503, 504}
+
 # Aggregate / regional codes to exclude from country-level data
 _AGGREGATE_CODES = {
     'ARB', 'CEB', 'CSS', 'EAP', 'EAR', 'EAS', 'ECA', 'ECS', 'EMU', 'EUU',
@@ -29,17 +34,71 @@ def get_wb_data(indicator):
     cache_key = f'wb_{indicator}'
 
     with _cache_lock:
-        if cache_key in _cache:
-            entry = _cache[cache_key]
-            if time.time() - entry['ts'] < _CACHE_TTL:
-                return entry['data']
+        entry = _cache.get(cache_key)
+        if entry and time.time() - entry['ts'] < _CACHE_TTL:
+            return entry['data']
 
     data = _fetch_wb(indicator)
+
+    # If the fetch failed but we have a prior successful payload, serve stale
+    # rather than wiping the chart. Only overwrite cache on success.
+    if (data.get('meta') or {}).get('error') and not data.get('countries'):
+        with _cache_lock:
+            entry = _cache.get(cache_key)
+        if entry and entry['data'].get('countries'):
+            stale = dict(entry['data'])
+            stale_meta = dict(stale.get('meta') or {})
+            stale_meta['stale'] = True
+            stale_meta['stale_age_s'] = int(time.time() - entry['ts'])
+            stale_meta['error'] = data['meta'].get('error')
+            stale['meta'] = stale_meta
+            return stale
+        return data
 
     with _cache_lock:
         _cache[cache_key] = {'data': data, 'ts': time.time()}
 
     return data
+
+
+def _get_with_retry(url):
+    """GET with retries on 5xx and network errors; raises on final failure."""
+    last_exc = None
+    for attempt, backoff in enumerate((0,) + _RETRY_BACKOFFS):
+        if backoff:
+            time.sleep(backoff)
+        try:
+            resp = requests.get(url, timeout=30)
+            if resp.status_code in _RETRY_STATUS:
+                last_exc = requests.HTTPError(
+                    f'{resp.status_code} Server Error for url: {url}'
+                )
+                print(
+                    f'[WorldBank] retry {attempt + 1}/{len(_RETRY_BACKOFFS) + 1} '
+                    f'after HTTP {resp.status_code}: {indicator_from_url(url)}'
+                )
+                continue
+            resp.raise_for_status()
+            return resp
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last_exc = e
+            print(
+                f'[WorldBank] retry {attempt + 1}/{len(_RETRY_BACKOFFS) + 1} '
+                f'after {type(e).__name__}: {indicator_from_url(url)}'
+            )
+            continue
+    raise last_exc if last_exc else RuntimeError('fetch failed')
+
+
+def indicator_from_url(url):
+    """Extract the indicator code from a WB URL for log readability."""
+    marker = '/indicator/'
+    i = url.find(marker)
+    if i < 0:
+        return url
+    tail = url[i + len(marker):]
+    q = tail.find('?')
+    return tail[:q] if q >= 0 else tail
 
 
 def _fetch_wb(indicator):
@@ -49,8 +108,7 @@ def _fetch_wb(indicator):
             f'{_WB_API}/country/all/indicator/{indicator}'
             f'?format=json&per_page=20000&date=2000:2025'
         )
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
+        resp = _get_with_retry(url)
         raw = resp.json()
 
         # Response is [metadata, data_array]
