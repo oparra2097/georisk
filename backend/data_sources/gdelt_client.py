@@ -112,7 +112,7 @@ def fetch_country_articles(country_alpha2, timespan=None, max_records=150):
         timespan = Config.GDELT_TIMESPAN
     search_name = _get_search_name(country_alpha2)
     params = {
-        'query': f'{search_name} sourcelang:english',
+        'query': f'"{search_name}" sourcelang:english',
         'mode': 'artlist',
         'maxrecords': max_records,
         'timespan': timespan,
@@ -122,17 +122,29 @@ def fetch_country_articles(country_alpha2, timespan=None, max_records=150):
     data = _gdelt_request(params)
     articles = data.get('articles', []) if data else []
 
-    # Fallback: if zero results and country has alternate search terms, retry
-    if not articles and country_alpha2 in COUNTRY_FALLBACK_TERMS:
+    # Always merge in fallback-term results when available — this catches
+    # city-level and figure-name coverage that the canonical country-name
+    # query misses (e.g. "Juba" or "SPLM-IO" stories about South Sudan).
+    if country_alpha2 in COUNTRY_FALLBACK_TERMS:
+        existing_urls = {a.get('url') for a in articles if a.get('url')}
         for fallback_term in COUNTRY_FALLBACK_TERMS[country_alpha2]:
-            params['query'] = f'{fallback_term} sourcelang:english'
-            data = _gdelt_request(params)
-            if data:
-                articles = data.get('articles', [])
-                if articles:
-                    logger.debug(f"GDELT fallback '{fallback_term}' returned "
-                                 f"{len(articles)} articles for {country_alpha2}")
-                    break
+            params['query'] = f'"{fallback_term}" sourcelang:english'
+            fb_data = _gdelt_request(params)
+            if not fb_data:
+                continue
+            fb_articles = fb_data.get('articles', []) or []
+            added = 0
+            for art in fb_articles:
+                url = art.get('url')
+                if url and url in existing_urls:
+                    continue
+                articles.append(art)
+                if url:
+                    existing_urls.add(url)
+                added += 1
+            if added:
+                logger.debug(f"GDELT fallback '{fallback_term}' added "
+                             f"{added} articles for {country_alpha2}")
 
     return articles
 
@@ -161,7 +173,7 @@ def fetch_country_tone(country_alpha2, timespan=None):
         timespan = Config.GDELT_TIMESPAN
     search_name = _get_search_name(country_alpha2)
     params = {
-        'query': f'{search_name} sourcelang:english',
+        'query': f'"{search_name}" sourcelang:english',
         'mode': 'timelinetone',
         'timespan': timespan,
         'format': 'json'
@@ -172,7 +184,7 @@ def fetch_country_tone(country_alpha2, timespan=None):
     # Fallback: if no tone data and country has alternate search terms, retry
     if tone is None and country_alpha2 in COUNTRY_FALLBACK_TERMS:
         for fallback_term in COUNTRY_FALLBACK_TERMS[country_alpha2]:
-            params['query'] = f'{fallback_term} sourcelang:english'
+            params['query'] = f'"{fallback_term}" sourcelang:english'
             data = _gdelt_request(params)
             tone = _extract_tone(data)
             if tone is not None:

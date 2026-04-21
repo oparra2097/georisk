@@ -50,7 +50,7 @@ ONS_SERIES = {
     'uk_dental':         {'cdid': 'L53Z', 'dataset': 'mm23', 'label': 'UK CPIH: Dental Services',                'color': '#fdba74', 'category': 'medical'},
     # Legal
     'uk_sppi_legal':     {'cdid': 'HSGL', 'dataset': 'sppi', 'label': 'UK SPPI: Legal Services',                 'color': '#f59e0b', 'category': 'legal'},
-    'uk_awe_prof':       {'cdid': 'K5EC', 'dataset': 'emp',  'label': 'UK AWE: Professional & Scientific',       'color': '#eab308', 'category': 'legal'},
+    'uk_awe_prof':       {'cdid': 'K5EC', 'dataset': 'emp',  'label': 'UK AWE: Prof, Scientific & Technical (legal proxy)', 'color': '#eab308', 'category': 'legal', 'approximate': True},
     # Insurance
     'uk_awe_finance':    {'cdid': 'K58I', 'dataset': 'emp',  'label': 'UK AWE: Finance & Insurance',             'color': '#a855f7', 'category': 'insurance'},
     # Bodily Injury
@@ -97,9 +97,10 @@ EU_PPI_SERIES = {
 }
 
 # Construction — quarterly (unit=PCH_Q4 = YoY quarterly change)
+# Dataset sts_copi_q covers CPA_F41001_X_410014: Residential buildings excl residences for communities
 EU_CONSTRUCTION = {
-    'eu_cci_cost':  {'indic': 'COST',    'label': 'EU CCI: Construction Cost Index',         'color': '#f97316', 'category': 'fire_allied'},
-    'eu_cppi':      {'indic': 'PRC_PRR', 'label': 'EU CPPI: Residential Building Prices',   'color': '#fb923c', 'category': 'fire_allied'},
+    'eu_cci_res':   {'indic': 'COST',    'label': 'EU CCI: Residential Buildings (excl Communities)',   'color': '#f97316', 'category': 'fire_allied'},
+    'eu_cppi_res':  {'indic': 'PRC_PRR', 'label': 'EU CPPI: Residential Buildings (excl Communities)', 'color': '#fb923c', 'category': 'fire_allied'},
 }
 
 # Labour Cost Index — quarterly
@@ -109,6 +110,9 @@ EU_LCI = {
     'eu_lci_construction':  {'nace': 'F',   'label': 'EU LCI: Construction',                   'color': '#c084fc', 'category': 'fire_allied'},
     'eu_lci_transport':     {'nace': 'H',   'label': 'EU LCI: Transport & Storage',            'color': '#d8b4fe', 'category': 'auto_physical'},
     'eu_lci_prof_services': {'nace': 'M',   'label': 'EU LCI: Professional & Scientific Svcs', 'color': '#fbbf24', 'category': 'legal'},
+    'eu_lci_industry':      {'nace': 'B-E', 'label': 'EU LCI: Industry',                      'color': '#64748b', 'category': 'bodily_injury'},
+    'eu_lci_construction_bi': {'nace': 'F', 'label': 'EU LCI: Construction',                   'color': '#94a3b8', 'category': 'bodily_injury'},
+    'eu_lci_services':      {'nace': 'G-N', 'label': 'EU LCI: Services',                      'color': '#cbd5e1', 'category': 'bodily_injury'},
 }
 
 # ── US BLS series ────────────────────────────────────────────────────────────
@@ -394,17 +398,17 @@ def _parse_eurostat_jsonstat(resp_json, series_map, dimension_key):
 
     num_times = len(time_dim)
 
-    # Build reverse map: code → series_key
-    code_to_key = {}
+    # Build reverse map: code → [series_key, ...] (supports duplicate codes)
+    code_to_keys = {}
     for key, info in series_map.items():
         code = info.get('coicop') or info.get('nace') or info.get('indic')
         if code:
-            code_to_key[code] = key
+            code_to_keys.setdefault(code, []).append(key)
 
     result = {}
     for code, code_pos in code_dim.items():
-        series_key = code_to_key.get(code)
-        if not series_key:
+        series_keys = code_to_keys.get(code, [])
+        if not series_keys:
             continue
 
         points = []
@@ -431,7 +435,8 @@ def _parse_eurostat_jsonstat(resp_json, series_map, dimension_key):
 
         points.sort(key=lambda p: (p['year'], p['month']))
         if points:
-            result[series_key] = points
+            for series_key in series_keys:
+                result[series_key] = [dict(p) for p in points]
 
     return result
 
@@ -492,7 +497,8 @@ def _fetch_eurostat_construction():
 
 def _fetch_eurostat_lci():
     """Fetch EU27 Labour Cost Index (quarterly)."""
-    naces = '&'.join(f'nace_r2={info["nace"]}' for info in EU_LCI.values())
+    unique_naces = sorted(set(info['nace'] for info in EU_LCI.values()))
+    naces = '&'.join(f'nace_r2={n}' for n in unique_naces)
     url = f'{EUROSTAT_BASE}/lc_lci_r2_q?geo=EU27_2020&s_adj=SCA&lcstruct=D1_D4_MD5&unit=PCH_Q4&freq=Q&sinceTimePeriod=2000-Q1&{naces}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
@@ -659,7 +665,8 @@ def _fetch_eurostat_construction_index():
 
 def _fetch_eurostat_lci_index():
     """Fetch EU27 LCI quarterly index (2020=100)."""
-    naces = '&'.join(f'nace_r2={info["nace"]}' for info in EU_LCI.values())
+    unique_naces = sorted(set(info['nace'] for info in EU_LCI.values()))
+    naces = '&'.join(f'nace_r2={n}' for n in unique_naces)
     url = f'{EUROSTAT_BASE}/lc_lci_r2_q?geo=EU27_2020&s_adj=SCA&lcstruct=D1_D4_MD5&unit=I20&freq=Q&sinceTimePeriod=2000-Q1&{naces}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
