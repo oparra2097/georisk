@@ -432,6 +432,7 @@
             case 'forecast-group': renderForecast(ds); break;
             case 'weo': renderWeo(ds); break;
             case 'wb': renderWeo(ds); break;  // World Bank uses same data shape as WEO
+            case 'us-trade-quarterly': renderUsTradeQuarterly(ds); break;
             case 'sovereign-debt': renderSovereignDebt(ds); break;
             case 'fertilizer-em': renderFertilizerEM(ds); break;
             case 'cofer-nowcast': renderCoferNowcast(ds); break;
@@ -3595,6 +3596,261 @@
             </tr>`;
         });
         tbody.innerHTML = tbHtml;
+    }
+
+    // ══════════════════════════════════════════════════════
+    // US TRADE QUARTERLY RENDERER (FRED / BEA NIPA)
+    // ══════════════════════════════════════════════════════
+
+    function _tradeQSortKey(d) {
+        // "2024-Q3" -> 20243
+        const parts = d.split('-Q');
+        return parseInt(parts[0]) * 10 + parseInt(parts[1]);
+    }
+
+    function _tradeYoY(points) {
+        const idx = {};
+        points.forEach(p => { idx[p.date] = p.value; });
+        return points.map(p => {
+            const prev = idx[(p.year - 1) + '-Q' + p.quarter];
+            const yoy = (prev != null && prev !== 0) ? ((p.value - prev) / Math.abs(prev)) * 100 : null;
+            return { ...p, y: yoy };
+        });
+    }
+
+    function _tradeQoQ(points) {
+        // points are already sorted chronologically
+        return points.map((p, i) => {
+            const prev = i > 0 ? points[i - 1].value : null;
+            const qoq = (prev != null && prev !== 0) ? ((p.value - prev) / Math.abs(prev)) * 100 : null;
+            return { ...p, y: qoq };
+        });
+    }
+
+    function renderUsTradeQuarterly(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data) return;
+
+        const allSeries = data.series || {};
+        const view = state.view || 'level';
+        const rangeYears = state.range === 'all' ? null : parseInt(state.range);
+        const currentYear = new Date().getFullYear();
+
+        // Colors + series ordering
+        const seriesOrder = [
+            { key: 'exports',      color: '#10b981', dash: []    },
+            { key: 'imports',      color: '#ef4444', dash: []    },
+            { key: 'net_exports',  color: '#3b82f6', dash: [4,3] },
+        ];
+        const pctSeriesOrder = [
+            { key: 'exports_pct',  color: '#10b981', dash: []    },
+            { key: 'imports_pct',  color: '#ef4444', dash: []    },
+        ];
+
+        // For "level" view of $B we show exports / imports / net exports.
+        // For "% of GDP" (implicit when view=level on the pct series) we also
+        // show the pct series. To keep the control simple, we split the chart
+        // into: $B levels OR YoY%/QoQ% of the $B levels. The pct-of-GDP series
+        // get their own small chart below.
+        const useSeries = seriesOrder;
+
+        // Transform points according to view
+        function pointsFor(key) {
+            const s = allSeries[key];
+            if (!s || !s.points) return [];
+            let pts = s.points.slice().sort((a, b) => _tradeQSortKey(a.date) - _tradeQSortKey(b.date));
+            if (rangeYears) {
+                const minYear = currentYear - rangeYears;
+                pts = pts.filter(p => p.year >= minYear - 1);
+            }
+            if (view === 'yoy') pts = _tradeYoY(pts);
+            else if (view === 'qoq') pts = _tradeQoQ(pts);
+            else pts = pts.map(p => ({ ...p, y: p.value }));
+            if (rangeYears) {
+                const minYear = currentYear - rangeYears;
+                pts = pts.filter(p => p.year >= minYear);
+            }
+            return pts;
+        }
+
+        // Union of quarter labels across selected series for a shared x-axis
+        const allLabels = new Set();
+        useSeries.forEach(s => pointsFor(s.key).forEach(p => allLabels.add(p.date)));
+        const labels = [...allLabels].sort((a, b) => _tradeQSortKey(a) - _tradeQSortKey(b));
+
+        const chartDatasets = useSeries.map(s => {
+            const pts = pointsFor(s.key);
+            const byLabel = {};
+            pts.forEach(p => { byLabel[p.date] = p.y; });
+            return {
+                label: (allSeries[s.key] || {}).label || s.key,
+                data: labels.map(l => byLabel[l] != null ? byLabel[l] : null),
+                borderColor: s.color,
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: s.dash,
+                fill: false,
+                pointRadius: 0,
+                pointHitRadius: 6,
+                tension: 0.2,
+                spanGaps: true,
+            };
+        });
+
+        // Summary cards — latest values
+        const summary = document.getElementById('panel-summary');
+        if (summary) {
+            const latest = (key) => {
+                const s = allSeries[key];
+                if (!s || !s.points || s.points.length === 0) return { value: null, date: '' };
+                const last = s.points[s.points.length - 1];
+                return { value: last.value, date: last.date };
+            };
+            const fmt = (v) => v == null ? '—' : (v >= 0 ? '' : '') + '$' + v.toLocaleString(undefined, { maximumFractionDigits: 1 }) + 'B';
+            const exp = latest('exports');
+            const imp = latest('imports');
+            const net = latest('net_exports');
+            const expPct = latest('exports_pct');
+            const impPct = latest('imports_pct');
+            summary.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;width:100%;">
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Exports</div>
+                        <div style="color:#10b981;font-size:22px;font-weight:700;margin-top:4px;">${fmt(exp.value)}</div>
+                        <div style="color:#64748b;font-size:11px;">${exp.date}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Imports</div>
+                        <div style="color:#ef4444;font-size:22px;font-weight:700;margin-top:4px;">${fmt(imp.value)}</div>
+                        <div style="color:#64748b;font-size:11px;">${imp.date}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Net Exports</div>
+                        <div style="color:${net.value != null && net.value < 0 ? '#f59e0b' : '#3b82f6'};font-size:22px;font-weight:700;margin-top:4px;">${fmt(net.value)}</div>
+                        <div style="color:#64748b;font-size:11px;">${net.date}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Exports % GDP</div>
+                        <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">${expPct.value != null ? expPct.value.toFixed(1) + '%' : '—'}</div>
+                        <div style="color:#64748b;font-size:11px;">${expPct.date}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Imports % GDP</div>
+                        <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">${impPct.value != null ? impPct.value.toFixed(1) + '%' : '—'}</div>
+                        <div style="color:#64748b;font-size:11px;">${impPct.date}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Chart
+        PD.destroyChart('main');
+        const canvasEl = document.getElementById('panel-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        const isPct = view === 'yoy' || view === 'qoq';
+        const yLabel = isPct ? (view === 'yoy' ? 'YoY %' : 'QoQ %') : 'Billions $ (SAAR)';
+
+        PD.setChart('main', new Chart(ctx, {
+            type: 'line',
+            data: { labels: labels, datasets: chartDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 14, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: (tt) => {
+                                const v = tt.parsed.y;
+                                if (v == null) return tt.dataset.label + ': N/A';
+                                if (isPct) return tt.dataset.label + ': ' + v.toFixed(2) + '%';
+                                return tt.dataset.label + ': $' + v.toFixed(1) + 'B';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#9ca3af', font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 16 },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        title: { display: true, text: 'Quarter', color: '#6b7280', font: { size: 11 } },
+                    },
+                    y: {
+                        ticks: {
+                            color: '#6b7280', font: { size: 10 },
+                            callback: (v) => isPct ? v.toFixed(1) + '%' : '$' + v.toFixed(0) + 'B',
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        title: { display: true, text: yLabel, color: '#6b7280', font: { size: 11 } },
+                    }
+                }
+            }
+        }));
+
+        // Table — last 24 quarters, one column per series
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            const tableSeries = [
+                { key: 'exports',      label: 'Exports ($B)' },
+                { key: 'imports',      label: 'Imports ($B)' },
+                { key: 'net_exports',  label: 'Net Exports ($B)' },
+                { key: 'exports_pct',  label: 'Exports (% GDP)' },
+                { key: 'imports_pct',  label: 'Imports (% GDP)' },
+            ];
+            const tableLabels = labels.slice(-24).reverse();
+            const pointsByKey = {};
+            tableSeries.forEach(ts => {
+                const s = allSeries[ts.key];
+                const map = {};
+                (s ? s.points : []).forEach(p => { map[p.date] = p.value; });
+                pointsByKey[ts.key] = map;
+            });
+
+            let hdr = '<tr><th>Quarter</th>';
+            tableSeries.forEach(ts => { hdr += '<th>' + ts.label + '</th>'; });
+            hdr += '</tr>';
+            thead.innerHTML = hdr;
+
+            let rows = '';
+            tableLabels.forEach(q => {
+                rows += '<tr><td>' + q + '</td>';
+                tableSeries.forEach(ts => {
+                    const v = pointsByKey[ts.key][q];
+                    if (v == null) { rows += '<td>—</td>'; return; }
+                    const isPctCol = ts.key.endsWith('_pct');
+                    rows += '<td>' + (isPctCol ? v.toFixed(2) + '%' : '$' + v.toFixed(1) + 'B') + '</td>';
+                });
+                rows += '</tr>';
+            });
+            tbody.innerHTML = rows;
+        }
+
+        // Meta
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            const meta = data.meta || {};
+            const parts = [];
+            if (meta.source) parts.push(meta.source);
+            if (meta.latest_quarter) parts.push('Latest: ' + meta.latest_quarter);
+            if (meta.last_updated) parts.push('Updated: ' + meta.last_updated);
+            parts.push('Seasonally adjusted annual rate (SAAR)');
+            metaEl.textContent = parts.join(' · ');
+        }
+
+        const histSection = document.getElementById('panel-history-section');
+        if (histSection) histSection.style.display = 'none';
     }
 
 })();

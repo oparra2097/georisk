@@ -17,6 +17,7 @@ from backend.data_sources.commodities_forecast import get_forecast_data
 from backend.data_sources.gdp_nowcast import get_gdp_nowcast
 from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
+from backend.data_sources.trade_quarterly import get_us_trade_quarterly
 from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.data_sources.yale_tariff import get_yale_tariff_data
@@ -1127,6 +1128,87 @@ def export_wb_excel(indicator):
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'worldbank_{safe_name}_{today}.xlsx'
+    )
+
+
+@api_bp.route('/trade/us-quarterly')
+def get_trade_us_quarterly():
+    """Return US quarterly trade data (FRED / BEA NIPA, cached 6h)."""
+    return jsonify(get_us_trade_quarterly())
+
+
+@api_bp.route('/trade/us-quarterly/export')
+def export_trade_us_quarterly():
+    """Excel export of US quarterly trade series."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_us_trade_quarterly()
+    series = data.get('series', {})
+    meta = data.get('meta', {})
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'US Quarterly Trade'
+
+    ws.cell(row=1, column=1, value='US Quarterly Imports & Exports').font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value=f"{meta.get('source', '')} · Latest: {meta.get('latest_quarter', '')}").font = Font(italic=True, size=9, color='6B7280')
+
+    # Collect union of quarters across every series for a merged table
+    all_quarters = set()
+    for s in series.values():
+        for p in s.get('points', []):
+            all_quarters.add(p['date'])
+    sorted_quarters = sorted(all_quarters, key=lambda q: (int(q.split('-Q')[0]), int(q.split('-Q')[1])))
+
+    headers = ['Quarter'] + [s['label'] + ' (' + s['unit'] + ')' for s in series.values()]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # Build per-quarter lookup: {quarter: {key: value}}
+    lookup = {}
+    for key, s in series.items():
+        for p in s.get('points', []):
+            lookup.setdefault(p['date'], {})[key] = p['value']
+
+    for row_idx, q in enumerate(sorted_quarters, 5):
+        ws.cell(row=row_idx, column=1, value=q).border = thin_border
+        for col_idx, key in enumerate(series.keys(), 2):
+            val = lookup.get(q, {}).get(key)
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.number_format = '0.00'
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+
+    ws.column_dimensions['A'].width = 10
+    for col_idx in range(2, len(headers) + 1):
+        col_letter = ws.cell(row=4, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].width = 28
+    ws.freeze_panes = 'B5'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'us_trade_quarterly_{today}.xlsx'
     )
 
 
