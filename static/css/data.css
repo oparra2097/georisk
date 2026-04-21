@@ -1179,3 +1179,120 @@ th.col-actual {
     .sd-rank-name { font-size: 11px; }
     #sd-top-chart-wrap { height: 400px; }
 }
+
+
+/* ===== EM External Vulnerability — Bubble Chart ===== */
+
+.em-vuln-chart-container {
+    height: 520px;
+}
+
+.em-vuln-legend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.em-vuln-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+}
+.em-vuln-legend-label {
+    color: var(--text-secondary);
+    margin-right: 8px;
+}
+.em-vuln-legend-note {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.em-vuln-picker {
+    margin-bottom: 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+}
+.em-vuln-picker-head {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+.em-vuln-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.em-vuln-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+}
+.em-vuln-search {
+    flex: 1;
+    min-width: 140px;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    outline: none;
+}
+.em-vuln-search:focus {
+    border-color: var(--accent);
+}
+.em-vuln-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 4px 12px;
+    max-height: 260px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+.em-vuln-opt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px 0;
+}
+.em-vuln-opt input {
+    cursor: pointer;
+}
+.em-vuln-opt-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.em-vuln-em-tag {
+    font-size: 9px;
+    font-weight: 700;
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+}

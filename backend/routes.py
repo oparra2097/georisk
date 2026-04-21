@@ -21,6 +21,7 @@ from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.data_sources.yale_tariff import get_yale_tariff_data
 from backend.data_sources.insurance_inflation import get_insurance_inflation_data
+from backend.data_sources.em_vulnerability import get_em_vulnerability_data
 from flask_login import login_required, current_user
 from functools import wraps
 from backend.cache.database import get_country_history, get_all_history, detect_anomalies, get_score_count
@@ -1055,6 +1056,105 @@ def get_world_bank(indicator):
     """Return World Bank data for the given indicator (cached 24 hours)."""
     data = get_wb_data(indicator)
     return jsonify(data)
+
+
+@api_bp.route('/em-vulnerability')
+def get_em_vulnerability():
+    """Return EM external vulnerability bubble-chart dataset (cached 24 hours)."""
+    data = get_em_vulnerability_data()
+    return jsonify(data)
+
+
+@api_bp.route('/em-vulnerability/export')
+def export_em_vulnerability_excel():
+    """Generate Excel file with EM external vulnerability metrics."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_em_vulnerability_data()
+    countries = data.get('countries', {})
+    meta = data.get('meta', {})
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'EM External Vulnerability'
+
+    ws.cell(row=1, column=1, value='EM External Vulnerability Metrics')
+    ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value=meta.get('source', 'World Bank'))
+    ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
+
+    headers = [
+        'Country', 'ISO3', 'EM', 'Year', 'GDP (USD)', 'GDP Rank', 'EM Rank',
+        'Current Account (% GDP)', 'FDI Net (% GDP)', 'Basic Balance (% GDP)',
+        'Reserves (USD)', 'Short-Term External Debt (USD)',
+        'Reserves / ST Debt (%)',
+    ]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    sorted_rows = sorted(
+        countries.values(),
+        key=lambda r: (-(r.get('gdp_usd') or 0), r.get('name', '')),
+    )
+    for row_idx, r in enumerate(sorted_rows, 5):
+        values = [
+            r.get('name', ''),
+            r.get('iso3', ''),
+            'Yes' if r.get('is_em') else 'No',
+            r.get('year', ''),
+            r.get('gdp_usd'),
+            r.get('gdp_rank'),
+            r.get('em_rank'),
+            r.get('ca_pct_gdp'),
+            r.get('fdi_pct_gdp'),
+            r.get('basic_balance_pct_gdp'),
+            r.get('reserves_usd'),
+            r.get('st_debt_usd'),
+            r.get('reserves_to_st_debt_pct'),
+        ]
+        for col, v in enumerate(values, 1):
+            cell = ws.cell(row=row_idx, column=col, value=v)
+            cell.border = thin_border
+            if col >= 5:
+                cell.alignment = Alignment(horizontal='right')
+                if col in (5, 11, 12):
+                    cell.number_format = '#,##0'
+                else:
+                    cell.number_format = '0.00'
+
+    ws.column_dimensions['A'].width = 28
+    ws.column_dimensions['B'].width = 7
+    ws.column_dimensions['C'].width = 5
+    ws.column_dimensions['D'].width = 7
+    for col in range(5, len(headers) + 1):
+        ws.column_dimensions[ws.cell(row=4, column=col).column_letter].width = 16
+    ws.freeze_panes = 'A5'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'em_external_vulnerability_{today}.xlsx'
+    )
 
 
 @api_bp.route('/wb/<path:indicator>/export')
