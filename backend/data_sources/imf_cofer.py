@@ -341,11 +341,14 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
         if latest_real_idx < 0:
             continue
 
-        # Capped forward-fill: smooth over short reporting gaps (≤3
-        # months) to keep chart lines continuous across normal delays,
-        # but do NOT propagate stale values more than 3 months so
-        # countries that genuinely stopped reporting show a break.
-        def _capped_fill(arr, max_gap=3):
+        # Capped forward-fill: smooth over reporting gaps to keep chart
+        # lines continuous. IFS data is dense through ~2025-06 but IRFCL
+        # FX only covers 10 countries — without fill, gold (= total − fx)
+        # shows dashes for every other country after 2025-06. A 9-month
+        # cap carries IFS values far enough to cover the gap between the
+        # frozen mirror and today, while still breaking the line for
+        # countries that genuinely stopped reporting a long time ago.
+        def _capped_fill(arr, max_gap=9):
             last_val = None
             gap = 0
             for i, v in enumerate(arr):
