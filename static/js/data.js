@@ -3734,6 +3734,8 @@
                 ratioMissing: ratio == null,
                 gdp: c.gdp_usd,
                 reserves: c.reserves_usd,
+                reservesSource: c.reserves_source,
+                reservesPeriod: c.reserves_period,
                 stDebt: c.st_debt_usd,
                 year: c.year,
                 isEm: !!c.is_em,
@@ -3844,7 +3846,10 @@
                                 lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%' + caTag +
                                     '  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
                                 lines.push('Reserves / ST Debt: ' + (p.ratio != null ? p.ratio.toFixed(0) + '%' : 'N/A — plotted at chart edge'));
-                                lines.push('Reserves: ' + _emFormatUsd(p.reserves));
+                                const resvTag = p.reservesSource === 'IMF IFS' && p.reservesPeriod
+                                    ? ' (IFS ' + p.reservesPeriod + ')'
+                                    : '';
+                                lines.push('Reserves: ' + _emFormatUsd(p.reserves) + resvTag);
                                 lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt));
                                 lines.push('GDP: ' + _emFormatUsd(p.gdp) + '  ·  Year: ' + (p.year || '—'));
                                 return lines;

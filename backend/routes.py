@@ -1346,8 +1346,8 @@ def export_em_vulnerability_excel():
         'Country', 'ISO3', 'EM', 'Year', 'GDP (USD)', 'GDP Rank', 'EM Rank',
         'Current Account (% GDP)', 'CA Source', 'CA Year',
         'FDI Net (% GDP)', 'Basic Balance (% GDP)',
-        'Reserves (USD)', 'Short-Term External Debt (USD)',
-        'Reserves / ST Debt (%)',
+        'Reserves (USD)', 'Reserves Source', 'Reserves Period',
+        'Short-Term External Debt (USD)', 'Reserves / ST Debt (%)',
     ]
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=4, column=col, value=h)
@@ -1376,6 +1376,8 @@ def export_em_vulnerability_excel():
             r.get('fdi_pct_gdp'),
             r.get('basic_balance_pct_gdp'),
             r.get('reserves_usd'),
+            r.get('reserves_source', ''),
+            r.get('reserves_period', ''),
             r.get('st_debt_usd'),
             r.get('reserves_to_st_debt_pct'),
         ]
@@ -1384,9 +1386,9 @@ def export_em_vulnerability_excel():
             cell.border = thin_border
             if col >= 4:
                 cell.alignment = Alignment(horizontal='right')
-                if col in (5, 13, 14):
+                if col in (5, 13, 16):
                     cell.number_format = '#,##0'
-                elif col in (8, 11, 12, 15):
+                elif col in (8, 11, 12, 17):
                     cell.number_format = '0.00'
 
     ws.column_dimensions['A'].width = 28
@@ -1394,7 +1396,9 @@ def export_em_vulnerability_excel():
     ws.column_dimensions['C'].width = 5
     ws.column_dimensions['D'].width = 7
     ws.column_dimensions['I'].width = 18
-    for col_letter in ('E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'O'):
+    ws.column_dimensions['N'].width = 16
+    ws.column_dimensions['O'].width = 14
+    for col_letter in ('E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'P', 'Q'):
         ws.column_dimensions[col_letter].width = 16
     ws.freeze_panes = 'A5'
 
