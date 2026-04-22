@@ -1177,9 +1177,18 @@ def get_em_vulnerability():
 
 @api_bp.route('/em-vulnerability/export')
 def export_em_vulnerability_excel():
-    """Generate Excel file with EM external vulnerability metrics."""
+    """Generate Excel file with EM external vulnerability metrics.
+
+    Two sheets:
+      1. "Bubble Chart" — clean X / Y / Size / Label layout with an
+         embedded Excel bubble chart already configured. Users can re-create
+         or restyle the chart natively without touching column references.
+      2. "Full Metrics" — all per-country fields including data-source
+         provenance for the current account series.
+    """
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.chart import BubbleChart, Reference, Series
 
     data = get_em_vulnerability_data()
     countries = data.get('countries', {})
@@ -1187,6 +1196,7 @@ def export_em_vulnerability_excel():
 
     header_font = Font(bold=True, color='FFFFFF', size=11)
     header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    em_fill = PatternFill(start_color='FEE2E2', end_color='FEE2E2', fill_type='solid')
     thin_border = Border(
         left=Side(style='thin', color='D1D5DB'),
         right=Side(style='thin', color='D1D5DB'),
@@ -1194,18 +1204,148 @@ def export_em_vulnerability_excel():
         bottom=Side(style='thin', color='D1D5DB'),
     )
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = 'EM External Vulnerability'
+    # Only countries that can be plotted (have basic balance). ST-debt-missing
+    # ones still get a row but with blank X so Excel skips them — user can
+    # tell from the blank cell why they're not on the chart.
+    plottable = [
+        r for r in countries.values()
+        if r.get('basic_balance_pct_gdp') is not None
+    ]
+    em_rows = sorted(
+        [r for r in plottable if r.get('is_em')],
+        key=lambda r: -(r.get('gdp_usd') or 0),
+    )
+    dm_rows = sorted(
+        [r for r in plottable if not r.get('is_em')],
+        key=lambda r: -(r.get('gdp_usd') or 0),
+    )
+    chart_rows = em_rows + dm_rows  # EM first so they're a contiguous series
 
-    ws.cell(row=1, column=1, value='EM External Vulnerability Metrics')
+    wb = Workbook()
+
+    # ── Sheet 1: Bubble Chart (chart-data layout + embedded chart) ──────────
+    chart_ws = wb.active
+    chart_ws.title = 'Bubble Chart'
+
+    chart_ws.cell(row=1, column=1, value='EM External Vulnerability — Bubble Chart Data')
+    chart_ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+    chart_ws.cell(row=2, column=1, value=meta.get('source', 'World Bank'))
+    chart_ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
+    chart_ws.cell(
+        row=3, column=1,
+        value=(
+            'X = Reserves / Short-Term External Debt (%)  ·  '
+            'Y = Basic Balance (Current Account + Net FDI, % GDP)  ·  '
+            'Bubble size = Nominal GDP ($B). '
+            'EM rows (red shading) are listed first; the embedded chart '
+            'splits them into two series for color coding.'
+        ),
+    )
+    chart_ws.cell(row=3, column=1).font = Font(italic=True, size=9, color='6B7280')
+
+    chart_headers = [
+        'Country', 'ISO3', 'EM',
+        'X · Reserves / ST Debt (%)',
+        'Y · Basic Balance (% GDP)',
+        'Size · GDP ($B)',
+        'Year', 'CA Source',
+    ]
+    HEADER_ROW = 5
+    for col, h in enumerate(chart_headers, 1):
+        cell = chart_ws.cell(row=HEADER_ROW, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = thin_border
+
+    DATA_START = HEADER_ROW + 1
+    for i, r in enumerate(chart_rows):
+        row = DATA_START + i
+        values = [
+            r.get('name', ''),
+            r.get('iso3', ''),
+            'Yes' if r.get('is_em') else 'No',
+            r.get('reserves_to_st_debt_pct'),  # X — may be None
+            r.get('basic_balance_pct_gdp'),     # Y
+            (r.get('gdp_usd') or 0) / 1e9,      # Size in $B for legibility
+            r.get('year', ''),
+            r.get('ca_source', ''),
+        ]
+        for col, v in enumerate(values, 1):
+            cell = chart_ws.cell(row=row, column=col, value=v)
+            cell.border = thin_border
+            if r.get('is_em'):
+                cell.fill = em_fill
+            if col in (4, 5):
+                cell.number_format = '0.00'
+                cell.alignment = Alignment(horizontal='right')
+            elif col == 6:
+                cell.number_format = '#,##0'
+                cell.alignment = Alignment(horizontal='right')
+            elif col == 7:
+                cell.alignment = Alignment(horizontal='center')
+
+    chart_ws.column_dimensions['A'].width = 28
+    chart_ws.column_dimensions['B'].width = 7
+    chart_ws.column_dimensions['C'].width = 6
+    chart_ws.column_dimensions['D'].width = 18
+    chart_ws.column_dimensions['E'].width = 18
+    chart_ws.column_dimensions['F'].width = 14
+    chart_ws.column_dimensions['G'].width = 7
+    chart_ws.column_dimensions['H'].width = 18
+    chart_ws.row_dimensions[HEADER_ROW].height = 32
+    chart_ws.freeze_panes = f'A{DATA_START}'
+
+    # ── Embedded bubble chart ─────────────────────────────────────────────
+    if chart_rows:
+        em_count = len(em_rows)
+        dm_count = len(dm_rows)
+        em_end = DATA_START + em_count - 1
+        dm_start = em_end + 1
+        dm_end = dm_start + dm_count - 1
+
+        bubble = BubbleChart()
+        bubble.style = 18
+        bubble.title = 'EM External Vulnerability'
+        bubble.x_axis.title = 'Foreign Reserves / Short-Term External Debt (%)'
+        bubble.y_axis.title = 'Basic Balance (Current Account + Net FDI, % GDP)'
+        bubble.x_axis.scaling.min = 0
+        bubble.height = 14
+        bubble.width = 24
+        bubble.legend.position = 'b'
+
+        if em_count > 0:
+            em_series = Series(
+                values=Reference(chart_ws, min_col=5, min_row=DATA_START, max_row=em_end),
+                xvalues=Reference(chart_ws, min_col=4, min_row=DATA_START, max_row=em_end),
+                zvalues=Reference(chart_ws, min_col=6, min_row=DATA_START, max_row=em_end),
+                title='Emerging Markets',
+            )
+            bubble.series.append(em_series)
+        if dm_count > 0:
+            dm_series = Series(
+                values=Reference(chart_ws, min_col=5, min_row=dm_start, max_row=dm_end),
+                xvalues=Reference(chart_ws, min_col=4, min_row=dm_start, max_row=dm_end),
+                zvalues=Reference(chart_ws, min_col=6, min_row=dm_start, max_row=dm_end),
+                title='Advanced / Other',
+            )
+            bubble.series.append(dm_series)
+
+        # Anchor the chart to the right of the data, top-aligned with headers.
+        chart_ws.add_chart(bubble, 'J5')
+
+    # ── Sheet 2: Full Metrics (everything we have) ────────────────────────
+    ws = wb.create_sheet(title='Full Metrics')
+
+    ws.cell(row=1, column=1, value='EM External Vulnerability — Full Metrics')
     ws.cell(row=1, column=1).font = Font(bold=True, size=13)
     ws.cell(row=2, column=1, value=meta.get('source', 'World Bank'))
     ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
 
     headers = [
         'Country', 'ISO3', 'EM', 'Year', 'GDP (USD)', 'GDP Rank', 'EM Rank',
-        'Current Account (% GDP)', 'FDI Net (% GDP)', 'Basic Balance (% GDP)',
+        'Current Account (% GDP)', 'CA Source', 'CA Year',
+        'FDI Net (% GDP)', 'Basic Balance (% GDP)',
         'Reserves (USD)', 'Short-Term External Debt (USD)',
         'Reserves / ST Debt (%)',
     ]
@@ -1213,8 +1353,9 @@ def export_em_vulnerability_excel():
         cell = ws.cell(row=4, column=col, value=h)
         cell.font = header_font
         cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
         cell.border = thin_border
+    ws.row_dimensions[4].height = 30
 
     sorted_rows = sorted(
         countries.values(),
@@ -1230,6 +1371,8 @@ def export_em_vulnerability_excel():
             r.get('gdp_rank'),
             r.get('em_rank'),
             r.get('ca_pct_gdp'),
+            r.get('ca_source', ''),
+            r.get('ca_year', ''),
             r.get('fdi_pct_gdp'),
             r.get('basic_balance_pct_gdp'),
             r.get('reserves_usd'),
@@ -1239,19 +1382,20 @@ def export_em_vulnerability_excel():
         for col, v in enumerate(values, 1):
             cell = ws.cell(row=row_idx, column=col, value=v)
             cell.border = thin_border
-            if col >= 5:
+            if col >= 4:
                 cell.alignment = Alignment(horizontal='right')
-                if col in (5, 11, 12):
+                if col in (5, 13, 14):
                     cell.number_format = '#,##0'
-                else:
+                elif col in (8, 11, 12, 15):
                     cell.number_format = '0.00'
 
     ws.column_dimensions['A'].width = 28
     ws.column_dimensions['B'].width = 7
     ws.column_dimensions['C'].width = 5
     ws.column_dimensions['D'].width = 7
-    for col in range(5, len(headers) + 1):
-        ws.column_dimensions[ws.cell(row=4, column=col).column_letter].width = 16
+    ws.column_dimensions['I'].width = 18
+    for col_letter in ('E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'O'):
+        ws.column_dimensions[col_letter].width = 16
     ws.freeze_panes = 'A5'
 
     output = BytesIO()
