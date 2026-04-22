@@ -69,9 +69,16 @@ _AGGREGATE_CODES = {
 }
 
 
-def get_wb_data(indicator):
-    """Fetch World Bank data for the given indicator. Returns cached if fresh."""
-    cache_key = f'wb_{indicator}'
+def get_wb_data(indicator, source=None):
+    """Fetch World Bank data for the given indicator. Returns cached if fresh.
+
+    ``source`` optionally overrides the WB API ``source`` parameter. Default
+    is WDI (source=2). Useful sources for this codebase:
+      - 22 = Quarterly External Debt Statistics / SDDS
+      - 23 = Quarterly External Debt Statistics / GDDS
+      - 6  = International Debt Statistics (IDS)
+    """
+    cache_key = f'wb_{indicator}' + (f'_src{source}' if source else '')
 
     with _cache_lock:
         entry = _cache.get(cache_key)
@@ -81,13 +88,14 @@ def get_wb_data(indicator):
     # In-memory miss: try disk before going to the network. Render runs
     # multiple gunicorn workers, so the disk file may have been written by a
     # sibling worker, and it survives restarts/redeploys.
-    disk_data, disk_ts = _load_from_disk(indicator)
+    disk_key = f'{indicator}' + (f'_src{source}' if source else '')
+    disk_data, disk_ts = _load_from_disk(disk_key)
     if disk_data and disk_data.get('countries') and (time.time() - disk_ts) < _CACHE_TTL:
         with _cache_lock:
             _cache[cache_key] = {'data': disk_data, 'ts': disk_ts}
         return disk_data
 
-    data = _fetch_wb(indicator)
+    data = _fetch_wb(indicator, source=source)
 
     # If the fetch failed but we have a prior successful payload (memory or
     # disk), serve stale rather than wiping the chart. Only overwrite cache
@@ -113,7 +121,7 @@ def get_wb_data(indicator):
     now = time.time()
     with _cache_lock:
         _cache[cache_key] = {'data': data, 'ts': now}
-    _save_to_disk(indicator, data, now)
+    _save_to_disk(disk_key, data, now)
 
     return data
 
@@ -158,13 +166,15 @@ def indicator_from_url(url):
     return tail[:q] if q >= 0 else tail
 
 
-def _fetch_wb(indicator):
+def _fetch_wb(indicator, source=None):
     """Fetch and parse World Bank data from API v2."""
     try:
         url = (
             f'{_WB_API}/country/all/indicator/{indicator}'
             f'?format=json&per_page=20000&date=2000:2025'
         )
+        if source:
+            url += f'&source={source}'
         resp = _get_with_retry(url)
         raw = resp.json()
 
