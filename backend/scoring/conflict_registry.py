@@ -118,6 +118,20 @@ ACTIVE_CONFLICTS = {
         'since': '2022-02-24',
         'updated': '2025-01-01',
     },
+    'IR': {
+        'tier': 'WAR',
+        'conflict': 'Israel-Iran conflict / proxy network escalation',
+        'parties': ['IRGC', 'Israel', 'Hezbollah', 'Houthis', 'US'],
+        'since': '2024-04-13',
+        'updated': '2026-04-01',
+    },
+    'LB': {
+        'tier': 'WAR',
+        'conflict': 'Israel-Hezbollah conflict',
+        'parties': ['Hezbollah', 'IDF'],
+        'since': '2023-10-08',
+        'updated': '2026-04-01',
+    },
 
     # --- MINOR CONFLICTS (100-999 deaths/year) ---
     'SO': {
@@ -168,6 +182,34 @@ ACTIVE_CONFLICTS = {
         'parties': ['Multiple factions'],
         'since': '2013-12-15',
         'updated': '2025-01-01',
+    },
+    'MZ': {
+        'tier': 'MINOR_CONFLICT',
+        'conflict': 'Cabo Delgado insurgency',
+        'parties': ['Mozambique govt', 'IS-Mozambique', 'SAMIM'],
+        'since': '2017-10-05',
+        'updated': '2026-04-01',
+    },
+    'MX': {
+        'tier': 'MINOR_CONFLICT',
+        'conflict': 'Mexican drug war',
+        'parties': ['Federal govt', 'CJNG', 'Sinaloa cartel', 'others'],
+        'since': '2006-12-11',
+        'updated': '2026-04-01',
+    },
+    'CO': {
+        'tier': 'MINOR_CONFLICT',
+        'conflict': 'ELN / FARC dissident insurgency',
+        'parties': ['Colombian govt', 'ELN', 'FARC-EP dissidents', 'Clan del Golfo'],
+        'since': '1964-05-27',
+        'updated': '2026-04-01',
+    },
+    'CM': {
+        'tier': 'MINOR_CONFLICT',
+        'conflict': 'Anglophone Crisis / Boko Haram spillover',
+        'parties': ['Cameroon govt', 'Ambazonia forces', 'Boko Haram'],
+        'since': '2017-10-01',
+        'updated': '2026-04-01',
     },
 
     # --- SKIRMISHES (<100 deaths/year, low-intensity) ---
