@@ -1440,39 +1440,58 @@ def _fetch_reserves():
         logger.warning(f"IMF IRFCL fetch failed: {e}")
 
     # ── Merge: IFS base + IRFCL overlay ─────────────────────────────
-    # Collect all country codes (union of both sources)
-    all_codes = set(ifs_total) | set(irfcl_total)
-    if not all_codes:
+    # Normalize all country codes to ISO3 first, so IFS ('CN') and
+    # IRFCL ('CHN') merge into one entry instead of creating duplicates.
+    def _to_iso3(code):
+        code = (code or '').strip().upper()
+        if len(code) == 2:
+            return ISO2_TO_ISO3.get(code)
+        if len(code) == 3 and code.isalpha():
+            return code
+        return None
+
+    def _normalize(by_country):
+        out = {}
+        for code, periods in by_country.items():
+            iso3 = _to_iso3(code)
+            if not iso3:
+                continue
+            if iso3 in out:
+                out[iso3].update(periods)
+            else:
+                out[iso3] = dict(periods)
+        return out
+
+    ifs_total_n = _normalize(ifs_total)
+    ifs_fx_n = _normalize(ifs_fx)
+    irfcl_total_n = _normalize(irfcl_total)
+    irfcl_fx_n = _normalize(irfcl_fx)
+
+    all_iso3 = set(ifs_total_n) | set(irfcl_total_n)
+    if not all_iso3:
         logger.warning("Both IFS and IRFCL returned no data — falling back to World Bank")
         return _fetch_reserves_wb()
 
     merged_total = {}
     merged_fx = {}
 
-    for code in all_codes:
-        # Start with IFS history (dense), then overlay IRFCL (current)
+    for iso3 in all_iso3:
+        # IFS first (dense history), then IRFCL overlay (current)
         periods_total = {}
-        if code in ifs_total:
-            periods_total.update(ifs_total[code])
-        # ISO2 ↔ ISO3 bridge: IRFCL uses ISO3, IFS uses ISO2
-        iso3 = ISO2_TO_ISO3.get(code, code) if len(code) == 2 else code
-        iso2 = next((k for k, v in ISO2_TO_ISO3.items() if v == code), code) if len(code) == 3 else code
-        for irfcl_code in (code, iso3, iso2):
-            if irfcl_code in irfcl_total:
-                periods_total.update(irfcl_total[irfcl_code])
-                break
+        if iso3 in ifs_total_n:
+            periods_total.update(ifs_total_n[iso3])
+        if iso3 in irfcl_total_n:
+            periods_total.update(irfcl_total_n[iso3])
         if periods_total:
-            merged_total[code] = periods_total
+            merged_total[iso3] = periods_total
 
         periods_fx = {}
-        if code in ifs_fx:
-            periods_fx.update(ifs_fx[code])
-        for irfcl_code in (code, iso3, iso2):
-            if irfcl_code in irfcl_fx:
-                periods_fx.update(irfcl_fx[irfcl_code])
-                break
+        if iso3 in ifs_fx_n:
+            periods_fx.update(ifs_fx_n[iso3])
+        if iso3 in irfcl_fx_n:
+            periods_fx.update(irfcl_fx_n[iso3])
         if periods_fx:
-            merged_fx[code] = periods_fx
+            merged_fx[iso3] = periods_fx
 
     source_parts = []
     if ifs_total:
