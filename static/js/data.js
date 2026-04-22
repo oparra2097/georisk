@@ -277,8 +277,11 @@
                 '</select>';
         }
         if (ds.controls.includes('scenario')) {
+            // Initial placeholder — populateScenarioDropdown replaces this
+            // with the group-specific scenario list once data loads.
             html += '<select id="ctrl-scenario" class="data-select">' +
-                '<option value="All"' + (state.scenario === 'All' ? ' selected' : '') + '>All Scenarios</option>' +
+                '<option value="' + (state.scenario || 'Base') + '" selected>' +
+                (state.scenario || 'Base') + '</option>' +
                 '</select>';
         }
         if (ds.controls.includes('comm-freq')) {
@@ -1095,11 +1098,9 @@
         if (!group) return;
         const order = group.scenario_order || [];
         sel.innerHTML = '';
-        // "All Scenarios" option shows every scenario line on the overview
-        const allOpt = document.createElement('option');
-        allOpt.value = 'All'; allOpt.textContent = 'All Scenarios';
-        if (state.scenario === 'All') allOpt.selected = true;
-        sel.appendChild(allOpt);
+        // Scenarios-only dropdown (no 'All' mode): user picks exactly one
+        // scenario line to display on the overview. Default is the group's
+        // base scenario.
         order.forEach(sc => {
             if (sc === 'Actual') return;
             const opt = document.createElement('option');
@@ -1107,13 +1108,15 @@
             if (state.scenario === sc) opt.selected = true;
             sel.appendChild(opt);
         });
-        // If the persisted state.scenario is no longer a valid option
-        // (e.g. legacy 'Weighted Avg' from localStorage / URL), force
-        // the dropdown + state back to 'All' so the filter still works.
+        // Pick a sensible fallback when the persisted state.scenario isn't
+        // in this group's order (legacy 'Weighted Avg' / 'All' from
+        // localStorage, or a group that uses 'Base Case' vs 'Base').
         const validValues = Array.from(sel.options).map(o => o.value);
         if (!validValues.includes(state.scenario)) {
-            state.scenario = 'All';
-            sel.value = 'All';
+            const baseScenario = order.find(sc => sc === 'Base Case' || sc === 'Base')
+                || validValues[0] || 'Base';
+            state.scenario = baseScenario;
+            sel.value = baseScenario;
         }
     }
 
@@ -1259,11 +1262,26 @@
                         borderDash: [],
                         fill: false, pointRadius: 0, pointHitRadius: 8,
                         pointBackgroundColor: lineColor, pointBorderColor: lineColor, tension: 0.3,
+                        // Metals overview: Copper (~$5/lb) and Silver (~$50/oz)
+                        // sit on a secondary axis so they aren't dwarfed by
+                        // Gold (~$4000/oz), Aluminum (~$2600/MT), Platinum.
+                        yAxisID: (groupName === 'Metals' && (name === 'Copper' || name === 'Silver'))
+                            ? 'y1' : 'y',
                         segment: forecastStartIdx > 0 ? {
                             borderDash: ctx2 => ctx2.p0DataIndex >= forecastStartIdx - 1 ? [4, 3] : [],
                         } : undefined,
                     });
                 });
+            });
+        }
+
+        // Also tag yearly-mode datasets (built earlier) with yAxisIDs.
+        if (commFreq === 'yearly') {
+            chartDatasets.forEach(ds => {
+                if (ds.yAxisID) return;
+                const commodity = (ds.label || '').split(' (')[0];
+                ds.yAxisID = (groupName === 'Metals' && (commodity === 'Copper' || commodity === 'Silver'))
+                    ? 'y1' : 'y';
             });
         }
 
@@ -1305,26 +1323,43 @@
                         }
                     }
                 },
-                scales: {
-                    x: {
-                        type: 'category',
-                        ticks: {
-                            color: (tickCtx) => {
-                                if (chartIsForecast(tickCtx.index)) return '#6b7280';
-                                return '#9ca3af';
+                scales: (() => {
+                    const base = {
+                        x: {
+                            type: 'category',
+                            ticks: {
+                                color: (tickCtx) => {
+                                    if (chartIsForecast(tickCtx.index)) return '#6b7280';
+                                    return '#9ca3af';
+                                },
+                                font: { size: 11 },
+                                maxRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: commFreq === 'yearly' ? 15 : 20,
                             },
-                            font: { size: 11 },
-                            maxRotation: 45,
-                            autoSkip: true,
-                            maxTicksLimit: commFreq === 'yearly' ? 15 : 20,
+                            grid: { color: 'rgba(55,65,81,0.3)' },
                         },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
-                    },
-                    y: {
-                        ticks: { color: '#6b7280', font: { size: 10 } },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            ticks: { color: '#6b7280', font: { size: 10 } },
+                            grid: { color: 'rgba(55,65,81,0.3)' },
+                            title: groupName === 'Metals'
+                                ? { display: true, text: 'Gold / Platinum / Aluminum', color: '#6b7280', font: { size: 10 } }
+                                : undefined,
+                        },
+                    };
+                    if (groupName === 'Metals') {
+                        base.y1 = {
+                            type: 'linear',
+                            position: 'right',
+                            ticks: { color: '#a78bfa', font: { size: 10 } },
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'Copper / Silver', color: '#a78bfa', font: { size: 10 } },
+                        };
                     }
-                }
+                    return base;
+                })(),
             },
         }));
 
