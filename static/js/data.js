@@ -336,7 +336,11 @@
         bind('ctrl-region', v => { state.region = v; });
         bind('ctrl-reserve-type', v => { state.reserveType = v; });
         bind('ctrl-ins-region', v => { state.insRegion = v; });
-        bind('ctrl-em-universe', v => { state.emUniverse = v; });
+        bind('ctrl-em-universe', v => {
+            state.emUniverse = v;
+            // Re-entering "custom" after leaving it should re-seed defaults.
+            if (v !== 'custom') state.emCustomTouched = false;
+        });
     }
 
     // ══════════════════════════════════════════════════════
@@ -3621,8 +3625,15 @@
     function _emSelectedISO(data) {
         const mode = state.emUniverse || 'em40';
         const all = data.countries || {};
-        if (mode === 'custom' && state.countries && state.countries.length) {
-            return state.countries.filter(i => all[i]);
+        if (mode === 'custom') {
+            // Once the user has touched the custom picker, respect their
+            // exact selection — including an empty list (don't fall back).
+            if (state.emCustomTouched) {
+                return (state.countries || []).filter(i => all[i]);
+            }
+            if (state.countries && state.countries.length) {
+                return state.countries.filter(i => all[i]);
+            }
         }
         if (mode === 'all') {
             return Object.keys(all);
@@ -3653,12 +3664,25 @@
         // Pick countries to plot
         const allCountries = data.countries;
         let selected = _emSelectedISO(data);
-        // Drop any country missing the reserves/ST debt ratio (can't place on X axis)
-        const plottable = selected.filter(iso => {
+        // Need at least the basic-balance value to place a Y coord. Countries
+        // without a reserves/ST-debt ratio (typically advanced economies — WB
+        // doesn't collect short-term external debt for them) get plotted at
+        // the chart's right edge with a tooltip note.
+        const plottableWithRatio = selected.filter(iso => {
             const c = allCountries[iso];
             return c && c.reserves_to_st_debt_pct != null && c.basic_balance_pct_gdp != null;
         });
+        const plottableNoRatio = selected.filter(iso => {
+            const c = allCountries[iso];
+            return c && c.reserves_to_st_debt_pct == null && c.basic_balance_pct_gdp != null;
+        });
+        const plottable = plottableWithRatio.concat(plottableNoRatio);
         const missing = selected.length - plottable.length;
+        const ratiosShown = plottableWithRatio
+            .map(i => allCountries[i].reserves_to_st_debt_pct)
+            .filter(v => v != null && v > 0);
+        const maxRatio = ratiosShown.length ? Math.max(...ratiosShown) : 300;
+        const fallbackX = Math.max(maxRatio * 1.1, 500);
 
         // Bubble scaling — radius proportional to sqrt(GDP) so that area ~ GDP
         const gdpValues = plottable.map(i => allCountries[i].gdp_usd || 0).filter(v => v > 0);
@@ -3680,8 +3704,9 @@
 
         function pointFor(iso) {
             const c = allCountries[iso];
+            const ratio = c.reserves_to_st_debt_pct;
             return {
-                x: c.reserves_to_st_debt_pct,
+                x: ratio != null ? ratio : fallbackX,
                 y: c.basic_balance_pct_gdp,
                 r: radiusFor(c.gdp_usd),
                 iso: iso,
@@ -3689,7 +3714,8 @@
                 ca: c.ca_pct_gdp,
                 fdi: c.fdi_pct_gdp,
                 basic: c.basic_balance_pct_gdp,
-                ratio: c.reserves_to_st_debt_pct,
+                ratio: ratio,
+                ratioMissing: ratio == null,
                 gdp: c.gdp_usd,
                 reserves: c.reserves_usd,
                 stDebt: c.st_debt_usd,
@@ -3797,7 +3823,7 @@
                                 const lines = [];
                                 lines.push('Basic Balance: ' + (p.basic != null ? p.basic.toFixed(2) : '—') + '% GDP');
                                 lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
-                                lines.push('Reserves / ST Debt: ' + (p.ratio != null ? p.ratio.toFixed(0) + '%' : '—'));
+                                lines.push('Reserves / ST Debt: ' + (p.ratio != null ? p.ratio.toFixed(0) + '%' : 'N/A — plotted at chart edge'));
                                 lines.push('Reserves: ' + _emFormatUsd(p.reserves));
                                 lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt));
                                 lines.push('GDP: ' + _emFormatUsd(p.gdp) + '  ·  Year: ' + (p.year || '—'));
@@ -3892,7 +3918,8 @@
             const parts = [];
             if (m.source) parts.push(m.source);
             parts.push(plottable.length + ' countries plotted');
-            if (missing > 0) parts.push(missing + ' selected w/o short-term debt data');
+            if (plottableNoRatio.length > 0) parts.push(plottableNoRatio.length + ' at chart edge (no ST debt data)');
+            if (missing > 0) parts.push(missing + ' selected w/o basic balance');
             if (m.latest_data_year) parts.push('Latest year: ' + m.latest_data_year);
             if (m.last_updated) parts.push('Updated: ' + m.last_updated);
             metaEl.textContent = parts.join(' · ');
@@ -3939,8 +3966,9 @@
 
         if (mode !== 'custom') return;
 
-        // Seed state.countries with defaults if empty
-        if (!state.countries || state.countries.length === 0) {
+        // Seed state.countries with defaults the first time the picker opens,
+        // but never override a deliberate empty list (the Clear button).
+        if (!state.emCustomTouched && (!state.countries || state.countries.length === 0)) {
             state.countries = (data.default_em_countries || []).slice();
         }
 
@@ -3974,6 +4002,7 @@
             const set = new Set(state.countries);
             if (t.checked) set.add(iso); else set.delete(iso);
             state.countries = Array.from(set);
+            state.emCustomTouched = true;
             PD.pushState();
             renderCurrentDataset();
         });
@@ -3986,16 +4015,19 @@
         const bClr = document.getElementById('em-vuln-selclear');
         if (bSelAll) bSelAll.addEventListener('click', () => {
             state.countries = Object.keys(allCountries);
+            state.emCustomTouched = true;
             PD.pushState();
             renderCurrentDataset();
         });
         if (bEm) bEm.addEventListener('click', () => {
             state.countries = (data.default_em_countries || []).slice();
+            state.emCustomTouched = true;
             PD.pushState();
             renderCurrentDataset();
         });
         if (bClr) bClr.addEventListener('click', () => {
             state.countries = [];
+            state.emCustomTouched = true;
             PD.pushState();
             renderCurrentDataset();
         });
