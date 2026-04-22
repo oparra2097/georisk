@@ -1439,9 +1439,15 @@
         const summary = document.getElementById('panel-summary');
         if (summary) {
             summary.innerHTML =
-                '<button class="methodology-btn" onclick="window.openMethodology(\'' +
-                commodityName.replace(/'/g, "\\'") +
-                '\')">View methodology →</button>';
+                '<div class="forecast-cta-row">' +
+                  '<button class="methodology-btn" onclick="window.openMethodology(\'' +
+                    commodityName.replace(/'/g, "\\'") +
+                  '\')">View methodology →</button>' +
+                  '<button class="scenario-btn" onclick="window.toggleScenarioPanel(\'' +
+                    commodityName.replace(/'/g, "\\'") +
+                  '\')">Build scenario →</button>' +
+                '</div>' +
+                '<div id="panel-scenario-container"></div>';
         }
 
         // ── Chart ──
@@ -4169,5 +4175,363 @@
         if (overlay) overlay.style.display = 'none';
     }
     window.openMethodology = openMethodology;
+
+
+    // ══════════════════════════════════════════════════════
+    // Scenario builder — interactive shock sliders per commodity
+    // ══════════════════════════════════════════════════════
+
+    // In-memory per-commodity scenario state. Schema:
+    //   { shocks: {id: magnitude}, catalogue: [...], lastForecast: {...} }
+    const scenarioState = {};
+
+    // Debounced per-commodity fetch so quick slider drags coalesce.
+    const scenarioDebouncers = {};
+
+    function scenarioLocalKey(commodity) {
+        return 'parra.scenario.' + commodity;
+    }
+
+    function loadScenarioFromStorage(commodity) {
+        try {
+            const raw = localStorage.getItem(scenarioLocalKey(commodity));
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return (parsed && parsed.shocks && typeof parsed.shocks === 'object') ? parsed : null;
+        } catch (_) { return null; }
+    }
+
+    function saveScenarioToStorage(commodity, shocks) {
+        try {
+            const hasAny = Object.values(shocks || {}).some(v => Number(v) !== 0);
+            if (!hasAny) {
+                localStorage.removeItem(scenarioLocalKey(commodity));
+                return;
+            }
+            localStorage.setItem(scenarioLocalKey(commodity), JSON.stringify({
+                shocks: shocks, saved_at: new Date().toISOString()
+            }));
+        } catch (_) { /* ignore quota / private-mode errors */ }
+    }
+
+    function scenarioFromUrl(commodity) {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const enc = params.get('scenario');
+            if (!enc) return null;
+            const parsed = JSON.parse(atob(enc.replace(/-/g, '+').replace(/_/g, '/')));
+            if (parsed && parsed.commodity === commodity && parsed.shocks) {
+                return { shocks: parsed.shocks };
+            }
+        } catch (_) { /* ignore bad base64 */ }
+        return null;
+    }
+
+    function scenarioBuildShareUrl(commodity, shocks) {
+        const hasAny = Object.values(shocks || {}).some(v => Number(v) !== 0);
+        const url = new URL(window.location.href);
+        if (!hasAny) {
+            url.searchParams.delete('scenario');
+        } else {
+            const json = JSON.stringify({ commodity: commodity, shocks: shocks });
+            const enc = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            url.searchParams.set('scenario', enc);
+        }
+        return url.toString();
+    }
+
+    function collectShocksArray(state) {
+        return Object.entries(state.shocks || {})
+            .filter(([_, v]) => Number(v) !== 0)
+            .map(([id, v]) => ({ id: id, magnitude: Number(v) }));
+    }
+
+    // ── Chart overlay ─────────────────────────────────────────────────
+
+    // Adds / refreshes three overlay datasets on the commodity chart:
+    // scenario p2.5, p50, p97.5. Removes them cleanly when shocks reset.
+    const SCENARIO_DATASET_PREFIX = '_scenario:';
+
+    function removeScenarioDatasets() {
+        const chart = PD.charts.main;
+        if (!chart || !chart.data) return;
+        chart.data.datasets = chart.data.datasets.filter(
+            ds => !(ds.label && ds.label.indexOf(SCENARIO_DATASET_PREFIX) === 0)
+        );
+        try { chart.update('none'); } catch (_) { chart.update(); }
+    }
+
+    function applyScenarioToChart(commodityName, scenarioForecast) {
+        const chart = PD.charts.main;
+        if (!chart || !chart.data) return;
+
+        // Remove any prior scenario overlays
+        chart.data.datasets = chart.data.datasets.filter(
+            ds => !(ds.label && ds.label.indexOf(SCENARIO_DATASET_PREFIX) === 0)
+        );
+        if (!scenarioForecast) {
+            try { chart.update('none'); } catch (_) { chart.update(); }
+            return;
+        }
+
+        const labels = chart.data.labels || [];
+        // Scenario forecast is keyed Q+1..Q+4; its entries carry a `label` like 'Q3 2026'.
+        // Map to the chart's x-axis by walking forecast-typed labels in order.
+        const forecastQuarterKeys = ['Q+1', 'Q+2', 'Q+3', 'Q+4'];
+        const scenarioQuarters = forecastQuarterKeys
+            .map(k => scenarioForecast[k])
+            .filter(Boolean);
+        // Identify chart indices that correspond to forecast quarters (the last N).
+        const nForecasts = scenarioQuarters.length;
+        const forecastIndices = labels.slice(-nForecasts).map((_, i) => labels.length - nForecasts + i);
+
+        const medianData = new Array(labels.length).fill(null);
+        const lowData    = new Array(labels.length).fill(null);
+        const highData   = new Array(labels.length).fill(null);
+        forecastIndices.forEach((idx, i) => {
+            const q = scenarioQuarters[i];
+            if (!q) return;
+            medianData[idx] = q.median;
+            lowData[idx]    = q.p2_5;
+            highData[idx]   = q.p97_5;
+        });
+        // Anchor line at the last non-forecast point so it's visually continuous
+        const anchorIdx = (labels.length - nForecasts) - 1;
+        if (anchorIdx >= 0 && chart.data.datasets.length > 0) {
+            const baseline = chart.data.datasets.find(ds => ds.label === 'Historical') || chart.data.datasets[0];
+            if (baseline && baseline.data && baseline.data[anchorIdx] != null) {
+                medianData[anchorIdx] = baseline.data[anchorIdx];
+                lowData[anchorIdx]    = baseline.data[anchorIdx];
+                highData[anchorIdx]   = baseline.data[anchorIdx];
+            }
+        }
+
+        const purple = '#a78bfa';
+        chart.data.datasets.push({
+            label: SCENARIO_DATASET_PREFIX + 'p97.5',
+            data: highData,
+            borderColor: purple + '88', borderWidth: 1, borderDash: [4, 4],
+            fill: false, pointRadius: 0, pointHitRadius: 6, tension: 0.3, spanGaps: true,
+        });
+        chart.data.datasets.push({
+            label: SCENARIO_DATASET_PREFIX + 'median',
+            data: medianData,
+            borderColor: purple, backgroundColor: purple + '22', borderWidth: 3,
+            fill: false, pointRadius: 5, pointHitRadius: 8,
+            pointBackgroundColor: purple, pointBorderColor: purple,
+            tension: 0.3, spanGaps: true,
+        });
+        chart.data.datasets.push({
+            label: SCENARIO_DATASET_PREFIX + 'p2.5',
+            data: lowData,
+            borderColor: purple + '88', borderWidth: 1, borderDash: [4, 4],
+            fill: '-2', backgroundColor: purple + '18',
+            pointRadius: 0, pointHitRadius: 6, tension: 0.3, spanGaps: true,
+        });
+        try { chart.update('none'); } catch (_) { chart.update(); }
+    }
+
+    // ── API plumbing ─────────────────────────────────────────────────
+
+    function fetchCatalogue(commodity) {
+        const url = '/api/forecasts/shocks/' + encodeURIComponent(commodity);
+        const cached = PD.getCached(url);
+        if (cached) return Promise.resolve(cached);
+        return fetch(url).then(r => r.json()).then(j => {
+            PD.setCached(url, j);
+            return j;
+        });
+    }
+
+    function postScenario(commodity, shocks) {
+        return fetch('/api/forecasts/scenario', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commodity: commodity, shocks: shocks }),
+        }).then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j)));
+    }
+
+    function scheduleScenarioUpdate(commodity) {
+        if (scenarioDebouncers[commodity]) clearTimeout(scenarioDebouncers[commodity]);
+        scenarioDebouncers[commodity] = setTimeout(() => {
+            runScenarioUpdate(commodity);
+        }, 250);
+    }
+
+    function runScenarioUpdate(commodity) {
+        const state = scenarioState[commodity];
+        if (!state) return;
+        const shocks = collectShocksArray(state);
+        const container = document.getElementById('panel-scenario-container');
+        const statusEl = container ? container.querySelector('.scenario-status') : null;
+
+        if (shocks.length === 0) {
+            // No shocks active → clear overlay
+            applyScenarioToChart(commodity, null);
+            state.lastForecast = null;
+            saveScenarioToStorage(commodity, {});
+            if (statusEl) statusEl.textContent = 'Baseline forecast (no shocks applied).';
+            updateShareButton(commodity);
+            return;
+        }
+
+        if (statusEl) statusEl.textContent = 'Computing scenario…';
+        postScenario(commodity, shocks)
+            .then(j => {
+                state.lastForecast = j.forecast;
+                applyScenarioToChart(commodity, j.forecast);
+                saveScenarioToStorage(commodity, state.shocks);
+                updateShareButton(commodity);
+                if (statusEl) {
+                    const names = shocks.map(s => s.id + '=' + s.magnitude).join(', ');
+                    statusEl.textContent = 'Active: ' + names;
+                }
+            })
+            .catch(err => {
+                if (statusEl) statusEl.textContent = 'Scenario failed: ' +
+                    (err && err.error ? err.error : 'network error');
+            });
+    }
+
+    function updateShareButton(commodity) {
+        const btn = document.getElementById('scenario-share-btn');
+        if (!btn) return;
+        const state = scenarioState[commodity] || { shocks: {} };
+        const anyActive = Object.values(state.shocks).some(v => Number(v) !== 0);
+        btn.disabled = !anyActive;
+        btn.textContent = anyActive ? 'Copy share link' : 'No shocks to share';
+    }
+
+    // ── Slider rendering ─────────────────────────────────────────────
+
+    function renderSlider(shock, currentValue) {
+        const safeId = 'scn-' + shock.id.replace(/[^a-z0-9]/gi, '-');
+        const v = currentValue != null ? currentValue : (shock.default || 0);
+        return (
+            '<div class="scenario-row" data-shock-id="' + shock.id + '">' +
+              '<div class="scenario-row-head">' +
+                '<label for="' + safeId + '"><strong>' + shock.name + '</strong>' +
+                  '<span class="scenario-unit">' + (shock.unit || '') + '</span>' +
+                '</label>' +
+                '<output class="scenario-value" id="' + safeId + '-out">' + v + '</output>' +
+              '</div>' +
+              '<input type="range" id="' + safeId + '" ' +
+                    'min="' + shock.min + '" max="' + shock.max + '" ' +
+                    'step="' + shock.step + '" value="' + v + '" ' +
+                    'data-shock-id="' + shock.id + '">' +
+              '<div class="scenario-note">' + (shock.note || '') + '</div>' +
+            '</div>'
+        );
+    }
+
+    function renderScenarioPanelHtml(commodity, catalogue, state) {
+        if (!catalogue || !catalogue.length) {
+            return '<div class="scenario-empty">No scenario levers defined for ' + commodity + ' yet.</div>';
+        }
+        const sliders = catalogue.map(s => renderSlider(s, state.shocks[s.id])).join('');
+        return (
+            '<div class="scenario-panel-header">' +
+              '<div class="scenario-title">What-if scenario</div>' +
+              '<div class="scenario-actions">' +
+                '<button class="scenario-btn-ghost" id="scenario-reset-btn">Reset</button>' +
+                '<button class="scenario-btn-ghost" id="scenario-share-btn" disabled>No shocks to share</button>' +
+                '<button class="scenario-btn-ghost" id="scenario-close-btn">Close ×</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="scenario-status">Baseline forecast (no shocks applied).</div>' +
+            '<div class="scenario-grid">' + sliders + '</div>' +
+            '<div class="scenario-footer">Shocks apply an elasticity-based price multiplier with ' +
+              'geometric per-quarter decay. Purple band on the chart is the scenario forecast (p2.5/p50/p97.5).</div>'
+        );
+    }
+
+    function attachScenarioHandlers(commodity) {
+        const container = document.getElementById('panel-scenario-container');
+        if (!container) return;
+        const state = scenarioState[commodity];
+
+        container.querySelectorAll('input[type="range"]').forEach(input => {
+            const shockId = input.dataset.shockId;
+            const out = container.querySelector('#' + input.id + '-out');
+            input.addEventListener('input', () => {
+                const val = Number(input.value);
+                if (out) out.textContent = val;
+                state.shocks[shockId] = val;
+                scheduleScenarioUpdate(commodity);
+            });
+        });
+
+        const resetBtn = container.querySelector('#scenario-reset-btn');
+        if (resetBtn) resetBtn.addEventListener('click', () => {
+            state.shocks = {};
+            container.querySelectorAll('input[type="range"]').forEach(inp => {
+                const sid = inp.dataset.shockId;
+                const spec = state.catalogue.find(s => s.id === sid);
+                const def = spec ? (spec.default || 0) : 0;
+                inp.value = def;
+                const out = container.querySelector('#' + inp.id + '-out');
+                if (out) out.textContent = def;
+            });
+            runScenarioUpdate(commodity);
+        });
+
+        const shareBtn = container.querySelector('#scenario-share-btn');
+        if (shareBtn) shareBtn.addEventListener('click', () => {
+            const url = scenarioBuildShareUrl(commodity, state.shocks);
+            navigator.clipboard.writeText(url).then(() => {
+                shareBtn.textContent = 'Copied!';
+                setTimeout(() => updateShareButton(commodity), 1500);
+            }).catch(() => {
+                shareBtn.textContent = 'Copy failed';
+                setTimeout(() => updateShareButton(commodity), 1500);
+            });
+        });
+
+        const closeBtn = container.querySelector('#scenario-close-btn');
+        if (closeBtn) closeBtn.addEventListener('click', () => {
+            container.innerHTML = '';
+            removeScenarioDatasets();
+        });
+    }
+
+    function toggleScenarioPanel(commodity) {
+        const container = document.getElementById('panel-scenario-container');
+        if (!container) return;
+        // If already open for this commodity, close it
+        if (container.dataset.commodity === commodity && container.childElementCount > 0) {
+            container.innerHTML = '';
+            container.removeAttribute('data-commodity');
+            removeScenarioDatasets();
+            return;
+        }
+
+        container.innerHTML = '<div class="scenario-loading">Loading scenario levers…</div>';
+        container.dataset.commodity = commodity;
+
+        // Initial state: URL > localStorage > empty
+        const fromUrl     = scenarioFromUrl(commodity);
+        const fromStorage = loadScenarioFromStorage(commodity);
+        const initialShocks = (fromUrl && fromUrl.shocks) || (fromStorage && fromStorage.shocks) || {};
+
+        fetchCatalogue(commodity).then(j => {
+            const catalogue = (j && j.shocks) || [];
+            scenarioState[commodity] = {
+                shocks: Object.assign({}, initialShocks),
+                catalogue: catalogue,
+                lastForecast: null,
+            };
+            container.innerHTML = renderScenarioPanelHtml(commodity, catalogue, scenarioState[commodity]);
+            attachScenarioHandlers(commodity);
+            if (Object.values(scenarioState[commodity].shocks).some(v => Number(v) !== 0)) {
+                runScenarioUpdate(commodity);
+            } else {
+                updateShareButton(commodity);
+            }
+        }).catch(() => {
+            container.innerHTML = '<div class="scenario-empty">Failed to load scenario levers.</div>';
+        });
+    }
+
+    window.toggleScenarioPanel = toggleScenarioPanel;
 
 })();
