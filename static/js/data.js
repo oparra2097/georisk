@@ -3772,6 +3772,7 @@
                 reservesSource: c.reserves_source,
                 reservesPeriod: c.reserves_period,
                 stDebt: c.st_debt_usd,
+                stDebtYear: c.st_debt_year,
                 year: c.year,
                 isEm: !!c.is_em,
             };
@@ -3885,7 +3886,8 @@
                                     ? ' (IFS ' + p.reservesPeriod + ')'
                                     : '';
                                 lines.push('Reserves: ' + _emFormatUsd(p.reserves) + resvTag);
-                                lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt));
+                                const stTag = p.stDebtYear ? ' (' + p.stDebtYear + ')' : '';
+                                lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt) + stTag);
                                 lines.push('GDP: ' + _emFormatUsd(p.gdp) + '  ·  Year: ' + (p.year || '—'));
                                 return lines;
                             },
