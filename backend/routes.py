@@ -1233,31 +1233,85 @@ def diagnose_em_vulnerability():
         except Exception as e:
             result['step2_indicators_with_short'][source_id] = {'error': str(e)}
 
-    # Step 3: correct URL form is /country/{iso}/indicator/{code}?source={id}.
-    # Probe the best candidate (DT.DOD.DECT.CD.ST.US = "All Sectors, Short-
-    # term, All instruments, USD") across the QEDS sources + keep the older
-    # WDI-style code as a control so we can see which returns values.
-    for probe in [
+    # Step 3: country/all URL pattern — this is what the real fetcher uses.
+    # Single-country URLs are rejected by source=22 ("Invalid value"), but
+    # country/all might work. Count records and check whether CHL/MYS land.
+    result['step3_chile_sample'] = {}
+    for source_id, ind in (
         ('22', 'DT.DOD.DECT.CD.ST.US'),
         ('23', 'DT.DOD.DECT.CD.ST.US'),
-        ('22', 'DT.DOD.DSTC.CD'),
-        ('6',  'DT.DOD.DSTC.CD'),
-    ]:
-        source_id, ind = probe
-        for iso in ('CHL', 'MYS'):
-            try:
-                r = requests.get(
-                    f'https://api.worldbank.org/v2/country/{iso}/indicator/{ind}'
-                    f'?format=json&mrv=5&source={source_id}',
-                    timeout=30,
-                )
-                doc = r.json() if r.ok else None
-                result['step3_chile_sample'][f'{source_id}/{ind}/{iso}'] = {
-                    'http': r.status_code,
-                    'body_head': str(doc)[:600] if doc else r.text[:200],
-                }
-            except Exception as e:
-                result['step3_chile_sample'][f'{source_id}/{ind}/{iso}'] = {'error': str(e)}
+        ('22', 'DT.DOD.DECT.CD.ST.TD.NV.US'),
+        ('22', 'DT.DOD.CDST.CD.PU.AR.US'),
+    ):
+        try:
+            r = requests.get(
+                f'https://api.worldbank.org/v2/country/all/indicator/{ind}'
+                f'?format=json&mrv=4&source={source_id}&per_page=20000',
+                timeout=45,
+            )
+            doc = r.json() if r.ok else None
+            records = doc[1] if isinstance(doc, list) and len(doc) > 1 and doc[1] else []
+            iso_set = {rec.get('countryiso3code') for rec in records if isinstance(rec, dict)}
+            chl = [rec for rec in records if isinstance(rec, dict) and rec.get('countryiso3code') == 'CHL']
+            mys = [rec for rec in records if isinstance(rec, dict) and rec.get('countryiso3code') == 'MYS']
+            result['step3_chile_sample'][f'{source_id}/{ind}'] = {
+                'http': r.status_code,
+                'total_records': len(records),
+                'unique_isos': len(iso_set),
+                'sample_isos': sorted(list(iso_set))[:10],
+                'chile': chl[:2] if chl else 'NOT FOUND',
+                'malaysia': mys[:2] if mys else 'NOT FOUND',
+            }
+        except Exception as e:
+            result['step3_chile_sample'][f'{source_id}/{ind}'] = {'error': str(e)}
+
+    # Step 4: DBnomics WB/QDS mirror — 228K QEDS series in one dataset.
+    # Enumerate the dataset's dimensions and fetch a Chile sample.
+    result['step4_dbnomics_qds'] = {}
+    try:
+        r = requests.get(
+            'https://api.db.nomics.world/v22/datasets/WB/QDS',
+            timeout=30,
+        )
+        if r.ok:
+            doc = r.json()
+            ds = doc.get('dataset', {})
+            dims = ds.get('dimensions_codes_order', [])
+            dim_labels = ds.get('dimensions_labels', {})
+            dim_values = {}
+            for dim_code in dims:
+                vals = (ds.get('dimensions_values_labels', {}) or {}).get(dim_code, {})
+                dim_values[dim_code] = dict(list(vals.items())[:12]) if isinstance(vals, dict) else vals
+            result['step4_dbnomics_qds']['catalog'] = {
+                'dimensions_order': dims,
+                'dimensions_labels': dim_labels,
+                'dimension_values_sample': dim_values,
+                'nb_series': ds.get('nb_series'),
+            }
+    except Exception as e:
+        result['step4_dbnomics_qds']['catalog_error'] = str(e)
+
+    # Try a broad Chile query
+    try:
+        r = requests.get(
+            'https://api.db.nomics.world/v22/series/WB/QDS',
+            params={
+                'dimensions': '{"Country":["CHL"]}',
+                'limit': '50',
+                'observations': '0',
+                'metadata': 'false',
+            },
+            timeout=45,
+        )
+        if r.ok:
+            doc = r.json()
+            docs = doc.get('series', {}).get('docs', [])
+            result['step4_dbnomics_qds']['chile_sample_series_names'] = [
+                d.get('series_name', '')[:120] for d in docs[:20]
+            ]
+            result['step4_dbnomics_qds']['chile_total_series'] = doc.get('series', {}).get('num_found')
+    except Exception as e:
+        result['step4_dbnomics_qds']['chile_error'] = str(e)
 
     return jsonify(result)
 
