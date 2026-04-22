@@ -516,7 +516,13 @@ def _fetch_eurostat_lci():
 CONSTRUCTION_OPI_URL = 'https://www.ons.gov.uk/file?uri=/businessindustryandtrade/constructionindustry/datasets/interimconstructionoutputpriceindices/current/bulletindataset9.xlsx'
 
 def _fetch_construction_opi():
-    """Download ONS Construction OPI Excel and extract new work + R&M indices."""
+    """Download ONS Construction OPI Excel and extract new work + R&M indices.
+
+    The ONS file has monthly data on the 'All construction' sheet with columns
+    for 'All new work' and 'All repair and maintenance' index values.
+    Time periods are formatted as '2014 Jan', then 'Feb', 'Mar', etc.
+    (Only the first month of each year shows the year.)
+    """
     try:
         from openpyxl import load_workbook
 
@@ -526,65 +532,88 @@ def _fetch_construction_opi():
             return {}, {}
 
         wb = load_workbook(io.BytesIO(resp.content), data_only=True)
-        result = {}
 
-        # Try to find the data sheet — ONS names vary
+        # Find the 'All construction' sheet (has both new work + R&M columns)
         target_sheet = None
         for name in wb.sheetnames:
-            if 'data' in name.lower() or 'table' in name.lower() or 'index' in name.lower():
+            if 'all construction' in name.lower():
                 target_sheet = wb[name]
                 break
         if not target_sheet:
+            # Fallback: look for data/table/index sheet
+            for name in wb.sheetnames:
+                if 'data' in name.lower() or 'table' in name.lower() or 'index' in name.lower():
+                    target_sheet = wb[name]
+                    break
+        if not target_sheet:
             target_sheet = wb[wb.sheetnames[0]]
 
-        # Parse: look for "All New Work" and "All Repair and Maintenance" columns
-        # This is fragile — ONS may change layout. We do best-effort.
         ws = target_sheet
         header_row = None
         new_col = None
         repair_col = None
 
+        # Find header row with 'All new work' and 'All repair and maintenance'
         for row in ws.iter_rows(min_row=1, max_row=20, values_only=False):
             for cell in row:
-                val = str(cell.value or '').lower()
-                if 'all new work' in val:
+                val = str(cell.value or '').lower().replace('\n', ' ')
+                if 'all new work' in val and 'index' in val:
                     new_col = cell.column
                     header_row = cell.row
-                elif 'repair' in val and 'maintenance' in val:
+                elif 'all repair and maintenance' in val and 'index' in val:
                     repair_col = cell.column
-                    header_row = cell.row
+                    if not header_row:
+                        header_row = cell.row
 
         if not header_row:
             logger.warning("Construction OPI: could not find header row")
+            wb.close()
             return {}, {}
 
-        # Parse data rows (quarterly: "2024 Q1" format in first column)
+        # Parse monthly data rows
+        # Format: first row of year = "2014 Jan", subsequent months = "Feb", "Mar", etc.
+        month_names = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+        }
         new_points = []
         repair_points = []
-        q_map = {'Q1': 3, 'Q2': 6, 'Q3': 9, 'Q4': 12}
+        current_year = None
 
         for row in ws.iter_rows(min_row=header_row + 1, max_row=ws.max_row, values_only=False):
-            period_val = str(row[0].value or '')
-            parts = period_val.strip().split()
-            if len(parts) < 2 or parts[1] not in q_map:
+            period_val = str(row[0].value or '').strip()
+            if not period_val:
                 continue
-            try:
-                year = int(parts[0])
-                quarter = parts[1]
-                month = q_map[quarter]
-            except ValueError:
+
+            parts = period_val.split()
+            month = None
+
+            if len(parts) >= 2:
+                # "2014 Jan" format — year + month
+                try:
+                    current_year = int(parts[0])
+                    month = month_names.get(parts[1].lower()[:3])
+                except ValueError:
+                    continue
+            elif len(parts) == 1:
+                # "Feb" format — month only, use current_year
+                month = month_names.get(parts[0].lower()[:3])
+
+            if month is None or current_year is None:
                 continue
+
+            date_str = f'{current_year}-{str(month).zfill(2)}'
 
             if new_col:
                 try:
                     val = float(row[new_col - 1].value)
-                    new_points.append({'year': year, 'month': month, 'quarter': quarter, 'value': val, 'date': f'{year}-{quarter}'})
+                    new_points.append({'year': current_year, 'month': month, 'value': val, 'date': date_str})
                 except (ValueError, TypeError):
                     pass
             if repair_col:
                 try:
                     val = float(row[repair_col - 1].value)
-                    repair_points.append({'year': year, 'month': month, 'quarter': quarter, 'value': val, 'date': f'{year}-{quarter}'})
+                    repair_points.append({'year': current_year, 'month': month, 'value': val, 'date': date_str})
                 except (ValueError, TypeError):
                     pass
 
@@ -593,9 +622,11 @@ def _fetch_construction_opi():
         if new_points:
             raw_result['uk_opi_new'] = new_points
             yoy_result['uk_opi_new'] = _compute_yoy(new_points)
+            logger.info(f"Construction OPI: {len(new_points)} New Work points, {len(yoy_result.get('uk_opi_new', []))} YoY")
         if repair_points:
             raw_result['uk_opi_repair'] = repair_points
             yoy_result['uk_opi_repair'] = _compute_yoy(repair_points)
+            logger.info(f"Construction OPI: {len(repair_points)} R&M points, {len(yoy_result.get('uk_opi_repair', []))} YoY")
 
         wb.close()
         return yoy_result, raw_result
@@ -813,7 +844,7 @@ def _fetch_all():
 
     for key, info in all_defs.items():
         source = 'BLS' if key.startswith('us_') else ('ONS' if key.startswith('uk_') else 'Eurostat')
-        freq = 'Q' if key in EU_CONSTRUCTION or key in EU_LCI or key in ('uk_opi_new', 'uk_opi_repair') or key == 'uk_sppi_legal' else 'M'
+        freq = 'Q' if key in EU_CONSTRUCTION or key in EU_LCI or key == 'uk_sppi_legal' else 'M'
         meta = {
             'label': info.get('label', key),
             'color': info.get('color', '#94a3b8'),
