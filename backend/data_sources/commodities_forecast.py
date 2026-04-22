@@ -48,9 +48,8 @@ GROUP_SCENARIOS = {
             'Base Case':    '#3b82f6',
             'Severe Case':  '#f59e0b',
             'Worst Case':   '#ef4444',
-            'Weighted Avg': '#10b981',
         },
-        'scenario_order': ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'],
+        'scenario_order': ['Actual', 'Base Case', 'Severe Case', 'Worst Case'],
     },
     'Agriculture': {
         'weights': {
@@ -68,9 +67,8 @@ GROUP_SCENARIOS = {
             'Bear':         '#3b82f6',
             'Base':         '#10b981',
             'Bull':         '#ef4444',
-            'Weighted Avg': '#f59e0b',
         },
-        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull', 'Weighted Avg'],
+        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull'],
     },
     'Metals': {
         'weights': {
@@ -88,9 +86,8 @@ GROUP_SCENARIOS = {
             'Bear':         '#3b82f6',
             'Base':         '#10b981',
             'Bull':         '#ef4444',
-            'Weighted Avg': '#f59e0b',
         },
-        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull', 'Weighted Avg'],
+        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull'],
     },
 }
 
@@ -669,35 +666,6 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
         row['FY2'] = round(sum(fy2_parts) / len(fy2_parts), 2) if fy2_parts else None
 
         scenarios[scenario] = row
-
-    # ── Weighted average row (using group-specific weights) ──
-    weighted = {}
-    for label in labels:
-        val = 0.0
-        has_all = True
-        for sc, w in weights.items():
-            sc_val = scenarios.get(sc, {}).get(label)
-            if sc_val is not None:
-                val += w * sc_val
-            else:
-                has_all = False
-                break
-        weighted[label] = round(val, 2) if has_all else None
-
-    # FY and FY2 weighted averages
-    for fy_key in ('FY', 'FY2'):
-        fy_val = 0.0
-        fy_ok = True
-        for sc, w in weights.items():
-            sc_fy = scenarios.get(sc, {}).get(fy_key)
-            if sc_fy is not None:
-                fy_val += w * sc_fy
-            else:
-                fy_ok = False
-                break
-        weighted[fy_key] = round(fy_val, 2) if fy_ok else None
-
-    scenarios['Weighted Avg'] = weighted
 
     return scenarios, source, forward_curve
 
