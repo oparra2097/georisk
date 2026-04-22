@@ -957,11 +957,21 @@ def get_model_forecast(
     days_in_quarter: int = 90,
     driver_shifts: Optional[dict] = None,
     shocks: Optional[list] = None,
+    use_forward_curve: bool = True,
 ) -> Optional[dict]:
     """Public entry used by commodities_forecast.py integration.
 
     ``driver_shifts`` and ``shocks`` are passed through to
     ``CommodityModel.forecast``; see that docstring for the schema.
+
+    If ``use_forward_curve`` is True (default) and the commodity has a
+    forward curve adapter wired in ``forward_curve.CURVE_SPECS`` (currently
+    WTI / Brent / HH / TTF), the model's central tendency for each
+    forecast quarter is shrunk toward the curve-implied price using
+    horizon-weighted blending. Confidence bands widen to encompass both
+    the model envelope and the curve. The unmodified model output is
+    preserved alongside under the ``model_only`` key, and the curve itself
+    is exposed under ``forward_curve``.
     """
     model = get_or_fit(name)
     if model is None:
@@ -970,8 +980,22 @@ def get_model_forecast(
     if not forecast:
         return None
     nowcast_val = model.nowcast(qtd_mean, days_elapsed, days_in_quarter) if qtd_mean is not None else None
+
+    forward_curve = None
+    forecast_anchored = forecast
+    if use_forward_curve:
+        try:
+            from backend.data_sources import forward_curve as fc_mod
+            forward_curve = fc_mod.fetch_curve_quarterly(name, h=4)
+            if forward_curve:
+                forecast_anchored = fc_mod.shrink_to_curve(forecast, forward_curve)
+        except Exception as exc:
+            logger.warning(f'{name}: forward-curve anchor skipped ({exc})')
+
     return {
-        'forecast': forecast,
+        'forecast': forecast_anchored,
+        'model_only': forecast,
+        'forward_curve': forward_curve,
         'nowcast': nowcast_val,
         'summary': model.summary(),
         'exog_columns': list(model.exog_monthly.columns) if model.exog_monthly is not None else [],

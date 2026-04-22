@@ -513,17 +513,20 @@ def _model_targets_for_commodity(name, group_name, forecast_quarters,
     can fall back to the hardcoded targets.
 
     Returns:
-        (targets_dict, nowcast_value) — either may be None independently.
+        (targets_dict, nowcast_value, forward_curve_dict) — any element may
+        be None independently. forward_curve_dict is keyed by calendar
+        quarter (``'Q3'`` etc.) so the API can plot it alongside the
+        scenario rows without further translation.
     """
     try:
         from backend.data_sources import commodity_models
     except Exception as e:
         logger.debug(f'commodity_models import failed ({e}); using hardcoded targets')
-        return None, None
+        return None, None, None
 
     scenario_map = _SCENARIO_TO_PERCENTILE.get(group_name)
     if not scenario_map:
-        return None, None
+        return None, None, None
 
     try:
         result = commodity_models.get_model_forecast(
@@ -534,12 +537,22 @@ def _model_targets_for_commodity(name, group_name, forecast_quarters,
         )
     except Exception as e:
         logger.warning(f'{name}: model forecast crashed: {e}')
-        return None, None
+        return None, None, None
     if not result or not result.get('forecast'):
-        return None, None
+        return None, None, None
 
     fc = result['forecast']  # {'Q+1': {median, p2_5, p10, p90, p97_5, label}, ...}
     nowcast_val = result.get('nowcast')
+
+    # Re-key forward curve from Q+i → calendar Q{fq_num} so the frontend
+    # can align it with the scenario rows directly.
+    raw_curve = result.get('forward_curve') or {}
+    forward_curve: dict[str, float] = {}
+    for i, (_fy, fq_num, _label) in enumerate(forecast_quarters):
+        cv = raw_curve.get(f'Q+{i + 1}')
+        if cv and 'mean_price' in cv:
+            forward_curve[f'Q{fq_num}'] = round(float(cv['mean_price']), 2)
+
     # Map forecast index to calendar-quarter key used by SCENARIO_TARGETS
     # (lookup in _build_scenario_forecasts is by `Q{fq_num}` where fq_num ∈ 1..4).
     targets = {scenario: {} for scenario in scenario_map}
@@ -555,8 +568,8 @@ def _model_targets_for_commodity(name, group_name, forecast_quarters,
 
     # If the model produced no usable numbers, signal fallback
     if not any(q for q in targets.values()):
-        return None, nowcast_val
-    return targets, nowcast_val
+        return None, nowcast_val, forward_curve or None
+    return targets, nowcast_val, (forward_curve or None)
 
 
 def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
@@ -571,7 +584,7 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
     Returns a dict of scenario -> {label: price} for all time labels + FY,
     plus a `_source` marker ('model' or 'hardcoded') used by the meta block.
     """
-    targets_cfg, nowcast_val = _model_targets_for_commodity(
+    targets_cfg, nowcast_val, forward_curve = _model_targets_for_commodity(
         name, group_name, time_ctx['forecast_quarters'],
         qtd_mean=actual_data.get('current_q_avg'),
         days_elapsed=actual_data.get('qtd_days_elapsed', 0),
@@ -686,7 +699,7 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
 
     scenarios['Weighted Avg'] = weighted
 
-    return scenarios, source
+    return scenarios, source, forward_curve
 
 
 def _fetch_forecasts():
@@ -719,7 +732,7 @@ def _fetch_forecasts():
             )
             if not built:
                 continue
-            scenarios, forecast_source = built
+            scenarios, forecast_source, forward_curve = built
             source_counts[forecast_source] = source_counts.get(forecast_source, 0) + 1
 
             if group not in groups:
@@ -739,6 +752,7 @@ def _fetch_forecasts():
                 'scenarios': scenarios,
                 'historical': historical.get(name, []),
                 'forecast_source': forecast_source,
+                'forward_curve': forward_curve,
                 'consensus': consensus_data.get(name, []),
             }
 
