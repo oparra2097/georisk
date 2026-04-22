@@ -3768,6 +3768,8 @@
                 ratio: ratio,
                 ratioMissing: ratio == null,
                 gdp: c.gdp_usd,
+                gdpSource: c.gdp_source,
+                gdpYear: c.gdp_year,
                 reserves: c.reserves_usd,
                 reservesSource: c.reserves_source,
                 reservesPeriod: c.reserves_period,
@@ -3895,7 +3897,10 @@
                                     stTag = ' (' + p.stDebtYear + srcHint + ')';
                                 }
                                 lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt) + stTag);
-                                lines.push('GDP: ' + _emFormatUsd(p.gdp) + '  ·  Year: ' + (p.year || '—'));
+                                const gdpTag = p.gdpSource && p.gdpSource !== 'World Bank' && p.gdpYear
+                                    ? ' (' + p.gdpSource + ' ' + p.gdpYear + ')'
+                                    : (p.gdpYear ? ' (' + p.gdpYear + ')' : '');
+                                lines.push('GDP: ' + _emFormatUsd(p.gdp) + gdpTag + '  ·  As of: ' + (p.year || '—'));
                                 return lines;
                             },
                         },

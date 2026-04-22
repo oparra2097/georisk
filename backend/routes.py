@@ -1343,7 +1343,8 @@ def export_em_vulnerability_excel():
     ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
 
     headers = [
-        'Country', 'ISO3', 'EM', 'Year', 'GDP (USD)', 'GDP Rank', 'EM Rank',
+        'Country', 'ISO3', 'EM', 'As-Of Year',
+        'GDP (USD)', 'GDP Source', 'GDP Year', 'GDP Rank', 'EM Rank',
         'Current Account (% GDP)', 'CA Source', 'CA Year',
         'FDI Net (% GDP)', 'Basic Balance (% GDP)',
         'Reserves (USD)', 'Reserves Source', 'Reserves Period',
@@ -1369,6 +1370,8 @@ def export_em_vulnerability_excel():
             'Yes' if r.get('is_em') else 'No',
             r.get('year', ''),
             r.get('gdp_usd'),
+            r.get('gdp_source', ''),
+            r.get('gdp_year', ''),
             r.get('gdp_rank'),
             r.get('em_rank'),
             r.get('ca_pct_gdp'),
@@ -1389,21 +1392,23 @@ def export_em_vulnerability_excel():
             cell.border = thin_border
             if col >= 4:
                 cell.alignment = Alignment(horizontal='right')
-                if col in (5, 13, 16):
+                if col in (5, 15, 18):
                     cell.number_format = '#,##0'
-                elif col in (8, 11, 12, 19):
+                elif col in (10, 13, 14, 21):
                     cell.number_format = '0.00'
 
     ws.column_dimensions['A'].width = 28
     ws.column_dimensions['B'].width = 7
     ws.column_dimensions['C'].width = 5
-    ws.column_dimensions['D'].width = 7
-    ws.column_dimensions['I'].width = 18
-    ws.column_dimensions['N'].width = 16
-    ws.column_dimensions['O'].width = 14
-    ws.column_dimensions['Q'].width = 10
-    ws.column_dimensions['R'].width = 22
-    for col_letter in ('E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'P', 'S'):
+    ws.column_dimensions['D'].width = 10
+    ws.column_dimensions['F'].width = 18
+    ws.column_dimensions['G'].width = 10
+    ws.column_dimensions['K'].width = 18
+    ws.column_dimensions['P'].width = 16
+    ws.column_dimensions['Q'].width = 14
+    ws.column_dimensions['S'].width = 10
+    ws.column_dimensions['T'].width = 22
+    for col_letter in ('E', 'H', 'I', 'J', 'L', 'M', 'N', 'O', 'R', 'U'):
         ws.column_dimensions[col_letter].width = 16
     ws.freeze_panes = 'A5'
 
