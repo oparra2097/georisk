@@ -75,14 +75,16 @@ TREND_ANCHOR_SPECS: dict[str, dict] = {
 
 
 # Horizon-weighted shrinkage — the trend gets more weight at the long end,
-# where the SARIMAX drift estimate becomes less reliable relative to the
-# structural secular trend. Differs from the futures-curve weights because
-# the trend is a "slow" anchor, not a market-implied price.
+# where the SARIMAX drift estimate becomes least reliable relative to the
+# structural secular trend. Weights are deliberately trend-heavy so that a
+# model that predicts near-term momentum followed by mean-reversion (rise-
+# then-fall pattern for up-trending commodities like gold) gets corrected
+# toward the historical drift.
 DEFAULT_SHRINKAGE: dict[str, tuple[float, float]] = {
-    'Q+1': (0.80, 0.20),   # model dominates near-term
-    'Q+2': (0.65, 0.35),
-    'Q+3': (0.50, 0.50),
-    'Q+4': (0.35, 0.65),   # trend dominates far-term
+    'Q+1': (0.60, 0.40),   # model still leads, but trend has real pull
+    'Q+2': (0.45, 0.55),
+    'Q+3': (0.30, 0.70),
+    'Q+4': (0.20, 0.80),   # trend dominates at the far end
 }
 
 

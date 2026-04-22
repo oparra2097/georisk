@@ -71,6 +71,17 @@ BOOTSTRAP_DRAWS = 1000
 FORECAST_MONTHS = 12       # 4 quarters × 3 months
 STALE_AFTER_DAYS = 35
 
+# Per-commodity override for the training window. Metals with multi-decade
+# structural trends (gold/silver/platinum/copper) fit on a longer window so
+# the SARIMAX drift estimate isn't biased by short-term consolidation. The
+# rest fall through to HISTORY_YEARS.
+HISTORY_YEARS_OVERRIDE: dict[str, int] = {
+    'Gold':     20,
+    'Silver':   20,
+    'Platinum': 15,
+    'Copper':   20,
+}
+
 CACHE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     'cache',
@@ -601,7 +612,8 @@ class CommodityModel:
         self.as_of = as_of
         end = as_of
         anchor = as_of or date.today()
-        start = anchor - timedelta(days=365 * HISTORY_YEARS)
+        history_years = HISTORY_YEARS_OVERRIDE.get(self.name, HISTORY_YEARS)
+        start = anchor - timedelta(days=365 * history_years)
 
         price = DriverFetcher._fetch_yf(self.ticker, start, end)
         if price is None or len(price) < 36:

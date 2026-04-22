@@ -14,7 +14,7 @@ window.ParraData.state = {
     freq: 'monthly',
     view: 'yoy',
     range: '10',
-    scenario: 'All',
+    scenario: 'Base',
     commFreq: 'quarterly',
     region: 'World',
     reserveType: 'total',
