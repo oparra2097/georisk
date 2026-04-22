@@ -425,10 +425,33 @@ def _fetch_all_data(time_ctx):
     historical = {}
     actuals = {}
 
+    # Pre-compute shared timing info — applies to every commodity even when
+    # yfinance stalls on its ticker, so the builder can still populate the
+    # current-quarter column.
+    cq = time_ctx['current_quarter']
+    cq_start, cq_end = quarters[cq]
+    shared_qtd_elapsed  = max(0, (today - cq_start).days)
+    shared_qtd_in_q     = max(1, (cq_end - cq_start).days + 1)
+
     for name, (ticker, unit, group) in COMMODITIES.items():
         series = _extract_series(data, ticker, len(tickers))
+
+        # Resilient path: if yfinance returned nothing for this ticker
+        # (common for newer / thinly traded contracts like ALI=F),
+        # keep the commodity in the response with an empty actuals dict
+        # so the frontend subview can still render scenario targets +
+        # the placeholder targets table. The scenario rows will fall
+        # back to hardcoded values.
         if series is None:
-            logger.warning(f"No data for {name} ({ticker})")
+            logger.warning(f"No data for {name} ({ticker}) — keeping with empty actuals")
+            historical[name] = []
+            actuals[name] = {
+                'completed': {},
+                'latest_close': None,
+                'current_q_avg': None,
+                'qtd_days_elapsed': shared_qtd_elapsed,
+                'qtd_days_in_quarter': shared_qtd_in_q,
+            }
             continue
 
         # ── Historical quarterly averages (past 10 years) ──
@@ -454,6 +477,14 @@ def _fetch_all_data(time_ctx):
         # ── Current year actuals ──
         ytd_series = series[date(year, 1, 1).isoformat():]
         if len(ytd_series) == 0:
+            logger.warning(f"No YTD data for {name} ({ticker}) — keeping with empty actuals")
+            actuals[name] = {
+                'completed': {},
+                'latest_close': None,
+                'current_q_avg': None,
+                'qtd_days_elapsed': shared_qtd_elapsed,
+                'qtd_days_in_quarter': shared_qtd_in_q,
+            }
             continue
 
         result = {
@@ -469,16 +500,14 @@ def _fetch_all_data(time_ctx):
                 result['completed'][q_label] = round(float(q_data.mean()), 2)
 
         # Current quarter partial average (raw mean of QTD closes)
-        cq = time_ctx['current_quarter']
-        cq_start, cq_end = quarters[cq]
         cq_data = ytd_series[cq_start.isoformat():]
         if len(cq_data) > 0:
             result['current_q_avg'] = round(float(cq_data.mean()), 2)
 
         # Days-elapsed / days-in-quarter — shared across commodities but stored
         # per-commodity so the builder has everything it needs in one dict.
-        result['qtd_days_elapsed'] = max(0, (today - cq_start).days)
-        result['qtd_days_in_quarter'] = max(1, (cq_end - cq_start).days + 1)
+        result['qtd_days_elapsed'] = shared_qtd_elapsed
+        result['qtd_days_in_quarter'] = shared_qtd_in_q
 
         actuals[name] = result
         logger.info(
@@ -534,21 +563,25 @@ def _model_targets_for_commodity(name, group_name, forecast_quarters,
         )
     except Exception as e:
         logger.warning(f'{name}: model forecast crashed: {e}')
-        return None, None, None
+        return None, None, None, None
     if not result or not result.get('forecast'):
-        return None, None, None
+        return None, None, None, None
 
     fc = result['forecast']  # {'Q+1': {median, p2_5, p10, p90, p97_5, label}, ...}
     nowcast_val = result.get('nowcast')
 
-    # Re-key forward curve from Q+i → calendar Q{fq_num} so the frontend
-    # can align it with the scenario rows directly.
-    raw_curve = result.get('forward_curve') or {}
-    forward_curve: dict[str, float] = {}
-    for i, (_fy, fq_num, _label) in enumerate(forecast_quarters):
-        cv = raw_curve.get(f'Q+{i + 1}')
-        if cv and 'mean_price' in cv:
-            forward_curve[f'Q{fq_num}'] = round(float(cv['mean_price']), 2)
+    # Re-key anchor quarters from Q+i → calendar Q{fq_num} so the frontend
+    # can align them with the scenario rows directly.
+    def _rekey(raw: dict) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for i, (_fy, fq_num, _label) in enumerate(forecast_quarters):
+            cv = raw.get(f'Q+{i + 1}')
+            if cv and 'mean_price' in cv:
+                out[f'Q{fq_num}'] = round(float(cv['mean_price']), 2)
+        return out
+
+    forward_curve  = _rekey(result.get('forward_curve') or {})
+    long_run_trend = _rekey(result.get('long_run_trend') or {})
 
     # Map forecast index to calendar-quarter key used by SCENARIO_TARGETS
     # (lookup in _build_scenario_forecasts is by `Q{fq_num}` where fq_num ∈ 1..4).
@@ -565,8 +598,9 @@ def _model_targets_for_commodity(name, group_name, forecast_quarters,
 
     # If the model produced no usable numbers, signal fallback
     if not any(q for q in targets.values()):
-        return None, nowcast_val, forward_curve or None
-    return targets, nowcast_val, (forward_curve or None)
+        return None, nowcast_val, forward_curve or None, long_run_trend or None
+    return (targets, nowcast_val,
+            (forward_curve or None), (long_run_trend or None))
 
 
 def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
@@ -581,7 +615,7 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
     Returns a dict of scenario -> {label: price} for all time labels + FY,
     plus a `_source` marker ('model' or 'hardcoded') used by the meta block.
     """
-    targets_cfg, nowcast_val, forward_curve = _model_targets_for_commodity(
+    targets_cfg, nowcast_val, forward_curve, long_run_trend = _model_targets_for_commodity(
         name, group_name, time_ctx['forecast_quarters'],
         qtd_mean=actual_data.get('current_q_avg'),
         days_elapsed=actual_data.get('qtd_days_elapsed', 0),
@@ -667,7 +701,7 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
 
         scenarios[scenario] = row
 
-    return scenarios, source, forward_curve
+    return scenarios, source, forward_curve, long_run_trend
 
 
 def _fetch_forecasts():
@@ -700,7 +734,7 @@ def _fetch_forecasts():
             )
             if not built:
                 continue
-            scenarios, forecast_source, forward_curve = built
+            scenarios, forecast_source, forward_curve, long_run_trend = built
             source_counts[forecast_source] = source_counts.get(forecast_source, 0) + 1
 
             if group not in groups:
@@ -721,6 +755,7 @@ def _fetch_forecasts():
                 'historical': historical.get(name, []),
                 'forecast_source': forecast_source,
                 'forward_curve': forward_curve,
+                'long_run_trend': long_run_trend,
                 'consensus': consensus_data.get(name, []),
             }
 

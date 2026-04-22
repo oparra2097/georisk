@@ -958,6 +958,7 @@ def get_model_forecast(
     driver_shifts: Optional[dict] = None,
     shocks: Optional[list] = None,
     use_forward_curve: bool = True,
+    use_long_run_trend: bool = True,
 ) -> Optional[dict]:
     """Public entry used by commodities_forecast.py integration.
 
@@ -965,13 +966,22 @@ def get_model_forecast(
     ``CommodityModel.forecast``; see that docstring for the schema.
 
     If ``use_forward_curve`` is True (default) and the commodity has a
-    forward curve adapter wired in ``forward_curve.CURVE_SPECS`` (currently
+    forward-curve adapter wired in ``forward_curve.CURVE_SPECS`` (currently
     WTI / Brent / HH / TTF), the model's central tendency for each
     forecast quarter is shrunk toward the curve-implied price using
-    horizon-weighted blending. Confidence bands widen to encompass both
-    the model envelope and the curve. The unmodified model output is
-    preserved alongside under the ``model_only`` key, and the curve itself
-    is exposed under ``forward_curve``.
+    horizon-weighted blending.
+
+    If ``use_long_run_trend`` is True (default) and the commodity has a
+    trend-anchor spec in ``long_run_trend.TREND_ANCHOR_SPECS`` (currently
+    Gold / Silver / Platinum / Copper), the model median is additionally
+    shrunk toward a multi-decade CAGR trend line — so e.g. gold keeps
+    continuing its historical upward drift after a near-term dip instead
+    of extrapolating a flat local slope indefinitely.
+
+    Confidence bands widen to encompass both the model envelope and each
+    active anchor. The unmodified model output is preserved alongside
+    under ``model_only``; each anchor is exposed under ``forward_curve``
+    / ``long_run_trend`` for transparency and frontend overlay.
     """
     model = get_or_fit(name)
     if model is None:
@@ -988,14 +998,25 @@ def get_model_forecast(
             from backend.data_sources import forward_curve as fc_mod
             forward_curve = fc_mod.fetch_curve_quarterly(name, h=4)
             if forward_curve:
-                forecast_anchored = fc_mod.shrink_to_curve(forecast, forward_curve)
+                forecast_anchored = fc_mod.shrink_to_curve(forecast_anchored, forward_curve)
         except Exception as exc:
             logger.warning(f'{name}: forward-curve anchor skipped ({exc})')
+
+    long_run_trend = None
+    if use_long_run_trend:
+        try:
+            from backend.data_sources import long_run_trend as lrt_mod
+            long_run_trend = lrt_mod.fetch_long_run_trend(name, h=4)
+            if long_run_trend:
+                forecast_anchored = lrt_mod.shrink_to_trend(forecast_anchored, long_run_trend)
+        except Exception as exc:
+            logger.warning(f'{name}: long-run trend anchor skipped ({exc})')
 
     return {
         'forecast': forecast_anchored,
         'model_only': forecast,
         'forward_curve': forward_curve,
+        'long_run_trend': long_run_trend,
         'nowcast': nowcast_val,
         'summary': model.summary(),
         'exog_columns': list(model.exog_monthly.columns) if model.exog_monthly is not None else [],
