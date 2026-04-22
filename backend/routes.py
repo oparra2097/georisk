@@ -506,6 +506,54 @@ def get_forecasts():
     return jsonify(data)
 
 
+# Map commodity display names → methodology markdown file names.
+_METHODOLOGY_FILES = {
+    'WTI Crude':        'wti_crude.md',
+    'Brent Crude':      'brent_crude.md',
+    'Natural Gas (HH)': 'natural_gas_hh.md',
+    'TTF Gas':          'ttf_gas.md',
+    'Gold':             'gold.md',
+    'Silver':           'silver.md',
+    'Platinum':         'platinum.md',
+    'Copper':           'copper.md',
+    'Aluminum':         'aluminum.md',
+    'Cocoa':            'cocoa.md',
+    'Wheat':            'wheat.md',
+    'Soybeans':         'soybeans.md',
+    'Coffee':           'coffee.md',
+    'overview':         'README.md',
+}
+
+
+@api_bp.route('/forecasts/methodology/<path:commodity>')
+def get_methodology(commodity):
+    """Serve the per-commodity methodology markdown as plain text JSON.
+
+    Frontend renders client-side via marked.js in a modal. `commodity` is
+    the display name used in commodities_forecast.COMMODITIES (or the
+    literal string 'overview' for the index / README).
+    """
+    import os
+    fname = _METHODOLOGY_FILES.get(commodity)
+    if not fname:
+        return jsonify({'error': f'Unknown commodity: {commodity}'}), 404
+    docs_dir = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), 'docs', 'commodities')
+    path = os.path.join(docs_dir, fname)
+    if not os.path.exists(path):
+        return jsonify({'error': f'Methodology file missing: {fname}'}), 404
+    try:
+        with open(path) as f:
+            markdown = f.read()
+    except Exception as e:
+        return jsonify({'error': f'Failed to read {fname}: {e}'}), 500
+    return jsonify({
+        'commodity': commodity,
+        'markdown': markdown,
+        'file': fname,
+    })
+
+
 @api_bp.route('/gdp-nowcast')
 def gdp_nowcast():
     """Return US GDP nowcast estimate (cached 6 hours)."""

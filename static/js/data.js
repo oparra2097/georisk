@@ -1435,9 +1435,14 @@
         const titleEl = document.getElementById('panel-title');
         if (titleEl) titleEl.textContent = commodityName + ' \u2014 Scenario Forecast';
 
-        // Summary not used
+        // Methodology button — opens the per-commodity white paper modal
         const summary = document.getElementById('panel-summary');
-        if (summary) summary.innerHTML = '';
+        if (summary) {
+            summary.innerHTML =
+                '<button class="methodology-btn" onclick="window.openMethodology(\'' +
+                commodityName.replace(/'/g, "\\'") +
+                '\')">View methodology →</button>';
+        }
 
         // ── Chart ──
         PD.destroyChart('main');
@@ -4057,5 +4062,112 @@
             },
         };
     }
+
+    // ══════════════════════════════════════════════════════
+    // Methodology modal — per-commodity white paper viewer
+    // ══════════════════════════════════════════════════════
+
+    // Minimal markdown renderer covering what our white papers use:
+    // # / ## / ### headers, paragraphs, bulleted lists, **bold**, *italic*,
+    // `inline code`, blockquotes, links, and horizontal rules. No table
+    // support (not needed for the commodity notes).
+    function renderMarkdown(md) {
+        const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const inline = s => s
+            .replace(/`([^`]+)`/g, (_, t) => '<code>' + esc(t) + '</code>')
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+        const lines = md.replace(/\r\n/g, '\n').split('\n');
+        const out = [];
+        let inList = false;
+        let inQuote = false;
+        let para = [];
+        const flushPara = () => {
+            if (para.length) {
+                out.push('<p>' + inline(para.join(' ')) + '</p>');
+                para = [];
+            }
+        };
+        const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+        const closeQuote = () => { if (inQuote) { out.push('</blockquote>'); inQuote = false; } };
+
+        for (let raw of lines) {
+            const line = raw.trimEnd();
+            if (!line.trim()) { flushPara(); closeList(); closeQuote(); continue; }
+
+            let m;
+            if ((m = line.match(/^(#{1,6})\s+(.+)$/))) {
+                flushPara(); closeList(); closeQuote();
+                const level = m[1].length;
+                out.push('<h' + level + '>' + inline(m[2]) + '</h' + level + '>');
+                continue;
+            }
+            if (/^(---|\*\*\*|___)$/.test(line.trim())) {
+                flushPara(); closeList(); closeQuote();
+                out.push('<hr>');
+                continue;
+            }
+            if ((m = line.match(/^\s*[-*]\s+(.+)$/))) {
+                flushPara(); closeQuote();
+                if (!inList) { out.push('<ul>'); inList = true; }
+                out.push('<li>' + inline(m[1]) + '</li>');
+                continue;
+            }
+            if ((m = line.match(/^\s*>\s?(.*)$/))) {
+                flushPara(); closeList();
+                if (!inQuote) { out.push('<blockquote>'); inQuote = true; }
+                out.push(inline(m[1] || ''));
+                continue;
+            }
+            para.push(line.trim());
+        }
+        flushPara(); closeList(); closeQuote();
+        return out.join('\n');
+    }
+
+    function openMethodology(commodity) {
+        let overlay = document.getElementById('methodology-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'methodology-overlay';
+            overlay.className = 'methodology-overlay';
+            overlay.innerHTML =
+                '<div class="methodology-modal">' +
+                  '<div class="methodology-header">' +
+                    '<span class="methodology-title" id="methodology-title">Methodology</span>' +
+                    '<button class="methodology-close" id="methodology-close" aria-label="Close">&times;</button>' +
+                  '</div>' +
+                  '<div class="methodology-body" id="methodology-body">Loading…</div>' +
+                '</div>';
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', e => {
+                if (e.target === overlay) closeMethodology();
+            });
+            document.getElementById('methodology-close').addEventListener('click', closeMethodology);
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.style.display !== 'none') closeMethodology();
+            });
+        }
+        overlay.style.display = 'flex';
+        document.getElementById('methodology-title').textContent = commodity + ' — Methodology';
+        const body = document.getElementById('methodology-body');
+        body.innerHTML = '<div class="methodology-loading">Loading…</div>';
+
+        fetch('/api/forecasts/methodology/' + encodeURIComponent(commodity))
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(j => {
+                body.innerHTML = renderMarkdown(j.markdown || '');
+            })
+            .catch(err => {
+                body.innerHTML = '<p style="color:var(--text-muted)">Methodology unavailable (' + err + ').</p>';
+            });
+    }
+    function closeMethodology() {
+        const overlay = document.getElementById('methodology-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+    window.openMethodology = openMethodology;
 
 })();
