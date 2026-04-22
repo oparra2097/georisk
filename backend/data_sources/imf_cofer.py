@@ -9,7 +9,9 @@ Primary: IMF Data API (api.imf.org/external/sdmx/3.0, live monthly)
 
 Fallback 1: DBnomics IMF/IFS (monthly, ~140 countries, reliable mirror)
   - RAFA_USD   = Total reserves incl. gold (USD millions)
-  - RAXGFX_USD = FX reserves excl. gold (USD millions)
+  - RAXG_USD   = Total reserves excl. gold (USD millions)
+    (NOT RAXGFX_USD, which is only the FX sub-component and excludes
+    SDRs + IMF reserve position, producing inflated gold figures)
   - IFS is the canonical IMF macro dataflow; the old IRFCL mirror was
     frozen and returned empty results due to REF_SECTOR mismatch.
 
@@ -976,18 +978,21 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
 
         # IRFCL FX coverage is typically sparse (~10 countries). If we
         # got good total data but poor FX, REPLACE the entire FX dataset
-        # with DBnomics IFS RAXGFX_USD which has ~140 countries. The IRFCL
-        # FX values for the few countries it does cover are often wrong
-        # (e.g. India showing -$0.61B), so a full replacement is safer
-        # than a selective backfill.
+        # with DBnomics IFS RAXG_USD (total reserves excl. gold) which
+        # has ~140 countries. We use RAXG_USD (not RAXGFX_USD) because
+        # RAXGFX is only the foreign-exchange sub-component and excludes
+        # SDRs + IMF reserve position, producing inflated gold figures.
+        # The IRFCL FX values for the few countries it does cover are
+        # often wrong (e.g. India showing -$0.61B), so a full
+        # replacement is safer than a selective backfill.
         if total_by_country and len(fx_by_country) < len(total_by_country) * 0.5:
             if attempt_log is not None:
                 attempt_log.append(
                     f'IRFCL FX sparse ({len(fx_by_country)} vs {len(total_by_country)} total) '
-                    f'— replacing FX with DBnomics IFS (RAXGFX_USD)'
+                    f'— replacing FX with DBnomics IFS (RAXG_USD)'
                 )
             try:
-                ifs_fx_docs = _fetch_ifs_indicator('RAXGFX_USD')
+                ifs_fx_docs = _fetch_ifs_indicator('RAXG_USD')
                 ifs_fx = {}
                 for doc in ifs_fx_docs:
                     code = doc.get('series_code', '')
@@ -1144,7 +1149,9 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
 #
 # The old IRFCL mirror on DBnomics used REF_SECTOR='S1X' which returns
 # empty results. IFS is the canonical IMF macro dataflow for reserves
-# and has ~140 countries with RAFA_USD (total) and RAXGFX_USD (FX only).
+# and has ~140 countries with RAFA_USD (total) and RAXG_USD (total excl.
+# gold). Note: RAXGFX_USD is only the FX sub-component (excludes SDRs
+# and IMF reserve position) — using it inflates computed gold values.
 
 def _fetch_ifs_indicator(indicator_code):
     """Fetch one IFS indicator for all countries from DBnomics, paging."""
@@ -1187,7 +1194,7 @@ def _fetch_reserves_dbnomics():
         logger.info("Fetching reserves from DBnomics IMF/IFS (monthly)...")
 
         total_docs = _fetch_ifs_indicator('RAFA_USD')
-        fx_docs = _fetch_ifs_indicator('RAXGFX_USD')
+        fx_docs = _fetch_ifs_indicator('RAXG_USD')
 
         if not total_docs:
             logger.warning("DBnomics IFS returned no total reserves data")
@@ -1399,7 +1406,7 @@ def _fetch_reserves():
     ifs_total, ifs_fx = {}, {}
     try:
         ifs_docs_total = _fetch_ifs_indicator('RAFA_USD')
-        ifs_docs_fx = _fetch_ifs_indicator('RAXGFX_USD')
+        ifs_docs_fx = _fetch_ifs_indicator('RAXG_USD')
 
         def _parse_ifs(docs):
             by_country = {}
