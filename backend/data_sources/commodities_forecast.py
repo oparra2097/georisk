@@ -677,6 +677,14 @@ def _fetch_forecasts():
             logger.error("No actuals available")
             return None
 
+        # Pull market consensus once (24h-cached inside the tracker).
+        try:
+            from backend.data_sources import consensus_tracker
+            consensus_data = consensus_tracker.get_consensus_data()
+        except Exception as e:
+            logger.warning(f'consensus fetch failed: {e}')
+            consensus_data = {}
+
         # Organize by group
         groups = {}
         source_counts = {'model': 0, 'hardcoded': 0}
@@ -709,6 +717,7 @@ def _fetch_forecasts():
                 'scenarios': scenarios,
                 'historical': historical.get(name, []),
                 'forecast_source': forecast_source,
+                'consensus': consensus_data.get(name, []),
             }
 
         if not groups:
@@ -749,6 +758,11 @@ def _fetch_forecasts():
                 'baseline': 'Live YTD close prices via yfinance',
                 'commodities_count': commodities_count,
                 'forecast_sources': source_counts,
+                'consensus_sources': sorted({
+                    entry['source']
+                    for entries in consensus_data.values()
+                    for entry in entries
+                }),
                 'last_updated': now.isoformat(),
             }
         }
