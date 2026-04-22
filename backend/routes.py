@@ -1257,14 +1257,21 @@ def diagnose_em_vulnerability():
     # records have *non-null values* for each of the stranded EMs and the
     # most recent period+value found.
     result['step3_chile_sample'] = {}
-    STRANDED_EMS = ['KOR', 'MYS', 'POL', 'ROU', 'SAU', 'IRN', 'ARE', 'QAT',
-                    'CHL', 'ISR']
+    STRANDED_EMS = ['ARE', 'QAT', 'GTM', 'IRN', 'ISR', 'KWT', 'BHR', 'OMN',
+                    'CHL', 'LBN', 'LBY']
     for source_id, ind in (
-        ('22', 'DT.DOD.DSTC.CD.US'),          # QEDS SDDS — correct code
-        ('23', 'DT.DOD.DECT.CD.ST.US'),       # QEDS GDDS — correct code
-        ('54', 'DT.DOD.DSTC.CD.US'),          # JEDH probe
-        ('54', 'DT.DOD.DECT.CD.ST.US'),       # JEDH probe alt
-        ('22', 'DT.DOD.DECT.CD.ST.TD.NV.US'), # debt securities component
+        # QEDS SDDS — correct aggregate
+        ('22', 'DT.DOD.DSTC.CD.US'),
+        # QEDS GDDS — correct aggregate
+        ('23', 'DT.DOD.DECT.CD.ST.US'),
+        # JEDH — try both known aggregates + WDI code
+        ('54', 'DT.DOD.DSTC.CD'),
+        ('54', 'DT.DOD.DSTC.CD.US'),
+        ('54', 'DT.DOD.DECT.CD.ST.US'),
+        # IDS DSSI — last resort for low-income / small-state EMs
+        ('81', 'DT.DOD.DSTC.CD'),
+        # QEDS SDDS granular (debt securities only) as partial fallback
+        ('22', 'DT.DOD.DECT.CD.ST.TD.NV.US'),
     ):
         try:
             r = requests.get(
