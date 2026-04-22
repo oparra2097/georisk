@@ -278,7 +278,7 @@
         }
         if (ds.controls.includes('scenario')) {
             html += '<select id="ctrl-scenario" class="data-select">' +
-                '<option value="Weighted Avg"' + (state.scenario === 'Weighted Avg' ? ' selected' : '') + '>Weighted Avg</option>' +
+                '<option value="All"' + (state.scenario === 'All' ? ' selected' : '') + '>All Scenarios</option>' +
                 '</select>';
         }
         if (ds.controls.includes('comm-freq')) {
@@ -1095,23 +1095,26 @@
         if (!group) return;
         const order = group.scenario_order || [];
         sel.innerHTML = '';
-        // "All Scenarios" option for overview mode
+        // "All Scenarios" option shows every scenario line on the overview
         const allOpt = document.createElement('option');
         allOpt.value = 'All'; allOpt.textContent = 'All Scenarios';
         if (state.scenario === 'All') allOpt.selected = true;
         sel.appendChild(allOpt);
-        // Weighted Avg
-        const waOpt = document.createElement('option');
-        waOpt.value = 'Weighted Avg'; waOpt.textContent = 'Weighted Avg';
-        if (state.scenario === 'Weighted Avg') waOpt.selected = true;
-        sel.appendChild(waOpt);
         order.forEach(sc => {
-            if (sc === 'Actual' || sc === 'Weighted Avg') return;
+            if (sc === 'Actual') return;
             const opt = document.createElement('option');
             opt.value = sc; opt.textContent = sc;
             if (state.scenario === sc) opt.selected = true;
             sel.appendChild(opt);
         });
+        // If the persisted state.scenario is no longer a valid option
+        // (e.g. legacy 'Weighted Avg' from localStorage / URL), force
+        // the dropdown + state back to 'All' so the filter still works.
+        const validValues = Array.from(sel.options).map(o => o.value);
+        if (!validValues.includes(state.scenario)) {
+            state.scenario = 'All';
+            sel.value = 'All';
+        }
     }
 
     function renderForecast(ds) {
@@ -1223,8 +1226,8 @@
                         }),
                         borderColor: lineColor,
                         backgroundColor: 'transparent',
-                        borderWidth: sc === 'Weighted Avg' ? 3 : 2,
-                        borderDash: sc === 'Weighted Avg' ? [6, 3] : [],
+                        borderWidth: 2,
+                        borderDash: [],
                         fill: false, pointRadius: 3, pointHitRadius: 8,
                         pointBackgroundColor: lineColor, pointBorderColor: lineColor, tension: 0.3,
                         segment: chartForecastStartIdx > 0 ? {
@@ -1252,8 +1255,8 @@
                         data: allQLabels.map(l => valMap[l] != null ? valMap[l] : null),
                         borderColor: lineColor,
                         backgroundColor: 'transparent',
-                        borderWidth: sc === 'Weighted Avg' ? 3 : 2,
-                        borderDash: sc === 'Weighted Avg' ? [6, 3] : [],
+                        borderWidth: 2,
+                        borderDash: [],
                         fill: false, pointRadius: 0, pointHitRadius: 8,
                         pointBackgroundColor: lineColor, pointBorderColor: lineColor, tension: 0.3,
                         segment: forecastStartIdx > 0 ? {
@@ -1413,7 +1416,7 @@
         const scenarios = info.scenarios || {};
         const scenarioColors = group.scenario_colors || {};
         const scenarioLabels = group.scenario_labels || {};
-        const scenarioOrder = group.scenario_order || ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
+        const scenarioOrder = group.scenario_order || ['Actual', 'Base Case', 'Severe Case', 'Worst Case'];
         const timeCtx = data.time_context || {};
         const forecastLabels = timeCtx.labels || [];
         const labelTypes = timeCtx.label_types || [];
@@ -1479,7 +1482,7 @@
             .forEach(sc => {
                 const scenData = scenarios[sc];
                 const color = scenarioColors[sc] || '#9ca3af';
-                const isDashed = sc === 'Weighted Avg';
+                const isDashed = false;
                 const isBase = sc === baseScenario;
 
                 // Build data array: null for historical, then scenario values
@@ -1498,7 +1501,7 @@
                     data: lineData,
                     borderColor: color,
                     backgroundColor: isBase ? color + '1A' : 'transparent',
-                    borderWidth: sc === 'Weighted Avg' ? 3 : 2,
+                    borderWidth: 2,
                     borderDash: isDashed ? [6, 3] : [],
                     fill: false, pointRadius: 4, pointHitRadius: 8,
                     pointBackgroundColor: color, pointBorderColor: color, tension: 0.3,
@@ -1604,7 +1607,7 @@
 
             // Line 1: Scenario narratives with weights
             const scenParts = [];
-            scenarioOrder.filter(sc => sc !== 'Actual' && sc !== 'Weighted Avg').forEach(sc => {
+            scenarioOrder.filter(sc => sc !== 'Actual').forEach(sc => {
                 const w = weights[sc] ? (weights[sc] * 100).toFixed(0) + '%' : '';
                 const label = scenarioLabels[sc] || '';
                 if (label) scenParts.push('<strong>' + sc + ' (' + w + ')</strong>: ' + label);

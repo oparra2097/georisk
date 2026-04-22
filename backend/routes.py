@@ -662,7 +662,7 @@ def export_forecasts_excel():
             continue
 
         # Per-group scenario config
-        scenario_order = group.get('scenario_order', ['Actual', 'Weighted Avg'])
+        scenario_order = group.get('scenario_order', ['Actual'])
         scenario_weights = group.get('scenario_weights', {})
         scenario_labels = group.get('scenario_labels', {})
         commodities = group.get('commodities', {})
@@ -750,7 +750,7 @@ def export_forecasts_excel():
 
             # ── Scenario Descriptions ──
             for sc in scenario_order:
-                if sc in ('Actual', 'Weighted Avg'):
+                if sc == 'Actual':
                     continue
                 desc = scenario_labels.get(sc, '')
                 w = scenario_weights.get(sc)
