@@ -1213,7 +1213,9 @@ def diagnose_em_vulnerability():
     # Step 2: for candidate source IDs, list short-term debt indicators.
     # Source 22 (QEDS SDDS) has many granular breakdowns; narrow to the ones
     # that look like the "all sectors, all instruments" aggregate.
-    for source_id in ('6', '22', '23', '46', '32', '81'):
+    # Added source 54 = JEDH (Joint External Debt Hub) which combines
+    # SDDS/GDDS/BIS/OECD and likely carries the cleanest aggregate.
+    for source_id in ('6', '22', '23', '54', '81'):
         try:
             r = requests.get(
                 f'https://api.worldbank.org/v2/sources/{source_id}/indicators'
@@ -1250,51 +1252,72 @@ def diagnose_em_vulnerability():
         except Exception as e:
             result['step2_indicators_with_short'][source_id] = {'error': str(e)}
 
-    # Step 3: records come back but countryiso3code is empty. Dump the
-    # full first record of each probe to find where the country code is
-    # actually stashed (likely country.id as ISO-2).
+    # Step 3: probe the aggregate "all sectors, short-term, all instruments"
+    # across QEDS SDDS, QEDS GDDS, and JEDH. For each, report how many
+    # records have *non-null values* for each of the stranded EMs and the
+    # most recent period+value found.
     result['step3_chile_sample'] = {}
+    STRANDED_EMS = ['KOR', 'MYS', 'POL', 'ROU', 'SAU', 'IRN', 'ARE', 'QAT',
+                    'CHL', 'ISR']
     for source_id, ind in (
-        ('22', 'DT.DOD.CDST.CD.PU.AR.US'),
-        ('22', 'DT.DOD.DECT.CD.ST.TD.NV.US'),
+        ('22', 'DT.DOD.DECT.CD.ST.US'),
         ('23', 'DT.DOD.DECT.CD.ST.US'),
+        ('54', 'DT.DOD.DECT.CD.ST.US'),
+        ('54', 'DT.DOD.DSTC.CD'),
+        ('22', 'DT.DOD.DECT.CD.ST.TD.NV.US'),
     ):
         try:
             r = requests.get(
                 f'https://api.worldbank.org/v2/country/all/indicator/{ind}'
-                f'?format=json&mrv=4&source={source_id}&per_page=20000',
-                timeout=45,
+                f'?format=json&mrv=20&source={source_id}&per_page=50000',
+                timeout=60,
             )
             doc = r.json() if r.ok else None
             records = doc[1] if isinstance(doc, list) and len(doc) > 1 and doc[1] else []
-            chl_rec = next((rec for rec in records
-                            if isinstance(rec, dict)
-                            and (rec.get('country') or {}).get('id') in ('CL', 'CHL')), None)
-            mys_rec = next((rec for rec in records
-                            if isinstance(rec, dict)
-                            and (rec.get('country') or {}).get('id') in ('MY', 'MYS')), None)
+            # Count records with a non-null value
+            populated = [rec for rec in records
+                         if isinstance(rec, dict) and rec.get('value') is not None]
+            populated_isos = {
+                (rec.get('country') or {}).get('id') for rec in populated
+            }
+            per_country = {}
+            for iso in STRANDED_EMS:
+                iso_records = [rec for rec in populated
+                               if (rec.get('country') or {}).get('id') == iso]
+                if iso_records:
+                    # Most recent period+value
+                    latest = sorted(iso_records,
+                                    key=lambda r: r.get('date', ''),
+                                    reverse=True)[0]
+                    per_country[iso] = {
+                        'period': latest.get('date'),
+                        'value': latest.get('value'),
+                    }
+                else:
+                    per_country[iso] = None
             result['step3_chile_sample'][f'{source_id}/{ind}'] = {
                 'http': r.status_code,
                 'total_records': len(records),
-                'first_full_record': records[0] if records else None,
-                'chile_full_record': chl_rec,
-                'malaysia_full_record': mys_rec,
+                'populated_records': len(populated),
+                'unique_populated_isos': len(populated_isos),
+                'populated_iso_sample': sorted(iso for iso in populated_isos if iso)[:20],
+                'stranded_em_coverage': per_country,
             }
         except Exception as e:
             result['step3_chile_sample'][f'{source_id}/{ind}'] = {'error': str(e)}
 
-    # Step 4: enumerate DBnomics WB provider datasets to find the right
-    # QEDS mirror (WB/QDS returned empty; likely misnamed).
-    result['step4_dbnomics_qds'] = {}
+    # Step 4: Enumerate IMF datasets on DBnomics for external debt.
+    # Source 54 (JEDH) may or may not cover the stranded EMs — if not, a
+    # direct IMF external debt dataset might.
+    result['step4_dbnomics_imf'] = {}
     try:
         r = requests.get(
-            'https://api.db.nomics.world/v22/providers/WB',
+            'https://api.db.nomics.world/v22/providers/IMF',
             timeout=30,
         )
         if r.ok:
             doc = r.json()
             ds_list = (doc.get('category_tree') or [])
-            # Flatten category tree → list of dataset codes + names
             flat = []
             def _walk(nodes):
                 for n in nodes or []:
@@ -1302,26 +1325,13 @@ def diagnose_em_vulnerability():
                         flat.append((n.get('code'), n.get('name', '')))
                     _walk(n.get('children') or [])
             _walk(ds_list)
-            qeds_like = [(c, n) for c, n in flat
-                         if 'debt' in n.lower() or 'qeds' in n.lower() or 'qds' in c.lower()]
-            result['step4_dbnomics_qds']['wb_datasets_debt_related'] = qeds_like[:30]
+            debt_like = [(c, n) for c, n in flat
+                         if 'debt' in (n or '').lower()
+                         or 'sdds' in (n or '').lower()
+                         or 'external' in (n or '').lower()]
+            result['step4_dbnomics_imf']['imf_datasets_debt_related'] = debt_like[:30]
     except Exception as e:
-        result['step4_dbnomics_qds']['enumerate_error'] = str(e)
-
-    # Try candidate dataset IDs for Chile
-    for ds_code in ('WB/QEDS-SDDS', 'WB/QEDS_SDDS', 'WB/QDS', 'WB/QEDS', 'WB/IDS'):
-        try:
-            r = requests.get(
-                f'https://api.db.nomics.world/v22/datasets/{ds_code}',
-                timeout=20,
-            )
-            result['step4_dbnomics_qds'][f'probe_{ds_code}'] = {
-                'http': r.status_code,
-                'exists': r.ok and 'dataset' in (r.json() if r.ok else {}),
-                'nb_series': (r.json().get('dataset') or {}).get('nb_series') if r.ok else None,
-            } if r.ok else {'http': r.status_code, 'body': r.text[:200]}
-        except Exception as e:
-            result['step4_dbnomics_qds'][f'probe_{ds_code}'] = {'error': str(e)}
+        result['step4_dbnomics_imf']['enumerate_error'] = str(e)
 
     return jsonify(result)
 
