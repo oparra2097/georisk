@@ -488,18 +488,80 @@ def _fetch_all_data(time_ctx):
     return historical, actuals
 
 
+# Mapping from group scenario name → percentile field returned by the
+# SARIMAX + GARCH model in commodity_models.get_model_forecast.
+# Oil & Gas: 3-tier disruption gradient (higher price = worse for consumers).
+# Agriculture / Metals: symmetric Bear/Base/Bull around the median.
+_SCENARIO_TO_PERCENTILE = {
+    'Oil & Gas':   {'Base Case': 'median', 'Severe Case': 'p90', 'Worst Case': 'p97_5'},
+    'Agriculture': {'Bear': 'p2_5', 'Base': 'median', 'Bull': 'p97_5'},
+    'Metals':      {'Bear': 'p2_5', 'Base': 'median', 'Bull': 'p97_5'},
+}
+
+
+def _model_targets_for_commodity(name, group_name, forecast_quarters):
+    """
+    Build a dict shaped like SCENARIO_TARGETS[name] populated from the
+    SARIMAX + GARCH model. Returns None on any failure so the caller can
+    fall back to the hardcoded targets.
+    """
+    try:
+        from backend.data_sources import commodity_models
+    except Exception as e:
+        logger.debug(f'commodity_models import failed ({e}); using hardcoded targets')
+        return None
+
+    scenario_map = _SCENARIO_TO_PERCENTILE.get(group_name)
+    if not scenario_map:
+        return None
+
+    try:
+        result = commodity_models.get_model_forecast(name)
+    except Exception as e:
+        logger.warning(f'{name}: model forecast crashed: {e}')
+        return None
+    if not result or not result.get('forecast'):
+        return None
+
+    fc = result['forecast']  # {'Q+1': {median, p2_5, p10, p90, p97_5, label}, ...}
+    # Map forecast index to calendar-quarter key used by SCENARIO_TARGETS
+    # (lookup in _build_scenario_forecasts is by `Q{fq_num}` where fq_num ∈ 1..4).
+    targets = {scenario: {} for scenario in scenario_map}
+    for i, (_fy, fq_num, _label) in enumerate(forecast_quarters):
+        bucket = fc.get(f'Q+{i + 1}')
+        if not bucket:
+            continue
+        q_key = f'Q{fq_num}'
+        for scenario, percentile in scenario_map.items():
+            val = bucket.get(percentile)
+            if val is not None:
+                targets[scenario][q_key] = round(float(val), 2)
+
+    # If the model produced no usable numbers, signal fallback
+    if not any(q for q in targets.values()):
+        return None
+    return targets
+
+
 def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
     """
     Build scenario-based forecasts for a single commodity.
 
-    Uses absolute price targets from SCENARIO_TARGETS (not spreads).
-    For actual/current_q columns uses live data; for forecast columns uses
-    the fixed model targets.  Q1 targets set to None are auto-filled from
-    the current quarter YTD average.
+    Tries the SARIMAX + GARCH model (commodity_models.get_model_forecast)
+    first; falls back to the hardcoded SCENARIO_TARGETS if the model fails,
+    is stale, or does not cover this commodity. For actual / current_q
+    columns always uses live data.
 
-    Returns a dict of scenario -> {label: price} for all time labels + FY.
+    Returns a dict of scenario -> {label: price} for all time labels + FY,
+    plus a `_source` marker ('model' or 'hardcoded') used by the meta block.
     """
-    targets_cfg = SCENARIO_TARGETS.get(name)
+    targets_cfg = _model_targets_for_commodity(
+        name, group_name, time_ctx['forecast_quarters']
+    )
+    source = 'model'
+    if not targets_cfg:
+        targets_cfg = SCENARIO_TARGETS.get(name)
+        source = 'hardcoded'
     if not targets_cfg:
         return None
 
@@ -602,7 +664,7 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
 
     scenarios['Weighted Avg'] = weighted
 
-    return scenarios
+    return scenarios, source
 
 
 def _fetch_forecasts():
@@ -617,15 +679,18 @@ def _fetch_forecasts():
 
         # Organize by group
         groups = {}
+        source_counts = {'model': 0, 'hardcoded': 0}
         for name, (ticker, unit, group) in COMMODITIES.items():
             if name not in actuals:
                 continue
 
-            scenarios = _build_scenario_forecasts(
+            built = _build_scenario_forecasts(
                 name, actuals[name], time_ctx, group
             )
-            if not scenarios:
+            if not built:
                 continue
+            scenarios, forecast_source = built
+            source_counts[forecast_source] = source_counts.get(forecast_source, 0) + 1
 
             if group not in groups:
                 group_cfg = GROUP_SCENARIOS.get(group, {})
@@ -643,6 +708,7 @@ def _fetch_forecasts():
                 'latest_close': actuals[name]['latest_close'],
                 'scenarios': scenarios,
                 'historical': historical.get(name, []),
+                'forecast_source': forecast_source,
             }
 
         if not groups:
@@ -676,9 +742,13 @@ def _fetch_forecasts():
             'meta': {
                 'source': 'ParraMacro Commodities Forecast',
                 'data_source': f'yfinance ({HISTORY_YEARS}yr history + YTD {time_ctx["year"]})',
-                'method': 'Scenario-based absolute price targets · 4-quarter rolling forecast',
+                'method': (
+                    'Hybrid SARIMAX(1,0,1) + GARCH(1,1) with 95% CI bootstrap · '
+                    '4-quarter rolling forecast · hardcoded scenario targets as fallback'
+                ),
                 'baseline': 'Live YTD close prices via yfinance',
                 'commodities_count': commodities_count,
+                'forecast_sources': source_counts,
                 'last_updated': now.isoformat(),
             }
         }
