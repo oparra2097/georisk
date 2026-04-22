@@ -142,20 +142,20 @@ class DriverFetcher:
     def __init__(self):
         self._cache: dict[str, pd.Series] = {}
 
-    def fetch(self, kind: str, key: str, start: date) -> Optional[pd.Series]:
-        cache_key = f'{kind}:{key}'
+    def fetch(self, kind: str, key: str, start: date, end: Optional[date] = None) -> Optional[pd.Series]:
+        cache_key = f'{kind}:{key}:{end.isoformat() if end else ""}'
         if cache_key in self._cache:
             return self._cache[cache_key]
 
         try:
             if kind == 'fred':
-                series = self._fetch_fred(key, start)
+                series = self._fetch_fred(key, start, end)
             elif kind == 'yf':
-                series = self._fetch_yf(key, start)
+                series = self._fetch_yf(key, start, end)
             elif kind == 'gpr':
-                series = self._fetch_gpr(start)
+                series = self._fetch_gpr(start, end)
             elif kind == 'comm':
-                series = self._fetch_yf(TICKERS[key], start)
+                series = self._fetch_yf(TICKERS[key], start, end)
             else:
                 logger.warning(f'Unknown driver kind: {kind}')
                 return None
@@ -167,13 +167,14 @@ class DriverFetcher:
         return series
 
     @staticmethod
-    def _fetch_yf(ticker: str, start: date) -> Optional[pd.Series]:
+    def _fetch_yf(ticker: str, start: date, end: Optional[date] = None) -> Optional[pd.Series]:
         if yf is None:
             return None
+        end_dt = (end or date.today()) + timedelta(days=1)
         data = yf.download(
             ticker,
             start=start.isoformat(),
-            end=(date.today() + timedelta(days=1)).isoformat(),
+            end=end_dt.isoformat(),
             auto_adjust=True,
             progress=False,
         )
@@ -187,10 +188,12 @@ class DriverFetcher:
             return None
         monthly = close.resample('ME').mean()
         monthly.index = monthly.index.to_period('M').to_timestamp('M')
+        if end is not None:
+            monthly = monthly.loc[monthly.index <= pd.Timestamp(end)]
         return monthly
 
     @staticmethod
-    def _fetch_fred(series_id: str, start: date) -> Optional[pd.Series]:
+    def _fetch_fred(series_id: str, start: date, end: Optional[date] = None) -> Optional[pd.Series]:
         try:
             from backend.data_sources import fred_client
         except Exception:
@@ -198,7 +201,7 @@ class DriverFetcher:
         obs = fred_client.fetch_series(
             series_id,
             start_date=start.isoformat(),
-            end_date=date.today().isoformat(),
+            end_date=(end or date.today()).isoformat(),
         )
         if not obs:
             return None
@@ -208,10 +211,12 @@ class DriverFetcher:
         s = pd.to_numeric(df['value'], errors='coerce').dropna()
         monthly = s.resample('ME').mean()
         monthly.index = monthly.index.to_period('M').to_timestamp('M')
+        if end is not None:
+            monthly = monthly.loc[monthly.index <= pd.Timestamp(end)]
         return monthly
 
     @staticmethod
-    def _fetch_gpr(start: date) -> Optional[pd.Series]:
+    def _fetch_gpr(start: date, end: Optional[date] = None) -> Optional[pd.Series]:
         try:
             from backend.data_sources import gpr_index
             data = gpr_index.fetch_gpr_data()
@@ -243,7 +248,10 @@ class DriverFetcher:
             s = s.sort_index()
             monthly = s.resample('ME').mean()
             monthly.index = monthly.index.to_period('M').to_timestamp('M')
-            return monthly.loc[monthly.index >= pd.Timestamp(start)]
+            monthly = monthly.loc[monthly.index >= pd.Timestamp(start)]
+            if end is not None:
+                monthly = monthly.loc[monthly.index <= pd.Timestamp(end)]
+            return monthly
         except Exception:
             return None
 
@@ -281,10 +289,16 @@ class CommodityModel:
         self.rmse: Optional[float] = None
         self.fit_at: Optional[datetime] = None
         self.fit_error: Optional[str] = None
+        self.as_of: Optional[date] = None   # endpoint used for fit (backtest pivots)
 
     # ── fit ────────────────────────────────────────────────────────────
 
-    def fit(self, fetcher: Optional[DriverFetcher] = None) -> bool:
+    def fit(self, fetcher: Optional[DriverFetcher] = None, as_of: Optional[date] = None) -> bool:
+        """Fit on monthly data up to and including ``as_of`` (default today).
+
+        ``as_of`` lets walk-forward backtests refit the model at historical
+        pivots without touching the global "now" state.
+        """
         if not _STATS_OK:
             self.fit_error = 'statsmodels/arch not installed'
             return False
@@ -293,9 +307,12 @@ class CommodityModel:
             return False
 
         fetcher = fetcher or DriverFetcher()
-        start = date.today() - timedelta(days=365 * HISTORY_YEARS)
+        self.as_of = as_of
+        end = as_of
+        anchor = as_of or date.today()
+        start = anchor - timedelta(days=365 * HISTORY_YEARS)
 
-        price = DriverFetcher._fetch_yf(self.ticker, start)
+        price = DriverFetcher._fetch_yf(self.ticker, start, end)
         if price is None or len(price) < 36:
             self.fit_error = f'Insufficient price history ({0 if price is None else len(price)} months)'
             return False
@@ -303,7 +320,7 @@ class CommodityModel:
         self.last_price = float(price.iloc[-1])
 
         y = _transform(price, 'logret').dropna()
-        exog = self._build_exog(fetcher, start)
+        exog = self._build_exog(fetcher, start, end)
         if exog is not None:
             idx = y.index.intersection(exog.index)
             y = y.loc[idx]
@@ -362,10 +379,11 @@ class CommodityModel:
         )
         return True
 
-    def _build_exog(self, fetcher: DriverFetcher, start: date) -> Optional[pd.DataFrame]:
+    def _build_exog(self, fetcher: DriverFetcher, start: date,
+                    end: Optional[date] = None) -> Optional[pd.DataFrame]:
         cols: dict[str, pd.Series] = {}
         for kind, key in self.driver_spec:
-            raw = fetcher.fetch(kind, key, start)
+            raw = fetcher.fetch(kind, key, start, end)
             if raw is None or len(raw) < 24:
                 continue
             transform_key = f'{kind}_{key}' if kind not in ('comm',) else 'comm_'
@@ -428,10 +446,10 @@ class CommodityModel:
 
         # Aggregate into quarterly averages
         result = {}
-        today = date.today()
-        current_q = (today.month - 1) // 3 + 1
+        anchor = self.as_of or date.today()
+        current_q = (anchor.month - 1) // 3 + 1
         next_q_num = current_q + 1
-        next_q_year = today.year
+        next_q_year = anchor.year
         if next_q_num > 4:
             next_q_num -= 4
             next_q_year += 1
