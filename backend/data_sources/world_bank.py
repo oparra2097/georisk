@@ -169,12 +169,20 @@ def indicator_from_url(url):
 def _fetch_wb(indicator, source=None):
     """Fetch and parse World Bank data from API v2."""
     try:
-        url = (
-            f'{_WB_API}/country/all/indicator/{indicator}'
-            f'?format=json&per_page=20000&date=2000:2025'
-        )
+        # Non-WDI sources (QEDS=22, IDS=6) are often quarterly — annual-style
+        # date ranges ("2000:2025") return empty against them. mrv=N grabs the
+        # most-recent-N values regardless of frequency, which is what we want
+        # for a "latest snapshot" chart.
         if source:
-            url += f'&source={source}'
+            url = (
+                f'{_WB_API}/country/all/indicator/{indicator}'
+                f'?format=json&per_page=20000&mrv=20&source={source}'
+            )
+        else:
+            url = (
+                f'{_WB_API}/country/all/indicator/{indicator}'
+                f'?format=json&per_page=20000&date=2000:2025'
+            )
         resp = _get_with_retry(url)
         raw = resp.json()
 
@@ -201,8 +209,12 @@ def _fetch_wb(indicator, source=None):
             if val is None or year_str == '':
                 continue
 
+            # Handle both annual ("2024") and quarterly ("2024Q3") labels —
+            # QEDS/IDS sources return quarterly, WDI returns annual. Year
+            # used only for the aggregate 'years' list; period key stays
+            # as-is so callers can tell annual from quarterly.
             try:
-                year = int(year_str)
+                year = int(year_str[:4])
                 val_float = float(val)
             except (ValueError, TypeError):
                 continue
