@@ -150,6 +150,7 @@ window.ParraData.navigate = function (categoryId, datasetId, subviewId) {
         state.insRegion = 'all';
         state.countries = [];
         state.emUniverse = 'em40';
+        state.emCustomTouched = false;
     }
 
     window.ParraData.pushState();
