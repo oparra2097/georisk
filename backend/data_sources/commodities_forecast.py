@@ -106,6 +106,9 @@ COMMODITIES = {
     'Coffee':           ('KC=F',  '\u00a2/lb',  'Agriculture'),
     'Copper':           ('HG=F',  '\u00a2/lb',  'Metals'),
     'Gold':             ('GC=F',  '$/troy oz',  'Metals'),
+    'Silver':           ('SI=F',  '$/troy oz',  'Metals'),
+    'Platinum':         ('PL=F',  '$/troy oz',  'Metals'),
+    'Aluminum':         ('ALI=F', '$/MT',       'Metals'),
 }
 
 # ── Scenario Price Targets ──────────────────────────────────────────────────
@@ -184,6 +187,28 @@ SCENARIO_TARGETS = {
         'Base':  {'Q1': 5700, 'Q2': 5100, 'Q3': 5350, 'Q4': 5600},
         'Bull':  {'Q1': 6400, 'Q2': 5450, 'Q3': 5800, 'Q4': 6200},
     },
+    # ── PLACEHOLDER TARGETS ────────────────────────────────────────────────
+    # Silver / Platinum / Aluminum were added in Phase 1. The quarterly
+    # numbers below are hand-picked anchors to make the UI render sensibly
+    # until the SARIMAX + GARCH model (Phase 4) replaces them with real
+    # posterior p2.5 / p50 / p97.5 draws. Do NOT cite these externally.
+    # Spot reference (Apr 2026): Silver ~$52/oz, Platinum ~$1300/oz,
+    # Aluminum ~$2600/MT.
+    'Silver': {
+        'Bear':  {'Q1': 42, 'Q2': 44, 'Q3': 41, 'Q4': 43},
+        'Base':  {'Q1': 52, 'Q2': 54, 'Q3': 56, 'Q4': 58},
+        'Bull':  {'Q1': 65, 'Q2': 68, 'Q3': 72, 'Q4': 75},
+    },
+    'Platinum': {
+        'Bear':  {'Q1': 1080, 'Q2': 1120, 'Q3': 1060, 'Q4': 1100},
+        'Base':  {'Q1': 1300, 'Q2': 1330, 'Q3': 1360, 'Q4': 1400},
+        'Bull':  {'Q1': 1580, 'Q2': 1640, 'Q3': 1690, 'Q4': 1750},
+    },
+    'Aluminum': {
+        'Bear':  {'Q1': 2250, 'Q2': 2320, 'Q3': 2210, 'Q4': 2280},
+        'Base':  {'Q1': 2600, 'Q2': 2650, 'Q3': 2680, 'Q4': 2720},
+        'Bull':  {'Q1': 3100, 'Q2': 3220, 'Q3': 3300, 'Q4': 3400},
+    },
 }
 
 # Group colors for commodity lines in group overview
@@ -201,8 +226,11 @@ GROUP_COMMODITY_COLORS = {
         'Coffee':   '#ef4444',
     },
     'Metals': {
-        'Copper': '#f97316',
-        'Gold':   '#eab308',
+        'Copper':   '#f97316',
+        'Gold':     '#eab308',
+        'Silver':   '#94a3b8',
+        'Platinum': '#a78bfa',
+        'Aluminum': '#06b6d4',
     },
 }
 

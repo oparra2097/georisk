@@ -154,8 +154,11 @@ window.ParraData.CATALOG = {
                         { id: 'overview', label: 'Overview' },
                         { id: 'Copper', label: 'Copper' },
                         { id: 'Gold', label: 'Gold' },
+                        { id: 'Silver', label: 'Silver' },
+                        { id: 'Platinum', label: 'Platinum' },
+                        { id: 'Aluminum', label: 'Aluminum' },
                     ],
-                    searchTerms: ['metals', 'copper', 'gold', 'precious', 'industrial metals', 'mining'],
+                    searchTerms: ['metals', 'copper', 'gold', 'silver', 'platinum', 'aluminum', 'aluminium', 'precious', 'industrial metals', 'mining'],
                 },
                 {
                     id: 'fertilizer-em-inflation',
