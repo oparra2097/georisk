@@ -40,6 +40,7 @@ in backend/scheduler.py triggers monthly refits.
 from __future__ import annotations
 
 import os
+import json
 import pickle
 import logging
 import calendar
@@ -507,11 +508,53 @@ class CommodityModel:
             return None
 
 
-# ── Public helpers ─────────────────────────────────────────────────────────
+# ── Storage layer ──────────────────────────────────────────────────────────
+
+def _safe_name(name: str) -> str:
+    return name.replace(' ', '_').replace('/', '_').replace('(', '').replace(')', '')
+
 
 def _cache_path(name: str, cache_dir: str = CACHE_DIR) -> str:
-    safe = name.replace(' ', '_').replace('/', '_').replace('(', '').replace(')', '')
-    return os.path.join(cache_dir, f'{safe}.pkl')
+    return os.path.join(cache_dir, f'{_safe_name(name)}.pkl')
+
+
+def _sidecar_path(name: str, cache_dir: str = CACHE_DIR) -> str:
+    return os.path.join(cache_dir, f'{_safe_name(name)}.json')
+
+
+def _manifest_path(cache_dir: str = CACHE_DIR) -> str:
+    return os.path.join(cache_dir, 'manifest.json')
+
+
+def _write_sidecar(model: 'CommodityModel', cache_dir: str = CACHE_DIR) -> None:
+    """Write a human-readable JSON summary + latest forecast alongside the pickle."""
+    try:
+        payload = {
+            'summary': model.summary(),
+            'forecast': model.forecast(h=4),
+            'written_at': datetime.utcnow().isoformat(),
+        }
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(_sidecar_path(model.name, cache_dir), 'w') as f:
+            json.dump(payload, f, indent=2, default=str)
+    except Exception as e:
+        logger.warning(f'{model.name}: sidecar write failed: {e}')
+
+
+def _update_manifest(summaries: dict, cache_dir: str = CACHE_DIR) -> None:
+    """Maintain a single manifest.json enumerating all cached fits."""
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        manifest = {
+            'updated_at': datetime.utcnow().isoformat(),
+            'stale_after_days': STALE_AFTER_DAYS,
+            'cache_dir': cache_dir,
+            'models': summaries,
+        }
+        with open(_manifest_path(cache_dir), 'w') as f:
+            json.dump(manifest, f, indent=2, default=str)
+    except Exception as e:
+        logger.warning(f'manifest write failed: {e}')
 
 
 def load_cached(name: str, cache_dir: str = CACHE_DIR) -> Optional[CommodityModel]:
@@ -535,6 +578,7 @@ def fit_and_cache(name: str, cache_dir: str = CACHE_DIR) -> Optional[CommodityMo
         return None
     try:
         model.save(_cache_path(name, cache_dir))
+        _write_sidecar(model, cache_dir)
     except Exception as e:
         logger.warning(f'{name}: save failed: {e}')
     return model
@@ -542,6 +586,22 @@ def fit_and_cache(name: str, cache_dir: str = CACHE_DIR) -> Optional[CommodityMo
 
 def get_or_fit(name: str) -> Optional[CommodityModel]:
     return load_cached(name) or fit_and_cache(name)
+
+
+def list_cached(cache_dir: str = CACHE_DIR) -> list[dict]:
+    """Inspect what's currently on disk without deserializing the pickles."""
+    if not os.path.isdir(cache_dir):
+        return []
+    out = []
+    for fname in sorted(os.listdir(cache_dir)):
+        if not fname.endswith('.json') or fname == 'manifest.json':
+            continue
+        try:
+            with open(os.path.join(cache_dir, fname)) as f:
+                out.append(json.load(f).get('summary', {}))
+        except Exception:
+            continue
+    return out
 
 
 def refit_all(cache_dir: str = CACHE_DIR) -> dict[str, dict]:
@@ -555,10 +615,12 @@ def refit_all(cache_dir: str = CACHE_DIR) -> dict[str, dict]:
             ok = model.fit(fetcher=fetcher)
             if ok:
                 model.save(_cache_path(name, cache_dir))
+                _write_sidecar(model, cache_dir)
             summaries[name] = model.summary()
         except Exception as e:
             logger.error(f'{name}: refit crashed: {e}')
             summaries[name] = {'name': name, 'fit_error': str(e)}
+    _update_manifest(summaries, cache_dir)
     return summaries
 
 

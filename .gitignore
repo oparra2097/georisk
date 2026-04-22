@@ -5,3 +5,7 @@ venv/
 .venv/
 data/
 !static/data/
+
+# Commodity model cache artifacts (regenerated on monthly refit)
+backend/cache/commodity_models/*.pkl
+backend/cache/commodity_models/*.json
