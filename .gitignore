@@ -3,5 +3,10 @@ __pycache__/
 *.pyc
 venv/
 .venv/
-data/
+data/*
 !static/data/
+!data/consensus.yaml
+
+# Commodity model cache artifacts (regenerated on monthly refit)
+backend/cache/commodity_models/*.pkl
+backend/cache/commodity_models/*.json
