@@ -111,8 +111,13 @@ def fetch_country_articles(country_alpha2, timespan=None, max_records=150):
     if timespan is None:
         timespan = Config.GDELT_TIMESPAN
     search_name = _get_search_name(country_alpha2)
+    # NOTE: we intentionally do NOT quote the phrase. GDELT DOC 2.0's
+    # quoted-phrase search is significantly slower/flakier (times out
+    # under load) than bag-of-words search. We accept the noisier
+    # recall here and rely on backend/scoring/relevance.py to drop
+    # articles that aren't actually about this country.
     params = {
-        'query': f'"{search_name}" sourcelang:english',
+        'query': f'{search_name} sourcelang:english',
         'mode': 'artlist',
         'maxrecords': max_records,
         'timespan': timespan,
@@ -128,7 +133,7 @@ def fetch_country_articles(country_alpha2, timespan=None, max_records=150):
     if country_alpha2 in COUNTRY_FALLBACK_TERMS:
         existing_urls = {a.get('url') for a in articles if a.get('url')}
         for fallback_term in COUNTRY_FALLBACK_TERMS[country_alpha2]:
-            params['query'] = f'"{fallback_term}" sourcelang:english'
+            params['query'] = f'{fallback_term} sourcelang:english'
             fb_data = _gdelt_request(params)
             if not fb_data:
                 continue
@@ -173,7 +178,7 @@ def fetch_country_tone(country_alpha2, timespan=None):
         timespan = Config.GDELT_TIMESPAN
     search_name = _get_search_name(country_alpha2)
     params = {
-        'query': f'"{search_name}" sourcelang:english',
+        'query': f'{search_name} sourcelang:english',
         'mode': 'timelinetone',
         'timespan': timespan,
         'format': 'json'
@@ -184,7 +189,7 @@ def fetch_country_tone(country_alpha2, timespan=None):
     # Fallback: if no tone data and country has alternate search terms, retry
     if tone is None and country_alpha2 in COUNTRY_FALLBACK_TERMS:
         for fallback_term in COUNTRY_FALLBACK_TERMS[country_alpha2]:
-            params['query'] = f'"{fallback_term}" sourcelang:english'
+            params['query'] = f'{fallback_term} sourcelang:english'
             data = _gdelt_request(params)
             tone = _extract_tone(data)
             if tone is not None:
