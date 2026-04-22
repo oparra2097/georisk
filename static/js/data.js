@@ -3726,6 +3726,8 @@
                 iso: iso,
                 name: c.name || iso,
                 ca: c.ca_pct_gdp,
+                caSource: c.ca_source,
+                caYear: c.ca_year,
                 fdi: c.fdi_pct_gdp,
                 basic: c.basic_balance_pct_gdp,
                 ratio: ratio,
@@ -3836,7 +3838,11 @@
                                 const p = ctx2.raw;
                                 const lines = [];
                                 lines.push('Basic Balance: ' + (p.basic != null ? p.basic.toFixed(2) : '—') + '% GDP');
-                                lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
+                                const caTag = p.caSource && p.caSource !== 'World Bank'
+                                    ? ' (' + p.caSource + (p.caYear ? ' ' + p.caYear : '') + ')'
+                                    : '';
+                                lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%' + caTag +
+                                    '  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
                                 lines.push('Reserves / ST Debt: ' + (p.ratio != null ? p.ratio.toFixed(0) + '%' : 'N/A — plotted at chart edge'));
                                 lines.push('Reserves: ' + _emFormatUsd(p.reserves));
                                 lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt));
