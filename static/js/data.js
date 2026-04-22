@@ -3727,11 +3727,16 @@
         });
         const plottable = plottableWithRatio.concat(plottableNoRatio);
         const missing = selected.length - plottable.length;
-        const ratiosShown = plottableWithRatio
-            .map(i => allCountries[i].reserves_to_st_debt_pct)
-            .filter(v => v != null && v > 0);
-        const maxRatio = ratiosShown.length ? Math.max(...ratiosShown) : 300;
-        const fallbackX = Math.max(maxRatio * 1.1, 500);
+        // Visual clip: ratios above 1500% are already "off the charts safe"
+        // (Gulf states, some AEs), so we plot them at the clip line instead
+        // of letting them stretch the X axis out to 4000%+ and drag the
+        // fallback bubbles (stranded EMs) along with them.
+        const VISUAL_MAX_RATIO = 1500;
+        const fallbackX = VISUAL_MAX_RATIO;
+        function clipRatio(v) {
+            if (v == null) return null;
+            return v > VISUAL_MAX_RATIO ? VISUAL_MAX_RATIO : v;
+        }
 
         // Bubble scaling — radius proportional to sqrt(GDP) so that area ~ GDP
         const gdpValues = plottable.map(i => allCountries[i].gdp_usd || 0).filter(v => v > 0);
@@ -3755,7 +3760,8 @@
             const c = allCountries[iso];
             const ratio = c.reserves_to_st_debt_pct;
             return {
-                x: ratio != null ? ratio : fallbackX,
+                x: ratio != null ? clipRatio(ratio) : fallbackX,
+                xClipped: ratio != null && ratio > VISUAL_MAX_RATIO,
                 y: c.basic_balance_pct_gdp,
                 r: radiusFor(c.gdp_usd),
                 iso: iso,
@@ -3884,7 +3890,15 @@
                                     : '';
                                 lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%' + caTag +
                                     '  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
-                                lines.push('Reserves / ST Debt: ' + (p.ratio != null ? p.ratio.toFixed(0) + '%' : 'N/A — plotted at chart edge'));
+                                let ratioLine;
+                                if (p.ratio == null) {
+                                    ratioLine = 'N/A — plotted at chart edge';
+                                } else if (p.xClipped) {
+                                    ratioLine = p.ratio.toFixed(0) + '% (clipped to 1500% on chart)';
+                                } else {
+                                    ratioLine = p.ratio.toFixed(0) + '%';
+                                }
+                                lines.push('Reserves / ST Debt: ' + ratioLine);
                                 const resvTag = p.reservesSource === 'IMF IFS' && p.reservesPeriod
                                     ? ' (IFS ' + p.reservesPeriod + ')'
                                     : '';
@@ -3923,6 +3937,7 @@
                         },
                         grid: { color: 'rgba(55,65,81,0.3)' },
                         min: 0,
+                        max: 1600,  // 1500% clip + 100 buffer for labels
                     },
                     y: {
                         type: 'linear',
