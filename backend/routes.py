@@ -1175,6 +1175,45 @@ def get_em_vulnerability():
     return jsonify(data)
 
 
+@api_bp.route('/em-vulnerability/missing')
+def list_em_missing_st_debt():
+    """Return which EMs are currently missing ST-debt data, grouped by
+    whether they'd drop into the default Top 40 view. Drives the targeted
+    data-source hunt for the holdouts.
+    """
+    data = get_em_vulnerability_data()
+    countries = data.get('countries', {})
+    missing_em = []
+    missing_non_em = []
+    for iso, r in countries.items():
+        if r.get('reserves_to_st_debt_pct') is not None:
+            continue
+        row = {
+            'iso3': iso,
+            'name': r.get('name'),
+            'gdp_usd': r.get('gdp_usd'),
+            'em_rank': r.get('em_rank'),
+            'gdp_rank': r.get('gdp_rank'),
+            'basic_balance_pct_gdp': r.get('basic_balance_pct_gdp'),
+            'reserves_usd': r.get('reserves_usd'),
+            'reserves_source': r.get('reserves_source'),
+            'st_debt_year': r.get('st_debt_year'),
+            'st_debt_source': r.get('st_debt_source'),
+        }
+        if r.get('is_em'):
+            missing_em.append(row)
+        else:
+            missing_non_em.append(row)
+    missing_em.sort(key=lambda x: -(x.get('gdp_usd') or 0))
+    missing_non_em.sort(key=lambda x: -(x.get('gdp_usd') or 0))
+    return jsonify({
+        'missing_em_count': len(missing_em),
+        'missing_em': missing_em,
+        'missing_non_em_count': len(missing_non_em),
+        'missing_non_em_sample': missing_non_em[:20],
+    })
+
+
 @api_bp.route('/em-vulnerability/diagnose')
 def diagnose_em_vulnerability():
     """Temporary diagnostic — probes WB API for the right QEDS source + indicator.
