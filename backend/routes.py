@@ -1197,6 +1197,7 @@ def list_em_missing_st_debt():
             'basic_balance_pct_gdp': r.get('basic_balance_pct_gdp'),
             'reserves_usd': r.get('reserves_usd'),
             'reserves_source': r.get('reserves_source'),
+            'st_debt_usd': r.get('st_debt_usd'),
             'st_debt_year': r.get('st_debt_year'),
             'st_debt_source': r.get('st_debt_source'),
         }
