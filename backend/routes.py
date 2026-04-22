@@ -554,6 +554,68 @@ def get_methodology(commodity):
     })
 
 
+@api_bp.route('/forecasts/shocks', defaults={'commodity': None})
+@api_bp.route('/forecasts/shocks/<path:commodity>')
+def get_shocks(commodity):
+    """Return the scenario-shock catalogue.
+
+    Without a commodity → ``{all: {commodity_name: [shocks...]}}`` for the
+    full catalogue. With one → ``{commodity, shocks}``. Used by the
+    frontend scenario builder to render sliders.
+    """
+    from backend.data_sources import commodity_models
+    return jsonify(commodity_models.get_shocks_catalogue(commodity))
+
+
+@api_bp.route('/forecasts/scenario', methods=['POST'])
+def post_scenario_forecast():
+    """Run a scenario-modified forecast for a single commodity.
+
+    Body::
+
+        {
+            "commodity": "WTI Crude",
+            "shocks": [{"id": "opec_production", "magnitude": -2.0}],
+            "driver_shifts": {"yf:^GSPC": -0.01}
+        }
+
+    Both ``shocks`` and ``driver_shifts`` are optional — pass an empty
+    dict to retrieve the unmodified base forecast (same as
+    ``/api/forecasts`` per-commodity output).
+    """
+    from backend.data_sources import commodity_models
+    payload = request.get_json(silent=True) or {}
+    commodity = payload.get('commodity')
+    if not commodity or commodity not in commodity_models.TICKERS:
+        return jsonify({'error': f'Unknown or missing commodity: {commodity!r}'}), 400
+
+    shocks = payload.get('shocks') or []
+    driver_shifts = payload.get('driver_shifts') or {}
+    if not isinstance(shocks, list) or not isinstance(driver_shifts, dict):
+        return jsonify({'error': 'shocks must be a list, driver_shifts a dict'}), 400
+
+    try:
+        result = commodity_models.get_model_forecast(
+            commodity,
+            driver_shifts=driver_shifts,
+            shocks=shocks,
+        )
+    except Exception as exc:
+        return jsonify({'error': f'Forecast failed: {exc}'}), 500
+    if result is None:
+        return jsonify({'error': f'Model unavailable for {commodity}'}), 503
+
+    return jsonify({
+        'commodity': commodity,
+        'forecast': result.get('forecast'),
+        'summary': result.get('summary'),
+        'exog_columns': result.get('exog_columns', []),
+        'shocks_applied': shocks,
+        'driver_shifts_applied': driver_shifts,
+        'shocks_catalogue': commodity_models.SHOCKS.get(commodity, []),
+    })
+
+
 @api_bp.route('/gdp-nowcast')
 def gdp_nowcast():
     """Return US GDP nowcast estimate (cached 6 hours)."""

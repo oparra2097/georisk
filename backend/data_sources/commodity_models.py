@@ -134,6 +134,297 @@ DRIVER_TRANSFORM = {
 }
 
 
+# ── Scenario shock catalogue ──────────────────────────────────────────────
+#
+# Per-commodity menu of "what-if" levers a user can apply on top of the base
+# SARIMAX + GARCH forecast. Each shock declares an elasticity (price % per
+# unit of shock magnitude) plus a per-quarter decay factor — so a one-time
+# OPEC cut bites hardest in Q+1, half as much in Q+3, etc.
+#
+# Elasticities are anchored on published research and round-numbered for
+# transparency. Operators should treat them as "starting point with
+# institutional priors", not estimates from this codebase. Citations live
+# in the per-commodity white papers under docs/commodities/.
+#
+# Schema:
+#   id            — stable string used in API requests
+#   name          — display label for the slider
+#   unit          — informational ("mbpd", "%", "bp", "0-1")
+#   min/max/step  — slider bounds
+#   default       — slider position when nothing is set (always 0)
+#   elasticity    — Δprice % per +1 unit of shock magnitude
+#   decay_per_q   — multiplier each forward quarter (0.85 = -15% persistence/q)
+#   note          — short tooltip for the UI
+
+SHOCKS: dict[str, list[dict]] = {
+    'WTI Crude': [
+        {'id': 'opec_production', 'name': 'OPEC+ production change',
+         'unit': 'mbpd', 'min': -3.0, 'max': 3.0, 'step': 0.25, 'default': 0,
+         'elasticity': -0.07, 'decay_per_q': 0.85,
+         'note': 'Negative = production cut → higher price. ~7% per mbpd short-run.'},
+        {'id': 'spr_flow', 'name': 'SPR release / refill',
+         'unit': 'mbpd', 'min': -1.0, 'max': 1.0, 'step': 0.1, 'default': 0,
+         'elasticity': -0.04, 'decay_per_q': 0.70,
+         'note': 'Positive = refill (bullish), negative = release (bearish).'},
+        {'id': 'me_premium', 'name': 'Middle East risk premium',
+         'unit': 'severity', 'min': 0.0, 'max': 1.0, 'step': 0.1, 'default': 0,
+         'elasticity': 0.20, 'decay_per_q': 0.75,
+         'note': '0 = no premium, 1 = sustained Hormuz disruption.'},
+        {'id': 'demand_shock', 'name': 'Global demand shock',
+         'unit': '% of demand', 'min': -3.0, 'max': 3.0, 'step': 0.25, 'default': 0,
+         'elasticity': -0.08, 'decay_per_q': 0.80,
+         'note': 'Negative = demand destruction (recession). ~8% per 1% demand.'},
+    ],
+    'Brent Crude': [
+        {'id': 'opec_production', 'name': 'OPEC+ production change',
+         'unit': 'mbpd', 'min': -3.0, 'max': 3.0, 'step': 0.25, 'default': 0,
+         'elasticity': -0.075, 'decay_per_q': 0.85,
+         'note': 'Brent is more sensitive than WTI to OPEC moves.'},
+        {'id': 'me_premium', 'name': 'Middle East risk premium',
+         'unit': 'severity', 'min': 0.0, 'max': 1.0, 'step': 0.1, 'default': 0,
+         'elasticity': 0.25, 'decay_per_q': 0.75,
+         'note': 'Brent carries the seaborne risk premium.'},
+        {'id': 'china_demand', 'name': 'China demand shift',
+         'unit': '% imports', 'min': -10.0, 'max': 10.0, 'step': 1.0, 'default': 0,
+         'elasticity': -0.025, 'decay_per_q': 0.85,
+         'note': 'Negative = Chinese refining slowdown / quota cut.'},
+        {'id': 'demand_shock', 'name': 'Global demand shock',
+         'unit': '% of demand', 'min': -3.0, 'max': 3.0, 'step': 0.25, 'default': 0,
+         'elasticity': -0.085, 'decay_per_q': 0.80,
+         'note': 'Recession risk transmits via Brent first.'},
+    ],
+    'Natural Gas (HH)': [
+        {'id': 'lng_outage', 'name': 'LNG export disruption',
+         'unit': 'Bcf/d', 'min': -3.0, 'max': 3.0, 'step': 0.25, 'default': 0,
+         'elasticity': -0.04, 'decay_per_q': 0.65,
+         'note': 'Outage frees gas for domestic market → bearish HH.'},
+        {'id': 'hdd_anomaly', 'name': 'Winter HDD anomaly',
+         'unit': '% of normal', 'min': -25.0, 'max': 25.0, 'step': 5.0, 'default': 0,
+         'elasticity': 0.006, 'decay_per_q': 0.50,
+         'note': 'Cold winter = more storage draw = higher price.'},
+        {'id': 'production_change', 'name': 'US dry gas production',
+         'unit': 'Bcf/d', 'min': -3.0, 'max': 3.0, 'step': 0.25, 'default': 0,
+         'elasticity': -0.025, 'decay_per_q': 0.85,
+         'note': 'Lagged response from Haynesville / Appalachia rigs.'},
+    ],
+    'TTF Gas': [
+        {'id': 'norwegian_outage', 'name': 'Norwegian pipeline outage',
+         'unit': 'Bcf/d', 'min': -2.0, 'max': 2.0, 'step': 0.25, 'default': 0,
+         'elasticity': -0.10, 'decay_per_q': 0.65,
+         'note': 'Norway is now ~50% of EU imports. Negative = outage.'},
+        {'id': 'qatar_disruption', 'name': 'Qatar LNG disruption',
+         'unit': 'severity', 'min': 0.0, 'max': 1.0, 'step': 0.1, 'default': 0,
+         'elasticity': 0.30, 'decay_per_q': 0.70,
+         'note': '0 = normal flows, 1 = sustained Hormuz / Ras Laffan strike.'},
+        {'id': 'eu_storage', 'name': 'EU storage anomaly',
+         'unit': '% of normal', 'min': -20.0, 'max': 20.0, 'step': 5.0, 'default': 0,
+         'elasticity': -0.008, 'decay_per_q': 0.55,
+         'note': 'Below-normal storage entering winter is bullish.'},
+        {'id': 'russia_restart', 'name': 'Russian pipeline gas restart',
+         'unit': '0-1', 'min': 0.0, 'max': 1.0, 'step': 0.1, 'default': 0,
+         'elasticity': -0.30, 'decay_per_q': 0.85,
+         'note': 'Highly hypothetical. 1 = full restoration of pre-2022 flows.'},
+    ],
+    'Gold': [
+        {'id': 'real_rates', 'name': 'Real 10Y yield shift',
+         'unit': 'bp', 'min': -100.0, 'max': 100.0, 'step': 10.0, 'default': 0,
+         'elasticity': -0.0008, 'decay_per_q': 0.95,
+         'note': '-10bp ≈ +0.8% gold. Primary macro anchor.'},
+        {'id': 'cb_buying', 'name': 'Central bank purchases',
+         'unit': 'tonnes/yr', 'min': -500.0, 'max': 1000.0, 'step': 100.0, 'default': 0,
+         'elasticity': 0.00015, 'decay_per_q': 0.90,
+         'note': '+1000 tonnes vs trend ≈ +15%. WGC data.'},
+        {'id': 'usd_shock', 'name': 'USD index shift',
+         'unit': '%', 'min': -10.0, 'max': 10.0, 'step': 1.0, 'default': 0,
+         'elasticity': -0.007, 'decay_per_q': 0.85,
+         'note': 'Inverse relationship; -1% USD ≈ +0.7% gold.'},
+        {'id': 'risk_off', 'name': 'Risk-off intensity',
+         'unit': 'severity', 'min': 0.0, 'max': 1.0, 'step': 0.1, 'default': 0,
+         'elasticity': 0.12, 'decay_per_q': 0.65,
+         'note': 'Episodic safe-haven flow; short half-life.'},
+    ],
+    'Silver': [
+        {'id': 'real_rates', 'name': 'Real 10Y yield shift',
+         'unit': 'bp', 'min': -100.0, 'max': 100.0, 'step': 10.0, 'default': 0,
+         'elasticity': -0.0015, 'decay_per_q': 0.95,
+         'note': 'Silver ~2x more sensitive than gold to real rates.'},
+        {'id': 'solar_demand', 'name': 'Solar / industrial demand',
+         'unit': '%', 'min': -20.0, 'max': 30.0, 'step': 5.0, 'default': 0,
+         'elasticity': 0.005, 'decay_per_q': 0.90,
+         'note': 'PV demand growth is a structural bid; +10% ≈ +5%.'},
+        {'id': 'gold_silver_ratio', 'name': 'Gold/silver ratio target',
+         'unit': 'ratio shift', 'min': -15.0, 'max': 15.0, 'step': 1.0, 'default': 0,
+         'elasticity': -0.012, 'decay_per_q': 0.80,
+         'note': 'Negative = ratio compresses (silver outperforms gold).'},
+    ],
+    'Platinum': [
+        {'id': 'sa_supply_shock', 'name': 'South Africa supply shock',
+         'unit': '%', 'min': -25.0, 'max': 10.0, 'step': 2.5, 'default': 0,
+         'elasticity': -0.012, 'decay_per_q': 0.75,
+         'note': 'Eskom load-shedding cut historically -10% supply → +12%.'},
+        {'id': 'auto_production', 'name': 'Auto production change',
+         'unit': '%', 'min': -15.0, 'max': 15.0, 'step': 2.5, 'default': 0,
+         'elasticity': 0.005, 'decay_per_q': 0.85,
+         'note': '~40% of platinum demand is autocatalysts.'},
+        {'id': 'hydrogen_demand', 'name': 'Hydrogen economy uptake',
+         'unit': '%', 'min': 0.0, 'max': 30.0, 'step': 5.0, 'default': 0,
+         'elasticity': 0.002, 'decay_per_q': 0.95,
+         'note': 'Long-dated tailwind; impact still small relative to autos.'},
+    ],
+    'Copper': [
+        {'id': 'china_pmi', 'name': 'China manufacturing PMI shift',
+         'unit': 'PMI pts', 'min': -3.0, 'max': 3.0, 'step': 0.5, 'default': 0,
+         'elasticity': 0.020, 'decay_per_q': 0.80,
+         'note': '+1 PMI point ≈ +2% copper. China is ~55% of demand.'},
+        {'id': 'lme_stocks', 'name': 'LME stocks change',
+         'unit': '%', 'min': -50.0, 'max': 50.0, 'step': 10.0, 'default': 0,
+         'elasticity': -0.0015, 'decay_per_q': 0.65,
+         'note': 'Stock builds bearish; tightness below 100kt is bullish.'},
+        {'id': 'chile_supply', 'name': 'Chile / Peru supply shock',
+         'unit': '%', 'min': -15.0, 'max': 5.0, 'step': 2.5, 'default': 0,
+         'elasticity': -0.008, 'decay_per_q': 0.75,
+         'note': 'Strikes, water rationing, ore-grade decline.'},
+    ],
+    'Aluminum': [
+        {'id': 'china_capacity', 'name': 'China production cap shift',
+         'unit': '%', 'min': -10.0, 'max': 10.0, 'step': 1.0, 'default': 0,
+         'elasticity': -0.012, 'decay_per_q': 0.85,
+         'note': 'China is ~60% of global supply. Yunnan hydro is the swing.'},
+        {'id': 'eu_smelters', 'name': 'EU smelter closures',
+         'unit': '% capacity', 'min': 0.0, 'max': 25.0, 'step': 2.5, 'default': 0,
+         'elasticity': 0.008, 'decay_per_q': 0.85,
+         'note': 'Power-cost squeeze drives chronic curtailment.'},
+        {'id': 'power_shock', 'name': 'Energy / power price shock',
+         'unit': '%', 'min': -30.0, 'max': 50.0, 'step': 10.0, 'default': 0,
+         'elasticity': 0.0035, 'decay_per_q': 0.70,
+         'note': 'Smelting is 30-40% energy cost.'},
+    ],
+    'Cocoa': [
+        {'id': 'wa_harvest', 'name': 'West Africa harvest shortfall',
+         'unit': '%', 'min': -25.0, 'max': 10.0, 'step': 2.5, 'default': 0,
+         'elasticity': -0.040, 'decay_per_q': 0.80,
+         'note': 'Ghana + CI = ~60% of supply. Inelastic, big elasticity.'},
+        {'id': 'disease', 'name': 'Disease pressure (black pod / swollen shoot)',
+         'unit': 'severity', 'min': 0.0, 'max': 1.0, 'step': 0.1, 'default': 0,
+         'elasticity': 0.20, 'decay_per_q': 0.90,
+         'note': 'Multi-year compounding effect on yield.'},
+        {'id': 'demand_shift', 'name': 'Grindings / chocolate demand',
+         'unit': '%', 'min': -10.0, 'max': 10.0, 'step': 1.0, 'default': 0,
+         'elasticity': 0.015, 'decay_per_q': 0.80,
+         'note': 'Pass-through to retail capped some downside in 2024-26.'},
+    ],
+    'Wheat': [
+        {'id': 'black_sea', 'name': 'Black Sea export disruption',
+         'unit': '% blockade', 'min': 0.0, 'max': 100.0, 'step': 10.0, 'default': 0,
+         'elasticity': 0.0025, 'decay_per_q': 0.65,
+         'note': '100% blockade ≈ +25% short-run.'},
+        {'id': 'us_drought', 'name': 'US drought severity (PDSI shift)',
+         'unit': 'PDSI', 'min': -3.0, 'max': 0.0, 'step': 0.5, 'default': 0,
+         'elasticity': -0.06, 'decay_per_q': 0.70,
+         'note': 'Negative PDSI = drier; HRW belt sensitive.'},
+        {'id': 'export_ban', 'name': 'Major exporter ban (binary)',
+         'unit': '0-1', 'min': 0.0, 'max': 1.0, 'step': 0.5, 'default': 0,
+         'elasticity': 0.15, 'decay_per_q': 0.55,
+         'note': 'Russia tax, India ban, etc. Blunt step-function.'},
+        {'id': 'stocks_to_use', 'name': 'Stocks-to-use ratio shift',
+         'unit': 'pp', 'min': -5.0, 'max': 5.0, 'step': 1.0, 'default': 0,
+         'elasticity': -0.013, 'decay_per_q': 0.80,
+         'note': 'WASDE; tighter S/U ratio is bullish.'},
+    ],
+    'Soybeans': [
+        {'id': 'brazil_rainfall', 'name': 'Brazil rainfall anomaly',
+         'unit': '%', 'min': -30.0, 'max': 20.0, 'step': 5.0, 'default': 0,
+         'elasticity': -0.008, 'decay_per_q': 0.75,
+         'note': 'Cerrado Jan-Mar planting window is decisive.'},
+        {'id': 'china_imports', 'name': 'China imports shift',
+         'unit': '%', 'min': -15.0, 'max': 15.0, 'step': 2.5, 'default': 0,
+         'elasticity': 0.006, 'decay_per_q': 0.80,
+         'note': 'China is ~60% of global trade.'},
+        {'id': 'argentina_drought', 'name': 'Argentina drought',
+         'unit': 'severity', 'min': 0.0, 'max': 1.0, 'step': 0.1, 'default': 0,
+         'elasticity': 0.12, 'decay_per_q': 0.70,
+         'note': 'Pampas summer rain; 2021-22 ENSO was severe.'},
+    ],
+    'Coffee': [
+        {'id': 'brazil_frost', 'name': 'Brazil frost damage',
+         'unit': '%', 'min': 0.0, 'max': 30.0, 'step': 2.5, 'default': 0,
+         'elasticity': 0.020, 'decay_per_q': 0.75,
+         'note': '2021 frost (third worst on record) drove the spike.'},
+        {'id': 'vietnam_drought', 'name': 'Vietnam Robusta drought',
+         'unit': '%', 'min': 0.0, 'max': 25.0, 'step': 2.5, 'default': 0,
+         'elasticity': 0.010, 'decay_per_q': 0.80,
+         'note': 'Central Highlands El Niño exposure.'},
+        {'id': 'ico_shift', 'name': 'ICO indicator shift',
+         'unit': '%', 'min': -20.0, 'max': 20.0, 'step': 2.5, 'default': 0,
+         'elasticity': 0.008, 'decay_per_q': 0.85,
+         'note': 'Composite proxy for global supply-demand balance.'},
+    ],
+}
+
+
+def apply_driver_shifts(exog_future: Optional[pd.DataFrame],
+                        shifts: Optional[dict]) -> Optional[pd.DataFrame]:
+    """Add user-supplied shifts to the held-flat driver path.
+
+    `shifts` is a {column_name: delta} dict. The delta is applied additively
+    to every forecast month — appropriate for log-return drivers (DXY,
+    equities, commodities), first-difference drivers (real yield), and
+    log-level drivers (GPR). Unknown columns are ignored.
+    """
+    if not shifts or exog_future is None:
+        return exog_future
+    out = exog_future.copy()
+    for col, delta in shifts.items():
+        if col in out.columns:
+            try:
+                out[col] = out[col] + float(delta)
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
+def apply_shocks(commodity: str,
+                 shocks: Optional[list],
+                 sim_prices: 'np.ndarray') -> 'np.ndarray':
+    """Multiply simulated price paths by an elasticity-based shock factor.
+
+    Each shock is `{id, magnitude}`. Elasticity is looked up in SHOCKS;
+    impact decays geometrically per quarter. Multiple shocks compose
+    multiplicatively. Unknown ids are skipped.
+    """
+    if not shocks:
+        return sim_prices
+    spec_lookup = {s['id']: s for s in SHOCKS.get(commodity, [])}
+    n_months = sim_prices.shape[1]
+    factor = np.ones(n_months)
+    for shock in shocks:
+        spec = spec_lookup.get(shock.get('id'))
+        if not spec:
+            continue
+        try:
+            magnitude = float(shock.get('magnitude', 0))
+        except (TypeError, ValueError):
+            continue
+        if magnitude == 0:
+            continue
+        impact_pct = magnitude * spec['elasticity']
+        decay = spec.get('decay_per_q', 0.85)
+        for m in range(n_months):
+            q_idx = m // 3
+            factor[m] *= (1.0 + impact_pct * (decay ** q_idx))
+    return sim_prices * factor[np.newaxis, :]
+
+
+def get_shocks_catalogue(commodity: Optional[str] = None) -> dict:
+    """Return the shock menu for a single commodity or all commodities.
+
+    Used by the frontend to render the scenario builder sliders.
+    """
+    if commodity is not None:
+        return {'commodity': commodity, 'shocks': SHOCKS.get(commodity, [])}
+    return {'all': {name: SHOCKS.get(name, []) for name in TICKERS}}
+
+
 # ── Driver fetchers ────────────────────────────────────────────────────────
 
 class DriverFetcher:
@@ -400,15 +691,28 @@ class CommodityModel:
 
     # ── forecast ────────────────────────────────────────────────────────
 
-    def forecast(self, h: int = 4, draws: int = BOOTSTRAP_DRAWS) -> dict:
-        """Forecast h forward quarterly averages with 95% CIs."""
+    def forecast(self, h: int = 4, draws: int = BOOTSTRAP_DRAWS,
+                 driver_shifts: Optional[dict] = None,
+                 shocks: Optional[list] = None) -> dict:
+        """Forecast h forward quarterly averages with 95% CIs.
+
+        Optional overrides for interactive scenario building:
+
+        * ``driver_shifts`` — ``{column_name: delta}`` added to the held-flat
+          forecast driver path before SARIMAX consumes it. Use the column
+          names exposed by ``self.exog_monthly.columns`` (e.g. ``'fred:DXY'``).
+        * ``shocks`` — list of ``{id, magnitude}`` dicts looked up against
+          the per-commodity ``SHOCKS`` catalogue. Each shock applies an
+          elasticity-based price multiplier with geometric per-quarter decay,
+          composed multiplicatively across shocks.
+        """
         if self.sarimax_res is None or self.price_monthly is None:
             return {}
 
         rng = np.random.default_rng(seed=42)
         n_months = h * 3
 
-        # Deterministic mean forecast (exog held at last value)
+        # Deterministic mean forecast (exog held at last value, then user shifts)
         exog_future = None
         if self.exog_monthly is not None and len(self.exog_monthly) > 0:
             last = self.exog_monthly.iloc[-1]
@@ -416,6 +720,7 @@ class CommodityModel:
                 np.tile(last.values, (n_months, 1)),
                 columns=self.exog_monthly.columns,
             )
+        exog_future = apply_driver_shifts(exog_future, driver_shifts)
 
         try:
             mean_fc = self.sarimax_res.get_forecast(steps=n_months, exog=exog_future)
@@ -443,6 +748,9 @@ class CommodityModel:
         sim_returns = mean_returns[np.newaxis, :] + innov  # (draws, n_months)
         sim_log_prices = np.cumsum(sim_returns, axis=1) + np.log(self.last_price)
         sim_prices = np.exp(sim_log_prices)
+
+        # Layer shock-elasticity overlay on top of the simulated paths.
+        sim_prices = apply_shocks(self.name, shocks, sim_prices)
 
         # Aggregate into quarterly averages
         result = {}
@@ -647,12 +955,18 @@ def get_model_forecast(
     qtd_mean: Optional[float] = None,
     days_elapsed: int = 0,
     days_in_quarter: int = 90,
+    driver_shifts: Optional[dict] = None,
+    shocks: Optional[list] = None,
 ) -> Optional[dict]:
-    """Public entry used by commodities_forecast.py integration."""
+    """Public entry used by commodities_forecast.py integration.
+
+    ``driver_shifts`` and ``shocks`` are passed through to
+    ``CommodityModel.forecast``; see that docstring for the schema.
+    """
     model = get_or_fit(name)
     if model is None:
         return None
-    forecast = model.forecast(h=4)
+    forecast = model.forecast(h=4, driver_shifts=driver_shifts, shocks=shocks)
     if not forecast:
         return None
     nowcast_val = model.nowcast(qtd_mean, days_elapsed, days_in_quarter) if qtd_mean is not None else None
@@ -660,6 +974,7 @@ def get_model_forecast(
         'forecast': forecast,
         'nowcast': nowcast_val,
         'summary': model.summary(),
+        'exog_columns': list(model.exog_monthly.columns) if model.exog_monthly is not None else [],
     }
 
 
