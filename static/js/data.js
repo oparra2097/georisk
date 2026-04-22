@@ -3890,9 +3890,15 @@
                                     : '';
                                 lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%' + caTag +
                                     '  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
+                                // Synthetic ratios (GCC net creditors, sanctions, WAEMU pool)
+                                // are flagged via st_debt_source that doesn't start with "World Bank".
+                                const isSynth = p.stDebtSource &&
+                                    !p.stDebtSource.startsWith('World Bank');
                                 let ratioLine;
                                 if (p.ratio == null) {
                                     ratioLine = 'N/A — plotted at chart edge';
+                                } else if (isSynth) {
+                                    ratioLine = p.ratio.toFixed(0) + '% (synthetic — ' + p.stDebtSource + ')';
                                 } else if (p.xClipped) {
                                     ratioLine = p.ratio.toFixed(0) + '% (clipped to 1500% on chart)';
                                 } else {
