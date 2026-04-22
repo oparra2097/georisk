@@ -320,20 +320,13 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 
         total_values = []
         fx_values = []
-        gold_values = []
         latest_real_idx = -1
 
         for i, period in enumerate(periods):
             total_b = _usd_millions_to_billions(total_data.get(period))
             fx_b = _usd_millions_to_billions(fx_data.get(period))
-            gold_b = (
-                round(total_b - fx_b, 2)
-                if (total_b is not None and fx_b is not None)
-                else None
-            )
             total_values.append(total_b)
             fx_values.append(fx_b)
-            gold_values.append(gold_b)
             if total_b is not None:
                 latest_real_idx = i
 
@@ -344,11 +337,11 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
         # Capped forward-fill: smooth over reporting gaps to keep chart
         # lines continuous. IFS data is dense through ~2025-06 but IRFCL
         # FX only covers 10 countries — without fill, gold (= total − fx)
-        # shows dashes for every other country after 2025-06. A 9-month
+        # shows dashes for every other country after 2025-06. A 12-month
         # cap carries IFS values far enough to cover the gap between the
         # frozen mirror and today, while still breaking the line for
-        # countries that genuinely stopped reporting a long time ago.
-        def _capped_fill(arr, max_gap=9):
+        # countries that genuinely stopped reporting long ago.
+        def _capped_fill(arr, max_gap=12):
             last_val = None
             gap = 0
             for i, v in enumerate(arr):
@@ -362,12 +355,13 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
         _capped_fill(total_values)
         _capped_fill(fx_values)
 
-        # Recompute gold after filling so short fx gaps don't create
-        # spurious null gold entries.
+        # Recompute gold from the filled arrays. Clamp to zero: mixing
+        # sources (IRFCL total + IFS FX) can produce negative gold when
+        # their methodologies differ slightly for a country.
         gold_values = []
         for t, f in zip(total_values, fx_values):
             if t is not None and f is not None:
-                gold_values.append(round(t - f, 2))
+                gold_values.append(max(round(t - f, 2), 0.0))
             else:
                 gold_values.append(None)
 
