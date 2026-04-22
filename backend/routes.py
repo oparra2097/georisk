@@ -1260,16 +1260,16 @@ def diagnose_em_vulnerability():
     STRANDED_EMS = ['KOR', 'MYS', 'POL', 'ROU', 'SAU', 'IRN', 'ARE', 'QAT',
                     'CHL', 'ISR']
     for source_id, ind in (
-        ('22', 'DT.DOD.DECT.CD.ST.US'),
-        ('23', 'DT.DOD.DECT.CD.ST.US'),
-        ('54', 'DT.DOD.DECT.CD.ST.US'),
-        ('54', 'DT.DOD.DSTC.CD'),
-        ('22', 'DT.DOD.DECT.CD.ST.TD.NV.US'),
+        ('22', 'DT.DOD.DSTC.CD.US'),          # QEDS SDDS — correct code
+        ('23', 'DT.DOD.DECT.CD.ST.US'),       # QEDS GDDS — correct code
+        ('54', 'DT.DOD.DSTC.CD.US'),          # JEDH probe
+        ('54', 'DT.DOD.DECT.CD.ST.US'),       # JEDH probe alt
+        ('22', 'DT.DOD.DECT.CD.ST.TD.NV.US'), # debt securities component
     ):
         try:
             r = requests.get(
                 f'https://api.worldbank.org/v2/country/all/indicator/{ind}'
-                f'?format=json&mrv=20&source={source_id}&per_page=50000',
+                f'?format=json&mrv=20&source={source_id}&per_page=20000',
                 timeout=60,
             )
             doc = r.json() if r.ok else None
