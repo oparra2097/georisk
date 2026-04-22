@@ -83,6 +83,28 @@ def init_scheduler(app):
         )
         logger.info("ACLED daily prefetch scheduled (6 AM UTC).")
 
+    # Job 4: Commodity model refit (monthly, 1st of month at 07:00 UTC)
+    def _refit_commodity_models():
+        try:
+            from backend.data_sources import commodity_models, commodities_forecast
+            summaries = commodity_models.refit_all()
+            fits = sum(1 for s in summaries.values() if not s.get('fit_error'))
+            logger.info(f"Commodity model refit: {fits}/{len(summaries)} succeeded")
+            # Invalidate the forecast cache so downstream calls pick up new fits
+            commodities_forecast._cache.clear()
+        except Exception as e:
+            logger.error(f"Commodity model refit failed: {e}")
+
+    scheduler.add_job(
+        func=_refit_commodity_models,
+        trigger='cron',
+        day=1, hour=7, minute=0,
+        id='refit_commodity_models',
+        replace_existing=True,
+        max_instances=1,
+    )
+    logger.info("Commodity model monthly refit scheduled (1st of month, 07:00 UTC).")
+
     scheduler.start()
     logger.info(
         f"Scheduler started. GDELT every {gdelt_interval}min (ALL countries), "

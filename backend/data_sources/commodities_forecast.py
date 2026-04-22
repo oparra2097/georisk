@@ -471,12 +471,17 @@ def _fetch_all_data(time_ctx):
             if len(q_data) > 0:
                 result['completed'][q_label] = round(float(q_data.mean()), 2)
 
-        # Current quarter partial average
+        # Current quarter partial average (raw mean of QTD closes)
         cq = time_ctx['current_quarter']
-        cq_start, _ = quarters[cq]
+        cq_start, cq_end = quarters[cq]
         cq_data = ytd_series[cq_start.isoformat():]
         if len(cq_data) > 0:
             result['current_q_avg'] = round(float(cq_data.mean()), 2)
+
+        # Days-elapsed / days-in-quarter — shared across commodities but stored
+        # per-commodity so the builder has everything it needs in one dict.
+        result['qtd_days_elapsed'] = max(0, (today - cq_start).days)
+        result['qtd_days_in_quarter'] = max(1, (cq_end - cq_start).days + 1)
 
         actuals[name] = result
         logger.info(
@@ -499,31 +504,42 @@ _SCENARIO_TO_PERCENTILE = {
 }
 
 
-def _model_targets_for_commodity(name, group_name, forecast_quarters):
+def _model_targets_for_commodity(name, group_name, forecast_quarters,
+                                  qtd_mean=None, days_elapsed=0, days_in_quarter=90):
     """
     Build a dict shaped like SCENARIO_TARGETS[name] populated from the
-    SARIMAX + GARCH model. Returns None on any failure so the caller can
-    fall back to the hardcoded targets.
+    SARIMAX + GARCH model. Also returns the model's blended nowcast for
+    the current quarter. Returns (None, None) on any failure so the caller
+    can fall back to the hardcoded targets.
+
+    Returns:
+        (targets_dict, nowcast_value) — either may be None independently.
     """
     try:
         from backend.data_sources import commodity_models
     except Exception as e:
         logger.debug(f'commodity_models import failed ({e}); using hardcoded targets')
-        return None
+        return None, None
 
     scenario_map = _SCENARIO_TO_PERCENTILE.get(group_name)
     if not scenario_map:
-        return None
+        return None, None
 
     try:
-        result = commodity_models.get_model_forecast(name)
+        result = commodity_models.get_model_forecast(
+            name,
+            qtd_mean=qtd_mean,
+            days_elapsed=days_elapsed,
+            days_in_quarter=days_in_quarter,
+        )
     except Exception as e:
         logger.warning(f'{name}: model forecast crashed: {e}')
-        return None
+        return None, None
     if not result or not result.get('forecast'):
-        return None
+        return None, None
 
     fc = result['forecast']  # {'Q+1': {median, p2_5, p10, p90, p97_5, label}, ...}
+    nowcast_val = result.get('nowcast')
     # Map forecast index to calendar-quarter key used by SCENARIO_TARGETS
     # (lookup in _build_scenario_forecasts is by `Q{fq_num}` where fq_num ∈ 1..4).
     targets = {scenario: {} for scenario in scenario_map}
@@ -539,8 +555,8 @@ def _model_targets_for_commodity(name, group_name, forecast_quarters):
 
     # If the model produced no usable numbers, signal fallback
     if not any(q for q in targets.values()):
-        return None
-    return targets
+        return None, nowcast_val
+    return targets, nowcast_val
 
 
 def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
@@ -555,8 +571,11 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
     Returns a dict of scenario -> {label: price} for all time labels + FY,
     plus a `_source` marker ('model' or 'hardcoded') used by the meta block.
     """
-    targets_cfg = _model_targets_for_commodity(
-        name, group_name, time_ctx['forecast_quarters']
+    targets_cfg, nowcast_val = _model_targets_for_commodity(
+        name, group_name, time_ctx['forecast_quarters'],
+        qtd_mean=actual_data.get('current_q_avg'),
+        days_elapsed=actual_data.get('qtd_days_elapsed', 0),
+        days_in_quarter=actual_data.get('qtd_days_in_quarter', 90),
     )
     source = 'model'
     if not targets_cfg:
@@ -605,10 +624,13 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
                     fy_parts.append(val)
 
             elif ltype == 'current_q':
-                # Use live actual for current quarter
-                row[label] = current_q_avg
-                if current_q_avg is not None:
-                    fy_parts.append(current_q_avg)
+                # Blended nowcast (QTD mean × elapsed_weight + model Q+0 ×
+                # remaining_weight) for scenario rows. Falls back to raw
+                # QTD mean if the model path didn't yield a nowcast.
+                cq_val = nowcast_val if nowcast_val is not None else current_q_avg
+                row[label] = round(float(cq_val), 2) if cq_val is not None else None
+                if cq_val is not None:
+                    fy_parts.append(cq_val)
 
             elif ltype == 'forecast':
                 fc_idx = sum(1 for lt in label_types[:i] if lt == 'forecast')
