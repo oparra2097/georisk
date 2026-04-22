@@ -3773,6 +3773,7 @@
                 reservesPeriod: c.reserves_period,
                 stDebt: c.st_debt_usd,
                 stDebtYear: c.st_debt_year,
+                stDebtSource: c.st_debt_source,
                 year: c.year,
                 isEm: !!c.is_em,
             };
@@ -3886,7 +3887,13 @@
                                     ? ' (IFS ' + p.reservesPeriod + ')'
                                     : '';
                                 lines.push('Reserves: ' + _emFormatUsd(p.reserves) + resvTag);
-                                const stTag = p.stDebtYear ? ' (' + p.stDebtYear + ')' : '';
+                                let stTag = '';
+                                if (p.stDebtYear) {
+                                    const srcHint = p.stDebtSource && p.stDebtSource !== 'World Bank WDI'
+                                        ? ', ' + p.stDebtSource.replace('World Bank ', '')
+                                        : '';
+                                    stTag = ' (' + p.stDebtYear + srcHint + ')';
+                                }
                                 lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt) + stTag);
                                 lines.push('GDP: ' + _emFormatUsd(p.gdp) + '  ·  Year: ' + (p.year || '—'));
                                 return lines;
