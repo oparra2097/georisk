@@ -13,7 +13,13 @@ from backend.data_sources.bls_cpi import get_bls_cpi_data, get_bls_components, c
 from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
 from backend.data_sources.eurostat_hicp import get_eurostat_cpi_data, get_eurostat_components
 from backend.data_sources.substack_feed import get_substack_posts
-from backend.data_sources.commodities_forecast import get_forecast_data
+from backend.data_sources.commodities_forecast import (
+    get_forecast_data,
+    get_scenario_config,
+    save_scenario_config,
+    reset_scenario_config,
+    COMMODITIES,
+)
 from backend.data_sources.gdp_nowcast import get_gdp_nowcast
 from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
@@ -504,6 +510,61 @@ def get_forecasts():
     """Return commodities forecast data (cached 24 hours)."""
     data = get_forecast_data()
     return jsonify(data)
+
+
+def _admin_required():
+    """Return (True, None) if caller is the admin, else (False, response)."""
+    from backend.auth import _is_admin
+    if not current_user.is_authenticated:
+        return False, (jsonify({'error': 'Authentication required'}), 401)
+    if not _is_admin():
+        return False, (jsonify({'error': 'Admin only'}), 403)
+    return True, None
+
+
+@api_bp.route('/forecasts/scenario-targets', methods=['GET'])
+@login_required
+def get_scenario_targets():
+    """Return the active scenario config + commodity->group mapping (admin only)."""
+    ok, err = _admin_required()
+    if not ok:
+        return err
+    cfg = get_scenario_config()
+    cfg['commodities'] = {
+        name: {'ticker': ticker, 'unit': unit, 'group': group}
+        for name, (ticker, unit, group) in COMMODITIES.items()
+    }
+    return jsonify(cfg)
+
+
+@api_bp.route('/forecasts/scenario-targets', methods=['POST'])
+@login_required
+def update_scenario_targets():
+    """Save an updated scenario config (admin only). Reloads + busts cache."""
+    ok, err = _admin_required()
+    if not ok:
+        return err
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({'error': 'Request body must be JSON'}), 400
+    try:
+        cfg = save_scenario_config(payload)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Failed to save: {e}'}), 500
+    return jsonify({'ok': True, 'config': cfg})
+
+
+@api_bp.route('/forecasts/scenario-targets/reset', methods=['POST'])
+@login_required
+def reset_scenario_targets():
+    """Delete override file, revert to seed values (admin only)."""
+    ok, err = _admin_required()
+    if not ok:
+        return err
+    cfg = reset_scenario_config()
+    return jsonify({'ok': True, 'config': cfg})
 
 
 @api_bp.route('/gdp-nowcast')

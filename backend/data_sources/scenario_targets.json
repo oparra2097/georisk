@@ -1,0 +1,116 @@
+{
+  "groups": {
+    "Oil & Gas": {
+      "weights": {
+        "Worst Case": 0.10,
+        "Severe Case": 0.20,
+        "Base Case": 0.70
+      },
+      "labels": {
+        "Base Case": "Gradual de-escalation · OPEC+ holds discipline · Brent normalises toward $72-78 by year-end",
+        "Severe Case": "Strait of Hormuz disruption persists · No ceasefire · Brent $95-110 sustained into 2027",
+        "Worst Case": "Iran targets critical ME production · Brent spikes >$130 then settles $105-112"
+      },
+      "colors": {
+        "Actual": "#94a3b8",
+        "Base Case": "#3b82f6",
+        "Severe Case": "#f59e0b",
+        "Worst Case": "#ef4444",
+        "Weighted Avg": "#10b981"
+      },
+      "scenario_order": ["Actual", "Base Case", "Severe Case", "Worst Case", "Weighted Avg"]
+    },
+    "Agriculture": {
+      "weights": {
+        "Bear": 0.25,
+        "Base": 0.50,
+        "Bull": 0.25
+      },
+      "labels": {
+        "Bear": "Favourable weather globally · Bumper harvests · Ample supply depresses prices through 2027",
+        "Base": "Normal seasonal patterns · Trend-line yields · Steady demand · Gradual recovery",
+        "Bull": "El Niño drought in key growing regions · Supply shock · Export restrictions tighten"
+      },
+      "colors": {
+        "Actual": "#94a3b8",
+        "Bear": "#3b82f6",
+        "Base": "#10b981",
+        "Bull": "#ef4444",
+        "Weighted Avg": "#f59e0b"
+      },
+      "scenario_order": ["Actual", "Bear", "Base", "Bull", "Weighted Avg"]
+    },
+    "Metals": {
+      "weights": {
+        "Bear": 0.25,
+        "Base": 0.50,
+        "Bull": 0.25
+      },
+      "labels": {
+        "Bear": "Risk-off pivot · Dollar strength · Demand slowdown · De-leveraging into 2027",
+        "Base": "Steady macro · Moderate central bank buying · Gradual industrial recovery",
+        "Bull": "Flight to safety · Speculative inflows · Central bank accumulation accelerates"
+      },
+      "colors": {
+        "Actual": "#94a3b8",
+        "Bear": "#3b82f6",
+        "Base": "#10b981",
+        "Bull": "#ef4444",
+        "Weighted Avg": "#f59e0b"
+      },
+      "scenario_order": ["Actual", "Bear", "Base", "Bull", "Weighted Avg"]
+    }
+  },
+  "targets": {
+    "WTI Crude": {
+      "Base Case":   {"Q1": 68,  "Q2": 95,  "Q3": 83,  "Q4": 72},
+      "Severe Case": {"Q1": 90,  "Q2": 108, "Q3": 104, "Q4": 94},
+      "Worst Case":  {"Q1": 102, "Q2": 124, "Q3": 117, "Q4": 107}
+    },
+    "Brent Crude": {
+      "Base Case":   {"Q1": 74,  "Q2": 100, "Q3": 87,  "Q4": 78},
+      "Severe Case": {"Q1": 96,  "Q2": 113, "Q3": 110, "Q4": 99},
+      "Worst Case":  {"Q1": 108, "Q2": 130, "Q3": 121, "Q4": 112}
+    },
+    "Natural Gas (HH)": {
+      "Base Case":   {"Q1": 3.80, "Q2": 3.20, "Q3": 3.40, "Q4": 3.60},
+      "Severe Case": {"Q1": 4.50, "Q2": 4.00, "Q3": 4.40, "Q4": 4.25},
+      "Worst Case":  {"Q1": 5.70, "Q2": 4.90, "Q3": 5.80, "Q4": 5.50}
+    },
+    "TTF Gas": {
+      "Base Case":   {"Q1": 68,  "Q2": 60,  "Q3": 64,  "Q4": 66},
+      "Severe Case": {"Q1": 84,  "Q2": 76,  "Q3": 87,  "Q4": 81},
+      "Worst Case":  {"Q1": 112, "Q2": 98,  "Q3": 119, "Q4": 108}
+    },
+    "Cocoa": {
+      "Bear": {"Q1": 2650, "Q2": 2780, "Q3": 2590, "Q4": 2690},
+      "Base": {"Q1": 3050, "Q2": 3065, "Q3": 3000, "Q4": 3100},
+      "Bull": {"Q1": 4100, "Q2": 3475, "Q3": 3790, "Q4": 3950}
+    },
+    "Wheat": {
+      "Bear": {"Q1": 535, "Q2": 555, "Q3": 530, "Q4": 545},
+      "Base": {"Q1": 620, "Q2": 615, "Q3": 622, "Q4": 628},
+      "Bull": {"Q1": 700, "Q2": 676, "Q3": 736, "Q4": 712}
+    },
+    "Soybeans": {
+      "Bear": {"Q1": 1055, "Q2": 1090, "Q3": 1045, "Q4": 1070},
+      "Base": {"Q1": 1200, "Q2": 1185, "Q3": 1195, "Q4": 1207},
+      "Bull": {"Q1": 1320, "Q2": 1277, "Q3": 1370, "Q4": 1335}
+    },
+    "Coffee": {
+      "Bear": {"Q1": 265, "Q2": 277, "Q3": 259, "Q4": 271},
+      "Base": {"Q1": 305, "Q2": 307, "Q3": 304, "Q4": 310},
+      "Bull": {"Q1": 400, "Q2": 346, "Q3": 376, "Q4": 391}
+    },
+    "Copper": {
+      "Bear": {"Q1": 4.85, "Q2": 5.03, "Q3": 4.81, "Q4": 4.92},
+      "Base": {"Q1": 5.75, "Q2": 5.63, "Q3": 5.74, "Q4": 5.80},
+      "Bull": {"Q1": 6.80, "Q2": 6.02, "Q3": 6.45, "Q4": 6.67}
+    },
+    "Gold": {
+      "Bear": {"Q1": 4400, "Q2": 4550, "Q3": 4380, "Q4": 4500},
+      "Base": {"Q1": 5700, "Q2": 5100, "Q3": 5350, "Q4": 5600},
+      "Bull": {"Q1": 6400, "Q2": 5450, "Q3": 5800, "Q4": 6200}
+    }
+  }
+}

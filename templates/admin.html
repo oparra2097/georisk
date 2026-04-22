@@ -41,6 +41,39 @@
     .flash-bar.error { background: #ef444418; color: #fca5a5; border: 1px solid #ef444433; }
     .meta-text { color: #475569; font-size: 12px; }
     .table-wrap { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; overflow-x: auto; }
+
+    .section-title { color: #f1f5f9; font-size: 16px; font-weight: 600; margin: 40px 0 4px; }
+    .section-sub { color: #64748b; font-size: 12px; margin-bottom: 16px; }
+    .scen-group { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .scen-group-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .scen-group-name { color: #f1f5f9; font-size: 14px; font-weight: 600; }
+    .scen-weights { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .scen-weight { display: flex; align-items: center; gap: 6px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #cbd5e1; }
+    .scen-weight input { width: 56px; background: #0f172a; border: 1px solid #334155; color: #f1f5f9; border-radius: 4px; padding: 3px 6px; font-size: 12px; text-align: right; }
+    .scen-weight-sum { color: #64748b; font-size: 11px; margin-left: auto; }
+    .scen-weight-sum.ok { color: #10b981; }
+    .scen-weight-sum.bad { color: #ef4444; }
+    .scen-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .scen-table th { color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; text-align: left; border-bottom: 1px solid #1e293b; }
+    .scen-table td { padding: 4px 8px; border-bottom: 1px solid #1e293b; color: #e2e8f0; }
+    .scen-table td.commodity { color: #f1f5f9; font-weight: 500; white-space: nowrap; }
+    .scen-table td.scenario { color: #94a3b8; white-space: nowrap; }
+    .scen-table input { width: 70px; background: #0f172a; border: 1px solid #334155; color: #f1f5f9; border-radius: 4px; padding: 3px 6px; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+    .scen-table input:focus { outline: none; border-color: #3b82f6; background: #0b1220; }
+    .scen-table input.dirty { border-color: #f59e0b; background: #f59e0b0d; }
+    .scen-actions { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
+    .scen-btn { padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1px solid; cursor: pointer; background: transparent; }
+    .scen-btn-save { border-color: #10b981; color: #10b981; }
+    .scen-btn-save:hover:not(:disabled) { background: #10b98118; }
+    .scen-btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+    .scen-btn-reset { border-color: #ef4444; color: #ef4444; }
+    .scen-btn-reset:hover { background: #ef444418; }
+    .scen-status { color: #64748b; font-size: 12px; margin-left: auto; }
+    .scen-status.ok { color: #10b981; }
+    .scen-status.err { color: #ef4444; }
+    .scen-override-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; margin-left: 8px; }
+    .scen-override-pill.active { background: #f59e0b18; color: #f59e0b; }
+    .scen-override-pill.seed { background: #64748b18; color: #94a3b8; }
 </style>
 {% endblock %}
 
@@ -135,5 +168,231 @@
             </tbody>
         </table>
     </div>
+
+    <div class="section-title">Forecast Scenarios <span id="scen-source-pill" class="scen-override-pill seed">Loading…</span></div>
+    <div class="section-sub">
+        Edit quarterly price targets and scenario weights live. Changes save to <code>DATA_DIR/scenario_targets.json</code>,
+        reload the forecast cache, and take effect immediately at <a href="/data" style="color:#3b82f6;">/data</a>.
+        Reset reverts to the values shipped with the code.
+    </div>
+
+    <div id="scen-editor">
+        <div style="color:#64748b;font-size:12px;padding:20px;">Loading scenario config…</div>
+    </div>
+
+    <div class="scen-actions">
+        <button id="scen-save" class="scen-btn scen-btn-save" disabled>Save Changes</button>
+        <button id="scen-reset" class="scen-btn scen-btn-reset">Reset to Seed Defaults</button>
+        <span id="scen-status" class="scen-status"></span>
+    </div>
 </div>
+
+<script>
+(function() {
+    var editorEl = document.getElementById('scen-editor');
+    var saveBtn = document.getElementById('scen-save');
+    var resetBtn = document.getElementById('scen-reset');
+    var statusEl = document.getElementById('scen-status');
+    var sourcePill = document.getElementById('scen-source-pill');
+    var state = null;
+
+    function setStatus(msg, kind) {
+        statusEl.className = 'scen-status' + (kind ? ' ' + kind : '');
+        statusEl.textContent = msg || '';
+    }
+
+    function markDirty() {
+        saveBtn.disabled = false;
+        setStatus('Unsaved changes', '');
+    }
+
+    function renderSourcePill(usingOverride) {
+        if (usingOverride) {
+            sourcePill.className = 'scen-override-pill active';
+            sourcePill.textContent = 'Override active';
+        } else {
+            sourcePill.className = 'scen-override-pill seed';
+            sourcePill.textContent = 'Using seed defaults';
+        }
+    }
+
+    function computeWeightSum(groupName) {
+        var inputs = editorEl.querySelectorAll('input[data-weight-group="' + groupName + '"]');
+        var sum = 0;
+        inputs.forEach(function(el) {
+            var v = parseFloat(el.value);
+            if (!isNaN(v)) sum += v;
+        });
+        return sum;
+    }
+
+    function updateWeightSumDisplay(groupName) {
+        var sum = computeWeightSum(groupName);
+        var el = document.querySelector('[data-weight-sum="' + groupName + '"]');
+        if (!el) return;
+        var ok = Math.abs(sum - 1.0) < 0.01;
+        el.className = 'scen-weight-sum ' + (ok ? 'ok' : 'bad');
+        el.textContent = 'Sum: ' + sum.toFixed(2) + (ok ? ' ✓' : ' (must = 1.00)');
+    }
+
+    function renderEditor(cfg) {
+        state = cfg;
+        renderSourcePill(cfg.using_override);
+        editorEl.innerHTML = '';
+
+        // commodities grouped by their group
+        var groupCommodities = {};
+        Object.keys(cfg.commodities || {}).forEach(function(name) {
+            var g = cfg.commodities[name].group;
+            (groupCommodities[g] = groupCommodities[g] || []).push(name);
+        });
+
+        Object.keys(cfg.groups).forEach(function(groupName) {
+            var group = cfg.groups[groupName];
+            var weights = group.weights || {};
+            var scenarioNames = Object.keys(weights);
+            var comms = groupCommodities[groupName] || [];
+
+            var wrap = document.createElement('div');
+            wrap.className = 'scen-group';
+
+            var head = document.createElement('div');
+            head.className = 'scen-group-head';
+            head.innerHTML = '<div class="scen-group-name">' + groupName + '</div>';
+            wrap.appendChild(head);
+
+            // Weights row
+            var weightsRow = document.createElement('div');
+            weightsRow.className = 'scen-weights';
+            scenarioNames.forEach(function(sc) {
+                var chip = document.createElement('label');
+                chip.className = 'scen-weight';
+                chip.innerHTML = sc + ' ';
+                var input = document.createElement('input');
+                input.type = 'number'; input.step = '0.01'; input.min = '0'; input.max = '1';
+                input.value = weights[sc];
+                input.dataset.weightGroup = groupName;
+                input.dataset.scenario = sc;
+                input.addEventListener('input', function() {
+                    weights[sc] = parseFloat(input.value);
+                    input.classList.add('dirty');
+                    updateWeightSumDisplay(groupName);
+                    markDirty();
+                });
+                chip.appendChild(input);
+                weightsRow.appendChild(chip);
+            });
+            var sumEl = document.createElement('span');
+            sumEl.className = 'scen-weight-sum';
+            sumEl.dataset.weightSum = groupName;
+            weightsRow.appendChild(sumEl);
+            wrap.appendChild(weightsRow);
+
+            // Targets table
+            var tbl = document.createElement('table');
+            tbl.className = 'scen-table';
+            var thead = document.createElement('thead');
+            thead.innerHTML = '<tr><th>Commodity</th><th>Scenario</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th></tr>';
+            tbl.appendChild(thead);
+            var tbody = document.createElement('tbody');
+            comms.forEach(function(commName) {
+                scenarioNames.forEach(function(sc, i) {
+                    var tr = document.createElement('tr');
+                    var targets = ((cfg.targets[commName] || {})[sc] || {});
+                    var unit = (cfg.commodities[commName] || {}).unit || '';
+                    tr.innerHTML =
+                        '<td class="commodity">' + (i === 0 ? commName + ' <span style="color:#475569;font-size:10px;">' + unit + '</span>' : '') + '</td>' +
+                        '<td class="scenario">' + sc + '</td>';
+                    ['Q1','Q2','Q3','Q4'].forEach(function(q) {
+                        var td = document.createElement('td');
+                        var inp = document.createElement('input');
+                        inp.type = 'number'; inp.step = 'any';
+                        inp.value = targets[q] != null ? targets[q] : '';
+                        inp.dataset.commodity = commName;
+                        inp.dataset.scenario = sc;
+                        inp.dataset.quarter = q;
+                        inp.addEventListener('input', function() {
+                            if (!cfg.targets[commName]) cfg.targets[commName] = {};
+                            if (!cfg.targets[commName][sc]) cfg.targets[commName][sc] = {};
+                            var v = parseFloat(inp.value);
+                            cfg.targets[commName][sc][q] = isNaN(v) ? null : v;
+                            inp.classList.add('dirty');
+                            markDirty();
+                        });
+                        td.appendChild(inp);
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+            });
+            tbl.appendChild(tbody);
+            wrap.appendChild(tbl);
+            editorEl.appendChild(wrap);
+
+            updateWeightSumDisplay(groupName);
+        });
+    }
+
+    function loadConfig() {
+        setStatus('Loading…', '');
+        fetch('/api/forecasts/scenario-targets', { credentials: 'same-origin' })
+            .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(function(cfg) {
+                renderEditor(cfg);
+                setStatus('Loaded', 'ok');
+                saveBtn.disabled = true;
+            })
+            .catch(function(e) {
+                editorEl.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + e.message + '</div>';
+                setStatus('Load failed', 'err');
+            });
+    }
+
+    saveBtn.addEventListener('click', function() {
+        if (!state) return;
+        setStatus('Saving…', '');
+        saveBtn.disabled = true;
+        fetch('/api/forecasts/scenario-targets', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groups: state.groups, targets: state.targets })
+        })
+            .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
+            .then(function(res) {
+                if (!res.ok) {
+                    setStatus('Error: ' + (res.body.error || 'Unknown'), 'err');
+                    saveBtn.disabled = false;
+                    return;
+                }
+                setStatus('Saved · forecast cache cleared', 'ok');
+                renderEditor(Object.assign(res.body.config, { commodities: state.commodities }));
+                saveBtn.disabled = true;
+            })
+            .catch(function(e) {
+                setStatus('Error: ' + e.message, 'err');
+                saveBtn.disabled = false;
+            });
+    });
+
+    resetBtn.addEventListener('click', function() {
+        if (!confirm('Delete override file and revert to shipped seed values?')) return;
+        setStatus('Resetting…', '');
+        fetch('/api/forecasts/scenario-targets/reset', {
+            method: 'POST',
+            credentials: 'same-origin'
+        })
+            .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
+            .then(function(res) {
+                if (!res.ok) { setStatus('Error: ' + (res.body.error || 'Unknown'), 'err'); return; }
+                setStatus('Reset to seed values', 'ok');
+                renderEditor(Object.assign(res.body.config, { commodities: state ? state.commodities : {} }));
+                saveBtn.disabled = true;
+            })
+            .catch(function(e) { setStatus('Error: ' + e.message, 'err'); });
+    });
+
+    loadConfig();
+})();
+</script>
 {% endblock %}
