@@ -198,13 +198,20 @@ def _fetch_wb(indicator, source=None):
         countries = {}
 
         for rec in records:
-            iso3 = rec.get('countryiso3code', '')
+            # QEDS sources (22/23) leave countryiso3code empty but put the
+            # ISO-3 code in country.id (WDI puts ISO-2 there and ISO-3 at
+            # the top level). Fall back to country.id when the top-level
+            # field is empty; skip the record only if both are missing.
+            iso3 = rec.get('countryiso3code', '') or ''
+            country_obj = rec.get('country') or {}
+            if not iso3 and len(country_obj.get('id', '') or '') == 3:
+                iso3 = country_obj.get('id')
             if not iso3 or iso3 in _AGGREGATE_CODES:
                 continue
 
             val = rec.get('value')
             year_str = rec.get('date', '')
-            country_name = rec.get('country', {}).get('value', iso3)
+            country_name = country_obj.get('value', iso3)
 
             if val is None or year_str == '':
                 continue

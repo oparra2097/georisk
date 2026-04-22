@@ -1210,26 +1210,43 @@ def diagnose_em_vulnerability():
     except Exception as e:
         result['step1_sources'] = {'error': str(e)}
 
-    # Step 2: for a handful of candidate source IDs, list short-term debt
-    # indicators.
+    # Step 2: for candidate source IDs, list short-term debt indicators.
+    # Source 22 (QEDS SDDS) has many granular breakdowns; narrow to the ones
+    # that look like the "all sectors, all instruments" aggregate.
     for source_id in ('6', '22', '23', '46', '32', '81'):
         try:
             r = requests.get(
                 f'https://api.worldbank.org/v2/sources/{source_id}/indicators'
-                f'?format=json&per_page=2000',
+                f'?format=json&per_page=5000',
                 timeout=60,
             )
             r.raise_for_status()
             doc = r.json()
             indicators = doc[1] if isinstance(doc, list) and len(doc) > 1 else []
-            matches = [
-                {'id': i.get('id'), 'name': i.get('name', '')[:100]}
-                for i in indicators
-                if isinstance(i, dict)
-                and 'short' in (i.get('name', '') or '').lower()
-                and 'debt' in (i.get('name', '') or '').lower()
-            ]
-            result['step2_indicators_with_short'][source_id] = matches[:10]
+            # Only the aggregates: "All Sectors" + "Short-term" + (all
+            # instruments OR no sub-qualifier). Exclude per-instrument
+            # (Currency, Loans, Debt Securities, Trade) and per-sector
+            # (Public, Private) breakdowns.
+            aggregate_matches = []
+            for i in indicators:
+                if not isinstance(i, dict):
+                    continue
+                name = (i.get('name', '') or '').lower()
+                if 'short-term' not in name:
+                    continue
+                if 'all sectors' not in name:
+                    continue
+                # Avoid partial-instrument or sector-specific ones
+                skips = ['currency', 'loan', 'trade credit', 'debt securities',
+                         'public sector', 'private sector', 'central bank',
+                         'deposit-taking', 'beginning', 'market value',
+                         'nominal value', 'diff.', 'other sector']
+                if any(s in name for s in skips):
+                    continue
+                aggregate_matches.append({
+                    'id': i.get('id'), 'name': i.get('name', '')[:120],
+                })
+            result['step2_indicators_with_short'][source_id] = aggregate_matches[:20]
         except Exception as e:
             result['step2_indicators_with_short'][source_id] = {'error': str(e)}
 
