@@ -1233,27 +1233,31 @@ def diagnose_em_vulnerability():
         except Exception as e:
             result['step2_indicators_with_short'][source_id] = {'error': str(e)}
 
-    # Step 3: for source 22, try the top candidate indicators for Chile.
+    # Step 3: correct URL form is /country/{iso}/indicator/{code}?source={id}.
+    # Probe the best candidate (DT.DOD.DECT.CD.ST.US = "All Sectors, Short-
+    # term, All instruments, USD") across the QEDS sources + keep the older
+    # WDI-style code as a control so we can see which returns values.
     for probe in [
+        ('22', 'DT.DOD.DECT.CD.ST.US'),
+        ('23', 'DT.DOD.DECT.CD.ST.US'),
         ('22', 'DT.DOD.DSTC.CD'),
-        ('6', 'DT.DOD.DSTC.CD'),
-        ('22', 'DP.DOD.DSDD.CR.M.CD'),
-        ('22', 'DP.DOD.TOTL.CR.M.CD'),
+        ('6',  'DT.DOD.DSTC.CD'),
     ]:
         source_id, ind = probe
-        try:
-            r = requests.get(
-                f'https://api.worldbank.org/v2/sources/{source_id}'
-                f'/country/CHL/series/{ind}?format=json&mrv=5',
-                timeout=30,
-            )
-            doc = r.json() if r.ok else None
-            result['step3_chile_sample'][f'{source_id}/{ind}'] = {
-                'http': r.status_code,
-                'body_head': str(doc)[:600] if doc else r.text[:200],
-            }
-        except Exception as e:
-            result['step3_chile_sample'][f'{source_id}/{ind}'] = {'error': str(e)}
+        for iso in ('CHL', 'MYS'):
+            try:
+                r = requests.get(
+                    f'https://api.worldbank.org/v2/country/{iso}/indicator/{ind}'
+                    f'?format=json&mrv=5&source={source_id}',
+                    timeout=30,
+                )
+                doc = r.json() if r.ok else None
+                result['step3_chile_sample'][f'{source_id}/{ind}/{iso}'] = {
+                    'http': r.status_code,
+                    'body_head': str(doc)[:600] if doc else r.text[:200],
+                }
+            except Exception as e:
+                result['step3_chile_sample'][f'{source_id}/{ind}/{iso}'] = {'error': str(e)}
 
     return jsonify(result)
 
