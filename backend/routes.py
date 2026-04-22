@@ -1175,6 +1175,89 @@ def get_em_vulnerability():
     return jsonify(data)
 
 
+@api_bp.route('/em-vulnerability/diagnose')
+def diagnose_em_vulnerability():
+    """Temporary diagnostic — probes WB API for the right QEDS source + indicator.
+
+    Run this on prod (where api.worldbank.org is reachable) and paste the
+    output; the dev sandbox is behind an allowlist that blocks WB, so this
+    has to execute server-side. Remove once the right (source, indicator)
+    pair is confirmed.
+    """
+    import requests
+
+    result = {
+        'step1_sources': None,
+        'step2_indicators_with_short': {},
+        'step3_chile_sample': {},
+    }
+
+    # Step 1: list all sources, look for anything with "Debt" or "QEDS".
+    try:
+        r = requests.get(
+            'https://api.worldbank.org/v2/sources?format=json&per_page=100',
+            timeout=30,
+        )
+        r.raise_for_status()
+        doc = r.json()
+        sources = doc[1] if isinstance(doc, list) and len(doc) > 1 else []
+        result['step1_sources'] = [
+            {'id': s.get('id'), 'name': s.get('name'), 'code': s.get('code')}
+            for s in sources
+            if 'debt' in (s.get('name', '') or '').lower()
+            or 'qeds' in (s.get('name', '') or '').lower()
+        ]
+    except Exception as e:
+        result['step1_sources'] = {'error': str(e)}
+
+    # Step 2: for a handful of candidate source IDs, list short-term debt
+    # indicators.
+    for source_id in ('6', '22', '23', '46', '32', '81'):
+        try:
+            r = requests.get(
+                f'https://api.worldbank.org/v2/sources/{source_id}/indicators'
+                f'?format=json&per_page=2000',
+                timeout=60,
+            )
+            r.raise_for_status()
+            doc = r.json()
+            indicators = doc[1] if isinstance(doc, list) and len(doc) > 1 else []
+            matches = [
+                {'id': i.get('id'), 'name': i.get('name', '')[:100]}
+                for i in indicators
+                if isinstance(i, dict)
+                and 'short' in (i.get('name', '') or '').lower()
+                and 'debt' in (i.get('name', '') or '').lower()
+            ]
+            result['step2_indicators_with_short'][source_id] = matches[:10]
+        except Exception as e:
+            result['step2_indicators_with_short'][source_id] = {'error': str(e)}
+
+    # Step 3: for source 22, try the top candidate indicators for Chile.
+    for probe in [
+        ('22', 'DT.DOD.DSTC.CD'),
+        ('6', 'DT.DOD.DSTC.CD'),
+        ('22', 'DP.DOD.DSDD.CR.M.CD'),
+        ('22', 'DP.DOD.TOTL.CR.M.CD'),
+    ]:
+        source_id, ind = probe
+        try:
+            r = requests.get(
+                f'https://api.worldbank.org/v2/sources/{source_id}'
+                f'/country/CHL/series/{ind}?format=json&mrv=5',
+                timeout=30,
+            )
+            doc = r.json() if r.ok else None
+            result['step3_chile_sample'][f'{source_id}/{ind}'] = {
+                'http': r.status_code,
+                'body_head': str(doc)[:600] if doc else r.text[:200],
+            }
+        except Exception as e:
+            result['step3_chile_sample'][f'{source_id}/{ind}'] = {'error': str(e)}
+
+    return jsonify(result)
+
+
 @api_bp.route('/em-vulnerability/export')
 def export_em_vulnerability_excel():
     """Generate Excel file with EM external vulnerability metrics.
