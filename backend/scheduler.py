@@ -109,9 +109,11 @@ def init_scheduler(app):
     if Config.FRED_API_KEY:
         def _refresh_gdp_nowcast():
             try:
+                from backend.data_sources.fred_client import clear_cache as clear_fred
                 from backend.data_sources.gdp_nowcast import compute_nowcast
                 import backend.data_sources.gdp_nowcast as gnmod
                 import time as _time
+                clear_fred()
                 data = compute_nowcast()
                 if not data.get('error'):
                     with gnmod._lock:

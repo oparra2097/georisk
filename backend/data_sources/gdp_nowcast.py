@@ -307,6 +307,7 @@ def compute_nowcast():
         'contributions': contributions,
         'history': history,
         'methodology': 'Bridge equation: weighted high-frequency indicators + trend intercept',
+        'last_refreshed': datetime.now().isoformat(timespec='seconds'),
     }
 
 

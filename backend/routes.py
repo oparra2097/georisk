@@ -625,10 +625,12 @@ def gdp_nowcast():
 
 @api_bp.route('/gdp-nowcast/refresh')
 def gdp_nowcast_refresh():
-    """Force-refresh the GDP nowcast (bypasses cache)."""
+    """Force-refresh the GDP nowcast (clears FRED + nowcast caches)."""
+    from backend.data_sources.fred_client import clear_cache as clear_fred
     from backend.data_sources.gdp_nowcast import compute_nowcast
     import backend.data_sources.gdp_nowcast as gnmod
     import time as _time
+    clear_fred()
     data = compute_nowcast()
     with gnmod._lock:
         gnmod._cached_result = data

@@ -2262,7 +2262,8 @@
         // Meta
         const metaEl = document.getElementById('panel-meta');
         if (metaEl) {
-            metaEl.innerHTML = '<div>Source: FRED (Federal Reserve Economic Data) · Parra Macro bridge equation model</div>' +
+            const refreshed = data.last_refreshed ? ' · Last refreshed: ' + data.last_refreshed : '';
+            metaEl.innerHTML = '<div>Source: FRED (Federal Reserve Economic Data) · Parra Macro bridge equation model' + refreshed + '</div>' +
                 '<div style="color:#475569;font-size:11px;margin-top:4px;">' + (data.methodology || '') + '</div>';
         }
 
