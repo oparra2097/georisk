@@ -375,7 +375,11 @@ window.ParraData.CATALOG = {
                     api: '/api/gdp-nowcast',
                     type: 'gdp-nowcast',
                     controls: [],
-                    subviews: ['overview', 'contributions', 'history'],
+                    subviews: [
+                        { id: 'overview', label: 'Overview' },
+                        { id: 'contributions', label: 'Contributions' },
+                        { id: 'history', label: 'History' },
+                    ],
                     searchTerms: ['GDP', 'nowcast', 'GDPNow', 'Atlanta Fed', 'growth', 'real-time', 'FRED'],
                 },
                 {
