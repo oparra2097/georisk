@@ -54,15 +54,19 @@ def create_app():
 
     @app.route('/data')
     @app.route('/data/<path:subpath>')
+    @login_required
     def data(subpath=None):
-        is_auth = current_user.is_authenticated if current_user else False
-        return render_template('data.html', active_page='data', is_authenticated=is_auth)
+        has_insurance = current_user.has_insurance_access() if current_user.is_authenticated else False
+        return render_template('data.html', active_page='data',
+                               is_authenticated=True,
+                               has_insurance_access=has_insurance)
 
     @app.route('/research')
     def research():
         return render_template('research.html', active_page='research')
 
     @app.route('/economist')
+    @login_required
     def economist():
         return render_template('economist.html', active_page='economist')
 
