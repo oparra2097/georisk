@@ -1190,6 +1190,20 @@ def get_em_vulnerability():
     return jsonify(data)
 
 
+@api_bp.route('/em-vulnerability/country/<iso3>')
+def em_country_detail(iso3):
+    """Return the full EM Vulnerability record for one ISO-3 code so the
+    underlying data can be verified directly (e.g. Argentina's reserves).
+    """
+    data = get_em_vulnerability_data()
+    countries = data.get('countries', {})
+    iso = iso3.upper()
+    if iso not in countries:
+        return jsonify({'error': f'{iso} not in dataset',
+                        'available_sample': sorted(list(countries.keys()))[:20]}), 404
+    return jsonify(countries[iso])
+
+
 @api_bp.route('/em-vulnerability/missing')
 def list_em_missing_st_debt():
     """Return which EMs are currently missing ST-debt data, grouped by
