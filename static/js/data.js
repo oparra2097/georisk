@@ -2266,33 +2266,75 @@
                 '<div style="color:#475569;font-size:11px;margin-top:4px;">' + (data.methodology || '') + '</div>';
         }
 
-        // History section — show actual GDP history
+        // History section — actual GDP + current nowcast estimate
         const histSection = document.getElementById('panel-history-section');
-        if (histSection && history.length > 0) {
+        if (histSection && (history.length > 0 || nowcast.estimate != null)) {
             histSection.style.display = 'block';
             histSection.innerHTML = `
-                <h3 style="color:#e2e8f0;font-size:14px;font-weight:600;margin-bottom:12px;">Actual GDP Growth (Recent Quarters)</h3>
+                <h3 style="color:#e2e8f0;font-size:14px;font-weight:600;margin-bottom:12px;">GDP Growth (Recent Quarters)</h3>
                 <div style="height:250px;"><canvas id="gdp-history-chart"></canvas></div>
             `;
             const hCtx = document.getElementById('gdp-history-chart').getContext('2d');
+
+            // Append the current-quarter nowcast to the history series
             const hLabels = history.map(h => h.quarter);
-            const hValues = history.map(h => h.actual);
-            const hColors = hValues.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)');
+            const actualValues = history.map(h => h.actual);
+            const nowcastValues = history.map(() => null);
+
+            if (nowcast.quarter && nowcast.estimate != null) {
+                hLabels.push(nowcast.quarter + '*');
+                actualValues.push(null);
+                nowcastValues.push(nowcast.estimate);
+            }
+
+            const actualColors = actualValues.map(v => v == null ? 'transparent' : (v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'));
+            const nowcastColor = nowcast.estimate >= 0 ? 'rgba(59, 130, 246, 0.7)' : 'rgba(239, 68, 68, 0.7)';
 
             new Chart(hCtx, {
                 type: 'bar',
                 data: {
                     labels: hLabels,
-                    datasets: [{
-                        data: hValues,
-                        backgroundColor: hColors,
-                        borderRadius: 4,
-                    }]
+                    datasets: [
+                        {
+                            label: 'Actual',
+                            data: actualValues,
+                            backgroundColor: actualColors,
+                            borderRadius: 4,
+                        },
+                        {
+                            label: 'Nowcast',
+                            data: nowcastValues,
+                            backgroundColor: nowcastColor,
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 2,
+                            borderDash: [4, 3],
+                            borderRadius: 4,
+                        },
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10 },
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#d1d5db',
+                            callbacks: {
+                                label: function(ctx) {
+                                    const val = ctx.parsed.y;
+                                    if (val == null) return null;
+                                    const sign = val >= 0 ? '+' : '';
+                                    const suffix = ctx.datasetIndex === 1 ? ' (estimate)' : '';
+                                    return ctx.dataset.label + ': ' + sign + val.toFixed(1) + '%' + suffix;
+                                }
+                            }
+                        }
+                    },
                     scales: {
                         x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(55,65,81,0.3)' } },
                         y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => v.toFixed(0) + '%' }, grid: { color: 'rgba(55,65,81,0.3)' } }
