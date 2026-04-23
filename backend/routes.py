@@ -623,6 +623,19 @@ def gdp_nowcast():
     return jsonify(data)
 
 
+@api_bp.route('/gdp-nowcast/refresh')
+def gdp_nowcast_refresh():
+    """Force-refresh the GDP nowcast (bypasses cache)."""
+    from backend.data_sources.gdp_nowcast import compute_nowcast
+    import backend.data_sources.gdp_nowcast as gnmod
+    import time as _time
+    data = compute_nowcast()
+    with gnmod._lock:
+        gnmod._cached_result = data
+        gnmod._cached_at = _time.time()
+    return jsonify(data)
+
+
 @api_bp.route('/forecasts/export')
 def export_forecasts_excel():
     """Generate Excel file with commodity forecast + historical data."""

@@ -105,6 +105,36 @@ def init_scheduler(app):
     )
     logger.info("Commodity model monthly refit scheduled (1st of month, 07:00 UTC).")
 
+    # Job 5: GDP nowcast refresh every 6 hours
+    if Config.FRED_API_KEY:
+        def _refresh_gdp_nowcast():
+            try:
+                from backend.data_sources.gdp_nowcast import compute_nowcast
+                import backend.data_sources.gdp_nowcast as gnmod
+                import time as _time
+                data = compute_nowcast()
+                if not data.get('error'):
+                    with gnmod._lock:
+                        gnmod._cached_result = data
+                        gnmod._cached_at = _time.time()
+                    est = data.get('nowcast', {}).get('estimate')
+                    logger.info(f"GDP nowcast refreshed: {est}%")
+                else:
+                    logger.warning(f"GDP nowcast refresh error: {data.get('error')}")
+            except Exception as e:
+                logger.error(f"GDP nowcast refresh failed: {e}")
+
+        scheduler.add_job(
+            func=_refresh_gdp_nowcast,
+            trigger='interval',
+            hours=6,
+            id='refresh_gdp_nowcast',
+            replace_existing=True,
+            misfire_grace_time=600,
+            max_instances=1,
+        )
+        logger.info("GDP nowcast scheduled (every 6 hours).")
+
     scheduler.start()
     logger.info(
         f"Scheduler started. GDELT every {gdelt_interval}min (ALL countries), "
@@ -133,3 +163,15 @@ def init_scheduler(app):
             logger.error(f"EM vulnerability warmup failed: {e}")
 
     threading.Thread(target=_warm_em_vuln, daemon=True).start()
+
+    # Pre-warm GDP nowcast so first visit is instant
+    if Config.FRED_API_KEY:
+        def _warm_gdp_nowcast():
+            try:
+                from backend.data_sources.gdp_nowcast import get_gdp_nowcast
+                result = get_gdp_nowcast()
+                est = result.get('nowcast', {}).get('estimate')
+                logger.info(f"GDP nowcast cache warmed: {est}%")
+            except Exception as e:
+                logger.error(f"GDP nowcast warmup failed: {e}")
+        threading.Thread(target=_warm_gdp_nowcast, daemon=True).start()
