@@ -76,8 +76,9 @@
             // Only show categories that have datasets
             if (!cat.datasets || cat.datasets.length === 0) continue;
 
-            const lockIcon = cat.requiresAuth && !PD.isAuthenticated
-                ? ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;vertical-align:-1px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'
+            const needsApproval = cat.requiresAuth && !PD.hasInsuranceAccess;
+            const lockIcon = needsApproval
+                ? ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;vertical-align:-1px;" title="Approval required"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'
                 : '';
             html += '<div class="sidebar-category-heading">' + cat.icon + ' ' + cat.label + lockIcon + '</div>';
             for (const ds of cat.datasets) {
