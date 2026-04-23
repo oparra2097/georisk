@@ -277,6 +277,23 @@ def compute_nowcast():
     # Fetch actual GDP history
     history = _fetch_gdp_history()
 
+    # Compute a retroactive estimate for the prior quarter (Q-1) using the
+    # same bridge methodology.  Q-1 data is complete, so this acts as a
+    # "backcast" until BEA publishes the official advance estimate.
+    pp_year, pp_q = _prev_quarter(prev_year, prev_q)
+    pp_start, pp_end = _quarter_start_end(pp_year, pp_q)
+    prior_total = 0.0
+    prior_valid = 0
+    for ind in INDICATORS:
+        r = _compute_indicator_contribution(
+            ind['id'], prev_q_start, prev_q_end,
+            pp_start, pp_end, ind
+        )
+        if r:
+            prior_total += r['contribution']
+            prior_valid += 1
+    prior_estimate = round(GDP_INTERCEPT + prior_total, 1) if prior_valid >= 3 else None
+
     # Get prior quarter actual — use most recent quarter with data
     # (the immediately prior quarter may not be released yet due to BEA lag)
     prior_actual = None
@@ -294,6 +311,8 @@ def compute_nowcast():
     # Sort contributions by absolute contribution (largest impact first)
     contributions.sort(key=lambda x: abs(x['contribution']), reverse=True)
 
+    prior_q_label = _quarter_label(prev_year, prev_q)
+
     return {
         'nowcast': {
             'quarter': _quarter_label(curr_year, curr_q),
@@ -303,6 +322,8 @@ def compute_nowcast():
         'prior_quarter': {
             'quarter': prior_label,
             'actual': prior_actual,
+            'model_estimate': prior_estimate,
+            'official_quarter': prior_q_label,
         },
         'contributions': contributions,
         'history': history,

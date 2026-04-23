@@ -1927,26 +1927,26 @@
         if (summary) {
             const latestSrc = data.latest_source || '';
             summary.innerHTML = `
-                <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:12px;margin-bottom:20px;width:100%;">
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
+                <div class="yale-tariff-tiles">
+                    <div class="yale-tariff-tile">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Current Rate</div>
-                        <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">${latestVal.toFixed(2)}%</div>
+                        <div class="yale-tariff-tile-val" style="color:#f1f5f9;">${latestVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">as of ${latestDate}</div>
                         ${latestSrc ? '<div style="color:#64748b;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + latestSrc + '</div>' : ''}
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
+                    <div class="yale-tariff-tile">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak</div>
-                        <div style="color:#ef4444;font-size:28px;font-weight:700;margin-top:4px;">${peakVal.toFixed(2)}%</div>
+                        <div class="yale-tariff-tile-val" style="color:#ef4444;">${peakVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">${peakDate}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
+                    <div class="yale-tariff-tile">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Trade-War Low</div>
-                        <div style="color:#10b981;font-size:28px;font-weight:700;margin-top:4px;">${minVal.toFixed(2)}%</div>
+                        <div class="yale-tariff-tile-val" style="color:#10b981;">${minVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">${minDate}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
+                    <div class="yale-tariff-tile">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Pre-Trade-War Baseline</div>
-                        <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">2.40%</div>
+                        <div class="yale-tariff-tile-val" style="color:#f1f5f9;">2.40%</div>
                         <div style="color:#64748b;font-size:11px;">early Jan 2025</div>
                     </div>
                 </div>
@@ -2150,21 +2150,21 @@
         const summary = document.getElementById('panel-summary');
         if (summary) {
             summary.innerHTML = `
-                <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:12px;margin-bottom:20px;width:100%;">
-                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                <div class="yale-tariff-tiles" style="grid-template-columns:repeat(3, minmax(0, 1fr));">
+                    <div class="yale-tariff-tile" style="padding:20px;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Nowcast</div>
-                        <div style="color:${estColor};font-size:36px;font-weight:700;margin-top:6px;">${estSign}${estimate.toFixed(1)}%</div>
+                        <div class="yale-tariff-tile-val" style="color:${estColor};font-size:36px;">${estSign}${estimate.toFixed(1)}%</div>
                         <div style="color:#64748b;font-size:12px;margin-top:4px;">${nowcast.quarter} (annualized)</div>
                         <div style="color:#475569;font-size:11px;">as of ${nowcast.as_of}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                    <div class="yale-tariff-tile" style="padding:20px;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Prior Quarter</div>
-                        <div style="color:${priorColor};font-size:36px;font-weight:700;margin-top:6px;">${priorActual != null ? priorSign + priorActual.toFixed(1) + '%' : 'N/A'}</div>
+                        <div class="yale-tariff-tile-val" style="color:${priorColor};font-size:36px;">${priorActual != null ? priorSign + priorActual.toFixed(1) + '%' : 'N/A'}</div>
                         <div style="color:#64748b;font-size:12px;margin-top:4px;">${prior.quarter || ''} (actual)</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                    <div class="yale-tariff-tile" style="padding:20px;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Indicators</div>
-                        <div style="color:#e2e8f0;font-size:36px;font-weight:700;margin-top:6px;">${contributions.filter(c => c.signal !== 'unavailable').length}<span style="font-size:18px;color:#64748b;">/${contributions.length}</span></div>
+                        <div class="yale-tariff-tile-val" style="color:#e2e8f0;font-size:36px;">${contributions.filter(c => c.signal !== 'unavailable').length}<span style="font-size:18px;color:#64748b;">/${contributions.length}</span></div>
                         <div style="color:#64748b;font-size:12px;margin-top:4px;">reporting this quarter</div>
                     </div>
                 </div>
@@ -2277,19 +2277,32 @@
             `;
             const hCtx = document.getElementById('gdp-history-chart').getContext('2d');
 
-            // Append the current-quarter nowcast to the history series
+            // Build label + value arrays: actuals + prior estimate (if BEA
+            // hasn't released yet) + current-quarter nowcast
             const hLabels = history.map(h => h.quarter);
             const actualValues = history.map(h => h.actual);
-            const nowcastValues = history.map(() => null);
+            const estimateValues = history.map(() => null);
 
+            // If the immediately prior quarter (e.g. Q1 2026) isn't in BEA
+            // history, insert the model's retroactive estimate for it
+            const priorOfficial = prior.official_quarter || '';
+            const priorInHistory = hLabels.includes(priorOfficial);
+            if (!priorInHistory && priorOfficial && prior.model_estimate != null) {
+                hLabels.push(priorOfficial + '†');
+                actualValues.push(null);
+                estimateValues.push(prior.model_estimate);
+            }
+
+            // Append current-quarter nowcast
             if (nowcast.quarter && nowcast.estimate != null) {
                 hLabels.push(nowcast.quarter + '*');
                 actualValues.push(null);
-                nowcastValues.push(nowcast.estimate);
+                estimateValues.push(nowcast.estimate);
             }
 
             const actualColors = actualValues.map(v => v == null ? 'transparent' : (v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'));
-            const nowcastColor = nowcast.estimate >= 0 ? 'rgba(59, 130, 246, 0.7)' : 'rgba(239, 68, 68, 0.7)';
+
+            const estColors = estimateValues.map(v => v == null ? 'transparent' : (v >= 0 ? 'rgba(59, 130, 246, 0.7)' : 'rgba(239, 68, 68, 0.7)'));
 
             new Chart(hCtx, {
                 type: 'bar',
@@ -2297,15 +2310,15 @@
                     labels: hLabels,
                     datasets: [
                         {
-                            label: 'Actual',
+                            label: 'BEA Actual',
                             data: actualValues,
                             backgroundColor: actualColors,
                             borderRadius: 4,
                         },
                         {
-                            label: 'Nowcast',
-                            data: nowcastValues,
-                            backgroundColor: nowcastColor,
+                            label: 'Estimate',
+                            data: estimateValues,
+                            backgroundColor: estColors,
                             borderColor: 'rgba(59, 130, 246, 1)',
                             borderWidth: 2,
                             borderDash: [4, 3],
@@ -2330,7 +2343,7 @@
                                     const val = ctx.parsed.y;
                                     if (val == null) return null;
                                     const sign = val >= 0 ? '+' : '';
-                                    const suffix = ctx.datasetIndex === 1 ? ' (estimate)' : '';
+                                    const suffix = ctx.datasetIndex === 1 ? ' (model estimate)' : '';
                                     return ctx.dataset.label + ': ' + sign + val.toFixed(1) + '%' + suffix;
                                 }
                             }
