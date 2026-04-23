@@ -3772,14 +3772,25 @@
         const missing = selected.length - plottable.length;
         // Visual clip: ratios above 1500% are already "off the charts safe"
         // (Gulf states, some AEs), so we plot them at the clip line instead
-        // of letting them stretch the X axis out to 4000%+ and drag the
-        // fallback bubbles (stranded EMs) along with them.
+        // of letting them stretch the X axis out to 4000%+. Negative ratios
+        // (NIR < 0 for Turkey / Argentina) pass through unchanged — they
+        // belong in the bottom-left "most vulnerable" zone which is the
+        // entire point of this chart.
         const VISUAL_MAX_RATIO = 1500;
         const fallbackX = VISUAL_MAX_RATIO;
         function clipRatio(v) {
             if (v == null) return null;
             return v > VISUAL_MAX_RATIO ? VISUAL_MAX_RATIO : v;
         }
+        // Dynamic X-axis min: 0 unless some ratio is negative, then extend
+        // left with padding so the point isn't flush against the axis.
+        const realRatios = plottableWithRatio
+            .map(i => allCountries[i].reserves_to_st_debt_pct)
+            .filter(v => v != null);
+        const minRatioShown = realRatios.length ? Math.min(...realRatios) : 0;
+        const xAxisMin = minRatioShown >= 0
+            ? 0
+            : Math.floor((minRatioShown * 1.2) / 100) * 100;
 
         // Bubble scaling — radius proportional to sqrt(GDP) so that area ~ GDP
         const gdpValues = plottable.map(i => allCountries[i].gdp_usd || 0).filter(v => v > 0);
@@ -3948,9 +3959,13 @@
                                     ratioLine = p.ratio.toFixed(0) + '%';
                                 }
                                 lines.push('Reserves / ST Debt: ' + ratioLine);
-                                const resvTag = p.reservesSource === 'IMF IFS' && p.reservesPeriod
-                                    ? ' (IFS ' + p.reservesPeriod + ')'
-                                    : '';
+                                let resvTag = '';
+                                if (p.reservesSource === 'IMF IFS' && p.reservesPeriod) {
+                                    resvTag = ' (IFS ' + p.reservesPeriod + ')';
+                                } else if (p.reservesSource && !p.reservesSource.startsWith('World Bank') && p.reservesSource !== 'IMF IFS') {
+                                    // NIR override (BCRA, TCMB, CBE, SBP, ...)
+                                    resvTag = ' — NIR · ' + p.reservesSource;
+                                }
                                 lines.push('Reserves: ' + _emFormatUsd(p.reserves) + resvTag);
                                 let stTag = '';
                                 if (p.stDebtYear) {
@@ -3985,7 +4000,7 @@
                             callback: v => v + '%',
                         },
                         grid: { color: 'rgba(55,65,81,0.3)' },
-                        min: 0,
+                        min: xAxisMin,
                         max: 1600,  // 1500% clip + 100 buffer for labels
                     },
                     y: {
