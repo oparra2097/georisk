@@ -43,15 +43,27 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EquationSpec:
-    """Describes one behavioral equation to estimate."""
+    """
+    Describes one behavioral equation to estimate.
 
-    dependent: str                           # variable code (e.g. 'pce_core')
-    long_run: list[str]                      # drivers in the cointegrating relation
-    short_run: list[str]                     # drivers appearing as Δx (lagged)
-    max_lags: int = 4                        # highest common lag to search
-    include_lagged_dep: bool = True          # include ΔY lagged as regressor
+    Leave `long_run` empty to fit a pure short-run (dynamic) equation with
+    no error-correction term — appropriate for Phillips curves, Taylor
+    rules, and other dynamics that don't have a natural cointegrating
+    level relationship.
+    """
+
+    dependent: str                                     # variable code (e.g. 'pce_core')
+    long_run: list[str] = field(default_factory=list) # cointegrating drivers (empty = skip)
+    short_run_diffs: list[str] = field(default_factory=list)   # enter as Δx
+    short_run_levels: list[str] = field(default_factory=list)  # enter as x (level, lagged)
+    max_lags: int = 4                                  # highest common lag to search
+    include_lagged_dep: bool = True                    # include ΔY lagged as regressor
     name: str = ''
     notes: str = ''
+
+    @property
+    def all_regressors(self) -> list[str]:
+        return list(dict.fromkeys(self.long_run + self.short_run_diffs + self.short_run_levels))
 
 
 @dataclass
@@ -147,25 +159,34 @@ def _fit_long_run(panel: pd.DataFrame, dep: str, regs: list[str]) -> tuple[pd.Se
     return fit.params, float(fit.rsquared), float(p_val), resid
 
 
-def _build_short_run_matrix(panel: pd.DataFrame, dep: str, short_run: list[str],
-                             lag: int, include_lagged_dep: bool,
-                             lr_resid: pd.Series) -> tuple[pd.Series, pd.DataFrame]:
+def _build_short_run_matrix(panel: pd.DataFrame, dep: str, sr_diffs: list[str],
+                             sr_levels: list[str], lag: int, include_lagged_dep: bool,
+                             lr_resid: Optional[pd.Series]) -> tuple[pd.Series, pd.DataFrame]:
     """Build (Δy, X) matrix for the short-run regression at lag order `lag`."""
     dy = panel[dep].diff().rename('d_' + dep)
 
     cols: dict[str, pd.Series] = {}
-    # Contemporaneous Δx (lag 0) and lagged differences up to `lag`
-    for reg in short_run:
+    # Differenced regressors: contemporaneous and lagged Δx up to `lag`
+    for reg in sr_diffs:
         dx = panel[reg].diff()
         for k in range(0, lag + 1):
             cols[f'd_{reg}_l{k}'] = dx.shift(k)
+
+    # Level regressors: contemporaneous and lagged x up to `lag`. These
+    # are typically gaps (unemp − nrou) or rates entering a Phillips curve
+    # or Taylor rule, where level — not change — is the relevant signal.
+    for reg in sr_levels:
+        x = panel[reg]
+        for k in range(0, lag + 1):
+            cols[f'{reg}_l{k}'] = x.shift(k)
 
     if include_lagged_dep:
         for k in range(1, lag + 1):
             cols[f'd_{dep}_l{k}'] = dy.shift(k)
 
-    # The error-correction term: u_{t-1}
-    cols['ec_lag'] = lr_resid.shift(1)
+    # Error-correction term u_{t-1} — only when there was a long-run stage.
+    if lr_resid is not None:
+        cols['ec_lag'] = lr_resid.shift(1)
 
     X = pd.DataFrame(cols)
     return dy, X
@@ -179,14 +200,26 @@ def _fit_short_run(dy: pd.Series, X: pd.DataFrame) -> sm.regression.linear_model
 def fit_equation(panel: pd.DataFrame, spec: EquationSpec) -> EquationFit:
     """
     Engle-Granger two-step ECM with AIC lag selection. Returns EquationFit.
+
+    If `spec.long_run` is empty, the long-run (cointegration) stage is
+    skipped — appropriate for pure short-run equations like Phillips
+    curves and Taylor rules.
+
     Raises ValueError if dependent or regressors are missing from the panel.
     """
-    missing = [c for c in [spec.dependent] + spec.long_run + spec.short_run if c not in panel.columns]
+    required = [spec.dependent] + spec.all_regressors
+    missing = [c for c in required if c not in panel.columns]
     if missing:
         raise ValueError(f'panel missing columns: {missing}')
 
-    # Step 1 — long-run
-    lr_coefs, lr_rsq, coint_p, lr_resid = _fit_long_run(panel, spec.dependent, spec.long_run)
+    # Step 1 — long-run (optional)
+    if spec.long_run:
+        lr_coefs, lr_rsq, coint_p, lr_resid = _fit_long_run(panel, spec.dependent, spec.long_run)
+    else:
+        lr_coefs = pd.Series(dtype=float)
+        lr_rsq = float('nan')
+        coint_p = float('nan')
+        lr_resid = None
 
     # Step 2 — short-run with AIC lag search
     best_aic = np.inf
@@ -194,7 +227,8 @@ def fit_equation(panel: pd.DataFrame, spec: EquationSpec) -> EquationFit:
     best_lag = None
     for k in range(1, spec.max_lags + 1):
         dy, X = _build_short_run_matrix(
-            panel, spec.dependent, spec.short_run, k, spec.include_lagged_dep, lr_resid,
+            panel, spec.dependent, spec.short_run_diffs, spec.short_run_levels,
+            k, spec.include_lagged_dep, lr_resid,
         )
         fit = _fit_short_run(dy, X)
         if np.isfinite(fit.aic) and fit.aic < best_aic:
