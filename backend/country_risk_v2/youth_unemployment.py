@@ -54,14 +54,26 @@ def _fetch_fred(country_code: str) -> Optional[dict]:
         'total_unemp': total,
         'asof': youth[-1]['date'],
         'source': 'fred',
+        'step_for_yoy': 12,  # FRED series are monthly
     }
 
 
+def _with_default_step(result, step):
+    """Ensure result dicts expose step_for_yoy so scoring can honor frequency."""
+    if result is not None and 'step_for_yoy' not in result:
+        result = dict(result)
+        result['step_for_yoy'] = step
+    return result
+
+
+from backend.country_risk_v2.data_sources import ilo_client  # noqa: E402
+
 _FETCHERS = {
     'fred': _fetch_fred,
-    'ons': lambda code: ons_labour.get_uk_youth_unemployment() if code == 'GB' else None,
-    'eurostat': lambda code: eurostat_labour.get_youth_unemployment(code),
-    # 'ilo':      _fetch_ilo,  # Phase 4
+    'ons': lambda code: _with_default_step(
+        ons_labour.get_uk_youth_unemployment() if code == 'GB' else None, 12),
+    'eurostat': lambda code: _with_default_step(eurostat_labour.get_youth_unemployment(code), 12),
+    'ilo': lambda code: _with_default_step(ilo_client.get_youth_unemployment(code), 1),
 }
 
 

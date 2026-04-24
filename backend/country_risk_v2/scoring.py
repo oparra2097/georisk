@@ -13,6 +13,8 @@ from backend.country_risk_v2.macro import get_structural_sub_score, get_macro_su
 from backend.country_risk_v2.youth_unemployment import get_youth_unemployment
 from backend.country_risk_v2.indicators import youth_unemp_risk
 
+LOW_CONFIDENCE_COUNTRIES = {'AR'}
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,19 +24,20 @@ def _labor_sub_score(country_code: str) -> Optional[dict]:
     if not raw:
         return None
 
-    # Build history excluding the most recent point (for delta_12m reference)
     history = raw['history']
     scored = youth_unemp_risk(
         level=raw['level'],
         history=history,
         delta_12m=raw.get('delta_12m'),
         total_unemp=raw.get('total_unemp'),
+        step_for_yoy=raw.get('step_for_yoy', 12),
     )
     return {
         'value': scored['value'],
         'drivers': {
             **scored['drivers'],
             'source': raw['source'],
+            'frequency_step': raw.get('step_for_yoy', 12),
         },
         'asof': raw.get('asof'),
     }
@@ -83,6 +86,12 @@ def compute_composite(country_code: str) -> Optional[CountryRiskV2]:
             drivers=labor_raw['drivers'],
         )
         confidence = 'high'
+
+    # Countries whose official labor statistics are known to be noisy or
+    # revised frequently are downgraded regardless of whether ILO returned
+    # data. AR: INDEC under multiple administrations has revised series.
+    if code in LOW_CONFIDENCE_COUNTRIES:
+        confidence = 'low'
 
     composite = (
         structural.value * structural.weight

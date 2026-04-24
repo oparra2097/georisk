@@ -52,14 +52,18 @@ def percentile_rank(value: float, history: Iterable[float]) -> float:
 
 
 def youth_unemp_risk(level: float, history: list, delta_12m: Optional[float],
-                     total_unemp: Optional[float]) -> dict:
+                     total_unemp: Optional[float], step_for_yoy: int = 12) -> dict:
     """
     Composite labor risk from youth unemployment inputs.
 
     Weights inside the sub-score:
-      level        50%  → percentile of current level vs country's own 2015+ history
+      level        50%  → percentile of current level vs country's own history
       delta_12m    30%  → z-score of YoY change, logistic-squashed
       gap_vs_total 20%  → z-score of (youth - total), logistic-squashed
+
+    `step_for_yoy` is how many history points make up one year:
+      monthly data = 12, quarterly = 4, annual = 1. Needed because ILOSTAT
+      LatAm series are annual while FRED/ONS/Eurostat are monthly.
 
     Returns {'value': 0-100, 'drivers': {...}}.
     """
@@ -69,9 +73,9 @@ def youth_unemp_risk(level: float, history: list, delta_12m: Optional[float],
         delta_risk = 50.0
     else:
         deltas = []
-        if len(history) >= 13:
-            for i in range(12, len(history)):
-                deltas.append(history[i] - history[i - 12])
+        if len(history) > step_for_yoy:
+            for i in range(step_for_yoy, len(history)):
+                deltas.append(history[i] - history[i - step_for_yoy])
         delta_risk = logistic_squash(zscore(delta_12m, deltas)) if len(deltas) >= 2 else 50.0
 
     if total_unemp is None:
