@@ -101,6 +101,10 @@ def create_app():
     def georisk():
         return render_template('georisk.html', active_page='georisk')
 
+    @app.route('/models')
+    def models():
+        return render_template('models.html', active_page='models')
+
     @app.route('/about')
     def about():
         return render_template('about.html', active_page='about')
