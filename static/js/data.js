@@ -61,7 +61,66 @@
 
         // Initial load
         loadAndRender();
+
+        // Share button — copies the current URL to the clipboard. Uses
+        // delegation so it works for every panel variant (single handler,
+        // re-bound automatically when panels re-render).
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest && e.target.closest('#panel-share-btn, .js-share-url');
+            if (!btn) return;
+            e.preventDefault();
+            const url = btn.dataset.shareUrl || window.location.href;
+            copyToClipboard(url).then((ok) => {
+                if (ok) {
+                    btn.classList.add('copied');
+                    const label = btn.querySelector('.share-btn-label');
+                    const prev = label ? label.textContent : null;
+                    if (label) label.textContent = 'Copied';
+                    showShareToast('Link copied — paste it into LinkedIn, X, or Substack');
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        if (label && prev !== null) label.textContent = prev;
+                    }, 1800);
+                } else {
+                    showShareToast('Copy failed — ' + url);
+                }
+            });
+        });
     });
+
+    function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text).then(() => true, () => false);
+        }
+        // Fallback for older browsers / http contexts
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return Promise.resolve(ok);
+        } catch (_) {
+            return Promise.resolve(false);
+        }
+    }
+
+    function showShareToast(msg) {
+        let toast = document.getElementById('share-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'share-toast';
+            toast.className = 'share-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        requestAnimationFrame(() => toast.classList.add('show'));
+        clearTimeout(toast._hideTimer);
+        toast._hideTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
 
     // ══════════════════════════════════════════════════════
     // SIDEBAR RENDERING (Phase 2)
@@ -206,6 +265,13 @@
               '</svg>Excel</a>'
             : '';
 
+        const shareBtn =
+            '<button type="button" class="share-btn-data" id="panel-share-btn" title="Copy shareable link">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
+            '</svg><span class="share-btn-label">Share</span></button>';
+
         panel.innerHTML = `
             <div class="data-section-header">
                 <div>
@@ -214,6 +280,7 @@
                 </div>
                 <div class="data-controls" id="panel-controls">
                     ${controlsHtml}
+                    ${shareBtn}
                     ${exportBtn}
                 </div>
             </div>
@@ -3885,6 +3952,12 @@
               '<polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' +
               '</svg>Excel</a>'
             : '';
+        const shareBtnEm =
+            '<button type="button" class="share-btn-data" id="panel-share-btn" title="Copy shareable link">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
+            '</svg><span class="share-btn-label">Share</span></button>';
 
         panel.innerHTML = `
             <div class="data-section-header">
@@ -3894,6 +3967,7 @@
                 </div>
                 <div class="data-controls" id="panel-controls">
                     ${controlsHtml}
+                    ${shareBtnEm}
                     ${exportBtn}
                 </div>
             </div>
