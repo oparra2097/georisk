@@ -133,11 +133,14 @@ def _save_persist():
 def _try_load_persist() -> bool:
     try:
         if not os.path.exists(_PERSIST_PATH):
+            logger.info('house_prices: no pickle on disk, will build fresh')
             return False
         age = time.time() - os.path.getmtime(_PERSIST_PATH)
         if age > _PERSIST_MAX_AGE_S:
             logger.info(f'house_prices: pickle is {age/3600:.1f}h old, ignoring')
             return False
+        size_mb = os.path.getsize(_PERSIST_PATH) / 1024 / 1024
+        logger.info(f'house_prices: loading pickle ({size_mb:.1f}MB, {age:.0f}s old)…')
         with open(_PERSIST_PATH, 'rb') as f:
             data = pickle.load(f)
         with _lock:
@@ -147,10 +150,16 @@ def _try_load_persist() -> bool:
             _state['build_error'] = None
             _state['built_at'] = data.get('saved_at', time.time())
         logger.info(f'house_prices: hot-loaded persisted state '
-                    f'({len(data["summaries"])} entities, {age:.0f}s old)')
+                    f'({len(data["summaries"])} entities)')
         return True
     except Exception as e:
         logger.warning(f'house_prices: persist load failed: {e}')
+        # Delete corrupt pickle so subsequent cold-starts don't repeat the failure.
+        try:
+            os.remove(_PERSIST_PATH)
+            logger.info(f'house_prices: removed broken pickle at {_PERSIST_PATH}')
+        except OSError:
+            pass
         return False
 
 
