@@ -2,14 +2,24 @@
 Cached service facade for the macro model.
 
 The fit (fetch FRED + estimate 11 equations) is expensive, so we memoize
-a single fitted Simulator and rebuild it only on demand (startup warmup
-or manual refresh). Baseline forecast, bootstrap, and shock results are
-computed lazily and cached until the next rebuild.
+a single fitted Simulator. Three layers of cache, ordered fastest first:
+
+    in-memory _state['simulator']    → 0ms
+    disk pickle (this module)        → ~1s, survives worker restarts and
+                                       is shared across Gunicorn workers
+                                       (each one reads the same file)
+    fresh build via fit_all          → 60-120s
+
+The disk cache is what makes workers > 1 safe: after worker A finishes
+the cold build and writes the pickle, worker B serves its first request
+by reading from disk instead of rebuilding from scratch.
 """
 
 from __future__ import annotations
 
 import logging
+import os
+import pickle
 import threading
 import time
 from typing import Optional
@@ -17,6 +27,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from config import Config
 from backend.macro_model import diagnostics
 from backend.macro_model.data import build_panel
 from backend.macro_model.equations import derive_auxiliary_columns
@@ -29,6 +40,10 @@ from backend.macro_model.simulations import (
     run_shock,
 )
 from backend.macro_model.solver import Simulator
+
+# Cross-worker persistence
+_PERSIST_PATH = os.path.join(Config.DATA_DIR, 'macro_model_state.pkl')
+_PERSIST_MAX_AGE_S = 24 * 3600   # rebuild from scratch if pickle older than 24h
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +59,50 @@ _state: dict = {
     'built_at': None,
     'building': False,        # True while a background build is in flight
 }
+
+
+def _save_persist(report, sim, panel):
+    """Pickle the build artifacts so a sibling worker can load them
+    instead of rebuilding. Best-effort: any pickle failure is logged
+    but not raised."""
+    try:
+        os.makedirs(Config.DATA_DIR, exist_ok=True)
+        tmp = _PERSIST_PATH + '.tmp'
+        with open(tmp, 'wb') as f:
+            pickle.dump({'report': report, 'simulator': sim, 'panel': panel,
+                         'saved_at': time.time()}, f, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp, _PERSIST_PATH)
+        logger.info(f'macro_model.service: persisted state to {_PERSIST_PATH}')
+    except Exception as e:
+        logger.warning(f'macro_model.service: persist failed: {e}')
+
+
+def _try_load_persist() -> bool:
+    """Hot-load a previously-pickled build. Returns True on success."""
+    try:
+        if not os.path.exists(_PERSIST_PATH):
+            return False
+        age = time.time() - os.path.getmtime(_PERSIST_PATH)
+        if age > _PERSIST_MAX_AGE_S:
+            logger.info(f'macro_model.service: pickle is {age/3600:.1f}h old, ignoring')
+            return False
+        with open(_PERSIST_PATH, 'rb') as f:
+            data = pickle.load(f)
+        with _lock:
+            _state['report'] = data['report']
+            _state['simulator'] = data['simulator']
+            _state['baseline'] = None
+            _state['bootstrap'] = None
+            _state['shock_results'] = {}
+            _state['backtests'] = {}
+            _state['fit_error'] = None
+            _state['built_at'] = data.get('saved_at', time.time())
+        logger.info(f'macro_model.service: hot-loaded persisted state '
+                    f'({len(data["report"].fits)} equations, {age:.0f}s old)')
+        return True
+    except Exception as e:
+        logger.warning(f'macro_model.service: persist load failed (will rebuild): {e}')
+        return False
 
 
 def _build_locked(start: str = '1980-01-01', force_refresh: bool = False):
@@ -78,6 +137,9 @@ def _build_locked(start: str = '1980-01-01', force_refresh: bool = False):
         _state['fit_error'] = None
         _state['built_at'] = time.time()
         logger.info(f'macro_model.service: fitted {len(report.fits)} equations')
+
+        # Persist for sibling workers + restart resilience
+        _save_persist(report, sim, panel)
     except Exception as e:
         logger.exception('macro_model.service: fit failed')
         _state['fit_error'] = str(e)
@@ -113,12 +175,16 @@ def _build_in_background(start: str = '1980-01-01'):
 
 def ensure_built():
     """
-    Non-blocking: if not built yet, kick off a background build and return.
-    Callers that need the simulator should check status() first.
+    Non-blocking: if not built yet, try the disk pickle first (cheap), and
+    only kick off a background build if that fails. Callers that need the
+    simulator should check status() first.
     """
     with _lock:
         if _state['simulator'] is not None or _state['fit_error'] is not None:
             return
+    # Cheap path — sibling worker may have already built and persisted.
+    if _try_load_persist():
+        return
     _build_in_background()
 
 
