@@ -357,15 +357,20 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
         _capped_fill(total_values)
         _capped_fill(fx_values)
 
-        # Recompute gold from the filled arrays. Clamp to zero: mixing
-        # sources (IRFCL total + IFS FX) can produce negative gold when
-        # their methodologies differ slightly for a country.
+        # Recompute gold from the filled arrays. When total and fx come
+        # from different sources (IRFCL total + IFS fx) the methodology
+        # mismatch can produce negative residuals — treat those as
+        # missing rather than clamping to zero (which creates a visible
+        # dip to $0B on the chart). Then forward-fill gold so the chart
+        # line stays continuous through small gaps.
         gold_values = []
         for t, f in zip(total_values, fx_values):
             if t is not None and f is not None:
-                gold_values.append(max(round(t - f, 2), 0.0))
+                g = round(t - f, 2)
+                gold_values.append(g if g > 0 else None)
             else:
                 gold_values.append(None)
+        _capped_fill(gold_values)
 
         latest_real_period = periods[latest_real_idx]
 
