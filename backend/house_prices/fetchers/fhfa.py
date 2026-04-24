@@ -88,29 +88,66 @@ _LEVEL_MAP = {
 # ── Master file (national / region / state / MSA) ───────────────────────
 
 def _parse_master_csv(text: str) -> list[HpiRow]:
+    """
+    Robust parser: case-insensitive column names, lenient flavor/frequency
+    matching. Logs aggregate counts so the diagnostics endpoint can surface
+    why something is being filtered out.
+    """
     rows: list[HpiRow] = []
     reader = csv.DictReader(io.StringIO(text))
+    fieldnames = [f for f in (reader.fieldnames or [])]
+    if not fieldnames:
+        logger.warning('fhfa master: empty or non-CSV response (no fieldnames)')
+        return []
+
+    # Build a case-insensitive column lookup so 'HPI_Flavor' / 'hpi_flavor' / 'Flavor' all map.
+    col_map = {f.strip().lower(): f for f in fieldnames}
+    logger.info(f'fhfa master: columns = {list(col_map.keys())}')
+
+    def col(row, key, default=''):
+        actual = col_map.get(key)
+        return row.get(actual, default) if actual else default
+
+    flavor_counts: dict[str, int] = {}
+    freq_counts: dict[str, int] = {}
+    level_counts: dict[str, int] = {}
+    kept = 0
     for r in reader:
-        if r.get('hpi_flavor', '').strip().lower() != 'all-transactions':
+        flavor = col(r, 'hpi_flavor').strip().lower() or col(r, 'flavor').strip().lower()
+        freq = col(r, 'frequency').strip().lower()
+        flavor_counts[flavor] = flavor_counts.get(flavor, 0) + 1
+        freq_counts[freq] = freq_counts.get(freq, 0) + 1
+
+        if flavor and flavor != 'all-transactions':
             continue
-        if r.get('frequency', '').strip().lower() != 'quarterly':
+        if freq and freq != 'quarterly':
             continue
 
-        raw_level = r.get('level', '').strip()
+        raw_level = col(r, 'level').strip()
+        level_counts[raw_level] = level_counts.get(raw_level, 0) + 1
         level = _LEVEL_MAP.get(raw_level)
         if level is None:
             # Split 'USA or Census Division' based on place_id
-            pid = r.get('place_id', '').strip()
-            level = 'national' if pid in ('USA', '00') else 'region'
+            pid = col(r, 'place_id').strip()
+            if pid in ('USA', '00'):
+                level = 'national'
+            elif pid and len(pid) <= 3:  # short codes like 'NE', 'WSC' = region
+                level = 'region'
+            elif pid and len(pid) == 2:
+                level = 'state'
+            elif pid and len(pid) == 5 and pid.isdigit():
+                level = 'msa'
+            else:
+                level = 'region'
 
         try:
-            yr = int(r['yr'])
-            pd_ = int(r['period'])
+            yr = int(col(r, 'yr'))
+            pd_ = int(col(r, 'period'))
         except (KeyError, ValueError, TypeError):
             continue
 
         def _f(key):
-            v = r.get(key, '').strip()
+            v = col(r, key).strip()
             if v in ('', '.', '-'):
                 return None
             try:
@@ -120,14 +157,18 @@ def _parse_master_csv(text: str) -> list[HpiRow]:
 
         rows.append(HpiRow(
             level=level,
-            code=r.get('place_id', '').strip(),
-            name=r.get('place_name', '').strip(),
+            code=col(r, 'place_id').strip(),
+            name=col(r, 'place_name').strip(),
             year=yr,
             period=pd_,
             freq='quarterly',
             index_nsa=_f('index_nsa'),
             index_sa=_f('index_sa'),
         ))
+        kept += 1
+
+    logger.info(f'fhfa master: kept {kept} rows. flavors={flavor_counts}  '
+                f'frequencies={freq_counts}  top-levels={list(level_counts.items())[:8]}')
     return rows
 
 
@@ -219,6 +260,15 @@ def fetch_master(force: bool = False) -> list[HpiRow]:
             return []
         rows = _parse_master_csv(resp.text)
         logger.info(f'fhfa master: parsed {len(rows)} rows')
+        if len(rows) == 0:
+            # HTTP 200 but parser produced nothing — usually means FHFA changed
+            # the schema (column names) or the URL now returns an HTML/redirect
+            # page. Either way we want this loud, not silent.
+            preview = resp.text[:200].replace('\n', ' \\n ')
+            msg = f'FHFA master CSV parsed to 0 rows (header/schema mismatch). First 200 chars: {preview!r}'
+            logger.warning(msg)
+            diagnostics.record_fetch_fail('fhfa_master', 'FHFA HPI master', msg)
+            return rows
         with _lock:
             _mem['master'] = rows
         _save_disk(_CACHE_FILE, rows)
@@ -253,6 +303,12 @@ def fetch_county(force: bool = False) -> list[HpiRow]:
             return []
         rows = _parse_county_csv(resp.text)
         logger.info(f'fhfa county: parsed {len(rows)} rows')
+        if len(rows) == 0:
+            preview = resp.text[:200].replace('\n', ' \\n ')
+            msg = f'FHFA county CSV parsed to 0 rows (header/schema mismatch). First 200 chars: {preview!r}'
+            logger.warning(msg)
+            diagnostics.record_fetch_fail('fhfa_county', 'FHFA County HPI', msg)
+            return rows
         with _lock:
             _mem['county'] = rows
         _save_disk(_CACHE_FILE_COUNTY, rows)

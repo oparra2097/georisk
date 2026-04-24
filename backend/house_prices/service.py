@@ -1,10 +1,16 @@
 """
 Service facade: single source of truth for the /house-prices product.
 
-On first use (ensure_built), pulls the three data sources, parses into a
-single list of HpiRow records, groups per entity, and computes summary
+On first use (ensure_built), pulls data sources, parses into a single
+list of HpiRow records, groups per entity, and computes summary
 statistics. In-memory cache is keyed by (level, code); a full rebuild
 re-downloads everything.
+
+Memory budget: Render's free tier is ~512MB RAM. Zillow metro (~100MB)
+and county (~50MB) CSVs blow that budget after Python object overhead.
+Default is to skip Zillow; set HPI_INCLUDE_ZILLOW=1 in the environment
+to enable it. FHFA + Case-Shiller cover all the dashboard tabs (states,
+regions, MSAs, counties via FHFA annual) without Zillow.
 
 Built is idempotent; refresh() forces re-download.
 """
@@ -12,6 +18,7 @@ Built is idempotent; refresh() forces re-download.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from typing import Optional
@@ -35,53 +42,76 @@ _state: dict = {
 }
 
 
+# Zillow is heavy (~100MB metro CSV + ~50MB county CSV after Python object
+# overhead) and OOM's Render's 512MB free tier. Off by default; opt in via env.
+INCLUDE_ZILLOW = os.environ.get('HPI_INCLUDE_ZILLOW', '0').lower() in ('1', 'true', 'yes')
+INCLUDE_ZILLOW_ZIP = os.environ.get('HPI_INCLUDE_ZILLOW_ZIP', '0').lower() in ('1', 'true', 'yes')
+
+
 def _build_locked(include_zillow_zip: bool = False, force_refresh: bool = False):
+    """The actual build. Runs OUTSIDE the global lock — only state mutations
+    (the four assignments at the bottom) happen under the lock so concurrent
+    /status calls don't block on the long network/parse path."""
     err: Optional[BaseException] = None
+    rows: list[HpiRow] = []
+    summaries: dict = {}
+    grouped: dict = {}
     try:
         diagnostics.record_build_start(clear=force_refresh)
         logger.info('house_prices: fetching FHFA master + county…')
-        rows: list[HpiRow] = []
         rows.extend(fhfa.fetch_master(force=force_refresh))
         rows.extend(fhfa.fetch_county(force=force_refresh))
         logger.info('house_prices: fetching Case-Shiller (national + 20 cities)…')
         rows.extend(case_shiller.fetch_all())
-        logger.info('house_prices: fetching Zillow metro + county…')
-        rows.extend(zillow.fetch_metro(force=force_refresh))
-        rows.extend(zillow.fetch_county(force=force_refresh))
-        if include_zillow_zip:
-            logger.info('house_prices: fetching Zillow ZIP (last 36 months)…')
-            rows.extend(zillow.fetch_zip(force=force_refresh))
+
+        if INCLUDE_ZILLOW:
+            logger.info('house_prices: fetching Zillow metro + county (HPI_INCLUDE_ZILLOW=1)…')
+            rows.extend(zillow.fetch_metro(force=force_refresh))
+            rows.extend(zillow.fetch_county(force=force_refresh))
+            if include_zillow_zip or INCLUDE_ZILLOW_ZIP:
+                logger.info('house_prices: fetching Zillow ZIP (last 36 months)…')
+                rows.extend(zillow.fetch_zip(force=force_refresh))
+        else:
+            logger.info('house_prices: skipping Zillow (HPI_INCLUDE_ZILLOW=0). '
+                        'Set the env var to 1 to enable Zillow on a >=1GB worker.')
 
         grouped = group_by_entity(rows)
         summaries = {k: summarize(v) for k, v in grouped.items()}
         summaries = {k: v for k, v in summaries.items() if v is not None}
-
-        _state['rows'] = rows
-        _state['grouped'] = grouped
-        _state['summaries'] = summaries
-        _state['built_at'] = time.time()
-        _state['build_error'] = None
-        logger.info(f'house_prices: built with {len(rows)} rows across {len(summaries)} entities')
+        logger.info(f'house_prices: parsed {len(rows)} rows across {len(summaries)} entities')
     except Exception as e:
         err = e
         logger.exception('house_prices build failed')
-        _state['build_error'] = str(e)
-    finally:
+
+    # Brief locked region: state mutation only.
+    with _lock:
+        if err is None and summaries:
+            _state['rows'] = rows
+            _state['grouped'] = grouped
+            _state['summaries'] = summaries
+            _state['built_at'] = time.time()
+            _state['build_error'] = None
+        elif err is not None:
+            _state['build_error'] = str(err)
+        else:
+            _state['build_error'] = (
+                'no entities produced — likely a parser mismatch on the FHFA CSV. '
+                'Hit /api/house-prices/diagnostics to see per-source row counts.'
+            )
         _state['building'] = False
-        diagnostics.record_build_finish(error=err)
+    diagnostics.record_build_finish(error=err)
 
 
 def _build_in_background(include_zillow_zip: bool = False):
-    """Daemon-thread build so the first /level request returns fast instead
-    of timing out on Render while ~5 CSVs download (FHFA master + county +
-    Case-Shiller via FRED + Zillow metro + county). Total cold build
-    typically 60-120 seconds."""
+    """Daemon-thread build so the first /level request returns fast.
+
+    CRITICAL: do NOT hold _lock during the actual build. _build_locked
+    handles its own locked state-mutation block at the end; holding the
+    outer lock for the full 60-120s download would block every concurrent
+    /status request and freeze the dashboard."""
     def _run():
         try:
-            with _lock:
-                if _state['summaries'] is not None:
-                    return
-                _build_locked(include_zillow_zip=include_zillow_zip)
+            _build_locked(include_zillow_zip=include_zillow_zip)
         except Exception:
             logger.exception('house_prices background build died')
 
@@ -101,15 +131,25 @@ def ensure_built():
 
 
 def refresh(include_zillow_zip: bool = False):
-    """Force-refresh synchronously (used by POST /refresh)."""
+    """Force-refresh synchronously (used by POST /refresh).
+
+    Lock is held briefly to flip 'building' true, then released so /status
+    polls don't block during the rebuild. _build_locked re-acquires the
+    lock at the end for the state-mutation step.
+    """
     with _lock:
+        if _state['building']:
+            logger.info('refresh skipped: already building')
+            return
         _state['building'] = True
-        try:
-            fhfa.clear_cache()
-            zillow.clear_cache()
-            _build_locked(include_zillow_zip=include_zillow_zip, force_refresh=True)
-        finally:
+    try:
+        fhfa.clear_cache()
+        zillow.clear_cache()
+        _build_locked(include_zillow_zip=include_zillow_zip, force_refresh=True)
+    except Exception:
+        with _lock:
             _state['building'] = False
+        raise
 
 
 def get_diagnostics() -> dict:
