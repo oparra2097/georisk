@@ -48,6 +48,60 @@
 
   .footer-note { font-size: 10px; color: #9ca3af; margin-top: 18px; padding-top: 10px; border-top: 1px solid #f3f4f6; }
   .loading { color: #9ca3af; font-size: 12px; padding: 12px; text-align: center; }
+
+  /* ── Map ───────────────────────────────────────────────────────── */
+  .hp-map-card { padding: 18px 20px; }
+  .hp-map-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .hp-map-head h3 { margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #374151; }
+  .hp-map-head .sub { font-size: 11px; color: #9ca3af; margin-left: 6px; }
+  .hp-map-controls { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .hp-map-controls select { padding: 4px 8px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 3px; background: #fff; color: #1f2937; }
+  .hp-map-controls .btn-reset { padding: 4px 10px; font-size: 11px; border: 1px solid #d1d5db; background: #fff; border-radius: 3px; cursor: pointer; color: #374151; }
+  .hp-map-controls .btn-reset:hover { background: #f3f4f6; }
+  .hp-map-controls .btn-reset:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .hp-map-host { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 360px; background: #f9fafb;
+                 border-radius: 6px; overflow: hidden; border: 1px solid #f3f4f6; }
+  .hp-map-host svg { width: 100%; height: 100%; display: block; }
+
+  .hp-map-host path.geo {
+    fill: #e5e7eb; stroke: #fff; stroke-width: 0.6; cursor: pointer;
+    transition: fill 0.18s ease, stroke 0.18s ease;
+  }
+  .hp-map-host path.geo:hover { stroke: #111827; stroke-width: 1.2; }
+  .hp-map-host path.geo.no-data { fill: #f3f4f6; cursor: default; }
+  .hp-map-host path.county-border { fill: none; stroke: #fff; stroke-width: 0.4; pointer-events: none; }
+  .hp-map-host path.state-outline { fill: none; stroke: #1f2937; stroke-width: 1; pointer-events: none; }
+  .hp-map-host path.geo.dim { opacity: 0.25; }
+
+  .hp-tooltip {
+    position: absolute; pointer-events: none; background: rgba(15,23,42,0.95); color: #f1f5f9;
+    padding: 8px 10px; border-radius: 5px; font-size: 11px; z-index: 5; min-width: 160px;
+    transform: translate(-50%, -110%); white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+    opacity: 0; transition: opacity 0.12s;
+  }
+  .hp-tooltip.show { opacity: 1; }
+  .hp-tooltip strong { display: block; font-size: 12px; margin-bottom: 4px; color: #fff; }
+  .hp-tooltip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 10px; }
+  .hp-tooltip dt { color: #cbd5e1; }
+  .hp-tooltip dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+  .hp-tooltip .delta-pos { color: #fca5a5; } .hp-tooltip .delta-neg { color: #86efac; }
+
+  .hp-legend {
+    display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 10px; color: #6b7280;
+    font-variant-numeric: tabular-nums;
+  }
+  .hp-legend-bar {
+    width: 220px; height: 10px; border-radius: 2px;
+    background: linear-gradient(to right, #1d4ed8, #93c5fd, #f3f4f6, #fca5a5, #b91c1c);
+  }
+  .hp-legend .lbl { font-size: 11px; color: #4b5563; }
+
+  .hp-map-overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(249,250,251,0.85); color: #6b7280; font-size: 13px; pointer-events: none;
+  }
+  .hp-map-overlay.hidden { display: none; }
 </style>
 {% endblock %}
 
@@ -72,6 +126,36 @@
     </h3>
     <div id="hp-diag-summary" style="font-size:12px;color:#4b5563;"></div>
     <div id="hp-diag-details" style="display:none;margin-top:10px;"></div>
+  </section>
+
+  <!-- Choropleth map -->
+  <section class="hp-card hp-map-card">
+    <div class="hp-map-head">
+      <h3>Map</h3>
+      <span class="sub" id="hp-map-sub">United States — click any state to drill into counties</span>
+      <div class="hp-map-controls">
+        <label style="font-size:11px;color:#4b5563;">Color by
+          <select id="hp-map-metric">
+            <option value="yoy_pct" selected>YoY %</option>
+            <option value="yoy_3y_avg">3y avg %</option>
+            <option value="from_peak_pct">From peak %</option>
+            <option value="zscore_yoy">YoY z-score</option>
+          </select>
+        </label>
+        <button class="btn-reset" id="hp-map-reset" disabled>&larr; Back to US</button>
+      </div>
+    </div>
+    <div class="hp-map-host" id="hp-map-host">
+      <div class="hp-map-overlay" id="hp-map-overlay">Loading map…</div>
+    </div>
+    <div class="hp-legend">
+      <span class="lbl" id="hp-legend-min">−</span>
+      <span class="hp-legend-bar"></span>
+      <span class="lbl" id="hp-legend-max">+</span>
+      <span style="margin-left:auto;font-size:10px;color:#9ca3af;">
+        Choropleth: <span id="hp-legend-metric">YoY %</span>. Zero centered diverging scale.
+      </span>
+    </div>
   </section>
 
   <!-- Toolbar -->
@@ -124,10 +208,23 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <script>
 (function() {
   const API = '/api/house-prices';
   const $ = (id) => document.getElementById(id);
+
+  // ── State FIPS ↔ abbreviation mapping ─────────────────────────────
+  const STATE_FIPS_TO_ABBR = {
+    '01':'AL','02':'AK','04':'AZ','05':'AR','06':'CA','08':'CO','09':'CT','10':'DE','11':'DC',
+    '12':'FL','13':'GA','15':'HI','16':'ID','17':'IL','18':'IN','19':'IA','20':'KS','21':'KY',
+    '22':'LA','23':'ME','24':'MD','25':'MA','26':'MI','27':'MN','28':'MS','29':'MO','30':'MT',
+    '31':'NE','32':'NV','33':'NH','34':'NJ','35':'NM','36':'NY','37':'NC','38':'ND','39':'OH',
+    '40':'OK','41':'OR','42':'PA','44':'RI','45':'SC','46':'SD','47':'TN','48':'TX','49':'UT',
+    '50':'VT','51':'VA','53':'WA','54':'WV','55':'WI','56':'WY','72':'PR'
+  };
+  const ABBR_TO_FIPS = Object.fromEntries(Object.entries(STATE_FIPS_TO_ABBR).map(([k, v]) => [v, k]));
 
   const state = {
     level: 'state',
@@ -176,6 +273,12 @@
     state.entities = b.entities || [];
     $('hp-count').textContent = `${state.entities.length} entities`;
     renderTable();
+    // Mirror state-level data into the map cache so the choropleth has fresh values.
+    if (level === 'state') {
+      map.stateData = {};
+      for (const e of state.entities) map.stateData[e.code] = e;
+      if (map.svg) paintStates();
+    }
     // If the API said the build is still pending, kick off a poll
     if (b.pending || state.entities.length === 0) {
       schedulePoll();
@@ -363,7 +466,273 @@
     $('hp-diag-toggle').textContent = el.style.display === 'none' ? 'Details' : 'Hide';
   });
 
-  Promise.all([loadDiagnostics(), loadHero(), loadLevel('state'), loadSources()]);
+  // ────────────────────────────────────────────────────────────────────
+  //  Choropleth map
+  // ────────────────────────────────────────────────────────────────────
+
+  const map = {
+    statesTopo: null,         // cached states-10m topojson
+    countiesTopo: null,       // cached counties-10m topojson (lazy)
+    stateData: {},            // {abbr: summary}
+    countyData: {},           // {fips: summary} — filled lazily by state
+    selectedFips: null,       // 2-digit state FIPS when zoomed in
+    metric: 'yoy_pct',
+    svg: null, gMap: null, gStates: null, gCounties: null, gOutline: null,
+    projection: null, path: null,
+    width: 0, height: 0,
+    legendMin: -10, legendMax: 10,
+    tooltipEl: null,
+  };
+
+  function hpiColor(value, metric) {
+    if (value === null || value === undefined || isNaN(value)) return '#f3f4f6';
+    // Diverging scale around 0; YoY% typical range is -10 to +20, z-score is ±2.
+    const range = metric === 'zscore_yoy' ? 2.0 : 10.0;
+    const t = Math.max(-1, Math.min(1, value / range));
+    // Interpolate: blue → light → red
+    if (t < 0) {
+      const u = (t + 1);  // 0..1 from blue to neutral
+      return d3.interpolateRgb('#1d4ed8', '#f3f4f6')(u);
+    } else {
+      return d3.interpolateRgb('#f3f4f6', '#b91c1c')(t);
+    }
+  }
+
+  function fmtMetric(v, metric) {
+    if (v === null || v === undefined) return '—';
+    if (metric === 'zscore_yoy') return v.toFixed(2);
+    return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+  }
+
+  async function initMap() {
+    const host = $('hp-map-host');
+    map.width = host.clientWidth;
+    map.height = host.clientHeight;
+
+    // Tooltip
+    map.tooltipEl = document.createElement('div');
+    map.tooltipEl.className = 'hp-tooltip';
+    host.appendChild(map.tooltipEl);
+
+    // SVG + projection
+    map.svg = d3.select(host).append('svg')
+      .attr('viewBox', `0 0 ${map.width} ${map.height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+    map.gMap = map.svg.append('g').attr('class', 'map-root');
+    map.gCounties = map.gMap.append('g').attr('class', 'counties');
+    map.gStates = map.gMap.append('g').attr('class', 'states');
+    map.gOutline = map.gMap.append('g').attr('class', 'outline');
+
+    map.projection = d3.geoAlbersUsa();
+    map.path = d3.geoPath(map.projection);
+
+    try {
+      map.statesTopo = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json');
+    } catch (e) {
+      $('hp-map-overlay').textContent = 'Map topology failed to load.';
+      console.error('topojson load:', e);
+      return;
+    }
+
+    const states = topojson.feature(map.statesTopo, map.statesTopo.objects.states);
+    map.projection.fitSize([map.width, map.height], states);
+
+    // Render the state polygons (no fill yet — populated when stateData arrives)
+    map.gStates.selectAll('path.geo')
+      .data(states.features, d => d.id)
+      .join('path')
+      .attr('class', 'geo')
+      .attr('d', map.path)
+      .on('mouseenter', (e, d) => showTooltipState(e, d))
+      .on('mousemove', (e) => positionTooltip(e))
+      .on('mouseleave', hideTooltip)
+      .on('click', (e, d) => onStateClick(d));
+
+    $('hp-map-overlay').classList.add('hidden');
+    paintStates();
+  }
+
+  function paintStates() {
+    map.gStates.selectAll('path.geo')
+      .classed('no-data', d => !map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]])
+      .transition().duration(280)
+      .attr('fill', d => {
+        const s = map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]];
+        if (!s) return '#f3f4f6';
+        return hpiColor(s[map.metric], map.metric);
+      });
+    updateLegendBounds();
+  }
+
+  function updateLegendBounds() {
+    const vals = Object.values(map.stateData).map(s => s[map.metric]).filter(v => v !== null && v !== undefined);
+    if (!vals.length) return;
+    const range = map.metric === 'zscore_yoy' ? 2.0 : 10.0;
+    $('hp-legend-min').textContent = (map.metric === 'zscore_yoy' ? '−2.0' : '−10%');
+    $('hp-legend-max').textContent = (map.metric === 'zscore_yoy' ? '+2.0' : '+10%');
+    $('hp-legend-metric').textContent = $('hp-map-metric').selectedOptions[0]?.text || 'YoY %';
+  }
+
+  function showTooltipState(e, d) {
+    const abbr = STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')];
+    const s = map.stateData[abbr];
+    if (!s) {
+      map.tooltipEl.innerHTML = `<strong>${d.properties.name}</strong><dl><dt>No data</dt><dd></dd></dl>`;
+    } else {
+      map.tooltipEl.innerHTML = `
+        <strong>${s.name}</strong>
+        <dl>
+          <dt>HPI</dt><dd>${(s.latest_index ?? 0).toLocaleString(undefined,{maximumFractionDigits:1})}</dd>
+          <dt>YoY</dt><dd class="${(s.yoy_pct ?? 0) >= 0 ? 'delta-pos' : 'delta-neg'}">${fmtMetric(s.yoy_pct, 'yoy_pct')}</dd>
+          <dt>3y avg</dt><dd>${fmtMetric(s.yoy_3y_avg, 'yoy_pct')}</dd>
+          <dt>From peak</dt><dd>${fmtMetric(s.from_peak_pct, 'yoy_pct')}</dd>
+          <dt>YoY z</dt><dd>${(s.zscore_yoy ?? 0).toFixed(2)}</dd>
+        </dl>`;
+    }
+    map.tooltipEl.classList.add('show');
+    positionTooltip(e);
+  }
+
+  function showTooltipCounty(e, d) {
+    const fips = String(d.id).padStart(5, '0');
+    const c = map.countyData[fips];
+    const name = (d.properties && d.properties.name) || fips;
+    if (!c) {
+      map.tooltipEl.innerHTML = `<strong>${name}</strong><dl><dt>No data</dt><dd></dd></dl>`;
+    } else {
+      map.tooltipEl.innerHTML = `
+        <strong>${c.name}</strong>
+        <dl>
+          <dt>HPI</dt><dd>${(c.latest_index ?? 0).toFixed(1)}</dd>
+          <dt>YoY</dt><dd class="${(c.yoy_pct ?? 0) >= 0 ? 'delta-pos' : 'delta-neg'}">${fmtMetric(c.yoy_pct, 'yoy_pct')}</dd>
+          <dt>From peak</dt><dd>${fmtMetric(c.from_peak_pct, 'yoy_pct')}</dd>
+          <dt>YoY z</dt><dd>${(c.zscore_yoy ?? 0).toFixed(2)}</dd>
+        </dl>`;
+    }
+    map.tooltipEl.classList.add('show');
+    positionTooltip(e);
+  }
+
+  function positionTooltip(e) {
+    const rect = $('hp-map-host').getBoundingClientRect();
+    map.tooltipEl.style.left = (e.clientX - rect.left) + 'px';
+    map.tooltipEl.style.top = (e.clientY - rect.top - 6) + 'px';
+  }
+
+  function hideTooltip() { map.tooltipEl.classList.remove('show'); }
+
+  async function onStateClick(d) {
+    map.selectedFips = String(d.id).padStart(2, '0');
+    const abbr = STATE_FIPS_TO_ABBR[map.selectedFips];
+    const s = map.stateData[abbr];
+    if (!s) return;
+
+    $('hp-map-sub').textContent = `${s.name} — counties (FHFA annual + Zillow monthly)`;
+    $('hp-map-reset').disabled = false;
+
+    // Lazy load counties topology + data
+    if (!map.countiesTopo) {
+      $('hp-map-overlay').classList.remove('hidden');
+      $('hp-map-overlay').textContent = 'Loading county geometries…';
+      try {
+        map.countiesTopo = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json');
+      } catch (e) {
+        $('hp-map-overlay').textContent = 'County topology failed to load.';
+        return;
+      }
+      $('hp-map-overlay').classList.add('hidden');
+    }
+    if (!Object.keys(map.countyData).length) {
+      try {
+        const r = await fetch(`${API}/level/county`);
+        const b = await r.json();
+        for (const e of (b.entities || [])) map.countyData[String(e.code).padStart(5, '0')] = e;
+      } catch (err) {
+        console.error('county fetch:', err);
+      }
+    }
+
+    // Filter counties to the selected state
+    const counties = topojson.feature(map.countiesTopo, map.countiesTopo.objects.counties);
+    const stateFips = map.selectedFips;
+    const stateCounties = {
+      type: 'FeatureCollection',
+      features: counties.features.filter(f => String(f.id).padStart(5, '0').slice(0, 2) === stateFips),
+    };
+
+    // Project to fit just this state
+    map.projection.fitSize([map.width, map.height], d);
+    map.gStates.selectAll('path.geo').classed('dim', s2 => String(s2.id).padStart(2, '0') !== stateFips);
+
+    map.gCounties.selectAll('path.geo')
+      .data(stateCounties.features, f => f.id)
+      .join('path')
+      .attr('class', 'geo')
+      .attr('d', map.path)
+      .on('mouseenter', (e, c) => showTooltipCounty(e, c))
+      .on('mousemove', (e) => positionTooltip(e))
+      .on('mouseleave', hideTooltip)
+      .transition().duration(300)
+      .attr('fill', f => {
+        const fips = String(f.id).padStart(5, '0');
+        const c = map.countyData[fips];
+        return c ? hpiColor(c[map.metric], map.metric) : '#f3f4f6';
+      });
+
+    // Re-project the state outline so it stays crisp
+    map.gStates.selectAll('path.geo').attr('d', map.path);
+
+    // Filter the table below to this state's counties
+    state.level = 'county';
+    document.querySelectorAll('.hp-tab[data-level]').forEach(t =>
+      t.classList.toggle('active', t.dataset.level === 'county'));
+    state.entities = Object.values(map.countyData).filter(c =>
+      String(c.code).padStart(5, '0').slice(0, 2) === stateFips);
+    $('hp-count').textContent = `${state.entities.length} counties in ${s.name}`;
+    renderTable();
+  }
+
+  function resetMap() {
+    map.selectedFips = null;
+    $('hp-map-sub').textContent = 'United States — click any state to drill into counties';
+    $('hp-map-reset').disabled = true;
+    map.gCounties.selectAll('path').remove();
+    map.gStates.selectAll('path.geo').classed('dim', false);
+    const states = topojson.feature(map.statesTopo, map.statesTopo.objects.states);
+    map.projection.fitSize([map.width, map.height], states);
+    map.gStates.selectAll('path.geo').transition().duration(300).attr('d', map.path);
+    paintStates();
+    state.level = 'state';
+    document.querySelectorAll('.hp-tab[data-level]').forEach(t =>
+      t.classList.toggle('active', t.dataset.level === 'state'));
+    loadLevel('state');
+  }
+
+  // Wire map controls
+  $('hp-map-metric').addEventListener('change', (e) => {
+    map.metric = e.target.value;
+    if (map.selectedFips) {
+      // re-paint counties
+      const stateFips = map.selectedFips;
+      map.gCounties.selectAll('path.geo').transition().duration(280).attr('fill', f => {
+        const fips = String(f.id).padStart(5, '0');
+        const c = map.countyData[fips];
+        return c ? hpiColor(c[map.metric], map.metric) : '#f3f4f6';
+      });
+    }
+    paintStates();
+  });
+  $('hp-map-reset').addEventListener('click', resetMap);
+
+  // Init: load diagnostics + hero + initial state data (also populates map cache via loadLevel)
+  // + map topology + sources, all with explicit error catches so silent failures are visible.
+  Promise.all([
+    loadDiagnostics().catch(e => console.error('loadDiagnostics:', e)),
+    loadHero().catch(e => console.error('loadHero:', e)),
+    loadLevel('state').catch(e => console.error('loadLevel:', e)),
+    loadSources().catch(e => console.error('loadSources:', e)),
+    initMap().catch(e => console.error('initMap:', e)),
+  ]);
 })();
 </script>
 {% endblock %}
