@@ -28,18 +28,22 @@ _cache = {}  # {series_id: {'data': [...], 'fetched_at': float}}
 
 
 def _get_api_key():
-    """Resolve the FRED key at *call time* (not import time) so a user who
-    sets FRED_API_KEY after Python boots can still pick it up after the
-    next request — no Gunicorn restart required.
+    """Resolve the FRED key at *call time* (not import time).
 
-    Strips whitespace and accepts a few common alternate names in case the
-    env var was named slightly differently.
+    Priority: live env vars BEFORE Config.FRED_API_KEY. Config is loaded
+    once at app boot and freezes whatever os.environ said at that moment;
+    if the user adds the key later in Render's UI, Config stays empty
+    until a redeploy. Reading os.environ first picks up live changes
+    without a restart.
+
+    Strips whitespace and quotes, and accepts alternate names in case
+    the var was named slightly differently in the dashboard.
     """
     for source in (
-        getattr(Config, 'FRED_API_KEY', ''),
         os.environ.get('FRED_API_KEY', ''),
         os.environ.get('FRED_KEY', ''),
         os.environ.get('FRED_TOKEN', ''),
+        getattr(Config, 'FRED_API_KEY', ''),
     ):
         key = (source or '').strip().strip('"').strip("'")
         if key:

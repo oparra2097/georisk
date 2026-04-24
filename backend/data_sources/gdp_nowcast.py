@@ -235,8 +235,10 @@ def compute_nowcast():
     - contributions: per-indicator breakdown
     - history: past quarters actual GDP
     """
-    from config import Config
-    if not Config.FRED_API_KEY:
+    # Use the dynamic resolver instead of stale Config.FRED_API_KEY,
+    # so a key added in Render after boot is picked up without redeploy.
+    from backend.data_sources.fred_client import _get_api_key
+    if not _get_api_key():
         return {'error': 'FRED_API_KEY not configured'}
 
     today = date.today()
