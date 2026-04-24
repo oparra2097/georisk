@@ -7,7 +7,6 @@ from backend.routes import api_bp
 from backend.economist import economist_bp
 from backend.auth import auth_bp, user_loader, init_auth_db, ADMIN_EMAIL
 from backend.scheduler import init_scheduler
-from backend.country_risk_v2.routes import country_risk_v2_bp
 
 
 def create_app():
@@ -37,7 +36,6 @@ def create_app():
     # ── Blueprints ───────────────────────────────────────────────────────
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(economist_bp, url_prefix='/api')
-    app.register_blueprint(country_risk_v2_bp, url_prefix='/api/country-risk')
     app.register_blueprint(auth_bp, url_prefix='/auth')
 
     # ── Routes ───────────────────────────────────────────────────────────
@@ -71,10 +69,6 @@ def create_app():
     @login_required
     def economist():
         return render_template('economist.html', active_page='economist')
-
-    @app.route('/country-risk')
-    def country_risk():
-        return render_template('country_risk.html', active_page='country-risk')
 
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
