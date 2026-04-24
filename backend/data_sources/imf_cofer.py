@@ -1412,6 +1412,12 @@ def _fetch_reserves():
     try:
         ifs_docs_total = _fetch_ifs_indicator('RAFA_USD')
         ifs_docs_fx = _fetch_ifs_indicator('RAXG_USD')
+        # If RAXG_USD doesn't exist on this DBnomics mirror, fall back
+        # to RAXGFX_USD (FX sub-component — inflates gold but better
+        # than nothing).
+        if not ifs_docs_fx:
+            logger.warning("RAXG_USD returned 0 docs, trying RAXGFX_USD fallback")
+            ifs_docs_fx = _fetch_ifs_indicator('RAXGFX_USD')
 
         def _parse_ifs(docs):
             by_country = {}
@@ -1586,10 +1592,15 @@ def diagnose_fetch():
         # (their lines on the chart will show NAs from that month
         # forward).
         for c in countries[:15]:
+            # Sample gold/fx/total at the latest period for debugging
+            latest_idx = len(years) - 1
             stale_countries.append({
                 'iso3': c.get('iso3'),
                 'name': c.get('name'),
                 'latest_real_period': c.get('latest_real_period'),
+                'total': (c.get('total_reserves') or [None])[latest_idx] if latest_idx >= 0 else None,
+                'fx': (c.get('fx_reserves') or [None])[latest_idx] if latest_idx >= 0 else None,
+                'gold': (c.get('gold_reserves') or [None])[latest_idx] if latest_idx >= 0 else None,
             })
 
     return {
