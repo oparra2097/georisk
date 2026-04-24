@@ -52,6 +52,22 @@ def _build_locked(start: str = '1980-01-01', force_refresh: bool = False):
         diagnostics.record_build_start(clear=force_refresh)
         panel = build_panel(start=start, force_refresh=force_refresh)
         report = fit_all(panel=panel)
+
+        # Refuse to construct a hollow Simulator. If 0 equations fit, the
+        # dashboard would otherwise show 'built: true, n_equations: 0' and
+        # render empty tables silently. Surface as a real error instead.
+        if len(report.fits) == 0:
+            err_msg = (
+                'no equations fit successfully — every equation raised. '
+                'Check /diagnostics for per-series fetch status; the most '
+                'common cause is one or more FRED series returning no data '
+                '(stale series ID, FRED rate-limit, or missing FRED_API_KEY).'
+            )
+            logger.error('macro_model.service: ' + err_msg)
+            _state['simulator'] = None
+            _state['fit_error'] = err_msg
+            return
+
         sim = Simulator(report.fits, derive_auxiliary_columns(panel))
         _state['report'] = report
         _state['simulator'] = sim

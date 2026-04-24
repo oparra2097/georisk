@@ -60,7 +60,16 @@ def _to_quarterly(raw: list[dict], freq: str) -> pd.Series:
         out.index = out.index.normalize()
         return out
 
-    # For M and D: average within the quarter.
+    # For daily series, forward-fill across holidays/weekends BEFORE aggregating
+    # so a single missing day doesn't NaN the whole quarter (root-cause #2 from
+    # the Apr 24 audit: DGS10 / DTWEXBGS / DCOILWTICO would lose Q4 if any
+    # observation was missing).
+    if freq == 'D':
+        # Reindex to a daily business calendar and forward-fill (≤ 7 days)
+        full = pd.date_range(df.index.min(), df.index.max(), freq='B')
+        df = df.reindex(full).ffill(limit=7)
+
+    # For M and D: average within the quarter (post forward-fill for D).
     grouped = df.groupby(df.index.to_period('Q')).mean()
     out = grouped.rename_axis('quarter').to_timestamp(how='end')
     out.index = out.index.normalize()
