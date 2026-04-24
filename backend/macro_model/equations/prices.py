@@ -41,4 +41,20 @@ phillips_curve = EquationSpec(
 )
 
 
-SPECS = [phillips_curve]
+wage = EquationSpec(
+    name='Wage equation',
+    dependent='wage',
+    long_run=['prod', 'cpi'],        # real wage pinned to productivity; nominal tracks CPI
+    short_run_diffs=['cpi', 'prod'],
+    short_run_levels=['unemp_gap'],  # wage curve: tight labor market boosts wages
+    max_lags=4,
+    include_lagged_dep=True,
+    notes=(
+        'Long-run: real wage = f(productivity); nominal adjusts with CPI. '
+        'Short-run: Phillips/wage-curve with unemployment gap (β expected '
+        'negative: slack lowers wage growth).'
+    ),
+)
+
+
+SPECS = [phillips_curve, wage]

@@ -58,7 +58,7 @@ VARIABLES: list[Variable] = [
     # ── Labor ─────────────────────────────────────────────────────────
     Variable('unemp',  'UNRATE',   'Unemployment Rate',             'M', 'pct',   'labor', unit='%'),
     Variable('emp',    'PAYEMS',   'Total Nonfarm Payrolls',        'M', 'log',   'labor', unit='Thous. persons'),
-    Variable('lfpr',   'CIVPART',  'Labor Force Participation',     'M', 'pct',   'labor', unit='%'),
+    Variable('lfpr',   'CIVPART',  'Labor Force Participation',     'M', 'pct',   'labor', endogenous=False, unit='%'),
     Variable('nrou',   'NROU',     'Natural Rate of Unemployment (CBO)', 'Q', 'pct', 'labor', endogenous=False, unit='%'),
     Variable('prod',   'OPHNFB',   'Nonfarm Business Productivity', 'Q', 'log',   'labor', endogenous=False, unit='Index 2017=100'),
 
