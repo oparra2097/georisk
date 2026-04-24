@@ -60,6 +60,26 @@
         <h3>Estimated equations</h3>
         <div id="mm-equations"><div class="loading">Loading equations…</div></div>
       </div>
+
+      <div class="mm-card">
+        <h3>Historical backtest
+          <span style="font-weight:400;font-size:11px;color:#6b7280;">fit on training sample, forecast out-of-sample, compare to actual</span>
+        </h3>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <label style="font-size:11px;color:#4b5563;">Train through
+            <select id="mm-bt-trainend" style="font-size:12px;padding:3px;">
+              <option value="2015-12-31">2015-12-31</option>
+              <option value="2019-12-31" selected>2019-12-31 (pre-COVID)</option>
+              <option value="2022-12-31">2022-12-31</option>
+            </select>
+          </label>
+          <label style="font-size:11px;color:#4b5563;">
+            <input type="checkbox" id="mm-bt-flatexog" style="vertical-align:middle;"> flat exogenous (stress test)
+          </label>
+          <button class="btn" id="mm-bt-run">Run backtest</button>
+        </div>
+        <div id="mm-backtest"><div class="loading">Click "Run backtest" to evaluate against historical actuals.</div></div>
+      </div>
     </div>
 
     <aside>
@@ -194,7 +214,36 @@
       <table class="mm-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
   }
 
+  async function runBacktest() {
+    const el = $('mm-backtest');
+    const trainEnd = $('mm-bt-trainend').value;
+    const flat = $('mm-bt-flatexog').checked ? '1' : '0';
+    el.innerHTML = '<div class="loading">Fitting on training sample, forecasting OOS…</div>';
+    const r = await fetch(`${API}/backtest?train_end=${trainEnd}&flat_exog=${flat}`);
+    if (!r.ok) { el.innerHTML = `<div class="loading">Backtest failed: ${r.statusText}</div>`; return; }
+    const b = await r.json();
+    if (b.error) { el.innerHTML = `<div class="loading">Backtest error: ${b.error}</div>`; return; }
+
+    const metaLine = `<div style="font-size:11px;color:#6b7280;margin-bottom:6px;">Train ${b.window.train_start} → ${b.window.train_end} &nbsp;·&nbsp; Test ${b.window.test_start} → ${b.window.test_end} &nbsp;·&nbsp; ${b.window.flat_exog ? 'flat' : 'actual'} exogenous</div>`;
+
+    const rows = Object.entries(b.metrics).map(([code, m]) => {
+      const rmse = m.rmse === null ? '—' : fmtNum(m.rmse, 3);
+      const rmsePct = m.rmse_pct === null ? '—' : fmtNum(m.rmse_pct * 100, 2) + '%';
+      const mae = m.mae === null ? '—' : fmtNum(m.mae, 3);
+      const dir = m.directional_acc === null ? '—' : fmtNum(m.directional_acc * 100, 1) + '%';
+      const dirCls = m.directional_acc > 0.6 ? 'delta-neg' : (m.directional_acc < 0.4 ? 'delta-pos' : '');
+      return `<tr><td>${code}</td><td>${m.n}</td><td>${rmse}</td><td>${mae}</td><td>${rmsePct}</td><td class="${dirCls}">${dir}</td></tr>`;
+    }).join('');
+    el.innerHTML = metaLine + `<table class="mm-table">
+      <thead><tr><th>Variable</th><th>N</th><th>RMSE</th><th>MAE</th><th>RMSE/μ</th><th>Dir. acc</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div style="font-size:10px;color:#9ca3af;margin-top:6px;">
+        Dir. acc > 50% = forecast quarterly changes share sign with actual. Red = worse than coin-flip.
+      </div>`;
+  }
+
   $('mm-run-shock').addEventListener('click', runShock);
+  $('mm-bt-run').addEventListener('click', runBacktest);
   Promise.all([loadStatus(), loadForecast(), loadEquations(), loadShocks()]);
 })();
 </script>

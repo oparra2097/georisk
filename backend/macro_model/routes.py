@@ -86,3 +86,24 @@ def post_shock():
 def post_refresh():
     service.refresh()
     return jsonify(service.status())
+
+
+@macro_model_bp.route('/backtest')
+def get_backtest():
+    """
+    GET /backtest?train_end=2019-12-31&flat_exog=0
+
+    Fits on data up to train_end, simulates out-of-sample to the panel end,
+    and returns per-variable RMSE / MAE / directional accuracy plus the
+    forecast-vs-actual paths. `flat_exog=1` carries exogenous forward
+    instead of feeding actual values; use that to stress-test the full
+    forecast system (both endogenous AND exogenous expectations).
+    """
+    train_end = request.args.get('train_end', '2019-12-31')
+    flat_exog = request.args.get('flat_exog', '0').lower() in ('1', 'true', 'yes')
+    result = service.get_backtest(train_end=train_end, flat_exog=flat_exog)
+    if result is None:
+        return jsonify({'error': 'model not built'}), 503
+    if isinstance(result, dict) and result.get('error'):
+        return jsonify(result), 500
+    return jsonify(result)

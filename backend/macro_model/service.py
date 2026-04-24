@@ -20,6 +20,7 @@ import pandas as pd
 from backend.macro_model.data import build_panel
 from backend.macro_model.equations import derive_auxiliary_columns
 from backend.macro_model.fit_runner import ModelFitReport, fit_all
+from backend.macro_model.backtest import run_backtest, BacktestResult
 from backend.macro_model.simulations import (
     baseline_forecast,
     bootstrap_forecast,
@@ -37,6 +38,7 @@ _state: dict = {
     'baseline': None,         # type: Optional[pd.DataFrame]
     'bootstrap': None,        # type: Optional[dict[str, pd.DataFrame]]
     'shock_results': {},      # {shock_id: result dict}
+    'backtests': {},          # {(train_end, flat_exog): BacktestResult}
     'fit_error': None,
     'built_at': None,
 }
@@ -53,6 +55,7 @@ def _build_locked(start: str = '1980-01-01'):
         _state['baseline'] = None
         _state['bootstrap'] = None
         _state['shock_results'] = {}
+        _state['backtests'] = {}
         _state['fit_error'] = None
         _state['built_at'] = time.time()
         logger.info(f'macro_model.service: fitted {len(report.fits)} equations')
@@ -198,3 +201,30 @@ def status() -> dict:
             'built_at': _state['built_at'],
             'n_equations': len(_state['report'].fits) if _state['report'] else 0,
         }
+
+
+def get_backtest(train_end: str = '2019-12-31', flat_exog: bool = False) -> Optional[dict]:
+    """
+    Run (or serve cached) backtest. Note: this requires access to the full
+    panel (including data after train_end), which the service already has
+    because it built the panel at startup. For repeated calls with the same
+    parameters, the result is cached.
+    """
+    ensure_built()
+    with _lock:
+        key = (train_end, bool(flat_exog))
+        cached = _state['backtests'].get(key)
+        if cached is not None:
+            return cached.to_dict()
+
+    # Rebuild panel (the simulator's panel may have been extended by forecasts)
+    try:
+        panel = build_panel()
+        result = run_backtest(train_end=train_end, panel=panel, flat_exog=flat_exog)
+    except Exception as e:
+        logger.exception('backtest failed')
+        return {'error': str(e)}
+
+    with _lock:
+        _state['backtests'][key] = result
+    return result.to_dict()
