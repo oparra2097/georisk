@@ -127,14 +127,22 @@ def _parse_master_csv(text: str) -> list[HpiRow]:
         level_counts[raw_level] = level_counts.get(raw_level, 0) + 1
         level = _LEVEL_MAP.get(raw_level)
         if level is None:
-            # Fallback when FHFA returns an unrecognized 'level' value.
-            # Order matters: 2-char alpha = state (CA, TX), 2-char numeric =
-            # state FIPS, 3-char alpha = region/division (NE, WSC), 5-char
-            # numeric = MSA CBSA code.
+            # Fallback for unrecognized 'level' values. FHFA recently
+            # introduced prefixed place_ids (`DV_ENC` for divisions,
+            # `ST_xx` for states, `RG_xx` for regions). Plus the legacy
+            # bare codes for backwards compat.
             pid = col(r, 'place_id').strip()
-            place_name = col(r, 'place_name').strip()
-            if pid in ('USA', '00'):
+            up = pid.upper()
+            if up in ('USA', '00') or up.startswith('US_'):
                 level = 'national'
+            elif up.startswith('ST_'):
+                level = 'state'
+            elif up.startswith('DV_') or up.startswith('RG_') or up.startswith('CD_'):
+                level = 'region'
+            elif up.startswith('MSA_') or up.startswith('CBSA_'):
+                level = 'msa'
+            elif up.startswith('CO_') or up.startswith('FIPS_'):
+                level = 'county'
             elif pid and len(pid) == 2 and pid.isalpha():
                 level = 'state'
             elif pid and len(pid) == 2 and pid.isdigit():
@@ -149,6 +157,14 @@ def _parse_master_csv(text: str) -> list[HpiRow]:
                 level = 'region'
             else:
                 level = 'region'
+
+        # Strip recognized prefixes from place_id so the dashboard / map can
+        # use the bare code (CA, NE, 31080) without changes downstream.
+        bare_pid = col(r, 'place_id').strip()
+        for prefix in ('ST_', 'DV_', 'RG_', 'CD_', 'MSA_', 'CBSA_', 'CO_', 'FIPS_', 'US_'):
+            if bare_pid.upper().startswith(prefix):
+                bare_pid = bare_pid[len(prefix):]
+                break
 
         try:
             yr = int(col(r, 'yr'))
@@ -167,7 +183,7 @@ def _parse_master_csv(text: str) -> list[HpiRow]:
 
         rows.append(HpiRow(
             level=level,
-            code=col(r, 'place_id').strip(),
+            code=bare_pid,
             name=col(r, 'place_name').strip(),
             year=yr,
             period=pd_,
@@ -247,23 +263,34 @@ def _save_disk(path: str, rows: list[HpiRow]):
 
 # ── Public API ──────────────────────────────────────────────────────────
 
-# Per-level fallback URLs — FHFA publishes individual files in addition to
-# the master CSV. If the master parses successfully these are unused; if
-# states/regions come back empty (column-rename, schema shift) we fall
-# back to fetching the dedicated state/division CSVs which have a known,
-# narrower schema that's been stable for years.
-_FALLBACK_STATE_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_bdl_state.csv'
-_FALLBACK_DIVISION_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_bdl_division.csv'
+# Per-level fallback URLs — FHFA publishes individual files in addition
+# to the master CSV. If the master parses 0 rows for a given level (schema
+# drift), we fall back to these dedicated files. Verified against the
+# FHFA HPI Datasets page (April 2026 audit).
+#
+# State CSV: comma-delimited, columns place_id (e.g. 'CA'), place_name,
+#   yr, qtr, index_nsa, index_sa.
+# US-and-Census TXT: tab-delimited (NOT comma!), covers national + 9
+#   census divisions + 4 census regions. Columns: Place_Name, Place_ID,
+#   yr, qtr, index_nsa, index_sa.
+_FALLBACK_STATE_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_state.csv'
+_FALLBACK_DIVISION_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_us_and_census.txt'
 
 
 def _parse_per_level_csv(text: str, level: str) -> list[HpiRow]:
-    """Parser for the dedicated per-level FHFA files (state / division).
+    """Parser for the dedicated per-level FHFA files (state CSV /
+    us_and_census TXT).
 
     Schema (case-insensitive): place_name, place_id, yr, qtr (or period),
-    index_nsa, index_sa. Both files share this layout.
+    index_nsa, index_sa. The us_and_census file is **tab-delimited**, not
+    comma — sniff before parsing.
     """
+    # Sniff delimiter — first non-empty line tells us
+    first = next((l for l in text.splitlines() if l.strip()), '')
+    delim = '\t' if (first.count('\t') > first.count(',')) else ','
+
     rows: list[HpiRow] = []
-    reader = csv.DictReader(io.StringIO(text))
+    reader = csv.DictReader(io.StringIO(text), delimiter=delim)
     fieldnames = reader.fieldnames or []
     if not fieldnames:
         return []
@@ -295,9 +322,17 @@ def _parse_per_level_csv(text: str, level: str) -> list[HpiRow]:
             except ValueError:
                 return None
 
+        # Strip prefixes (DV_, ST_, RG_, MSA_, etc.) so codes match the
+        # master file's bare format (CA, ENC, 31080).
+        bare = pid
+        for prefix in ('ST_', 'DV_', 'RG_', 'CD_', 'MSA_', 'CBSA_', 'CO_', 'FIPS_', 'US_'):
+            if bare.upper().startswith(prefix):
+                bare = bare[len(prefix):]
+                break
+
         rows.append(HpiRow(
             level=level,
-            code=pid,
+            code=bare,
             name=name,
             year=yr,
             period=period,
