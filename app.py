@@ -72,6 +72,10 @@ def create_app():
     def economist():
         return render_template('economist.html', active_page='economist')
 
+    @app.route('/country-risk')
+    def country_risk():
+        return render_template('country_risk.html', active_page='country-risk')
+
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
     init_scheduler(app)

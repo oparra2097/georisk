@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}Country Risk — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cr-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+  .cr-header { margin-bottom: 24px; }
+  .cr-title { font-size: 24px; font-weight: 600; margin: 0 0 4px; }
+  .cr-subtitle { font-size: 13px; color: #6b7280; margin: 0; }
+  .cr-toolbar { display: flex; gap: 12px; align-items: center; margin: 16px 0; flex-wrap: wrap; }
+  .cr-toolbar label { font-size: 12px; color: #4b5563; display: flex; gap: 6px; align-items: center; }
+  .cr-toolbar select, .cr-toolbar button {
+    border: 1px solid #d1d5db; background: #fff; padding: 6px 10px; font-size: 13px;
+    border-radius: 4px; cursor: pointer;
+  }
+  .cr-toolbar button:hover { background: #f3f4f6; }
+  .cr-toolbar button.primary { background: #111827; color: #fff; border-color: #111827; }
+  .cr-toolbar button.primary:hover { background: #374151; }
+
+  .cr-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: 20px; }
+  @media (max-width: 900px) { .cr-layout { grid-template-columns: 1fr; } }
+
+  .cr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .cr-card {
+    border: 1px solid #e5e7eb; background: #fff; padding: 12px; border-radius: 6px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .cr-card:hover { border-color: #9ca3af; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .cr-card.selected { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+  .cr-card-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .cr-card-name { font-size: 14px; font-weight: 600; margin: 0; }
+  .cr-card-code { font-size: 11px; color: #6b7280; font-family: monospace; }
+  .cr-score { font-size: 28px; font-weight: 700; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+  .cr-bar { height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden; margin: 6px 0; }
+  .cr-bar-fill { height: 100%; transition: width 0.2s; }
+  .cr-sub { display: flex; gap: 6px; font-size: 11px; color: #4b5563; flex-wrap: wrap; }
+  .cr-sub span { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; }
+  .cr-confidence { font-size: 10px; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; font-weight: 600; }
+  .conf-high   { background: #d1fae5; color: #065f46; }
+  .conf-medium { background: #fef3c7; color: #78350f; }
+  .conf-low    { background: #fee2e2; color: #991b1b; }
+  .badge-agg { background: #dbeafe; color: #1e40af; font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
+
+  .cr-panel {
+    border: 1px solid #e5e7eb; background: #fff; padding: 16px; border-radius: 6px;
+    position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto;
+  }
+  .cr-panel h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+  .cr-section { border-top: 1px solid #f3f4f6; padding-top: 12px; margin-top: 12px; }
+  .cr-section:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+
+  .shock-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .shock-chip {
+    padding: 4px 8px; font-size: 11px; border: 1px solid #d1d5db;
+    border-radius: 12px; cursor: pointer; background: #fff; user-select: none;
+  }
+  .shock-chip.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .shock-result { background: #f9fafb; padding: 8px; border-radius: 4px; margin-top: 8px; font-size: 12px; }
+  .shock-result .delta-pos { color: #dc2626; font-weight: 600; }
+  .shock-result .delta-neg { color: #059669; font-weight: 600; }
+  .shock-result dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 4px 0 0; font-size: 11px; }
+  .shock-result dt { color: #6b7280; }
+  .shock-result dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .shock-contrib { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; }
+
+  .drivers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 11px; margin: 4px 0; }
+  .drivers-grid dt { color: #6b7280; }
+  .drivers-grid dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+  .loading { color: #9ca3af; font-size: 13px; padding: 12px; text-align: center; }
+
+  .members-chips { display: flex; flex-wrap: wrap; gap: 4px; font-size: 10px; }
+  .members-chips span { background: #f3f4f6; padding: 1px 5px; border-radius: 2px; font-family: monospace; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cr-page">
+  <div class="cr-header">
+    <h1 class="cr-title">Country Risk <span style="font-weight:400;color:#9ca3af;font-size:14px">/ v2</span></h1>
+    <p class="cr-subtitle">Youth unemployment + macro fundamentals, with a global-shock scenario layer. Sources: FRED, ONS, Eurostat, ILOSTAT, World Bank (WGI + macro).</p>
+  </div>
+
+  <div class="cr-toolbar">
+    <label>EU aggregate
+      <select id="cr-scope">
+        <option value="eu27">EU-27</option>
+        <option value="ea">Euro Area (EA-20)</option>
+      </select>
+    </label>
+    <button id="cr-refresh">Refresh</button>
+    <span id="cr-status" style="font-size:11px;color:#6b7280;margin-left:auto;"></span>
+  </div>
+
+  <div class="cr-layout">
+    <div>
+      <div class="cr-grid" id="cr-grid">
+        <div class="loading">Loading country scores...</div>
+      </div>
+    </div>
+
+    <aside class="cr-panel" id="cr-panel">
+      <div class="cr-section">
+        <h3>Scenario Builder</h3>
+        <label style="font-size:11px;color:#6b7280;">Apply to
+          <select id="cr-scenario-country" style="width:100%;padding:4px;font-size:12px;margin-top:4px;">
+            <option value="">— pick a country —</option>
+          </select>
+        </label>
+        <div class="shock-chips" id="cr-shock-chips"></div>
+        <button class="primary" id="cr-apply-scenario" style="width:100%;padding:8px;font-size:13px;border:none;border-radius:4px;background:#111827;color:#fff;cursor:pointer;">
+          Apply shocks
+        </button>
+        <div class="shock-result" id="cr-shock-result" style="display:none;"></div>
+      </div>
+
+      <div class="cr-section" id="cr-detail-section" style="display:none;">
+        <h3 id="cr-detail-name">—</h3>
+        <div id="cr-detail-body"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const API = '/api/country-risk';
+  const $ = (id) => document.getElementById(id);
+
+  const state = {
+    countries: [],
+    shocks: [],
+    selectedShocks: new Set(),
+    selectedCountry: null,
+    scope: 'eu27',
+  };
+
+  function scoreColor(score) {
+    // 0 (green) → 50 (amber) → 100 (red)
+    if (score <= 30) return '#10b981';
+    if (score <= 50) return '#84cc16';
+    if (score <= 65) return '#f59e0b';
+    if (score <= 80) return '#f97316';
+    return '#dc2626';
+  }
+
+  function confClass(conf) { return 'conf-' + (conf || 'high'); }
+
+  function renderCard(c) {
+    const sub = c.sub_scores || {};
+    const s = (x) => x ? Math.round(x.value) : '–';
+    return `
+      <div class="cr-card ${state.selectedCountry === c.country_code ? 'selected' : ''}" data-code="${c.country_code}">
+        <div class="cr-card-top">
+          <h4 class="cr-card-name">${c.country_name}${c.is_aggregate ? '<span class="badge-agg">AGG</span>' : ''}</h4>
+          <span class="cr-card-code">${c.country_code}</span>
+        </div>
+        <div class="cr-score" style="color:${scoreColor(c.composite)}">${c.composite.toFixed(1)}</div>
+        <div class="cr-bar"><div class="cr-bar-fill" style="width:${c.composite}%;background:${scoreColor(c.composite)}"></div></div>
+        <div class="cr-sub">
+          <span>S ${s(sub.structural)}</span>
+          <span>M ${s(sub.macro)}</span>
+          <span>L ${s(sub.labor)}</span>
+          <span class="cr-confidence ${confClass(c.confidence)}">${c.confidence || 'high'}</span>
+        </div>
+      </div>`;
+  }
+
+  function renderGrid() {
+    const grid = $('cr-grid');
+    if (!state.countries.length) {
+      grid.innerHTML = '<div class="loading">No data.</div>';
+      return;
+    }
+    grid.innerHTML = state.countries.map(renderCard).join('');
+    grid.querySelectorAll('.cr-card').forEach(el => {
+      el.addEventListener('click', () => selectCountry(el.dataset.code));
+    });
+  }
+
+  function renderShockChips() {
+    const wrap = $('cr-shock-chips');
+    wrap.innerHTML = state.shocks.map(s => `
+      <span class="shock-chip ${state.selectedShocks.has(s.id) ? 'active' : ''}" data-id="${s.id}" title="${s.description || ''}">${s.label}</span>
+    `).join('');
+    wrap.querySelectorAll('.shock-chip').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.dataset.id;
+        if (state.selectedShocks.has(id)) state.selectedShocks.delete(id);
+        else state.selectedShocks.add(id);
+        renderShockChips();
+      });
+    });
+  }
+
+  function renderCountryPicker() {
+    const sel = $('cr-scenario-country');
+    sel.innerHTML = '<option value="">— pick a country —</option>' +
+      state.countries.map(c => `<option value="${c.country_code}">${c.country_name}</option>`).join('');
+  }
+
+  function renderDrivers(risk) {
+    const section = $('cr-detail-section');
+    const name = $('cr-detail-name');
+    const body = $('cr-detail-body');
+    if (!risk) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    name.textContent = risk.country_name;
+    const sub = risk.sub_scores || {};
+
+    const renderSub = (s, label) => {
+      if (!s) return '';
+      const drivers = Object.entries(s.drivers || {})
+        .filter(([k, v]) => v !== null && v !== undefined)
+        .slice(0, 8)
+        .map(([k, v]) => `<dt>${k}</dt><dd>${typeof v === 'number' ? v.toFixed(2) : v}</dd>`)
+        .join('');
+      return `
+        <div style="margin-top:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;">
+            <strong style="font-size:12px;">${label}</strong>
+            <span style="font-size:13px;font-weight:600;color:${scoreColor(s.value)}">${s.value.toFixed(1)}</span>
+            <span style="font-size:10px;color:#9ca3af;">w=${(s.weight*100).toFixed(0)}%</span>
+          </div>
+          <dl class="drivers-grid">${drivers}</dl>
+        </div>`;
+    };
+
+    let html = renderSub(sub.structural, 'Structural (WGI)');
+    html += renderSub(sub.macro, 'Macro Fundamentals');
+    html += renderSub(sub.labor, 'Labor (Youth Unemp)');
+
+    if (risk.is_aggregate && risk.members_included && risk.members_included.length) {
+      html += `<div style="margin-top:12px;"><strong style="font-size:11px;">Members (${risk.members_included.length}):</strong>
+        <div class="members-chips">${risk.members_included.map(m => `<span>${m}</span>`).join('')}</div></div>`;
+    }
+    body.innerHTML = html;
+  }
+
+  function selectCountry(code) {
+    state.selectedCountry = code;
+    renderGrid();
+    const c = state.countries.find(x => x.country_code === code);
+    renderDrivers(c);
+    $('cr-scenario-country').value = code;
+  }
+
+  async function loadCountries() {
+    $('cr-status').textContent = 'Loading...';
+    const url = state.scope === 'ea' ? `${API}/?scope=ea` : `${API}/`;
+    const res = await fetch(url);
+    if (!res.ok) { $('cr-status').textContent = 'Failed to load.'; return; }
+    const body = await res.json();
+    state.countries = body.countries || [];
+    $('cr-status').textContent = `Updated ${new Date().toLocaleTimeString()} — ${state.countries.length} countries.`;
+    renderGrid();
+    renderCountryPicker();
+  }
+
+  async function loadShocks() {
+    const res = await fetch(`${API}/shocks`);
+    if (!res.ok) return;
+    const body = await res.json();
+    state.shocks = body.shocks || [];
+    renderShockChips();
+  }
+
+  async function applyScenario() {
+    const country = $('cr-scenario-country').value;
+    const out = $('cr-shock-result');
+    if (!country || state.selectedShocks.size === 0) {
+      out.style.display = 'block';
+      out.innerHTML = '<em>Pick a country and at least one shock.</em>';
+      return;
+    }
+    out.style.display = 'block';
+    out.innerHTML = '<em>Computing...</em>';
+
+    const payload = {
+      country,
+      shocks: Array.from(state.selectedShocks).map(id => ({ id })),
+    };
+    const res = await fetch(`${API}/scenario`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      out.innerHTML = `<span style="color:#dc2626;">Error: ${err.error || res.statusText}</span>`;
+      return;
+    }
+    const r = await res.json();
+    const deltaClass = r.delta > 0 ? 'delta-pos' : 'delta-neg';
+    const contribs = (r.contributions || []).map(c => `
+      <div class="shock-contrib">
+        <span>${c.shock_id}</span>
+        <span class="${c.delta > 0 ? 'delta-pos' : 'delta-neg'}">${c.delta >= 0 ? '+' : ''}${c.delta}</span>
+      </div>`).join('');
+    out.innerHTML = `
+      <dl>
+        <dt>Base</dt><dd>${r.base_score.toFixed(1)}</dd>
+        <dt>Shocked</dt><dd>${r.shocked_score.toFixed(1)}</dd>
+        <dt>Delta</dt><dd class="${deltaClass}">${r.delta >= 0 ? '+' : ''}${r.delta}</dd>
+      </dl>
+      <div style="margin-top:6px;border-top:1px solid #e5e7eb;padding-top:6px;">${contribs}</div>`;
+  }
+
+  // Event wiring
+  $('cr-scope').addEventListener('change', (e) => {
+    state.scope = e.target.value;
+    loadCountries();
+  });
+  $('cr-refresh').addEventListener('click', loadCountries);
+  $('cr-apply-scenario').addEventListener('click', applyScenario);
+
+  // Boot
+  Promise.all([loadCountries(), loadShocks()]);
+})();
+</script>
+{% endblock %}

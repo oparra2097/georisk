@@ -137,6 +137,29 @@ def init_scheduler(app):
         )
         logger.info("GDP nowcast scheduled (every 6 hours).")
 
+    # Job 6: Country-Risk v2 refresh (every 6 hours)
+    # Scores the 12 priority countries + EU aggregate into the v2 service
+    # cache so first user visit to /country-risk is served fast.
+    def _refresh_country_risk_v2():
+        try:
+            from backend.country_risk_v2 import service as crv2
+            crv2.clear_cache()
+            risks = crv2.score_all(force_refresh=True)
+            logger.info(f"country-risk v2: {len(risks)} countries refreshed")
+        except Exception as e:
+            logger.error(f"country-risk v2 refresh failed: {e}")
+
+    scheduler.add_job(
+        func=_refresh_country_risk_v2,
+        trigger='interval',
+        hours=6,
+        id='refresh_country_risk_v2',
+        replace_existing=True,
+        misfire_grace_time=600,
+        max_instances=1,
+    )
+    logger.info("Country-Risk v2 scheduled (every 6 hours).")
+
     scheduler.start()
     logger.info(
         f"Scheduler started. GDELT every {gdelt_interval}min (ALL countries), "
@@ -165,6 +188,16 @@ def init_scheduler(app):
             logger.error(f"EM vulnerability warmup failed: {e}")
 
     threading.Thread(target=_warm_em_vuln, daemon=True).start()
+
+    # Pre-warm country-risk v2 cache so first visit is instant.
+    def _warm_country_risk_v2():
+        try:
+            from backend.country_risk_v2 import service as crv2
+            risks = crv2.score_all()
+            logger.info(f"country-risk v2 cache warmed: {len(risks)} countries")
+        except Exception as e:
+            logger.error(f"country-risk v2 warmup failed: {e}")
+    threading.Thread(target=_warm_country_risk_v2, daemon=True).start()
 
     # Pre-warm GDP nowcast so first visit is instant
     if Config.FRED_API_KEY:
