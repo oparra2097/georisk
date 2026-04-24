@@ -1,8 +1,9 @@
 # Shadow Debt Indicator — Methodology
 
-**Current version:** `v1.2-em-guardrails-baseline-override` (served product)
+**Current version:** `v1.3-em-regional-exposure` (served product)
 **AE rebuild version:** `ae-v2.0-bottom-up` (separate endpoint, drill-down only)
-**Scope:** Emerging & frontier markets served via the main indicator. Advanced-economy bottom-up stacks available via `/api/ae-contingent-liabilities` but do not flow into the main Shadow Debt Indicator output.
+**EM regional-exposure version:** `em-regional-v1.0-waemu` (skeleton, drill-down only)
+**Scope:** Emerging & frontier markets served via the main indicator. Advanced-economy bottom-up stacks available via `/api/ae-contingent-liabilities` (7 countries). Regional-banking exposure (WAEMU titres publics held by Ivorian + pan-African banks) tracked via `/api/em-regional-exposure` — currently skeleton pending live BCEAO/AUT data pulls.
 
 ## 1. Purpose
 
@@ -59,6 +60,37 @@ AE coverage will return only once rebuilt bottom-up:
 - **Landesbanken / French regional public banks** itemised as a distinct tier, never folded into the primary `estimated_debt_gdp` without explicit toggle.
 - **CI reconciliation.** Every AE must land within the Eurostat extended-debt band ±2pp in the benchmark YAML, or deploy is blocked.
 
+## 5b. Regional-banking exposure (v1.3 WAEMU layer)
+
+**Blind spot this closes.** BIS Consolidated Banking Statistics covers 33 reporting jurisdictions — no WAEMU (UEMOA) or CEMAC country is a reporter. Pan-African banks headquartered in Abidjan (SGBCI, BICICI, Ecobank CI, NSIA), Lomé (Ecobank Group, Oragroup), and elsewhere in the union hold material claims on Senegalese and other WAEMU-member sovereigns via the regional XOF-denominated `titres publics` market. These claims are genuine cross-border sovereign exposure but are invisible to BIS and to World Bank IDS (which captures FX-denominated bonds + Paris/non-Paris bilateral + multilateral, not regional-market paper).
+
+**Data stack.** One YAML per country in `data/em_regional_exposure/`:
+
+- `titres_publics_stock_local_bn` — stock of regional public securities issued by this sovereign (AUT bulletin).
+- `banking_system_claims_on_govt_local_bn` — WAEMU-wide banking system claims on this sovereign (BCEAO monetary survey "créances sur l'Administration Centrale").
+- `cross_border_share` — fraction held by banks in OTHER union members (rarely published explicitly; inferred from Article IV commentary).
+- `regional_bank_exposure_usd_bn` — derived: stock × share, in USD.
+
+**CI gate.** Skeleton entries are NOT applied to `estimated_debt_gdp`. An entry passes only when:
+1. `regional_bank_exposure_usd_bn` is non-null;
+2. `titres_publics_stock_local_bn` is populated from live BCEAO/AUT data (not derived from an aggregate allocation);
+3. `cross_border_share_method` is `published` or `inferred_article_iv` (not `order_of_magnitude`);
+4. `double_count_check` is documented.
+
+Current state: **WAEMU 8 countries seeded** (SEN, CIV, MLI, BFA, NER, TGO, BEN, GNB); all skeleton, none auto-applied. MLI and NER have `cross_border_share_method: inferred_article_iv` grounded in the 2022 Mali default / 2023 Niger sanctions episodes but remain skeleton because their stock figures are still order-of-magnitude.
+
+**Estimated impact once populated** (order-of-magnitude, not yet applied):
+- Senegal: ~10pp of GDP — material shadow adjustment
+- Togo: ~20pp of GDP — HIGH-IMPACT (Lomé HQ effect, needs bespoke treatment)
+- Benin: ~10pp
+- Mali: ~10pp
+- Niger: ~9pp
+- Burkina Faso: ~9pp
+- Côte d'Ivoire: ~5pp (deepest domestic sector)
+- Guinea-Bissau: ~4pp
+
+**Future coverage.** CEMAC (6 countries), SADC overflow (MOZ, ZMB, ZWE, AGO → South African + pan-African banks), East Africa (Kenyan bank holdings of regional sovereign debt), frontier Gulf (EGY, JOR Gulf bank exposure). Same schema, same CI gate.
+
 ## 6. Known limitations (current release)
 
 - **Senegal baseline uncertainty.** The `official_debt_gdp` for Senegal is carried as 128.4%, above the IMF Article IV April 2024 post-revelation figure (~99% for 2024). There is a real risk the baseline already embeds hidden-debt adjustments that are then double-counted in the 63.1pp shadow add. Baseline should be sourced cleanly to a single IMF publication and the shadow add recomputed against it. Tracked.
@@ -83,7 +115,8 @@ This is the minimum governance required to avoid a repeat of the DEU/FRA watchli
 | v1.0    | pre-2026-04 | Initial upstream-generated parquet; BIS-50% AE rule; flat sigma. |
 | v1.1-em-guardrails | 2026-04-24 | AE suppression; negative-shadow clamp; per-country sigma; benchmark reconciliation; preflight checklist. EM/frontier only. |
 | v1.2-em-guardrails-baseline-override | 2026-04-24 | Added baseline overrides (SEN 128.4→99.7, GHA 70.3→82.5, both sourced to IMF WEO); added benchmark_type (floor for EM, symmetric for AE) with shadow_ceiling_pct_gdp upper bound; populated EM benchmarks for SEN/MOZ/ZMB/GHA from IMF WEO Apr 2025 / Oct 2024; floor-semantics test surfaces upstream bugs (GHA stale baseline). |
-| ae-v2.0-bottom-up | 2026-04-24 | Bottom-up AE stack for DEU (mid 74% of GDP, components from Bundesbank/KfW/BMF/ESM) and FRA (mid 118.3%, components from INSEE/CADES/EDF/SNCF/Bpifrance/CDC). Exposed via `/api/ae-contingent-liabilities` as drill-down, not folded into main output. Every component cites a source URL; 12-test CI gate enforces band ordering, no-double-counting, defensible-ceiling adherence. |
+| ae-v2.0-bottom-up | 2026-04-24 | Bottom-up AE stack for DEU (mid 74%), FRA (mid 118.3%), ITA (mid 140.7%), ESP (mid 103.7%), BEL (mid 105.9%), NLD (mid 44.2%), JPN (mid 238.3%). Exposed via `/api/ae-contingent-liabilities` as drill-down, not folded into main output. Every component cites a source URL; 12-test CI gate enforces band ordering, no-double-counting, defensible-ceiling adherence. |
+| v1.3-em-regional-exposure | 2026-04-24 | Added WAEMU regional-banking exposure layer. Closes the "Senegal ↔ Côte d'Ivoire banks" blind spot: BIS consolidated claims do not reach WAEMU (no member is a BIS reporter) and WB IDS covers only FX-denom external debt, missing XOF-denom regional-market titres publics. Skeletons for all 8 WAEMU countries seeded from Agence UMOA-Titres aggregate × country shares. CI gate requires live BCEAO/AUT stock data before auto-apply; MLI and NER have inferred_article_iv share grounding from 2022 sanctions / 2023 coup episodes but are still held back until stock figures are pulled. Served via `/api/em-regional-exposure`. |
 | v2.0 (planned) | TBD | Upstream parquet pipeline migrated into `sovereign_debt_pipeline/` under CI; BIS-50% rule removed entirely; all EM benchmarks populated; AE stacks expanded beyond DEU/FRA to ITA, ESP, BEL, NLD, JPN. |
 
 ## 9. What agent research populated (2026-04-24)

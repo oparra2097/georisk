@@ -19,8 +19,9 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 from .benchmarks import reconcile as _reconcile_benchmark
+from .em_regional_exposure import apply_regional_exposure as _apply_regional_exposure
 
-METHODOLOGY_VERSION = "v1.2-em-guardrails-baseline-override"
+METHODOLOGY_VERSION = "v1.3-em-regional-exposure"
 
 # IMF WEO Advanced Economies (2024 classification) — suppressed from output
 # while AE methodology is under review.
@@ -63,7 +64,12 @@ BASELINE_OVERRIDES = {
 
 METHODOLOGY_NOTE = (
     "Advanced economies (IMF WEO classification) are excluded pending "
-    "methodology review. Coverage is limited to emerging and frontier markets."
+    "methodology review — bottom-up rebuild available via "
+    "/api/ae-contingent-liabilities. Main product covers emerging and "
+    "frontier markets; regional-banking exposure (WAEMU titres publics "
+    "held by Ivorian and pan-African banks, etc.) is tracked separately "
+    "via /api/em-regional-exposure — currently skeleton pending live "
+    "BCEAO/AUT data."
 )
 
 # ── Static JSON (always works — deployed with the app) ───────────────────
@@ -145,6 +151,7 @@ def _apply_ae_suppression(result):
     for iso3, c in filtered.items():
         _apply_baseline_override(iso3, c, integrity_flags)
         _guard_negative_shadow(iso3, c, integrity_flags)
+        _apply_regional_exposure(iso3, c, integrity_flags)
         _compute_sigma(c)
         c["benchmark"] = _reconcile_benchmark(iso3, c.get("estimated_debt_gdp"))
 
@@ -167,6 +174,12 @@ def _apply_ae_suppression(result):
                       if c.get("benchmark", {}).get("status")
                       in ("no_benchmark", "benchmark_missing_value"))
 
+    # Regional-exposure coverage roll-up
+    regional_applied = sum(1 for c in filtered.values()
+                           if c.get("regional_exposure_loaded"))
+    regional_skeleton = sum(1 for c in filtered.values()
+                            if c.get("regional_exposure_reason", "").startswith("skeleton"))
+
     summary = {
         "total_countries": len(filtered),
         "avg_official": _avg("official_debt_gdp"),
@@ -180,6 +193,10 @@ def _apply_ae_suppression(result):
             "ok": rec_ok,
             "out_of_band": rec_out,
             "missing_benchmark": rec_missing,
+        },
+        "regional_exposure": {
+            "applied_countries": regional_applied,
+            "skeleton_countries": regional_skeleton,
         },
         "integrity_flags": integrity_flags,
     }

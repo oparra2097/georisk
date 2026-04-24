@@ -1,0 +1,47 @@
+iso3: TGO
+name: Togo
+monetary_union: WAEMU
+currency: XOF
+as_of: 2024-12-31
+gdp_usd_bn: 9.8
+
+titres_publics_stock_local_bn: null
+titres_publics_stock_usd_bn: 4.0
+titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × Togo share ~10% (AUT) — TGO is disproportionately active at AUT relative to GDP"
+titres_publics_url: "https://umoatitres.org/statistiques/"
+titres_publics_date: 2023-12-31
+
+banking_system_claims_on_govt_local_bn: null
+banking_system_claims_source: "BCEAO — to be pulled"
+banking_system_claims_url: "https://www.bceao.int/"
+banking_system_claims_date: null
+
+cross_border_share: 0.50
+cross_border_share_method: order_of_magnitude
+cross_border_share_source: |
+  MAJOR CAVEAT: Lomé hosts Ecobank Transnational and Oragroup
+  consolidated HQs. Their balance sheets aggregate pan-regional
+  sovereign holdings under a "domestic" classification, blurring
+  the domestic/regional line. Published cross-border share would
+  under-state true regional exposure due to this HQ effect. Needs
+  bespoke treatment.
+cross_border_share_url: "https://www.imf.org/en/Countries/TGO"
+
+regional_bank_exposure_usd_bn: 2.0
+regional_bank_exposure_pct_gdp: 20.4
+
+include_in_shadow: true
+loss_given_default: 1.0
+double_count_check: |
+  Regional titres are separate from external debt (IDS). HQ effect for
+  Ecobank/Oragroup may need an adjustment that also considers
+  aggregated book exposures held by those HQ entities.
+
+notes: |
+  HIGH-IMPACT case: 20% of GDP is a material shadow adjustment on the
+  order-of-magnitude estimate. Needs bespoke work — the Lomé HQ effect
+  means a simple "cross-border share" is misleading. Track carefully.
+
+_status: skeleton_pending_source_data
+_ready_blocker: "HQ-effect complication — even with BCEAO data, need to handle Ecobank/Oragroup aggregation specially"
+_agent_research_date: 2026-04-24

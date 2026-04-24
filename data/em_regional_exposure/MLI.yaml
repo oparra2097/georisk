@@ -1,0 +1,47 @@
+iso3: MLI
+name: Mali
+monetary_union: WAEMU
+currency: XOF
+as_of: 2024-12-31
+gdp_usd_bn: 22.8
+
+titres_publics_stock_local_bn: null
+titres_publics_stock_usd_bn: 4.0
+titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × Mali share ~10% (AUT)"
+titres_publics_url: "https://umoatitres.org/statistiques/"
+titres_publics_date: 2023-12-31
+
+banking_system_claims_on_govt_local_bn: null
+banking_system_claims_source: "BCEAO — to be pulled; also Mali Ministry of Finance debt reports"
+banking_system_claims_url: "https://www.bceao.int/"
+banking_system_claims_date: null
+
+cross_border_share: 0.55
+cross_border_share_method: inferred_article_iv
+cross_border_share_source: |
+  Mali defaulted on regional WAEMU T-bills in 2022 during ECOWAS
+  financial sanctions — the missed auctions forced restructuring
+  with regional bank holders, documented in BCEAO communiqués. This
+  is genuine documented cross-border exposure, not a guess. Share
+  estimate remains approximate but method is grounded.
+cross_border_share_url: "https://www.bceao.int/fr/search?keyword=communiqué+Mali"
+
+regional_bank_exposure_usd_bn: 2.2
+regional_bank_exposure_pct_gdp: 9.6
+
+include_in_shadow: true
+loss_given_default: 1.0
+double_count_check: |
+  Mali has very limited Eurobond presence — most external debt is
+  multilateral/bilateral concessional (captured by IDS). Regional-
+  market titres are separate instruments.
+
+notes: |
+  The 2022 sanctions episode was the event that revealed WAEMU-wide
+  cross-border bank exposure to Malian paper. AES-bloc status post-
+  ECOWAS exit adds redenomination / political risk for regional
+  holders. Stock likely rose in 2024 as issuance resumed.
+
+_status: skeleton_pending_source_data
+_ready_blocker: "titres_publics_stock_local_bn null — cross_border_share is inferred_article_iv so if stock were populated, this would be ready"
+_agent_research_date: 2026-04-24

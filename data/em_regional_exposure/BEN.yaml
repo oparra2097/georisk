@@ -1,0 +1,39 @@
+iso3: BEN
+name: Benin
+monetary_union: WAEMU
+currency: XOF
+as_of: 2024-12-31
+gdp_usd_bn: 21.5
+
+titres_publics_stock_local_bn: null
+titres_publics_stock_usd_bn: 4.0
+titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × Benin share ~10% (AUT)"
+titres_publics_url: "https://umoatitres.org/statistiques/"
+titres_publics_date: 2023-12-31
+
+banking_system_claims_on_govt_local_bn: null
+banking_system_claims_source: "BCEAO — to be pulled"
+banking_system_claims_url: "https://www.bceao.int/"
+banking_system_claims_date: null
+
+cross_border_share: 0.55
+cross_border_share_method: order_of_magnitude
+cross_border_share_source: "Qualitative — Benin pioneered WAEMU SDG bond (2021), maintains active AUT issuance; domestic banking sector modest so regional uptake likely dominant."
+cross_border_share_url: "https://www.imf.org/en/Countries/BEN"
+
+regional_bank_exposure_usd_bn: 2.2
+regional_bank_exposure_pct_gdp: 10.2
+
+include_in_shadow: true
+loss_given_default: 1.0
+double_count_check: |
+  Benin has some Eurobonds including the SDG bond — those are captured
+  in external_debt_usd_bn via IDS. Regional XOF titres are distinct.
+
+notes: |
+  Benin is considered a higher-governance WAEMU issuer. Regular AUT
+  auctions absorbed widely across the union.
+
+_status: skeleton_pending_source_data
+_ready_blocker: "cross_border_share_method=order_of_magnitude"
+_agent_research_date: 2026-04-24

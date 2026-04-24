@@ -1,0 +1,52 @@
+# Senegal — WAEMU Regional Bank Exposure
+#
+# This is the test-bed country for the regional-exposure layer. The
+# exposure here is SEPARATE from BIS consolidated claims (which don't
+# reach WAEMU) and WB IDS external debt (which captures the Eurobond
+# stock but not regional-market titres publics).
+
+iso3: SEN
+name: Senegal
+monetary_union: WAEMU
+currency: XOF
+as_of: 2024-12-31
+gdp_usd_bn: 32.8
+
+titres_publics_stock_local_bn: null         # research-pending: AUT bulletin
+titres_publics_stock_usd_bn: 7.6            # order-of-magnitude from aggregate × country share
+titres_publics_source: "Order-of-magnitude allocation: WAEMU aggregate ~$40bn × Senegal share ~19% (Agence UMOA-Titres historical bulletins)"
+titres_publics_url: "https://umoatitres.org/statistiques/"
+titres_publics_date: 2023-12-31
+
+banking_system_claims_on_govt_local_bn: null   # research-pending: BCEAO monetary survey
+banking_system_claims_source: "BCEAO Bulletin Mensuel des Statistiques, Situation Monétaire Intégrée, 'Créances sur l'Administration Centrale' — to be pulled"
+banking_system_claims_url: "https://www.bceao.int/fr/publications/bulletin-mensuel-des-statistiques"
+banking_system_claims_date: null
+
+cross_border_share: 0.45
+cross_border_share_method: order_of_magnitude
+cross_border_share_source: "Qualitative inference from IMF Senegal Article IV 2023/2024 Staff Report — Senegalese T-bills/bonds broadly held across WAEMU banks (Ivorian, pan-African)."
+cross_border_share_url: "https://www.imf.org/en/Countries/SEN"
+
+regional_bank_exposure_usd_bn: 3.4          # derived: 7.6 × 0.45
+regional_bank_exposure_pct_gdp: 10.4        # 3.4 / 32.8
+
+include_in_shadow: true
+loss_given_default: 1.0
+double_count_check: |
+  Distinct from bis_claims_usd_bn ($8bn) in main pipeline: BIS covers
+  claims from BIS-reporting G-SIBs (none in WAEMU). Distinct from
+  external_debt_usd_bn ($30bn WB IDS): IDS captures hard-currency
+  bonds and multilateral + Paris/non-Paris bilateral, not XOF-
+  denominated regional-market titres publics. No overlap expected.
+
+notes: |
+  Agent flagged this as the paradigm case — Senegal is the 2nd-largest
+  WAEMU issuer (CIV is 1st). Ivorian banks (SGBCI, BICICI, Ecobank CI)
+  and pan-African banks (Ecobank Group, Oragroup, Coris, NSIA) are
+  material holders. Post-Cour des Comptes revelation (Feb 2025) may
+  have shifted holdings; regional banks now face concentration risk.
+
+_status: skeleton_pending_source_data
+_ready_blocker: "cross_border_share_method=order_of_magnitude — needs BCEAO/AUT live data + cross-border share from stability report to graduate to published"
+_agent_research_date: 2026-04-24

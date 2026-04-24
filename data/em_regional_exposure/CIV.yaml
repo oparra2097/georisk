@@ -1,0 +1,43 @@
+iso3: CIV
+name: Côte d'Ivoire
+monetary_union: WAEMU
+currency: XOF
+as_of: 2024-12-31
+gdp_usd_bn: 87.1
+
+titres_publics_stock_local_bn: null
+titres_publics_stock_usd_bn: 12.0
+titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × CIV share ~30% (AUT historical bulletins)"
+titres_publics_url: "https://umoatitres.org/statistiques/"
+titres_publics_date: 2023-12-31
+
+banking_system_claims_on_govt_local_bn: null
+banking_system_claims_source: "BCEAO Rapport Annuel (latest), tableaux créances sur administration centrale"
+banking_system_claims_url: "https://www.bceao.int/fr/publications/rapport-annuel"
+banking_system_claims_date: null
+
+cross_border_share: 0.35
+cross_border_share_method: order_of_magnitude
+cross_border_share_source: "Qualitative inference — CIV has the deepest domestic banking sector in the union; cross-border share correspondingly lower than peers."
+cross_border_share_url: "https://www.imf.org/en/Countries/CIV"
+
+regional_bank_exposure_usd_bn: 4.2
+regional_bank_exposure_pct_gdp: 4.8
+
+include_in_shadow: true
+loss_given_default: 1.0
+double_count_check: |
+  CIV has active Eurobonds (captured in external_debt_usd_bn via WB IDS).
+  Regional-market titres are XOF-denominated and held mostly by WAEMU
+  banks — no overlap with BIS (no reporter) and no overlap with IDS
+  (IDS covers FX-denom external debt).
+
+notes: |
+  Largest WAEMU sovereign issuer (~30% of regional stock). Abidjan is
+  the financial centre of the union; domestic absorption capacity is
+  significant, hence the lower cross-border share. Note CIV also has
+  material Eurobond debt that's captured elsewhere.
+
+_status: skeleton_pending_source_data
+_ready_blocker: "cross_border_share_method=order_of_magnitude"
+_agent_research_date: 2026-04-24

@@ -1954,6 +1954,38 @@ def ae_contingent_liabilities_detail(iso3):
     return jsonify(detail)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# EM REGIONAL BANKING EXPOSURE (v1.3 WAEMU/CEMAC layer)
+# Fills the BIS-gap for monetary unions where no country is a BIS reporter.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_bp.route('/em-regional-exposure')
+def list_em_regional_exposure():
+    """Summary of regional-exposure YAMLs across all tracked EM countries."""
+    from backend.data_sources.em_regional_exposure import get_regional_exposure_summary
+    return jsonify({
+        'methodology_version': 'em-regional-v1.0-waemu',
+        'scope_note': (
+            'Cross-border bank holdings of EM sovereign debt that do not '
+            'appear in BIS Consolidated Banking Statistics (no WAEMU/CEMAC '
+            'country is a BIS reporter) nor in World Bank IDS (which covers '
+            'FX-denominated external debt, not regional-market XOF/XAF titres '
+            'publics). Currently covers WAEMU; CEMAC/SADC to follow.'
+        ),
+        'countries': get_regional_exposure_summary(),
+    })
+
+
+@api_bp.route('/em-regional-exposure/<iso3>')
+def em_regional_exposure_detail(iso3):
+    """Full component-level breakdown for a single EM country."""
+    from backend.data_sources.em_regional_exposure import get_regional_detail
+    detail = get_regional_detail(iso3.upper())
+    if not detail:
+        return jsonify({'error': f'No regional-exposure data for {iso3.upper()}'}), 404
+    return jsonify(detail)
+
+
 @api_bp.route('/sovereign-debt/export')
 def export_sovereign_debt_excel():
     """Generate Excel file with sovereign debt indicator data."""

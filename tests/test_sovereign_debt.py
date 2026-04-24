@@ -57,9 +57,12 @@ def test_integrity_flags_surfaced():
     """If any guardrail fired, the summary must record it with a structured entry."""
     data = get_sovereign_debt_data()
     flags = data["summary"].get("integrity_flags", [])
+    known_issues = {"negative_shadow", "baseline_override", "regional_exposure_applied"}
     for flag in flags:
         assert "iso3" in flag
-        assert flag.get("issue") in ("negative_shadow", "baseline_override")
+        assert flag.get("issue") in known_issues, (
+            f"unexpected flag issue: {flag.get('issue')}"
+        )
         assert flag.get("action")
 
 
