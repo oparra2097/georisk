@@ -69,6 +69,47 @@ def get_diagnostics():
     return jsonify({'status': service.status(), 'diagnostics': service.get_diagnostics()})
 
 
+@macro_model_bp.route('/debug')
+@_macro_gate
+def get_debug():
+    """One-stop diagnostic dump: env, pickle, last log lines, status, diagnostics.
+
+    Hit this from a browser when the dashboard is empty and there's nowhere
+    else to look. No secrets are returned (FRED key is reported as a boolean,
+    not a value).
+    """
+    import os, time
+    from config import Config
+    from backend.log_capture import snapshot
+    from backend.macro_model.service import _PERSIST_PATH
+
+    fred_set = bool(getattr(Config, 'FRED_API_KEY', '') or os.environ.get('FRED_API_KEY', ''))
+
+    pickle_info = {'path': _PERSIST_PATH, 'exists': os.path.exists(_PERSIST_PATH)}
+    if pickle_info['exists']:
+        st = os.stat(_PERSIST_PATH)
+        pickle_info.update({
+            'size_mb': round(st.st_size / 1024 / 1024, 2),
+            'age_seconds': round(time.time() - st.st_mtime, 1),
+        })
+
+    return jsonify({
+        'product': 'macro-model',
+        'env': {
+            'FRED_API_KEY_set': fred_set,
+            'DATA_DIR': Config.DATA_DIR,
+            'data_dir_exists': os.path.isdir(Config.DATA_DIR),
+            'data_dir_writable': os.access(Config.DATA_DIR, os.W_OK) if os.path.isdir(Config.DATA_DIR) else False,
+        },
+        'pickle': pickle_info,
+        'status': service.status(),
+        'diagnostics': service.get_diagnostics(),
+        'logs_macro_model': snapshot('macro_model')[-100:],
+        'logs_fred': snapshot('fred')[-30:],
+        'logs_warmup': snapshot('warmup')[-30:],
+    })
+
+
 @macro_model_bp.route('/variables')
 @_macro_gate
 def get_variables():
