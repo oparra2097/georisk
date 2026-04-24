@@ -18,6 +18,7 @@ import pandas as pd
 from backend.macro_model.data import build_panel
 from backend.macro_model.equations import ALL_SPECS, derive_auxiliary_columns
 from backend.macro_model.estimation import EquationFit, EquationSpec, fit_equation
+from backend.macro_model import diagnostics
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +58,22 @@ def fit_all(
 
     fits: dict[str, EquationFit] = {}
     for spec in specs:
+        name = spec.name or spec.dependent
         try:
             fit = fit_equation(panel, spec)
-            fits[spec.name or spec.dependent] = fit
+            fits[name] = fit
             logger.info(
-                f"fit {spec.name or spec.dependent}: lag={fit.chosen_lag}, "
+                f"fit {name}: lag={fit.chosen_lag}, "
                 f"rsq={fit.rsq:.3f}, γ={fit.error_correction_coef():+.3f}, "
                 f"DW={fit.durbin_watson:.2f}, N={fit.n_obs}"
             )
+            diagnostics.record_fit_ok(
+                name=name, rsq=fit.rsq, n_obs=fit.n_obs,
+                chosen_lag=fit.chosen_lag, gamma=fit.error_correction_coef(),
+            )
         except Exception as e:
-            logger.exception(f"fit failed for {spec.name or spec.dependent}: {e}")
+            logger.exception(f"fit failed for {name}: {e}")
+            diagnostics.record_fit_fail(name, e)
 
     return ModelFitReport(
         panel_start=panel.index.min(),

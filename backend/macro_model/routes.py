@@ -43,10 +43,30 @@ def _macro_gate(f):
     return decorated
 
 
+def _building_detail():
+    s = service.status()
+    if s.get('building'):
+        msg = 'model building in background — retry in 30-60 seconds'
+    elif s.get('fit_error'):
+        msg = 'fit failed: ' + str(s['fit_error'])
+    else:
+        # First touch — ensure_built inside service methods already kicked off
+        # a background build, so this message matches that state.
+        msg = 'model build queued — retry in 30-60 seconds'
+    return msg, s
+
+
 @macro_model_bp.route('/status')
 @_macro_gate
 def get_status():
     return jsonify(service.status())
+
+
+@macro_model_bp.route('/diagnostics')
+@_macro_gate
+def get_diagnostics():
+    """Per-series fetch status + per-equation fit status + last build error."""
+    return jsonify({'status': service.status(), 'diagnostics': service.get_diagnostics()})
 
 
 @macro_model_bp.route('/variables')
@@ -60,8 +80,8 @@ def get_variables():
 def get_fit():
     report = service.get_fit_report()
     if report is None:
-        status = service.status()
-        return jsonify({'error': 'model not built', 'detail': status}), 503
+        msg, s = _building_detail()
+        return jsonify({'error': msg, 'status': s}), 503
     return jsonify(report)
 
 
@@ -71,7 +91,8 @@ def get_forecast():
     horizon = max(1, min(40, int(request.args.get('horizon', 20))))
     records = service.get_baseline(horizon=horizon)
     if records is None:
-        return jsonify({'error': 'model not built'}), 503
+        msg, s = _building_detail()
+        return jsonify({'error': msg, 'status': s}), 503
     return jsonify({'horizon': horizon, 'path': records})
 
 
@@ -82,7 +103,8 @@ def get_fan():
     n_draws = max(5, min(100, int(request.args.get('n_draws', 30))))
     result = service.get_bootstrap(horizon=horizon, n_draws=n_draws)
     if result is None:
-        return jsonify({'error': 'model not built'}), 503
+        msg, s = _building_detail()
+        return jsonify({'error': msg, 'status': s}), 503
     return jsonify({'horizon': horizon, 'n_draws': n_draws, 'bands': result})
 
 
@@ -105,7 +127,8 @@ def post_shock():
     except KeyError as e:
         return jsonify({'error': f'unknown shock: {e}'}), 404
     if result is None:
-        return jsonify({'error': 'model not built'}), 503
+        msg, s = _building_detail()
+        return jsonify({'error': msg, 'status': s}), 503
     return jsonify(result)
 
 
@@ -132,7 +155,8 @@ def get_backtest():
     flat_exog = request.args.get('flat_exog', '0').lower() in ('1', 'true', 'yes')
     result = service.get_backtest(train_end=train_end, flat_exog=flat_exog)
     if result is None:
-        return jsonify({'error': 'model not built'}), 503
+        msg, s = _building_detail()
+        return jsonify({'error': msg, 'status': s}), 503
     if isinstance(result, dict) and result.get('error'):
         return jsonify(result), 500
     return jsonify(result)

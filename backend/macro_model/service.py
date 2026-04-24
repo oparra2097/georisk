@@ -17,6 +17,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from backend.macro_model import diagnostics
 from backend.macro_model.data import build_panel
 from backend.macro_model.equations import derive_auxiliary_columns
 from backend.macro_model.fit_runner import ModelFitReport, fit_all
@@ -41,13 +42,15 @@ _state: dict = {
     'backtests': {},          # {(train_end, flat_exog): BacktestResult}
     'fit_error': None,
     'built_at': None,
+    'building': False,        # True while a background build is in flight
 }
 
 
-def _build_locked(start: str = '1980-01-01'):
+def _build_locked(start: str = '1980-01-01', force_refresh: bool = False):
     try:
         logger.info('macro_model.service: building panel + fitting equations…')
-        panel = build_panel(start=start)
+        diagnostics.record_build_start(clear=force_refresh)
+        panel = build_panel(start=start, force_refresh=force_refresh)
         report = fit_all(panel=panel)
         sim = Simulator(report.fits, derive_auxiliary_columns(panel))
         _state['report'] = report
@@ -63,17 +66,52 @@ def _build_locked(start: str = '1980-01-01'):
         logger.exception('macro_model.service: fit failed')
         _state['fit_error'] = str(e)
         _state['simulator'] = None
+        diagnostics.record_build_error(e)
+    finally:
+        _state['building'] = False
+
+
+def _build_in_background(start: str = '1980-01-01'):
+    """Run the build in a daemon thread so /fit and /forecast return fast
+    on the first hit instead of tripping Render's 30s request timeout."""
+    def _run():
+        try:
+            with _lock:
+                if _state['simulator'] is not None:
+                    return
+                _build_locked(start=start)
+        except Exception:
+            logger.exception('macro_model.service: background build died')
+
+    with _lock:
+        if _state['building'] or _state['simulator'] is not None:
+            return
+        _state['building'] = True
+    threading.Thread(target=_run, daemon=True, name='macro-model-build').start()
 
 
 def ensure_built():
+    """
+    Non-blocking: if not built yet, kick off a background build and return.
+    Callers that need the simulator should check status() first.
+    """
+    with _lock:
+        if _state['simulator'] is not None or _state['fit_error'] is not None:
+            return
+    _build_in_background()
+
+
+def ensure_built_sync():
+    """Blocking version — only call from POST /refresh."""
     with _lock:
         if _state['simulator'] is None and _state['fit_error'] is None:
             _build_locked()
 
 
 def refresh():
+    """Force rebuild synchronously. Called by POST /refresh."""
     with _lock:
-        _build_locked()
+        _build_locked(force_refresh=True)
 
 
 # ── Public ────────────────────────────────────────────────────────────
@@ -197,10 +235,16 @@ def status() -> dict:
     with _lock:
         return {
             'built': _state['simulator'] is not None,
+            'building': _state['building'],
             'fit_error': _state['fit_error'],
             'built_at': _state['built_at'],
             'n_equations': len(_state['report'].fits) if _state['report'] else 0,
         }
+
+
+def get_diagnostics() -> dict:
+    """Per-series fetch status + per-equation fit status."""
+    return diagnostics.snapshot()
 
 
 def get_backtest(train_end: str = '2019-12-31', flat_exog: bool = False) -> Optional[dict]:
