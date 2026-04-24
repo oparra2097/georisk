@@ -16,6 +16,7 @@ import threading
 import time
 from typing import Optional
 
+from backend.house_prices import diagnostics
 from backend.house_prices.fetchers import fhfa, case_shiller, zillow
 from backend.house_prices.fetchers.fhfa import HpiRow
 from backend.house_prices.indices import group_by_entity, history, summarize
@@ -30,23 +31,26 @@ _state: dict = {
     'summaries': None,         # {(level, code): summary dict}
     'built_at': None,
     'build_error': None,
+    'building': False,
 }
 
 
-def _build_locked(include_zillow_zip: bool = False):
+def _build_locked(include_zillow_zip: bool = False, force_refresh: bool = False):
+    err: Optional[BaseException] = None
     try:
+        diagnostics.record_build_start(clear=force_refresh)
         logger.info('house_prices: fetching FHFA master + county…')
         rows: list[HpiRow] = []
-        rows.extend(fhfa.fetch_master())
-        rows.extend(fhfa.fetch_county())
+        rows.extend(fhfa.fetch_master(force=force_refresh))
+        rows.extend(fhfa.fetch_county(force=force_refresh))
         logger.info('house_prices: fetching Case-Shiller (national + 20 cities)…')
         rows.extend(case_shiller.fetch_all())
         logger.info('house_prices: fetching Zillow metro + county…')
-        rows.extend(zillow.fetch_metro())
-        rows.extend(zillow.fetch_county())
+        rows.extend(zillow.fetch_metro(force=force_refresh))
+        rows.extend(zillow.fetch_county(force=force_refresh))
         if include_zillow_zip:
             logger.info('house_prices: fetching Zillow ZIP (last 36 months)…')
-            rows.extend(zillow.fetch_zip())
+            rows.extend(zillow.fetch_zip(force=force_refresh))
 
         grouped = group_by_entity(rows)
         summaries = {k: summarize(v) for k, v in grouped.items()}
@@ -59,27 +63,64 @@ def _build_locked(include_zillow_zip: bool = False):
         _state['build_error'] = None
         logger.info(f'house_prices: built with {len(rows)} rows across {len(summaries)} entities')
     except Exception as e:
+        err = e
         logger.exception('house_prices build failed')
         _state['build_error'] = str(e)
+    finally:
+        _state['building'] = False
+        diagnostics.record_build_finish(error=err)
+
+
+def _build_in_background(include_zillow_zip: bool = False):
+    """Daemon-thread build so the first /level request returns fast instead
+    of timing out on Render while ~5 CSVs download (FHFA master + county +
+    Case-Shiller via FRED + Zillow metro + county). Total cold build
+    typically 60-120 seconds."""
+    def _run():
+        try:
+            with _lock:
+                if _state['summaries'] is not None:
+                    return
+                _build_locked(include_zillow_zip=include_zillow_zip)
+        except Exception:
+            logger.exception('house_prices background build died')
+
+    with _lock:
+        if _state['building'] or _state['summaries'] is not None:
+            return
+        _state['building'] = True
+    threading.Thread(target=_run, daemon=True, name='hpi-build').start()
 
 
 def ensure_built():
+    """Non-blocking. Kicks off a background build if not already running."""
     with _lock:
-        if _state['summaries'] is None and _state['build_error'] is None:
-            _build_locked()
+        if _state['summaries'] is not None or _state['build_error'] is not None:
+            return
+    _build_in_background()
 
 
 def refresh(include_zillow_zip: bool = False):
+    """Force-refresh synchronously (used by POST /refresh)."""
     with _lock:
-        fhfa.clear_cache()
-        zillow.clear_cache()
-        _build_locked(include_zillow_zip=include_zillow_zip)
+        _state['building'] = True
+        try:
+            fhfa.clear_cache()
+            zillow.clear_cache()
+            _build_locked(include_zillow_zip=include_zillow_zip, force_refresh=True)
+        finally:
+            _state['building'] = False
+
+
+def get_diagnostics() -> dict:
+    return diagnostics.snapshot()
 
 
 def status() -> dict:
     with _lock:
         return {
             'built': _state['summaries'] is not None,
+            'building': _state['building'],
             'built_at': _state['built_at'],
             'n_entities': len(_state['summaries']) if _state['summaries'] else 0,
             'n_rows': len(_state['rows']) if _state['rows'] else 0,

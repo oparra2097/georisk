@@ -30,6 +30,7 @@ from typing import Literal, Optional
 import requests
 
 from config import Config
+from backend.house_prices import diagnostics
 from backend.house_prices.fetchers.fhfa import HpiRow
 from backend.house_prices.sources import SOURCES
 
@@ -197,12 +198,15 @@ def _is_date_column(s: str) -> bool:
 
 def fetch(scope: ZScope, force: bool = False,
           max_rows_per_region: Optional[int] = None) -> list[HpiRow]:
+    src_id = f'zillow_{scope}'
+    label = f'Zillow ZHVI {scope}'
     with _lock:
         if not force and scope in _mem:
             return _mem[scope]
         disk = _load_disk(scope) if not force else None
         if disk is not None:
             _mem[scope] = disk
+            diagnostics.record_fetch_ok(src_id, label + ' (cached)', len(disk))
             return disk
 
     logger.info(f'zillow: downloading {scope} ZHVI…')
@@ -210,16 +214,20 @@ def fetch(scope: ZScope, force: bool = False,
         resp = requests.get(_url(scope), timeout=120,
                             headers={'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'})
         if resp.status_code != 200:
-            logger.warning(f'zillow {scope} HTTP {resp.status_code}')
+            msg = f'HTTP {resp.status_code}'
+            logger.warning(f'zillow {scope} {msg}')
+            diagnostics.record_fetch_fail(src_id, label, msg)
             return []
         rows = _parse_wide(resp.text, scope, max_rows_per_region=max_rows_per_region)
         logger.info(f'zillow {scope}: parsed {len(rows)} rows')
         with _lock:
             _mem[scope] = rows
         _save_disk(scope, rows)
+        diagnostics.record_fetch_ok(src_id, label, len(rows))
         return rows
     except Exception as e:
         logger.error(f'zillow {scope} fetch failed: {e}')
+        diagnostics.record_fetch_fail(src_id, label, str(e))
         return []
 
 

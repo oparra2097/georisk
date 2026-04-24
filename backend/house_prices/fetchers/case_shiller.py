@@ -15,6 +15,7 @@ import logging
 from typing import Optional
 
 from backend.data_sources import fred_client
+from backend.house_prices import diagnostics
 from backend.house_prices.fetchers.fhfa import HpiRow
 from backend.house_prices.sources import CASE_SHILLER_CITIES, CASE_SHILLER_NATIONAL_FRED
 
@@ -72,4 +73,12 @@ def fetch_cities() -> list[HpiRow]:
 
 
 def fetch_all() -> list[HpiRow]:
-    return fetch_national() + fetch_cities()
+    rows = fetch_national() + fetch_cities()
+    if rows:
+        diagnostics.record_fetch_ok('case_shiller', 'S&P/Case-Shiller (national + 20 cities)', len(rows))
+    else:
+        diagnostics.record_fetch_fail(
+            'case_shiller', 'S&P/Case-Shiller',
+            'no data returned from FRED — check FRED_API_KEY is set',
+        )
+    return rows

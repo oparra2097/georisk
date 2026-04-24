@@ -48,10 +48,29 @@ def _hpi_gate(f):
     return decorated
 
 
+def _build_state_msg():
+    s = service.status()
+    if s.get('building'):
+        return 'data sources downloading in background — retry in 30-90 seconds', s
+    if s.get('build_error'):
+        return 'build failed: ' + str(s['build_error']), s
+    if not s.get('built'):
+        return 'data not yet loaded — kicked off background build, retry shortly', s
+    return None, s
+
+
 @house_prices_bp.route('/status')
 @_hpi_gate
 def get_status():
     return jsonify(service.status())
+
+
+@house_prices_bp.route('/diagnostics')
+@_hpi_gate
+def get_diagnostics():
+    """Per-source fetch status + build state. The dashboard polls this
+    while building so the user sees what's happening."""
+    return jsonify({'status': service.status(), 'diagnostics': service.get_diagnostics()})
 
 
 @house_prices_bp.route('/sources')
@@ -72,6 +91,13 @@ def get_level(level):
     level = level.lower()
     if level not in _VALID_LEVELS:
         return jsonify({'error': f'invalid level: {level}'}), 400
+    s = service.status()
+    if not s.get('built'):
+        # Trigger a background build via ensure_built() (called inside service.get_level)
+        # but signal that we're not yet ready, so the dashboard can show "building" UX.
+        msg, st = _build_state_msg()
+        return jsonify({'level': level, 'entities': service.get_level(level),
+                        'pending': True, 'message': msg, 'status': st})
     return jsonify({'level': level, 'entities': service.get_level(level)})
 
 
