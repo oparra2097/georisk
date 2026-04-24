@@ -13,8 +13,10 @@ Endpoints:
 """
 
 import logging
+from functools import wraps
 
 from flask import Blueprint, jsonify, request
+from flask_login import current_user
 
 from backend.macro_model import service
 
@@ -23,17 +25,38 @@ logger = logging.getLogger(__name__)
 macro_model_bp = Blueprint('macro_model', __name__)
 
 
+def _macro_gate(f):
+    """Require authenticated, email-verified, macro-access-granted user.
+
+    Kept local to this blueprint (rather than importing from app.py) to avoid
+    a circular import. Mirrors app.macro_access_required but always returns JSON.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Authentication required', 'login_url': '/auth/login'}), 401
+        if not current_user.email_verified:
+            return jsonify({'error': 'Please verify your email first.'}), 403
+        if not current_user.has_macro_access():
+            return jsonify({'error': 'US Macro Model access is granted by the admin.'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
 @macro_model_bp.route('/status')
+@_macro_gate
 def get_status():
     return jsonify(service.status())
 
 
 @macro_model_bp.route('/variables')
+@_macro_gate
 def get_variables():
     return jsonify({'variables': service.get_variables()})
 
 
 @macro_model_bp.route('/fit')
+@_macro_gate
 def get_fit():
     report = service.get_fit_report()
     if report is None:
@@ -43,6 +66,7 @@ def get_fit():
 
 
 @macro_model_bp.route('/forecast')
+@_macro_gate
 def get_forecast():
     horizon = max(1, min(40, int(request.args.get('horizon', 20))))
     records = service.get_baseline(horizon=horizon)
@@ -52,6 +76,7 @@ def get_forecast():
 
 
 @macro_model_bp.route('/fan')
+@_macro_gate
 def get_fan():
     horizon = max(1, min(24, int(request.args.get('horizon', 12))))
     n_draws = max(5, min(100, int(request.args.get('n_draws', 30))))
@@ -62,11 +87,13 @@ def get_fan():
 
 
 @macro_model_bp.route('/shocks')
+@_macro_gate
 def get_shocks():
     return jsonify({'shocks': service.get_shock_catalogue()})
 
 
 @macro_model_bp.route('/shock', methods=['POST'])
+@_macro_gate
 def post_shock():
     body = request.get_json(silent=True) or {}
     shock_id = body.get('id')
@@ -83,12 +110,14 @@ def post_shock():
 
 
 @macro_model_bp.route('/refresh', methods=['POST'])
+@_macro_gate
 def post_refresh():
     service.refresh()
     return jsonify(service.status())
 
 
 @macro_model_bp.route('/backtest')
+@_macro_gate
 def get_backtest():
     """
     GET /backtest?train_end=2019-12-31&flat_exog=0

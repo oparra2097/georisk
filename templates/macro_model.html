@@ -12,6 +12,21 @@
   .mm-status.ok { color: #065f46; }
   .mm-status.err { color: #b91c1c; }
 
+  /* Hero / landing ------------------------------------------------- */
+  .mm-hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+             color: #f1f5f9; padding: 36px 28px; border-radius: 10px; margin-bottom: 24px; }
+  .mm-hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #93c5fd; margin-bottom: 8px; }
+  .mm-hero h2 { font-size: 26px; font-weight: 700; margin: 0 0 10px; line-height: 1.2; letter-spacing: -0.01em; }
+  .mm-hero p { font-size: 14px; color: #cbd5e1; margin: 0 0 18px; line-height: 1.6; max-width: 780px; }
+  .mm-hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 16px; }
+  .mm-hero-stat { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); }
+  .mm-hero-stat .num { font-size: 22px; font-weight: 600; color: #f1f5f9; }
+  .mm-hero-stat .lbl { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .mm-hero-cta { display: inline-block; background: #3b82f6; color: #fff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500; margin-right: 8px; }
+  .mm-hero-cta:hover { background: #2563eb; }
+  .mm-hero-cta.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #f1f5f9; }
+  .mm-hero-cta.secondary:hover { background: rgba(255,255,255,0.08); }
+
   .mm-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 20px; }
   @media (max-width: 900px) { .mm-layout { grid-template-columns: 1fr; } }
 
@@ -43,9 +58,35 @@
 
 {% block content %}
 <div class="mm-page">
-  <div class="mm-header">
-    <h1 class="mm-title">US Macro Model <span style="font-weight:400;color:#9ca3af;font-size:14px">/ FRB/US-lite v1</span></h1>
-    <p class="mm-subtitle">Reduced-form error-correction model of the US economy. 11 behavioral equations across spending, prices, labor, and financial blocks, estimated on quarterly FRED data from 1980Q1. Solved jointly via damped Gauss-Seidel.</p>
+  <!-- Hero / product landing -->
+  <section class="mm-hero">
+    <div class="mm-hero-eyebrow">Parra Macro · Research Product</div>
+    <h2>US Macro Model</h2>
+    <p>A reduced-form econometric model of the US economy in the FRB/US lineage. Eleven estimated behavioral equations spanning spending, prices, labor, and financial blocks, solved jointly every quarter. Produces baseline forecasts, bootstrap fan charts, shock-scenario impulse responses, and out-of-sample backtests against actual FRED data &mdash; not a scorecard, not a weighted index, a real macro model.</p>
+    <div>
+      <a href="#mm-dashboard" class="mm-hero-cta">Launch dashboard</a>
+      <a href="#mm-methodology" class="mm-hero-cta secondary">Methodology</a>
+    </div>
+    <div class="mm-hero-stats">
+      <div class="mm-hero-stat"><div class="num">11</div><div class="lbl">Equations</div></div>
+      <div class="mm-hero-stat"><div class="num">19</div><div class="lbl">FRED series</div></div>
+      <div class="mm-hero-stat"><div class="num">1980+</div><div class="lbl">Sample start</div></div>
+      <div class="mm-hero-stat"><div class="num">7</div><div class="lbl">Shock types</div></div>
+      <div class="mm-hero-stat"><div class="num">20 qtrs</div><div class="lbl">Forecast horizon</div></div>
+    </div>
+  </section>
+
+  <!-- Methodology anchor + dashboard -->
+  <section id="mm-methodology" style="background:#f9fafb;border:1px solid #e5e7eb;padding:16px 20px;border-radius:6px;margin-bottom:20px;font-size:13px;color:#4b5563;line-height:1.6;">
+    <strong style="color:#111827;">Methodology.</strong>
+    Engle-Granger two-step error correction per equation (long-run cointegrating relation on levels, short-run dynamics on differences with AIC lag selection).
+    System solved jointly each quarter via damped Gauss-Seidel. Confidence bands come from residual bootstrapping (resample fitted-sample residuals). Shock scenarios rewrite the exogenous path; IRFs are the baseline-minus-shocked difference for every endogenous variable.
+    Not Bayesian, no fiscal block, adaptive expectations only &mdash; this is a v1. See <code>backend/macro_model/README.md</code> for known limitations.
+  </section>
+
+  <div class="mm-header" id="mm-dashboard">
+    <h1 class="mm-title">Model dashboard <span style="font-weight:400;color:#9ca3af;font-size:14px">/ FRB/US-lite v1</span></h1>
+    <p class="mm-subtitle">Live baseline forecast, per-equation diagnostics, shock scenarios, and OOS backtest.</p>
     <div class="mm-status" id="mm-status">Checking model status…</div>
   </div>
 
