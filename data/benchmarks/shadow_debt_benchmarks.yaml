@@ -1,0 +1,93 @@
+# Shadow-debt benchmark reconciliation values.
+#
+# Each entry is an externally-published "extended debt" figure that our
+# estimated_debt_gdp should be consistent with. Humans maintain this file
+# by hand from published sources — it is NOT auto-generated.
+#
+# Populate with values taken directly from:
+#   - IMF Fiscal Monitor Annex Table A.3 ("General government gross debt
+#     including contingent liabilities")
+#   - IMF Article IV Consultation Staff Reports ("Selected economic indicators")
+#   - World Bank International Debt Statistics (IDS) for external debt cross-check
+#
+# Tolerances:
+#   tol_pp: ±pp band within which model output is considered reconciled.
+#   For EM/frontier, 5pp is a reasonable starting band; tighten as confidence grows.
+#
+# Schema per country:
+#   ISO3:
+#     name: <country>
+#     benchmark_pct_gdp: <float>            # reference "extended" debt/GDP
+#     benchmark_source: <str>                # where it came from
+#     benchmark_date: YYYY-MM-DD             # publication / reference date
+#     tol_pp: <float>                        # acceptable deviation band
+#     notes: <str>                           # optional context / caveats
+
+SEN:
+  name: Senegal
+  benchmark_pct_gdp: null   # TODO: confirm post-revelation figure
+  benchmark_source: "IMF Article IV 2024 — pending verification"
+  benchmark_date: 2024-04-01
+  tol_pp: 5.0
+  notes: |
+    IMF Article IV (Apr 2024) cites post-revelation central govt debt
+    ~99% of GDP for 2024. Current model baseline is 128.4% — baseline
+    itself may already embed adjustments, risk of double-counting with
+    63.1pp shadow add. Set benchmark once source figure is nailed down.
+
+MOZ:
+  name: Mozambique
+  benchmark_pct_gdp: null
+  benchmark_source: "IMF Fiscal Monitor — TODO"
+  benchmark_date: null
+  tol_pp: 5.0
+  notes: |
+    Tuna-bond / Ematum history means Mozambique is a classic hidden-debt
+    case. Extended debt including contingent liabilities should be
+    cross-checked against the post-restructuring IMF DSA.
+
+ZMB:
+  name: Zambia
+  benchmark_pct_gdp: null
+  benchmark_source: "IMF Fiscal Monitor — TODO"
+  benchmark_date: null
+  tol_pp: 5.0
+  notes: |
+    Post-2020 default restructuring has produced published contingent
+    liability disclosures. Use those to pin a benchmark.
+
+GHA:
+  name: Ghana
+  benchmark_pct_gdp: null
+  benchmark_source: "IMF Fiscal Monitor — TODO"
+  benchmark_date: null
+  tol_pp: 5.0
+  notes: |
+    2022 restructuring. Post-DSA figures should exist in the latest
+    Article IV.
+
+# ── Advanced economies (for future AE rebuild — not served while AE
+# coverage is suppressed). Keep slots here so the rebuilt methodology
+# can be reconciled against these values at CI time.
+
+DEU:
+  name: Germany
+  benchmark_pct_gdp: 67.0    # placeholder mid-point of 65-70% defensible band
+  benchmark_source: "Eurostat EDP + supplementary tables on government interventions (2024)"
+  benchmark_date: 2024-10-21
+  tol_pp: 2.0
+  notes: |
+    Maastricht ~63% + drawn Sondervermögen + KfW bonded debt excluded
+    from EDP. Anything materially above 70% needs explicit itemised
+    contingent-liability justification.
+
+FRA:
+  name: France
+  benchmark_pct_gdp: 116.0   # placeholder mid-point of 115-118% defensible band
+  benchmark_source: "Eurostat EDP + supplementary tables on government interventions (2024)"
+  benchmark_date: 2024-10-21
+  tol_pp: 2.0
+  notes: |
+    Maastricht ~110.6% + CADES + SNCF Réseau + EDF decommissioning.
+    Original model figure of 138.4% exceeded this by ~22pp and was the
+    trigger for the AE methodology review.

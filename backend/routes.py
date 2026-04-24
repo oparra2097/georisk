@@ -1895,6 +1895,33 @@ def get_sovereign_debt():
     return jsonify(data)
 
 
+@api_bp.route('/sovereign-debt/preflight/<iso3>')
+def preflight_sovereign_debt(iso3):
+    """Run the pre-publication checklist for a single country."""
+    from backend.data_sources.preflight import preflight_check
+    iso3 = iso3.upper()
+    data = get_sovereign_debt_data()
+    country = data.get('countries', {}).get(iso3)
+    if not country:
+        return jsonify({
+            'error': f'No coverage for {iso3} (AE suppressed or not in dataset)',
+            'iso3': iso3,
+        }), 404
+    return jsonify({
+        'iso3': iso3,
+        'name': country.get('name'),
+        'methodology_version': data.get('methodology_version'),
+        **preflight_check(iso3, country),
+    })
+
+
+@api_bp.route('/sovereign-debt/benchmarks')
+def list_sovereign_debt_benchmarks():
+    """Expose the benchmark YAML for frontend display / review."""
+    from backend.data_sources.benchmarks import load_benchmarks
+    return jsonify({'benchmarks': load_benchmarks()})
+
+
 @api_bp.route('/sovereign-debt/export')
 def export_sovereign_debt_excel():
     """Generate Excel file with sovereign debt indicator data."""

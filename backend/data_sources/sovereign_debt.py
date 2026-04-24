@@ -18,6 +18,10 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 
+from .benchmarks import reconcile as _reconcile_benchmark
+
+METHODOLOGY_VERSION = "v1.1-em-guardrails"
+
 # IMF WEO Advanced Economies (2024 classification) — suppressed from output
 # while AE methodology is under review.
 ADVANCED_ECONOMIES_ISO3 = frozenset({
@@ -98,13 +102,20 @@ def get_sovereign_debt_data():
 
 def _apply_ae_suppression(result):
     """
-    Strip advanced-economy entries and recompute summary on the EM/frontier
-    subset. Keeps upstream data file intact so coverage can be re-enabled
-    once the AE methodology is rebuilt.
+    Strip advanced-economy entries, run integrity guards, compute
+    per-country sigma, attach benchmark reconciliation, and recompute
+    summary on the EM/frontier subset. Keeps upstream data file intact
+    so coverage can be re-enabled once the AE methodology is rebuilt.
     """
     countries = result.get("countries") or {}
     filtered = {iso3: c for iso3, c in countries.items()
                 if iso3 not in ADVANCED_ECONOMIES_ISO3}
+
+    integrity_flags = []
+    for iso3, c in filtered.items():
+        _guard_negative_shadow(iso3, c, integrity_flags)
+        _compute_sigma(c)
+        c["benchmark"] = _reconcile_benchmark(iso3, c.get("estimated_debt_gdp"))
 
     def _avg(field, decimals=1):
         vals = [c.get(field) for c in filtered.values()
@@ -116,6 +127,15 @@ def _apply_ae_suppression(result):
         tier_counts[tier] = sum(1 for c in filtered.values()
                                 if c.get("risk_tier") == tier)
 
+    # Reconciliation roll-up
+    rec_ok = sum(1 for c in filtered.values()
+                 if c.get("benchmark", {}).get("status") == "ok")
+    rec_out = sum(1 for c in filtered.values()
+                  if c.get("benchmark", {}).get("status") == "out_of_band")
+    rec_missing = sum(1 for c in filtered.values()
+                      if c.get("benchmark", {}).get("status")
+                      in ("no_benchmark", "benchmark_missing_value"))
+
     summary = {
         "total_countries": len(filtered),
         "avg_official": _avg("official_debt_gdp"),
@@ -125,6 +145,12 @@ def _apply_ae_suppression(result):
         "avg_short_term_pct": _avg("short_term_pct"),
         "avg_debt_service_pct": _avg("debt_service_pct_exports"),
         "avg_definition_gap": _avg("definition_gap_pp"),
+        "reconciliation": {
+            "ok": rec_ok,
+            "out_of_band": rec_out,
+            "missing_benchmark": rec_missing,
+        },
+        "integrity_flags": integrity_flags,
     }
 
     return {
@@ -132,8 +158,66 @@ def _apply_ae_suppression(result):
         "countries": filtered,
         "summary": summary,
         "methodology_note": METHODOLOGY_NOTE,
+        "methodology_version": METHODOLOGY_VERSION,
         "scope": "em_frontier",
     }
+
+
+def _guard_negative_shadow(iso3, c, flags):
+    """
+    Clamp mathematically-impossible rows where the upstream pipeline
+    produced estimated < official. This is a downstream guardrail, not
+    a fix — the underlying parquet build still needs to be corrected.
+    """
+    official = c.get("official_debt_gdp")
+    estimated = c.get("estimated_debt_gdp")
+    if official is None or estimated is None:
+        return
+    if estimated < official - 0.05:  # tolerate rounding noise
+        flags.append({
+            "iso3": iso3,
+            "issue": "negative_shadow",
+            "official_before": official,
+            "estimated_before": estimated,
+            "action": "clamped estimated_debt_gdp to official_debt_gdp",
+        })
+        c["estimated_debt_gdp"] = official
+        c["debt_gap_pp"] = 0.0
+        c["upstream_integrity_flag"] = "negative_shadow_clamped"
+        if c.get("confidence_ceiling_gdp") is not None \
+                and c["confidence_ceiling_gdp"] < official:
+            c["confidence_ceiling_gdp"] = official
+
+
+def _compute_sigma(c):
+    """
+    Per-country sigma derived from input-completeness and governance
+    dispersion, replacing the flat 0.35/0.86 placeholder. Range [0.15, 1.0].
+    Higher = noisier estimate. Expressed as fraction of estimated_debt_gdp.
+    """
+    # Start at a base informed by data completeness
+    required = [
+        "official_debt_gdp", "external_debt_usd_bn", "bis_claims_usd_bn",
+        "chinese_lending_usd_bn", "wgi_avg", "gdp_usd_bn",
+    ]
+    completeness = sum(
+        1 for f in required
+        if c.get(f) is not None and c.get(f) != 0
+    ) / len(required)
+
+    # Governance: WGI in [-2.5, 2.5]; lower = more opaque = more sigma
+    wgi = c.get("wgi_avg")
+    if wgi is None:
+        gov_component = 0.4
+    else:
+        # Map WGI +2.5 → 0.1, -2.5 → 0.7
+        gov_component = max(0.1, min(0.7, 0.4 - 0.12 * float(wgi)))
+
+    # Base sigma: more missing inputs = more noise
+    completeness_component = 0.5 * (1 - completeness)
+
+    sigma = round(min(1.0, max(0.15, gov_component + completeness_component)), 2)
+    c["sigma"] = sigma
 
 
 def _try_load_parquet():

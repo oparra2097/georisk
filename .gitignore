@@ -6,6 +6,8 @@ venv/
 data/*
 !static/data/
 !data/consensus.yaml
+!data/benchmarks/
+!data/benchmarks/**
 
 # Commodity model cache artifacts (regenerated on monthly refit)
 backend/cache/commodity_models/*.pkl
