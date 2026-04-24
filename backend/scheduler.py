@@ -177,3 +177,29 @@ def init_scheduler(app):
             except Exception as e:
                 logger.error(f"GDP nowcast warmup failed: {e}")
         threading.Thread(target=_warm_gdp_nowcast, daemon=True).start()
+
+    # Pre-warm macro-model: try the disk pickle first (instant if a sibling
+    # worker built recently), only kick off the expensive fit_all if no
+    # fresh pickle exists. Runs as a daemon thread so it doesn't block boot.
+    if Config.FRED_API_KEY:
+        def _warm_macro_model():
+            try:
+                from backend.macro_model import service as mm_svc
+                mm_svc.ensure_built()
+                # If the pickle wasn't loadable, ensure_built started a bg
+                # thread; we're done. If it was loadable, the simulator is
+                # ready and status() will show built=True.
+                logger.info(f"macro_model warmup: status={mm_svc.status()}")
+            except Exception as e:
+                logger.error(f"macro_model warmup failed: {e}")
+        threading.Thread(target=_warm_macro_model, daemon=True).start()
+
+    # Pre-warm HPI: same pattern.
+    def _warm_hpi():
+        try:
+            from backend.house_prices import service as hpi_svc
+            hpi_svc.ensure_built()
+            logger.info(f"house_prices warmup: status={hpi_svc.status()}")
+        except Exception as e:
+            logger.error(f"house_prices warmup failed: {e}")
+    threading.Thread(target=_warm_hpi, daemon=True).start()

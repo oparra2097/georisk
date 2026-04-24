@@ -6,11 +6,12 @@ list of HpiRow records, groups per entity, and computes summary
 statistics. In-memory cache is keyed by (level, code); a full rebuild
 re-downloads everything.
 
-Memory budget: Render's free tier is ~512MB RAM. Zillow metro (~100MB)
-and county (~50MB) CSVs blow that budget after Python object overhead.
-Default is to skip Zillow; set HPI_INCLUDE_ZILLOW=1 in the environment
-to enable it. FHFA + Case-Shiller cover all the dashboard tabs (states,
-regions, MSAs, counties via FHFA annual) without Zillow.
+Memory budget: Zillow metro (~100MB) and county (~50MB) CSVs balloon
+2-3x in Python object overhead. On Render's 512MB free tier this OOMs;
+on a 1GB+ plan it's fine.
+
+Default: Zillow ENABLED (we expect a ≥1GB worker now). To force-disable
+on a constrained plan, set HPI_INCLUDE_ZILLOW=0 in the environment.
 
 Built is idempotent; refresh() forces re-download.
 """
@@ -19,9 +20,17 @@ from __future__ import annotations
 
 import logging
 import os
+import pickle
 import threading
 import time
 from typing import Optional
+
+from config import Config
+
+# Cross-worker persistence — pickle the build artifacts so a sibling
+# Gunicorn worker reading the same file can hot-load instead of rebuilding.
+_PERSIST_PATH = os.path.join(Config.DATA_DIR, 'house_prices_state.pkl')
+_PERSIST_MAX_AGE_S = 7 * 24 * 3600   # weekly rebuild matches the FHFA cache TTL
 
 from backend.house_prices import diagnostics
 from backend.house_prices.fetchers import fhfa, case_shiller, zillow
@@ -42,9 +51,12 @@ _state: dict = {
 }
 
 
-# Zillow is heavy (~100MB metro CSV + ~50MB county CSV after Python object
-# overhead) and OOM's Render's 512MB free tier. Off by default; opt in via env.
-INCLUDE_ZILLOW = os.environ.get('HPI_INCLUDE_ZILLOW', '0').lower() in ('1', 'true', 'yes')
+# Zillow metro + county load is heavy (~150MB raw, 2-3x in memory after
+# Python object overhead). Default ON; set HPI_INCLUDE_ZILLOW=0 to disable
+# on a memory-constrained plan. ZIP file (~100MB) is still off by default
+# even on 1GB plans because it adds another ~250MB peak; opt in via
+# HPI_INCLUDE_ZILLOW_ZIP=1 only on 2GB+ workers.
+INCLUDE_ZILLOW = os.environ.get('HPI_INCLUDE_ZILLOW', '1').lower() in ('1', 'true', 'yes')
 INCLUDE_ZILLOW_ZIP = os.environ.get('HPI_INCLUDE_ZILLOW_ZIP', '0').lower() in ('1', 'true', 'yes')
 
 
@@ -65,15 +77,14 @@ def _build_locked(include_zillow_zip: bool = False, force_refresh: bool = False)
         rows.extend(case_shiller.fetch_all())
 
         if INCLUDE_ZILLOW:
-            logger.info('house_prices: fetching Zillow metro + county (HPI_INCLUDE_ZILLOW=1)…')
+            logger.info('house_prices: fetching Zillow metro + county…')
             rows.extend(zillow.fetch_metro(force=force_refresh))
             rows.extend(zillow.fetch_county(force=force_refresh))
             if include_zillow_zip or INCLUDE_ZILLOW_ZIP:
                 logger.info('house_prices: fetching Zillow ZIP (last 36 months)…')
                 rows.extend(zillow.fetch_zip(force=force_refresh))
         else:
-            logger.info('house_prices: skipping Zillow (HPI_INCLUDE_ZILLOW=0). '
-                        'Set the env var to 1 to enable Zillow on a >=1GB worker.')
+            logger.info('house_prices: Zillow disabled (HPI_INCLUDE_ZILLOW=0).')
 
         grouped = group_by_entity(rows)
         summaries = {k: summarize(v) for k, v in grouped.items()}
@@ -102,6 +113,47 @@ def _build_locked(include_zillow_zip: bool = False, force_refresh: bool = False)
     diagnostics.record_build_finish(error=err)
 
 
+def _save_persist():
+    try:
+        os.makedirs(Config.DATA_DIR, exist_ok=True)
+        tmp = _PERSIST_PATH + '.tmp'
+        with open(tmp, 'wb') as f:
+            pickle.dump({
+                'rows': _state['rows'],
+                'grouped': _state['grouped'],
+                'summaries': _state['summaries'],
+                'saved_at': time.time(),
+            }, f, protocol=pickle.HIGHEST_PROTOCOL)
+        os.replace(tmp, _PERSIST_PATH)
+        logger.info(f'house_prices: persisted state to {_PERSIST_PATH}')
+    except Exception as e:
+        logger.warning(f'house_prices: persist failed: {e}')
+
+
+def _try_load_persist() -> bool:
+    try:
+        if not os.path.exists(_PERSIST_PATH):
+            return False
+        age = time.time() - os.path.getmtime(_PERSIST_PATH)
+        if age > _PERSIST_MAX_AGE_S:
+            logger.info(f'house_prices: pickle is {age/3600:.1f}h old, ignoring')
+            return False
+        with open(_PERSIST_PATH, 'rb') as f:
+            data = pickle.load(f)
+        with _lock:
+            _state['rows'] = data['rows']
+            _state['grouped'] = data['grouped']
+            _state['summaries'] = data['summaries']
+            _state['build_error'] = None
+            _state['built_at'] = data.get('saved_at', time.time())
+        logger.info(f'house_prices: hot-loaded persisted state '
+                    f'({len(data["summaries"])} entities, {age:.0f}s old)')
+        return True
+    except Exception as e:
+        logger.warning(f'house_prices: persist load failed: {e}')
+        return False
+
+
 def _build_in_background(include_zillow_zip: bool = False):
     """Daemon-thread build so the first /level request returns fast.
 
@@ -112,6 +164,8 @@ def _build_in_background(include_zillow_zip: bool = False):
     def _run():
         try:
             _build_locked(include_zillow_zip=include_zillow_zip)
+            if _state.get('summaries'):
+                _save_persist()
         except Exception:
             logger.exception('house_prices background build died')
 
@@ -123,10 +177,13 @@ def _build_in_background(include_zillow_zip: bool = False):
 
 
 def ensure_built():
-    """Non-blocking. Kicks off a background build if not already running."""
+    """Non-blocking. Tries the disk pickle first (cheap), only kicks off
+    a background rebuild if that fails."""
     with _lock:
         if _state['summaries'] is not None or _state['build_error'] is not None:
             return
+    if _try_load_persist():
+        return
     _build_in_background()
 
 
