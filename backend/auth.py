@@ -57,6 +57,7 @@ def init_auth_db():
             verification_token TEXT,
             insurance_access BOOLEAN DEFAULT 0,
             macro_access BOOLEAN DEFAULT 0,
+            hpi_access BOOLEAN DEFAULT 0,
             last_login TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -67,6 +68,7 @@ def init_auth_db():
         ('verification_token', 'TEXT'),
         ('insurance_access', 'BOOLEAN DEFAULT 0'),
         ('macro_access', 'BOOLEAN DEFAULT 0'),
+        ('hpi_access', 'BOOLEAN DEFAULT 0'),
         ('last_login', 'TIMESTAMP'),
         ('reset_token', 'TEXT'),
     ]:
@@ -83,7 +85,7 @@ def init_auth_db():
 
 class User(UserMixin):
     def __init__(self, id, email, password_hash, email_verified=False,
-                 insurance_access=False, macro_access=False,
+                 insurance_access=False, macro_access=False, hpi_access=False,
                  last_login=None, created_at=None):
         self.id = id
         self.email = email
@@ -91,6 +93,7 @@ class User(UserMixin):
         self.email_verified = bool(email_verified)
         self.insurance_access = bool(insurance_access)
         self.macro_access = bool(macro_access)
+        self.hpi_access = bool(hpi_access)
         self.last_login = last_login
         self.created_at = created_at
 
@@ -104,6 +107,7 @@ class User(UserMixin):
             row['id'], row['email'], row['password_hash'],
             row['email_verified'], row['insurance_access'],
             row['macro_access'] if 'macro_access' in keys else False,
+            row['hpi_access'] if 'hpi_access' in keys else False,
             row['last_login'] if 'last_login' in keys else None,
             row['created_at'] if 'created_at' in keys else None,
         )
@@ -176,6 +180,13 @@ class User(UserMixin):
     def set_macro_access(user_id, access=True):
         conn = _get_db()
         conn.execute('UPDATE users SET macro_access = ? WHERE id = ?', (1 if access else 0, user_id))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def set_hpi_access(user_id, access=True):
+        conn = _get_db()
+        conn.execute('UPDATE users SET hpi_access = ? WHERE id = ?', (1 if access else 0, user_id))
         conn.commit()
         conn.close()
 
@@ -270,6 +281,14 @@ class User(UserMixin):
         if self.email == ADMIN_EMAIL:
             return True
         return bool(self.macro_access)
+
+    def has_hpi_access(self):
+        """Access to the US House Prices product. Admin and whitelisted users only."""
+        if not self.email_verified:
+            return False
+        if self.email == ADMIN_EMAIL:
+            return True
+        return bool(self.hpi_access)
 
 
 def user_loader(user_id):
@@ -515,6 +534,7 @@ def admin_dashboard():
         'verified': sum(1 for u in users if u.email_verified),
         'insurance': sum(1 for u in users if u.insurance_access or u.email.endswith('@aig.com')),
         'macro': sum(1 for u in users if u.has_macro_access()),
+        'hpi': sum(1 for u in users if u.has_hpi_access()),
         'aig': sum(1 for u in users if u.email.endswith('@aig.com')),
     }
     return render_template('admin.html', users=users, stats=stats, active_page='data')
@@ -543,6 +563,19 @@ def admin_toggle_macro(user_id):
         return jsonify({'error': 'User not found'}), 404
     User.set_macro_access(user_id, not user.macro_access)
     flash(f'Macro Model access {"granted to" if not user.macro_access else "revoked for"} {user.email}', 'success')
+    return redirect(url_for('auth.admin_dashboard'))
+
+
+@auth_bp.route('/admin/toggle-hpi/<int:user_id>', methods=['POST'])
+@login_required
+def admin_toggle_hpi(user_id):
+    if not _is_admin():
+        return jsonify({'error': 'Unauthorized'}), 403
+    user = User.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    User.set_hpi_access(user_id, not user.hpi_access)
+    flash(f'House Prices access {"granted to" if not user.hpi_access else "revoked for"} {user.email}', 'success')
     return redirect(url_for('auth.admin_dashboard'))
 
 
