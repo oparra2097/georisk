@@ -89,13 +89,18 @@ def _build_locked(start: str = '1980-01-01', force_refresh: bool = False):
 
 def _build_in_background(start: str = '1980-01-01'):
     """Run the build in a daemon thread so /fit and /forecast return fast
-    on the first hit instead of tripping Render's 30s request timeout."""
+    on the first hit instead of tripping Render's 30s request timeout.
+
+    CRITICAL: do NOT hold _lock during the actual build. The build takes
+    60+ seconds; if we held the lock the whole time, every concurrent
+    /status request would block on the lock and the dashboard would
+    hang on 'Checking model status…' the entire time.
+    """
     def _run():
         try:
-            with _lock:
-                if _state['simulator'] is not None:
-                    return
-                _build_locked(start=start)
+            # Build itself acquires _lock briefly inside _build_locked at the
+            # state-mutation points; see service._build_locked.
+            _build_locked(start=start)
         except Exception:
             logger.exception('macro_model.service: background build died')
 
