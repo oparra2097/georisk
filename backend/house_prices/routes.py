@@ -73,6 +73,44 @@ def get_diagnostics():
     return jsonify({'status': service.status(), 'diagnostics': service.get_diagnostics()})
 
 
+@house_prices_bp.route('/debug')
+@_hpi_gate
+def get_debug():
+    """One-stop diagnostic dump: env, pickle, last log lines, status."""
+    import os, time
+    from config import Config
+    from backend.log_capture import snapshot
+    from backend.house_prices.service import _PERSIST_PATH, INCLUDE_ZILLOW
+
+    fred_set = bool(getattr(Config, 'FRED_API_KEY', '') or os.environ.get('FRED_API_KEY', ''))
+
+    pickle_info = {'path': _PERSIST_PATH, 'exists': os.path.exists(_PERSIST_PATH)}
+    if pickle_info['exists']:
+        st = os.stat(_PERSIST_PATH)
+        pickle_info.update({
+            'size_mb': round(st.st_size / 1024 / 1024, 2),
+            'age_seconds': round(time.time() - st.st_mtime, 1),
+        })
+
+    return jsonify({
+        'product': 'house-prices',
+        'env': {
+            'FRED_API_KEY_set': fred_set,
+            'HPI_INCLUDE_ZILLOW': INCLUDE_ZILLOW,
+            'DATA_DIR': Config.DATA_DIR,
+            'data_dir_exists': os.path.isdir(Config.DATA_DIR),
+            'data_dir_writable': os.access(Config.DATA_DIR, os.W_OK) if os.path.isdir(Config.DATA_DIR) else False,
+        },
+        'pickle': pickle_info,
+        'status': service.status(),
+        'diagnostics': service.get_diagnostics(),
+        'logs_house_prices': snapshot('house_prices')[-100:],
+        'logs_zillow': snapshot('zillow')[-30:],
+        'logs_fhfa': snapshot('fhfa')[-30:],
+        'logs_warmup': snapshot('warmup')[-30:],
+    })
+
+
 @house_prices_bp.route('/sources')
 @_hpi_gate
 def get_sources():

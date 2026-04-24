@@ -5,6 +5,11 @@ from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
 from config import Config
 
+# Install the in-memory log ring buffer BEFORE anything else logs anything,
+# so the /debug endpoints can show the full warmup history.
+from backend.log_capture import install as _install_log_capture
+_install_log_capture()
+
 
 def _gated_page(check_access, active_page: str, reason: str):
     """Build a Flask decorator that gates a page on a User method.
