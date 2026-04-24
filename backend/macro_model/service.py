@@ -81,11 +81,14 @@ def _try_load_persist() -> bool:
     """Hot-load a previously-pickled build. Returns True on success."""
     try:
         if not os.path.exists(_PERSIST_PATH):
+            logger.info('macro_model.service: no pickle on disk, will build fresh')
             return False
         age = time.time() - os.path.getmtime(_PERSIST_PATH)
         if age > _PERSIST_MAX_AGE_S:
             logger.info(f'macro_model.service: pickle is {age/3600:.1f}h old, ignoring')
             return False
+        size_mb = os.path.getsize(_PERSIST_PATH) / 1024 / 1024
+        logger.info(f'macro_model.service: loading pickle ({size_mb:.1f}MB, {age:.0f}s old)…')
         with open(_PERSIST_PATH, 'rb') as f:
             data = pickle.load(f)
         with _lock:
@@ -98,10 +101,16 @@ def _try_load_persist() -> bool:
             _state['fit_error'] = None
             _state['built_at'] = data.get('saved_at', time.time())
         logger.info(f'macro_model.service: hot-loaded persisted state '
-                    f'({len(data["report"].fits)} equations, {age:.0f}s old)')
+                    f'({len(data["report"].fits)} equations)')
         return True
     except Exception as e:
         logger.warning(f'macro_model.service: persist load failed (will rebuild): {e}')
+        # Bad pickle — delete so we don't hit the same failure on every cold start.
+        try:
+            os.remove(_PERSIST_PATH)
+            logger.info(f'macro_model.service: removed broken pickle at {_PERSIST_PATH}')
+        except OSError:
+            pass
         return False
 
 
