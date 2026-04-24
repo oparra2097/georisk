@@ -2706,6 +2706,14 @@
         let tierOpts = '<option value="all">All Tiers</option>' +
             TIER_ORDER.map(t => `<option value="${t}">${t}</option>`).join('');
 
+        const methodologyNote = data.methodology_note
+            ? `<div class="sd-methodology-notice" role="note">
+                   <strong>Scope:</strong> Emerging &amp; frontier markets only.
+                   Advanced-economy coverage is under methodology review and
+                   temporarily suppressed.
+               </div>`
+            : '';
+
         panel.innerHTML = `
             <div class="sd-header">
                 <div class="sd-title-row">
@@ -2719,6 +2727,7 @@
                         Export
                     </a>
                 </div>
+                ${methodologyNote}
                 <div class="sd-summary">
                     <span class="sd-stat">${summary.total_countries || 0} countries</span>
                     <span class="sd-stat">Avg official: ${summary.avg_official || '—'}%</span>

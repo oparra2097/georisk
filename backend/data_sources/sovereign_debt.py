@@ -4,12 +4,33 @@ Sovereign Debt Indicator data source.
 Primary: loads pre-baked JSON from static/data/sovereign_debt.json
          (committed to repo, deployed with the app).
 Fallback: reads Parquet from the sovereign_debt pipeline if available.
+
+Scope note: advanced-economy coverage is suppressed pending methodology
+review. The BIS-consolidated-claims adjustment used in the upstream
+pipeline miscategorises G-SIB counterparty intermediation as sovereign
+liability for AEs, producing indefensible gaps. Only EM/frontier
+countries are served until the AE branch is rebuilt bottom-up against
+Eurostat supplementary tables and IMF Article IV contingent liabilities.
 """
 
 import os
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
+
+# IMF WEO Advanced Economies (2024 classification) — suppressed from output
+# while AE methodology is under review.
+ADVANCED_ECONOMIES_ISO3 = frozenset({
+    "AND", "AUS", "AUT", "BEL", "CAN", "CHE", "CYP", "CZE", "DEU", "DNK",
+    "ESP", "EST", "FIN", "FRA", "GBR", "GRC", "HKG", "IRL", "ISL", "ISR",
+    "ITA", "JPN", "KOR", "LTU", "LUX", "LVA", "MAC", "MLT", "NLD", "NOR",
+    "NZL", "PRI", "PRT", "SGP", "SMR", "SVK", "SVN", "SWE", "TWN", "USA",
+})
+
+METHODOLOGY_NOTE = (
+    "Advanced economies (IMF WEO classification) are excluded pending "
+    "methodology review. Coverage is limited to emerging and frontier markets."
+)
 
 # ── Static JSON (always works — deployed with the app) ───────────────────
 _STATIC_JSON = Path(__file__).resolve().parent.parent.parent / "static" / "data" / "sovereign_debt.json"
@@ -53,6 +74,7 @@ def get_sovereign_debt_data():
             with open(_STATIC_JSON) as f:
                 result = json.load(f)
             if result.get("countries"):
+                result = _apply_ae_suppression(result)
                 _CACHE = result
                 _CACHE_TIME = datetime.now()
                 return result
@@ -62,6 +84,7 @@ def get_sovereign_debt_data():
     # Strategy 2: Load from Parquet (local dev with sovereign_debt pipeline)
     result = _try_load_parquet()
     if result:
+        result = _apply_ae_suppression(result)
         _CACHE = result
         _CACHE_TIME = datetime.now()
         return result
@@ -70,6 +93,46 @@ def get_sovereign_debt_data():
         "error": "Sovereign debt data not found.",
         "countries": {},
         "summary": {},
+    }
+
+
+def _apply_ae_suppression(result):
+    """
+    Strip advanced-economy entries and recompute summary on the EM/frontier
+    subset. Keeps upstream data file intact so coverage can be re-enabled
+    once the AE methodology is rebuilt.
+    """
+    countries = result.get("countries") or {}
+    filtered = {iso3: c for iso3, c in countries.items()
+                if iso3 not in ADVANCED_ECONOMIES_ISO3}
+
+    def _avg(field, decimals=1):
+        vals = [c.get(field) for c in filtered.values()
+                if c.get(field) is not None]
+        return round(sum(vals) / len(vals), decimals) if vals else None
+
+    tier_counts = {}
+    for tier in ("Critical", "High", "Elevated", "Moderate", "Low"):
+        tier_counts[tier] = sum(1 for c in filtered.values()
+                                if c.get("risk_tier") == tier)
+
+    summary = {
+        "total_countries": len(filtered),
+        "avg_official": _avg("official_debt_gdp"),
+        "avg_estimated": _avg("estimated_debt_gdp"),
+        "avg_gap": _avg("debt_gap_pp"),
+        "tier_counts": tier_counts,
+        "avg_short_term_pct": _avg("short_term_pct"),
+        "avg_debt_service_pct": _avg("debt_service_pct_exports"),
+        "avg_definition_gap": _avg("definition_gap_pp"),
+    }
+
+    return {
+        **result,
+        "countries": filtered,
+        "summary": summary,
+        "methodology_note": METHODOLOGY_NOTE,
+        "scope": "em_frontier",
     }
 
 

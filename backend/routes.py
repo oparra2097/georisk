@@ -1931,7 +1931,9 @@ def export_sovereign_debt_excel():
     # Title
     ws.cell(row=1, column=1, value='ParraMacro Sovereign Debt Indicator')
     ws.cell(row=1, column=1).font = Font(bold=True, size=14, color='1F3864')
-    ws.cell(row=2, column=1, value='Estimated Actual Debt Including Shadow/Hidden Components')
+    ws.cell(row=2, column=1,
+            value='Estimated Actual Debt Including Shadow/Hidden Components — '
+                  'Emerging & Frontier Markets (Advanced-economy coverage under methodology review)')
     ws.cell(row=2, column=1).font = Font(italic=True, size=10, color='6B7280')
     summary = data.get('summary', {})
     ws.cell(row=3, column=1,

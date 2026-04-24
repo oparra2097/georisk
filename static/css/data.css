@@ -808,6 +808,22 @@ th.col-actual {
     text-decoration: none;
 }
 
+.sd-methodology-notice {
+    margin: 8px 0 12px;
+    padding: 8px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: #fde68a;
+    background: rgba(180, 83, 9, 0.12);
+    border: 1px solid rgba(217, 119, 6, 0.45);
+    border-left: 3px solid #d97706;
+    border-radius: 4px;
+}
+.sd-methodology-notice strong {
+    color: #fcd34d;
+    font-weight: 600;
+}
+
 .sd-summary {
     display: flex;
     gap: 16px;
