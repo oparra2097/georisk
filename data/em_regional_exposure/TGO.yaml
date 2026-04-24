@@ -1,3 +1,10 @@
+# Togo — WAEMU Regional Bank Exposure (v1.4 live-pull update)
+#
+# Togo First published per-country breakdown of Togolese domestic
+# debt holdings — one of the rare cases where the cross-border
+# matrix is actually disclosed. Cross-border share now has
+# inferred_article_iv grounding.
+
 iso3: TGO
 name: Togo
 monetary_union: WAEMU
@@ -7,41 +14,50 @@ gdp_usd_bn: 9.8
 
 titres_publics_stock_local_bn: null
 titres_publics_stock_usd_bn: 4.0
-titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × Togo share ~10% (AUT) — TGO is disproportionately active at AUT relative to GDP"
-titres_publics_url: "https://umoatitres.org/statistiques/"
-titres_publics_date: 2023-12-31
+titres_publics_source: "AUT aggregate allocation — primary 403-blocked"
+titres_publics_url: "https://www.umoatitres.org/en/bulletins-des-statistiques/"
+titres_publics_date: null
 
 banking_system_claims_on_govt_local_bn: null
-banking_system_claims_source: "BCEAO — to be pulled"
-banking_system_claims_url: "https://www.bceao.int/"
-banking_system_claims_date: null
+banking_system_claims_source: |
+  BCEAO Bulletin Mensuel — 403. IMF CR 24/299 discloses 61.9%
+  of Togo total debt is domestic at end-2023.
+banking_system_claims_url: "https://www.imf.org/-/media/files/publications/cr/2024/english/1tgoea2024001-print-pdf.pdf"
+banking_system_claims_date: 2023-12-31
 
-cross_border_share: 0.50
-cross_border_share_method: order_of_magnitude
+cross_border_share: 0.48
+cross_border_share_method: inferred_article_iv
 cross_border_share_source: |
-  MAJOR CAVEAT: Lomé hosts Ecobank Transnational and Oragroup
-  consolidated HQs. Their balance sheets aggregate pan-regional
-  sovereign holdings under a "domestic" classification, blurring
-  the domestic/regional line. Published cross-border share would
-  under-state true regional exposure due to this HQ effect. Needs
-  bespoke treatment.
-cross_border_share_url: "https://www.imf.org/en/Countries/TGO"
+  Togo First Jan-Sep 2024 breakdown of Togo domestic debt holdings:
+    Togolese investors:  22.8%
+    Ivorian investors:   24.8%
+    Senegalese investors: 22.7%
+    Other WAEMU / non-resident: 29.7%
+  → 77.2% of DOMESTIC debt held outside Togo.
+  Applied to total debt: 0.619 domestic × 0.772 non-Togolese = 0.478
+  cross-border share of total debt. Rounded 0.48.
+cross_border_share_url: "https://www.togofirst.com/en/investments/1611-15202-waemu-market-ivorian-investors-lead-togolese-domestic-debt-holdings"
 
-regional_bank_exposure_usd_bn: 2.0
-regional_bank_exposure_pct_gdp: 20.4
+regional_bank_exposure_usd_bn: 1.92           # 4.0 × 0.48
+regional_bank_exposure_pct_gdp: 19.6
 
 include_in_shadow: true
 loss_given_default: 1.0
 double_count_check: |
-  Regional titres are separate from external debt (IDS). HQ effect for
-  Ecobank/Oragroup may need an adjustment that also considers
-  aggregated book exposures held by those HQ entities.
+  CRITICAL CAVEAT: Lomé hosts Ecobank Transnational and Oragroup
+  consolidated HQs. Ecobank SN / CI / BJ subsidiaries' sovereign
+  books roll up to Lomé consolidation. The "22.8% Togolese" share
+  in the Togo First data may over-state true Togolese-resident
+  exposure because of this HQ consolidation. Handle with caution.
 
 notes: |
-  HIGH-IMPACT case: 20% of GDP is a material shadow adjustment on the
-  order-of-magnitude estimate. Needs bespoke work — the Lomé HQ effect
-  means a simple "cross-border share" is misleading. Track carefully.
+  HIGH-IMPACT case: 19.6% of GDP is a material shadow adjustment.
+  Cross-border share is the best-grounded of all 8 WAEMU countries
+  thanks to Togo First's per-investor-country breakdown. Stock
+  figure remains the gap. Lomé HQ effect requires bespoke
+  treatment — consolidated parent books conflate jurisdictions.
 
-_status: skeleton_pending_source_data
-_ready_blocker: "HQ-effect complication — even with BCEAO data, need to handle Ecobank/Oragroup aggregation specially"
+_status: skeleton_pending_stock_data
+_ready_blocker: "titres_publics_stock_local_bn null; also Lomé HQ effect needs bespoke handling"
+_fetch_status: primary_sources_403_in_sandbox_secondary_sourced
 _agent_research_date: 2026-04-24

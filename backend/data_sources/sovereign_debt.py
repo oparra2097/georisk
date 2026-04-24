@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from .benchmarks import reconcile as _reconcile_benchmark
 from .em_regional_exposure import apply_regional_exposure as _apply_regional_exposure
 
-METHODOLOGY_VERSION = "v1.3-em-regional-exposure"
+METHODOLOGY_VERSION = "v1.4-em-regional-exposure-waemu-sen-graduated"
 
 # IMF WEO Advanced Economies (2024 classification) — suppressed from output
 # while AE methodology is under review.

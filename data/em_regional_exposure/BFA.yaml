@@ -1,3 +1,5 @@
+# Burkina Faso — WAEMU Regional Bank Exposure (v1.4 live-pull update)
+
 iso3: BFA
 name: Burkina Faso
 monetary_union: WAEMU
@@ -5,35 +7,46 @@ currency: XOF
 as_of: 2024-12-31
 gdp_usd_bn: 23.1
 
-titres_publics_stock_local_bn: null
-titres_publics_stock_usd_bn: 4.0
-titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × BFA share ~10% (AUT)"
-titres_publics_url: "https://umoatitres.org/statistiques/"
-titres_publics_date: 2023-12-31
+titres_publics_stock_local_bn: 2892.0
+titres_publics_stock_usd_bn: 4.82
+titres_publics_source: |
+  UMOA-Titres snippet via agenceecofin. Primary AUT bulletin
+  403-blocked in sandbox.
+titres_publics_url: "https://www.umoatitres.org/en/bulletins-des-statistiques/"
+titres_publics_date: 2024-12-31
 
 banking_system_claims_on_govt_local_bn: null
-banking_system_claims_source: "BCEAO — to be pulled"
-banking_system_claims_url: "https://www.bceao.int/"
-banking_system_claims_date: null
+banking_system_claims_source: |
+  IMF CR 25/81 Burkina Faso Article IV (via snippet): banks'
+  public-sector exposure 18% of assets at June 2024 — below WAEMU
+  average of 21%.
+banking_system_claims_url: "https://www.imf.org/-/media/files/publications/cr/2024/english/1bfaea2024001-print-pdf.pdf"
+banking_system_claims_date: 2024-06-30
 
 cross_border_share: 0.50
 cross_border_share_method: order_of_magnitude
-cross_border_share_source: "Qualitative — smaller domestic banking system relative to issuance needs; IMF Article IV characterises Burkinabè paper as regionally placed."
-cross_border_share_url: "https://www.imf.org/en/Countries/BFA"
+cross_border_share_source: |
+  IMF CR 24/249 BFA Art IV: "Heightened uncertainty over the medium
+  term may make regional banks reluctant to purchase new government
+  securities and/or roll over existing debt." Qualitative evidence
+  of regional holding pattern but no specific % in surfaced material.
+cross_border_share_url: "https://www.imf.org/-/media/files/publications/cr/2024/english/1bfaea2024001-print-pdf.pdf"
 
-regional_bank_exposure_usd_bn: 2.0
-regional_bank_exposure_pct_gdp: 8.7
+regional_bank_exposure_usd_bn: 2.41           # 4.82 × 0.50
+regional_bank_exposure_pct_gdp: 10.4
 
 include_in_shadow: true
 loss_given_default: 1.0
 double_count_check: |
-  Minimal Eurobond activity; external debt captured elsewhere. Regional
-  titres are distinct XOF paper.
+  Minimal Eurobond; external debt via IDS is multilateral + bilateral.
+  Regional XOF titres distinct.
 
 notes: |
-  Security-related fiscal pressure has increased issuance volume. AES-
-  bloc political risk applies.
+  CR 24/249 (July 2024): total debt 55.6% GDP end-2023. AES-bloc
+  political risk. Stock populated; cross-border share still
+  order_of_magnitude pending BCEAO disclosure or AUT breakdown.
 
-_status: skeleton_pending_source_data
+_status: skeleton_pending_cross_border_share
 _ready_blocker: "cross_border_share_method=order_of_magnitude"
+_fetch_status: primary_sources_403_in_sandbox_secondary_sourced
 _agent_research_date: 2026-04-24

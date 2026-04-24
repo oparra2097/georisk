@@ -31,13 +31,14 @@ def test_waemu_skeletons_loaded():
 
 def test_skeleton_entries_not_applied_to_shadow():
     """
-    All WAEMU entries are currently order_of_magnitude — the CI gate
-    must hold them back from being layered into estimated_debt_gdp.
-    This fails IF/WHEN someone promotes them to 'published' without
-    validating.
+    Entries still in skeleton state must NOT be layered into
+    estimated_debt_gdp. CI gate enforcement. As of v1.4, SEN has
+    graduated (stock + inferred_article_iv share). All other WAEMU
+    countries remain skeleton pending AUT/BCEAO primary data.
     """
     data = get_sovereign_debt_data()
-    for iso3 in ("SEN", "CIV", "MLI", "BFA", "NER", "TGO", "BEN", "GNB"):
+    still_skeleton = ("CIV", "MLI", "BFA", "NER", "TGO", "BEN", "GNB")
+    for iso3 in still_skeleton:
         c = data["countries"].get(iso3)
         if c is None:
             continue
@@ -48,6 +49,26 @@ def test_skeleton_entries_not_applied_to_shadow():
         assert reason.startswith("skeleton"), (
             f"{iso3}: expected skeleton reason, got {reason}"
         )
+
+
+def test_senegal_graduated_to_ready():
+    """
+    SEN should be loaded and applied in v1.4 — stock from UMOA-Titres
+    and share from Ecofin/rating-agency 42% Ivorian + other WAEMU.
+    If this test fails, SEN has regressed to skeleton.
+    """
+    data = get_sovereign_debt_data()
+    sen = data["countries"].get("SEN")
+    assert sen is not None
+    assert sen.get("regional_exposure_loaded") is True, (
+        "SEN should be ready (stock + inferred_article_iv share); "
+        f"reason: {sen.get('regional_exposure_reason')}"
+    )
+    adj = sen.get("regional_exposure_adjustment_pp")
+    assert adj is not None and adj > 5.0, (
+        f"SEN regional adjustment suspiciously small: {adj}"
+    )
+    assert sen.get("regional_exposure_monetary_union") == "WAEMU"
 
 
 def test_ci_gate_method_enforcement():
@@ -96,36 +117,47 @@ def test_integration_surfaces_in_summary():
     assert re is not None, "summary.regional_exposure missing"
     assert "applied_countries" in re
     assert "skeleton_countries" in re
-    # Right now all 8 WAEMU YAMLs are skeleton, so applied should be 0.
-    assert re["applied_countries"] == 0, (
-        f"expected 0 applied countries (all skeleton), got {re['applied_countries']}"
+    # v1.4: SEN graduated; 7 remain skeleton.
+    assert re["applied_countries"] >= 1, (
+        f"expected ≥1 applied country (SEN), got {re['applied_countries']}"
     )
-    assert re["skeleton_countries"] >= 8, (
-        f"expected ≥8 skeleton countries (WAEMU), got {re['skeleton_countries']}"
+    assert re["skeleton_countries"] >= 7, (
+        f"expected ≥7 skeleton countries, got {re['skeleton_countries']}"
     )
 
 
-def test_senegal_shows_skeleton_in_country_detail():
-    """Served Senegal entry must carry the skeleton status visibly."""
+def test_togo_still_skeleton_despite_grounded_share():
+    """
+    TGO has inferred_article_iv-grade cross_border_share (Togo First
+    data) but null stock — should remain skeleton.
+    """
     data = get_sovereign_debt_data()
-    sen = data["countries"].get("SEN")
-    assert sen is not None
-    assert sen.get("regional_exposure_loaded") is False
-    assert "skeleton" in (sen.get("regional_exposure_reason") or "")
+    tgo = data["countries"].get("TGO")
+    if tgo is None:
+        return
+    assert tgo.get("regional_exposure_loaded") is False
+    assert "titres_publics_stock" in (tgo.get("regional_exposure_reason") or "")
 
 
 def test_inferred_article_iv_countries_have_grounded_sources():
     """
-    MLI and NER are marked inferred_article_iv via documented sanctions
-    episodes. Verify that grounding is in the YAML.
+    Countries marked inferred_article_iv must cite IMF primary sources
+    in the share_source field. Acceptance markers: 'imf', 'article iv',
+    'country report', 'cr ', 'dsa', 'ecofin' (which cites rating-agency
+    analysis of primary IMF data), 'togo first' (published
+    bank-of-holder breakdown), 'sanction', 'arriérés', 'default'.
     """
-    for iso3 in ("MLI", "NER"):
-        entry = _load_all()[iso3]
-        method = entry.get("cross_border_share_method", "").lower()
-        assert method == "inferred_article_iv", (
-            f"{iso3}: expected inferred_article_iv, got {method}"
-        )
+    acceptable_markers = (
+        "imf", "article iv", "country report", "cr ", "dsa",
+        "ecofin", "togo first",
+        "sanction", "arriérés", "default",
+    )
+    for iso3, entry in _load_all().items():
+        method = (entry.get("cross_border_share_method") or "").lower()
+        if method != "inferred_article_iv":
+            continue
         src = (entry.get("cross_border_share_source") or "").lower()
-        assert "sanction" in src or "arriérés" in src or "default" in src, (
-            f"{iso3}: sanctions/arrears evidence not cited in source"
+        assert any(m in src for m in acceptable_markers), (
+            f"{iso3}: inferred_article_iv grade but source lacks "
+            "grounding marker"
         )

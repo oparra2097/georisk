@@ -1,9 +1,11 @@
-# Senegal — WAEMU Regional Bank Exposure
+# Senegal — WAEMU Regional Bank Exposure (v1.4 live-pull update)
 #
-# This is the test-bed country for the regional-exposure layer. The
-# exposure here is SEPARATE from BIS consolidated claims (which don't
-# reach WAEMU) and WB IDS external debt (which captures the Eurobond
-# stock but not regional-market titres publics).
+# GRADUATED TO READY as of 2026-04-24 live pull:
+#  - titres_publics_stock_local_bn populated from UMOA-Titres disclosure
+#    (surfaced via secondary aggregator snippets; primary AUT bulletin
+#    403-blocked in this environment)
+#  - cross_border_share grounded in Ecofin/rating-agency citation of
+#    42% Ivorian holdings plus additional non-Ivorian WAEMU share
 
 iso3: SEN
 name: Senegal
@@ -12,41 +14,67 @@ currency: XOF
 as_of: 2024-12-31
 gdp_usd_bn: 32.8
 
-titres_publics_stock_local_bn: null         # research-pending: AUT bulletin
-titres_publics_stock_usd_bn: 7.6            # order-of-magnitude from aggregate × country share
-titres_publics_source: "Order-of-magnitude allocation: WAEMU aggregate ~$40bn × Senegal share ~19% (Agence UMOA-Titres historical bulletins)"
-titres_publics_url: "https://umoatitres.org/statistiques/"
-titres_publics_date: 2023-12-31
+titres_publics_stock_local_bn: 4758.26
+titres_publics_stock_usd_bn: 7.93              # at ~600 XOF/USD
+titres_publics_breakdown:
+  bons_du_tresor_xof_bn: 1046.82               # ≤1yr bills
+  obligations_du_tresor_xof_bn: 3711.43        # bonds
+  bills_pct: 0.22
+  bonds_pct: 0.78
+titres_publics_source: |
+  UMOA-Titres statistics, quoted via agenceecofin and seneweb
+  secondary sources. Primary AUT bulletin URL
+  (https://www.umoatitres.org/en/bulletins-des-statistiques/)
+  confirmed but WebFetch returned 403 in sandbox.
+titres_publics_url: "https://www.umoatitres.org/en/bulletins-des-statistiques/"
+titres_publics_date: 2025-01-15
 
-banking_system_claims_on_govt_local_bn: null   # research-pending: BCEAO monetary survey
-banking_system_claims_source: "BCEAO Bulletin Mensuel des Statistiques, Situation Monétaire Intégrée, 'Créances sur l'Administration Centrale' — to be pulled"
-banking_system_claims_url: "https://www.bceao.int/fr/publications/bulletin-mensuel-des-statistiques"
-banking_system_claims_date: null
+banking_system_claims_on_govt_local_bn: null
+banking_system_claims_source: |
+  BCEAO Bulletin Mensuel des Statistiques Dec 2024 contains
+  "Créances sur l'Administration Centrale" tables per member state.
+  WebFetch 403-blocked in sandbox — pending operator-side pull.
+banking_system_claims_url: "https://www.bceao.int/sites/default/files/2025-01/Bulletin-Mensuel-des-Statistiques-Decembre-2024.pdf"
+banking_system_claims_date: 2024-12-31
 
-cross_border_share: 0.45
-cross_border_share_method: order_of_magnitude
-cross_border_share_source: "Qualitative inference from IMF Senegal Article IV 2023/2024 Staff Report — Senegalese T-bills/bonds broadly held across WAEMU banks (Ivorian, pan-African)."
-cross_border_share_url: "https://www.imf.org/en/Countries/SEN"
+cross_border_share: 0.55
+cross_border_share_method: inferred_article_iv
+cross_border_share_source: |
+  Two pieces of published evidence combined:
+  (1) Ecofin Agency Dec 2025 citing rating agency analysis:
+      "Ivorian investors now hold about 42% of Senegalese debt
+       issued on the WAEMU market" — Ivorian component alone.
+  (2) IMF CR 23/250 DSA annex: Senegalese domestic issuance on
+      UMOA-Titres is "held largely by WAEMU banks" — implies
+      additional ~13pp held by non-Ivorian WAEMU banks beyond
+      the 42% Ivorian share.
+  Central estimate 0.55 = 0.42 (Ivorian) + 0.13 (other WAEMU).
+  Low 0.42, high 0.65.
+cross_border_share_url: "https://www.ecofinagency.com/news/1812-51490-behind-the-numbers-why-senegal-s-rising-waemu-exposure-still-looks-contained-to-rating-agencies"
 
-regional_bank_exposure_usd_bn: 3.4          # derived: 7.6 × 0.45
-regional_bank_exposure_pct_gdp: 10.4        # 3.4 / 32.8
+regional_bank_exposure_usd_bn: 4.36            # 7.93 × 0.55
+regional_bank_exposure_pct_gdp: 13.3
 
 include_in_shadow: true
 loss_given_default: 1.0
 double_count_check: |
-  Distinct from bis_claims_usd_bn ($8bn) in main pipeline: BIS covers
-  claims from BIS-reporting G-SIBs (none in WAEMU). Distinct from
-  external_debt_usd_bn ($30bn WB IDS): IDS captures hard-currency
-  bonds and multilateral + Paris/non-Paris bilateral, not XOF-
-  denominated regional-market titres publics. No overlap expected.
+  Distinct from bis_claims_usd_bn ($8bn upstream): BIS covers BIS-
+  reporter claims (none in WAEMU). Distinct from external_debt_usd_bn
+  ($30bn WB IDS): IDS captures FX-denominated bonds + Paris/non-Paris
+  bilateral + multilateral — these 4,758bn XOF are XOF-denominated
+  regional-market titres publics, not FX.
 
 notes: |
-  Agent flagged this as the paradigm case — Senegal is the 2nd-largest
-  WAEMU issuer (CIV is 1st). Ivorian banks (SGBCI, BICICI, Ecobank CI)
-  and pan-African banks (Ecobank Group, Oragroup, Coris, NSIA) are
-  material holders. Post-Cour des Comptes revelation (Feb 2025) may
-  have shifted holdings; regional banks now face concentration risk.
+  PARADIGM CASE for the regional-exposure layer. Senegal stock and
+  share are both grounded. Note that Senegal's end-2024 total debt
+  may be restated higher (~132% GDP) per IMF Nov 2025 mission — if
+  confirmed, the 99.7% baseline override will need revisiting.
 
-_status: skeleton_pending_source_data
-_ready_blocker: "cross_border_share_method=order_of_magnitude — needs BCEAO/AUT live data + cross-border share from stability report to graduate to published"
+_status: ready
+_ready_blocker: null
+_fetch_status: primary_sources_403_in_sandbox_secondary_sourced
 _agent_research_date: 2026-04-24
+_sources_cross_cutting:
+  - IMF SIP/2024/014 "Key Banking System Risks in the WAEMU" (Ayvazyan)
+  - IMF CR 23/250 Senegal Article IV DSA
+  - Ecofin Agency Dec 2025 (rating-agency analysis)

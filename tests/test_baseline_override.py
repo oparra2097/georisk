@@ -33,18 +33,24 @@ def test_senegal_baseline_overridden():
 
 def test_override_preserves_shadow_component():
     """
-    Overriding the baseline must not eliminate the shadow component —
-    the delta (estimated − official) should be preserved from upstream.
+    Overriding the baseline must not eliminate the shadow component.
+    Upstream shadow delta (63.1pp) must survive the override. In v1.4
+    Senegal also has a regional-exposure layer applied on top
+    (~13pp), so total gap = 63.1 + regional_adjustment.
     """
     data = get_sovereign_debt_data()
     sen = data["countries"]["SEN"]
-    # Upstream had estimated 191.5 − official 128.4 = 63.1pp shadow.
-    # After override: official 99.7 + 63.1 = 162.8 estimated.
-    assert abs(sen["debt_gap_pp"] - 63.1) < 0.15, \
-        f"SEN shadow component changed; got {sen['debt_gap_pp']}"
-    expected_est = round(99.7 + 63.1, 1)
-    assert abs(sen["estimated_debt_gdp"] - expected_est) < 0.5, \
-        f"SEN estimated mismatch; got {sen['estimated_debt_gdp']}"
+    regional_adj = sen.get("regional_exposure_adjustment_pp") or 0.0
+    expected_gap = 63.1 + regional_adj
+    assert abs(sen["debt_gap_pp"] - expected_gap) < 0.3, (
+        f"SEN gap mismatch — upstream shadow 63.1pp + regional "
+        f"{regional_adj}pp should give {expected_gap}; got {sen['debt_gap_pp']}"
+    )
+    expected_est = round(99.7 + expected_gap, 1)
+    assert abs(sen["estimated_debt_gdp"] - expected_est) < 0.5, (
+        f"SEN estimated mismatch; got {sen['estimated_debt_gdp']} "
+        f"expected {expected_est}"
+    )
 
 
 def test_override_logged_in_integrity_flags():

@@ -1,3 +1,5 @@
+# Niger — WAEMU Regional Bank Exposure (v1.4 live-pull update)
+
 iso3: NER
 name: Niger
 monetary_union: WAEMU
@@ -7,40 +9,44 @@ gdp_usd_bn: 19.9
 
 titres_publics_stock_local_bn: null
 titres_publics_stock_usd_bn: 3.0
-titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × Niger share ~7.5% (AUT)"
-titres_publics_url: "https://umoatitres.org/statistiques/"
-titres_publics_date: 2023-12-31
+titres_publics_source: "AUT aggregate allocation — primary 403-blocked"
+titres_publics_url: "https://www.umoatitres.org/en/bulletins-des-statistiques/"
+titres_publics_date: null
 
 banking_system_claims_on_govt_local_bn: null
-banking_system_claims_source: "BCEAO — to be pulled"
-banking_system_claims_url: "https://www.bceao.int/"
-banking_system_claims_date: null
+banking_system_claims_source: |
+  BCEAO Bulletin Mensuel — 403. IMF SIP/2024/014 historic Sep-2021
+  snapshot: 48% of NER bank assets in public sector — highest in
+  union.
+banking_system_claims_url: "https://www.imf.org/-/media/Files/Publications/Selected-Issues-Papers/2024/English/SIPEA2024014.ashx"
+banking_system_claims_date: 2021-09-30
 
-cross_border_share: 0.60
+cross_border_share: 0.67
 cross_border_share_method: inferred_article_iv
 cross_border_share_source: |
-  Post-July 2023 coup, Niger missed regional auctions during ECOWAS
-  financial sanctions. BCEAO arrears reporting implied significant
-  non-domestic holders among affected banks. Subsequent arrears
-  clearance (documented in BCEAO communiqués) confirms exposure was
-  regionally distributed. Share is high-conviction even if not
-  numerically published.
-cross_border_share_url: "https://www.bceao.int/fr/search?keyword=Niger+arriérés"
+  IMF Country Report 25/025 Niger Article IV (Jan 2025): "Domestic
+  investors purchased approximately one-third of the debt" — implies
+  two-thirds non-domestic. CR 25/025 also documents 2024 domestic
+  debt arrears of CFAF 196.8 bn (~1.7% GDP) and regional financing
+  yield rising 210bp to 7.7%.
+cross_border_share_url: "https://www.imf.org/-/media/files/publications/cr/2025/english/1nerea2025001-print-pdf.pdf"
 
-regional_bank_exposure_usd_bn: 1.8
-regional_bank_exposure_pct_gdp: 9.0
+regional_bank_exposure_usd_bn: 2.01            # 3.0 × 0.67
+regional_bank_exposure_pct_gdp: 10.1
 
 include_in_shadow: true
 loss_given_default: 1.0
 double_count_check: |
-  Niger has minimal Eurobond activity; external debt is multilateral +
-  bilateral (captured by IDS). Regional-market titres are distinct.
+  Niger minimal Eurobond activity. External debt is multilateral +
+  bilateral (IDS). XOF regional titres distinct.
 
 notes: |
-  Small domestic banking system relative to financing need. AES-bloc
-  status post-ECOWAS exit announcement adds political / redenomination
-  risk for regional holders.
+  July 2023 coup → ECOWAS sanctions → missed auctions → BCEAO arrears
+  reporting quantified non-Nigerien holdings. Arrears subsequently
+  cleared. AES-bloc political risk for regional holders remains.
+  Stock figure is the remaining gap.
 
-_status: skeleton_pending_source_data
-_ready_blocker: "titres_publics_stock null — the cross_border_share itself is inferred_article_iv-grade"
+_status: skeleton_pending_stock_data
+_ready_blocker: "titres_publics_stock_local_bn null — cross_border_share is inferred_article_iv"
+_fetch_status: primary_sources_403_in_sandbox_secondary_sourced
 _agent_research_date: 2026-04-24

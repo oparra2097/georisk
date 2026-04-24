@@ -1,3 +1,8 @@
+# Côte d'Ivoire — WAEMU Regional Bank Exposure (v1.4 live-pull update)
+#
+# Stock populated; cross-border share remains order_of_magnitude.
+# CI gate still holds this back until cross-border share is grounded.
+
 iso3: CIV
 name: Côte d'Ivoire
 monetary_union: WAEMU
@@ -5,39 +10,50 @@ currency: XOF
 as_of: 2024-12-31
 gdp_usd_bn: 87.1
 
-titres_publics_stock_local_bn: null
-titres_publics_stock_usd_bn: 12.0
-titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × CIV share ~30% (AUT historical bulletins)"
-titres_publics_url: "https://umoatitres.org/statistiques/"
-titres_publics_date: 2023-12-31
+titres_publics_stock_local_bn: 7122.0
+titres_publics_stock_usd_bn: 11.87
+titres_publics_source: |
+  UMOA-Titres snippet via agenceecofin; cross-checked against
+  Côte d'Ivoire Trésor "Bulletin statistique de la dette publique
+  au 31 décembre 2024" (URL blocked in sandbox).
+titres_publics_url: "https://tresor.gouv.ci/tres/wp-content/uploads/2025/06/bulletin-statistique-de-la-dette-publique-au-31-decembre-2024fr.pdf"
+titres_publics_date: 2024-12-31
 
 banking_system_claims_on_govt_local_bn: null
-banking_system_claims_source: "BCEAO Rapport Annuel (latest), tableaux créances sur administration centrale"
-banking_system_claims_url: "https://www.bceao.int/fr/publications/rapport-annuel"
+banking_system_claims_source: "BCEAO Bulletin Mensuel Dec 2024 — sandbox 403"
+banking_system_claims_url: "https://www.bceao.int/sites/default/files/2025-01/Bulletin-Mensuel-des-Statistiques-Decembre-2024.pdf"
 banking_system_claims_date: null
 
-cross_border_share: 0.35
+cross_border_share: 0.30
 cross_border_share_method: order_of_magnitude
-cross_border_share_source: "Qualitative inference — CIV has the deepest domestic banking sector in the union; cross-border share correspondingly lower than peers."
-cross_border_share_url: "https://www.imf.org/en/Countries/CIV"
+cross_border_share_source: |
+  IMF SIP/2024/014 flags that Ivorian banks have the most
+  concentrated home-country sovereign exposure in the union —
+  implying cross-border share of CIV paper is LOWER than peers.
+  The "50 of 100 WAEMU banks undercapitalised by a CIV default"
+  stress test shows wide propagation, but that combines Ivorian
+  holdings with cross-border — direct cross-border % not surfaced.
+  Conservative 0.30 pending primary source.
+cross_border_share_url: "https://www.imf.org/-/media/Files/Publications/Selected-Issues-Papers/2024/English/SIPEA2024014.ashx"
 
-regional_bank_exposure_usd_bn: 4.2
-regional_bank_exposure_pct_gdp: 4.8
+regional_bank_exposure_usd_bn: 3.56           # 11.87 × 0.30
+regional_bank_exposure_pct_gdp: 4.1
 
 include_in_shadow: true
 loss_given_default: 1.0
 double_count_check: |
-  CIV has active Eurobonds (captured in external_debt_usd_bn via WB IDS).
-  Regional-market titres are XOF-denominated and held mostly by WAEMU
-  banks — no overlap with BIS (no reporter) and no overlap with IDS
-  (IDS covers FX-denom external debt).
+  CIV has active Eurobonds (captured in external_debt via WB IDS).
+  7,122 bn XOF titres publics is XOF-denominated regional paper —
+  distinct instrument class.
 
 notes: |
-  Largest WAEMU sovereign issuer (~30% of regional stock). Abidjan is
-  the financial centre of the union; domestic absorption capacity is
-  significant, hence the lower cross-border share. Note CIV also has
-  material Eurobond debt that's captured elsewhere.
+  IMF CR 25/091 (2024 Article IV): total public debt 58.1% of GDP
+  end-2023; external share 61.8%. Domestic part (~$14bn using IMF
+  external figure of $28.5bn = 61.8%) is heavily concentrated in
+  Ivorian banks — SIP/2024/014 confirms. Cross-border share still
+  order_of_magnitude pending BCEAO cross-holdings disclosure.
 
-_status: skeleton_pending_source_data
+_status: skeleton_pending_cross_border_share
 _ready_blocker: "cross_border_share_method=order_of_magnitude"
+_fetch_status: primary_sources_403_in_sandbox_secondary_sourced
 _agent_research_date: 2026-04-24

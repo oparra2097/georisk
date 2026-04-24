@@ -1,3 +1,5 @@
+# Benin — WAEMU Regional Bank Exposure (v1.4 live-pull update)
+
 iso3: BEN
 name: Benin
 monetary_union: WAEMU
@@ -7,33 +9,46 @@ gdp_usd_bn: 21.5
 
 titres_publics_stock_local_bn: null
 titres_publics_stock_usd_bn: 4.0
-titres_publics_source: "Order-of-magnitude: WAEMU aggregate ~$40bn × Benin share ~10% (AUT)"
-titres_publics_url: "https://umoatitres.org/statistiques/"
-titres_publics_date: 2023-12-31
+titres_publics_stock_anchor_end_2021: 1161.27
+titres_publics_source: "AUT aggregate allocation; end-2021 anchor 1161 bn from togoweb.net MTP-2021 PDF"
+titres_publics_url: "https://www.umoatitres.org/en/bulletins-des-statistiques/"
+titres_publics_date: null
 
 banking_system_claims_on_govt_local_bn: null
-banking_system_claims_source: "BCEAO — to be pulled"
-banking_system_claims_url: "https://www.bceao.int/"
-banking_system_claims_date: null
+banking_system_claims_source: |
+  BCEAO — 403. IMF CR 24/338 (Nov 2024): total debt 52.9% GDP
+  (reached 53.4 end-2024); domestic 24.6% / external 75.4%.
+  Benin's share of WAEMU-wide debt coming to maturity peaking at
+  73% in May 2025.
+banking_system_claims_url: "https://www.imf.org/-/media/files/publications/cr/2024/english/1benea2024002-print-pdf.pdf"
+banking_system_claims_date: 2024-12-31
 
 cross_border_share: 0.55
 cross_border_share_method: order_of_magnitude
-cross_border_share_source: "Qualitative — Benin pioneered WAEMU SDG bond (2021), maintains active AUT issuance; domestic banking sector modest so regional uptake likely dominant."
-cross_border_share_url: "https://www.imf.org/en/Countries/BEN"
+cross_border_share_source: |
+  CR 24/338: "Costlier regional financing conditions with shallow
+  markets in the WAEMU and continued access to international capital
+  markets have increased Benin's reliance on often cheaper external
+  debt." Implies regional uptake material but specific cross-border
+  share not surfaced.
+cross_border_share_url: "https://www.imf.org/-/media/files/publications/cr/2024/english/1benea2024002-print-pdf.pdf"
 
-regional_bank_exposure_usd_bn: 2.2
+regional_bank_exposure_usd_bn: 2.20           # 4.0 × 0.55
 regional_bank_exposure_pct_gdp: 10.2
 
 include_in_shadow: true
 loss_given_default: 1.0
 double_count_check: |
-  Benin has some Eurobonds including the SDG bond — those are captured
-  in external_debt_usd_bn via IDS. Regional XOF titres are distinct.
+  Benin has Eurobonds (incl. SDG bond 2021) in external_debt via IDS.
+  Regional XOF titres distinct.
 
 notes: |
-  Benin is considered a higher-governance WAEMU issuer. Regular AUT
-  auctions absorbed widely across the union.
+  Benin is a high-governance WAEMU issuer with active AUT programme.
+  External share is high (75.4%) — regional piece is a smaller
+  absolute but still ~$4bn / 18% GDP. 73% of WAEMU maturities in
+  May 2025 is a concentration risk flag.
 
 _status: skeleton_pending_source_data
-_ready_blocker: "cross_border_share_method=order_of_magnitude"
+_ready_blocker: "titres_publics_stock_local_bn null; cross_border_share_method=order_of_magnitude"
+_fetch_status: primary_sources_403_in_sandbox_secondary_sourced
 _agent_research_date: 2026-04-24
