@@ -1497,11 +1497,19 @@ def _fetch_reserves():
         if periods_total:
             merged_total[iso3] = periods_total
 
+        # FX merge: IFS takes priority. IRFCL FX uses a different
+        # indicator (IRFCLDT4_IRFCL12 = narrow FX securities) that is
+        # incompatible with IFS's RAXG/RAXGFX (broader aggregate).
+        # Letting IRFCL overwrite IFS produces garbage like India
+        # fx=-$0.61B. Only use IRFCL FX to fill periods IFS doesn't
+        # cover, and skip negative values entirely.
         periods_fx = {}
         if iso3 in ifs_fx_n:
             periods_fx.update(ifs_fx_n[iso3])
         if iso3 in irfcl_fx_n:
-            periods_fx.update(irfcl_fx_n[iso3])
+            for period, val in irfcl_fx_n[iso3].items():
+                if period not in periods_fx and val is not None and val > 0:
+                    periods_fx[period] = val
         if periods_fx:
             merged_fx[iso3] = periods_fx
 
