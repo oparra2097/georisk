@@ -71,8 +71,21 @@ def _build_locked(include_zillow_zip: bool = False, force_refresh: bool = False)
     try:
         diagnostics.record_build_start(clear=force_refresh)
         logger.info('house_prices: fetching FHFA master + county…')
-        rows.extend(fhfa.fetch_master(force=force_refresh))
+        master_rows = fhfa.fetch_master(force=force_refresh)
+        rows.extend(master_rows)
         rows.extend(fhfa.fetch_county(force=force_refresh))
+
+        # If the master parser produced 0 state or 0 region rows (schema
+        # drift or a level naming change on FHFA's side), fall back to the
+        # dedicated state and division CSVs. Cheap (~2MB each).
+        n_states = sum(1 for r in master_rows if r.level == 'state')
+        n_regions = sum(1 for r in master_rows if r.level == 'region')
+        if n_states == 0:
+            logger.warning('house_prices: master returned 0 state rows — falling back to hpi_at_bdl_state.csv')
+            rows.extend(fhfa._fetch_fallback('state', fhfa._FALLBACK_STATE_URL))
+        if n_regions == 0:
+            logger.warning('house_prices: master returned 0 region rows — falling back to hpi_at_bdl_division.csv')
+            rows.extend(fhfa._fetch_fallback('region', fhfa._FALLBACK_DIVISION_URL))
         logger.info('house_prices: fetching Case-Shiller (national + 20 cities)…')
         rows.extend(case_shiller.fetch_all())
 
