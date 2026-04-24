@@ -1,0 +1,68 @@
+{
+  "_note": "v1 elasticities are hand-calibrated from public literature (IMF WEO ch.1 energy pass-through, BIS cross-border credit, World Bank Commodity Markets Outlook). Units: for each shock, delta_risk_points = elasticity * magnitude, where magnitude is the user-facing number (0.20 for +20% oil, 1.0 for +100bp, 0.10 for +10% DXY, -2.0 for -2pp China GDP). Elasticities are sign-preserving: positive = risk rises when the shock variable rises. Replace with VAR/LP IRFs post-MVP once a 10y+ panel is cached.",
+  "shocks": [
+    {
+      "id": "oil_plus_20",
+      "variable": "oil",
+      "default_magnitude": 0.20,
+      "unit": "pct_change",
+      "label": "Oil +20%",
+      "description": "Brent/WTI +20%. Commodity-importer EU/UK hit hardest; oil-exporters (CO, BR, MX, US) benefit."
+    },
+    {
+      "id": "oil_minus_20",
+      "variable": "oil",
+      "default_magnitude": -0.20,
+      "unit": "pct_change",
+      "label": "Oil -20%",
+      "description": "Mirror of oil_plus_20."
+    },
+    {
+      "id": "fed_plus_100bp",
+      "variable": "rates",
+      "default_magnitude": 1.0,
+      "unit": "hundred_bp",
+      "label": "Fed +100bp",
+      "description": "US 10Y / fed funds +100bp. Propagates to EM via USD funding stress."
+    },
+    {
+      "id": "fed_minus_50bp",
+      "variable": "rates",
+      "default_magnitude": -0.5,
+      "unit": "hundred_bp",
+      "label": "Fed -50bp",
+      "description": "Fed easing cycle; EM benefits, DM mildly supportive."
+    },
+    {
+      "id": "dxy_plus_10",
+      "variable": "usd",
+      "default_magnitude": 0.10,
+      "unit": "pct_change",
+      "label": "USD +10%",
+      "description": "Broad DXY strength. EM FX/inflation/debt service all worse."
+    },
+    {
+      "id": "china_gdp_minus_2",
+      "variable": "china",
+      "default_magnitude": -2.0,
+      "unit": "pp_change",
+      "label": "China GDP -2pp",
+      "description": "China growth slowdown. LatAm commodity exporters and DE (machinery/autos) hit hardest."
+    }
+  ],
+  "elasticities": {
+    "US": {"oil": -5,  "rates":  2, "usd":  -3, "china": -1},
+    "GB": {"oil":  8,  "rates":  2, "usd":   5, "china": -1},
+    "DE": {"oil": 20,  "rates":  3, "usd":   4, "china": -4},
+    "FR": {"oil": 15,  "rates":  3, "usd":   4, "china": -2},
+    "IT": {"oil": 25,  "rates":  5, "usd":   5, "china": -2},
+    "ES": {"oil": 18,  "rates":  4, "usd":   5, "china": -1},
+    "EU": {"oil": 18,  "rates":  3, "usd":   4, "china": -3},
+    "EA": {"oil": 19,  "rates":  4, "usd":   4, "china": -3},
+    "MX": {"oil": -10, "rates":  5, "usd":  25, "china": -2},
+    "CO": {"oil": -25, "rates":  6, "usd":  30, "china": -3},
+    "BR": {"oil":  -8, "rates":  6, "usd":  25, "china": -6},
+    "CL": {"oil":   6, "rates":  4, "usd":  20, "china": -8},
+    "AR": {"oil":  12, "rates": 10, "usd":  80, "china": -3}
+  }
+}

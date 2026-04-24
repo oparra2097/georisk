@@ -13,8 +13,9 @@ Endpoints (Phase 1: first three are live; /shocks and /scenario are Phase 3):
 
 from flask import Blueprint, jsonify, request
 
-from backend.country_risk_v2 import service
+from backend.country_risk_v2 import service, shocks
 from backend.country_risk_v2.country_configs import is_supported
+from backend.country_risk_v2.models import ShockSpec
 
 country_risk_v2_bp = Blueprint('country_risk_v2', __name__)
 
@@ -48,7 +49,7 @@ def single_score(country_code):
 @country_risk_v2_bp.route('/<country_code>/drivers')
 def country_drivers(country_code):
     code = country_code.upper()
-    if not is_supported(code):
+    if not (is_supported(code) or code == 'EA'):
         return jsonify({'error': f'country {code} not yet supported'}), 404
 
     risk = service.score_country(code)
@@ -63,3 +64,43 @@ def country_drivers(country_code):
         'labor': risk.labor.to_dict() if risk.labor else None,
         'data_asof': risk.data_asof,
     })
+
+
+@country_risk_v2_bp.route('/shocks')
+def list_shocks():
+    return jsonify({
+        'shocks': shocks.get_catalogue(),
+        'supported_countries': shocks.supported_countries(),
+    })
+
+
+@country_risk_v2_bp.route('/scenario', methods=['POST'])
+def run_scenario():
+    """
+    Body: {"country": "US", "shocks": [{"id": "oil_plus_20", "magnitude": 0.2}, ...]}
+
+    `magnitude` is optional; if omitted or 0, the shock's default_magnitude is used.
+    """
+    body = request.get_json(silent=True) or {}
+    country = str(body.get('country', '')).upper()
+    if not country:
+        return jsonify({'error': "'country' is required"}), 400
+
+    if not (is_supported(country) or country == 'EA'):
+        return jsonify({'error': f'country {country} not yet supported'}), 404
+
+    raw_shocks = body.get('shocks') or []
+    if not isinstance(raw_shocks, list) or not raw_shocks:
+        return jsonify({'error': "'shocks' must be a non-empty list"}), 400
+
+    try:
+        shock_specs = [ShockSpec.from_dict(s) for s in raw_shocks]
+    except (KeyError, TypeError, ValueError) as e:
+        return jsonify({'error': f'invalid shock spec: {e}'}), 400
+
+    base_risk = service.score_country(country)
+    if base_risk is None:
+        return jsonify({'error': f'no base score for {country}'}), 503
+
+    result = shocks.apply_scenario(country, base_risk.composite, shock_specs)
+    return jsonify(result.to_dict())
