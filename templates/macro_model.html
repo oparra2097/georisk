@@ -378,7 +378,18 @@
     el.style.display = el.style.display === 'none' ? 'block' : 'none';
     $('mm-diag-toggle').textContent = el.style.display === 'none' ? 'Details' : 'Hide';
   });
-  Promise.all([loadStatus(), loadForecast(), loadEquations(), loadShocks()]);
+
+  // Show System check immediately + run init with visible error feedback
+  $('mm-diagnostics-card').style.display = 'block';
+  $('mm-diag-summary').innerHTML = '<em style="color:#6b7280;">Checking model status…</em>';
+  Promise.all([
+    loadStatus().catch(e => console.error('loadStatus:', e)),
+    loadForecast().catch(e => console.error('loadForecast:', e)),
+    loadEquations().catch(e => console.error('loadEquations:', e)),
+    loadShocks().catch(e => console.error('loadShocks:', e)),
+  ]).catch(e => {
+    $('mm-diag-summary').innerHTML = `<span style="color:#b91c1c;">Init failed: ${e.message}. Open DevTools → Console for details.</span>`;
+  });
 })();
 </script>
 {% endblock %}
