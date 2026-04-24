@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 
 from backend.data_sources import fred_client
+from backend.macro_model import diagnostics
 from backend.macro_model.variables import VARIABLES, Variable
 
 logger = logging.getLogger(__name__)
@@ -77,12 +78,34 @@ def _apply_transform(series: pd.Series, transform: str) -> pd.Series:
 
 
 def _fetch_variable(v: Variable, start: str) -> pd.Series:
-    raw = fred_client.fetch_series(v.fred_id, start_date=start)
-    if not raw:
-        logger.warning(f"macro_model.data: empty FRED response for {v.code}={v.fred_id}")
+    try:
+        raw = fred_client.fetch_series(v.fred_id, start_date=start)
+    except Exception as e:
+        logger.error(f"macro_model.data: FRED fetch raised for {v.code}={v.fred_id}: {e}")
+        diagnostics.record_fetch_fail(v.code, v.fred_id, str(e))
         return pd.Series(dtype=float, name=v.code)
-    q = _to_quarterly(raw, v.freq)
-    q = _apply_transform(q, v.transform).rename(v.code)
+
+    if not raw:
+        msg = f"empty FRED response (check FRED_API_KEY or series id '{v.fred_id}' validity)"
+        logger.warning(f"macro_model.data: {v.code}={v.fred_id}: {msg}")
+        diagnostics.record_fetch_fail(v.code, v.fred_id, msg)
+        return pd.Series(dtype=float, name=v.code)
+
+    try:
+        q = _to_quarterly(raw, v.freq)
+        q = _apply_transform(q, v.transform).rename(v.code)
+    except Exception as e:
+        logger.exception(f"macro_model.data: transform failed for {v.code}")
+        diagnostics.record_fetch_fail(v.code, v.fred_id, f'transform error: {e}')
+        return pd.Series(dtype=float, name=v.code)
+
+    # Success — record a quick health snapshot
+    non_na = q.dropna()
+    diagnostics.record_fetch_ok(
+        v.code, v.fred_id,
+        n_obs=int(len(non_na)),
+        last_date=non_na.index.max().date().isoformat() if len(non_na) else None,
+    )
     return q
 
 

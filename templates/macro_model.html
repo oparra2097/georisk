@@ -84,6 +84,17 @@
     Not Bayesian, no fiscal block, adaptive expectations only &mdash; this is a v1. See <code>backend/macro_model/README.md</code> for known limitations.
   </section>
 
+  <!-- System check diagnostic -->
+  <section id="mm-diagnostics-card" class="mm-card" style="display:none;margin-bottom:20px;">
+    <h3 style="display:flex;align-items:center;gap:8px;">
+      System check
+      <span id="mm-diag-badge" style="font-size:10px;padding:2px 8px;border-radius:10px;"></span>
+      <button class="btn" id="mm-diag-toggle" style="margin-left:auto;font-size:11px;padding:3px 10px;">Details</button>
+    </h3>
+    <div id="mm-diag-summary" style="font-size:12px;color:#4b5563;"></div>
+    <div id="mm-diag-details" style="display:none;margin-top:10px;"></div>
+  </section>
+
   <div class="mm-header" id="mm-dashboard">
     <h1 class="mm-title">Model dashboard <span style="font-weight:400;color:#9ca3af;font-size:14px">/ FRB/US-lite v1</span></h1>
     <p class="mm-subtitle">Live baseline forecast, per-equation diagnostics, shock scenarios, and OOS backtest.</p>
@@ -168,10 +179,87 @@
     } else if (b.fit_error) {
       el.textContent = `Fit error: ${b.fit_error}`;
       el.className = 'mm-status err';
+    } else if (b.building) {
+      el.textContent = 'Model building in background — this takes 30-60s on first load…';
+      el.className = 'mm-status';
     } else {
-      el.textContent = 'Model not yet built — first request triggers a fit.';
+      el.textContent = 'Model build queued — refreshing diagnostics…';
       el.className = 'mm-status';
     }
+    await loadDiagnostics();
+    // If still building or failed, poll diagnostics every 5s up to 2 minutes
+    if (!b.built && (b.building || b.fit_error === null)) {
+      scheduleDiagPoll();
+    }
+  }
+
+  let _pollTimer = null;
+  let _pollCount = 0;
+  function scheduleDiagPoll() {
+    if (_pollTimer) return;
+    _pollCount = 0;
+    _pollTimer = setInterval(async () => {
+      _pollCount++;
+      await loadDiagnostics();
+      const r = await fetch(`${API}/status`);
+      const b = await r.json();
+      if (b.built || b.fit_error || _pollCount > 24) {
+        clearInterval(_pollTimer); _pollTimer = null;
+        if (b.built) { loadForecast(); loadEquations(); }  // refresh when ready
+      }
+    }, 5000);
+  }
+
+  async function loadDiagnostics() {
+    const card = $('mm-diagnostics-card');
+    const r = await fetch(`${API}/diagnostics`);
+    if (!r.ok) {
+      card.style.display = 'block';
+      $('mm-diag-summary').innerHTML = `<span style="color:#b91c1c;">Diagnostics endpoint error: ${r.statusText}</span>`;
+      return;
+    }
+    const body = await r.json();
+    const s = body.status, d = body.diagnostics;
+    card.style.display = 'block';
+
+    const badge = $('mm-diag-badge');
+    if (s.built) {
+      badge.textContent = 'OK'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46';
+    } else if (s.fit_error) {
+      badge.textContent = 'ERROR'; badge.style.background = '#fee2e2'; badge.style.color = '#b91c1c';
+    } else if (s.building) {
+      badge.textContent = 'BUILDING'; badge.style.background = '#fef3c7'; badge.style.color = '#78350f';
+    } else {
+      badge.textContent = 'QUEUED'; badge.style.background = '#e5e7eb'; badge.style.color = '#4b5563';
+    }
+
+    const summary = `<strong>FRED series:</strong> ${d.n_series_ok} ok, ${d.n_series_fail} failed &nbsp;·&nbsp;
+                     <strong>Equations:</strong> ${d.n_equations_ok} fit, ${d.n_equations_fail} failed
+                     ${s.fit_error ? `<br><span style="color:#b91c1c;">Build error: ${s.fit_error}</span>` : ''}`;
+    $('mm-diag-summary').innerHTML = summary;
+
+    const renderFetches = () => {
+      const bad = d.fetches.filter(f => !f.ok);
+      const good = d.fetches.filter(f => f.ok);
+      const badRows = bad.map(f => `<tr style="background:#fef2f2;"><td><code>${f.code}</code></td><td><code>${f.fred_id}</code></td><td>—</td><td style="color:#b91c1c;font-size:11px;">${f.error || 'error'}</td></tr>`).join('');
+      const goodRows = good.map(f => `<tr><td><code>${f.code}</code></td><td><code>${f.fred_id}</code></td><td>${f.n_obs}</td><td style="color:#6b7280;font-size:11px;">${f.last_date||''}</td></tr>`).join('');
+      return `<div><strong style="font-size:12px;">FRED fetches</strong>
+        <table class="mm-table" style="font-size:11px;margin-top:4px;">
+        <thead><tr><th>Code</th><th>FRED ID</th><th>N</th><th>Last</th></tr></thead>
+        <tbody>${badRows}${goodRows || '<tr><td colspan="4" style="color:#9ca3af;">No fetches yet.</td></tr>'}</tbody></table></div>`;
+    };
+    const renderFits = () => {
+      if (!d.fits.length) return '<div style="color:#9ca3af;font-size:11px;margin-top:10px;">No equation fits yet.</div>';
+      const bad = d.fits.filter(f => !f.ok);
+      const good = d.fits.filter(f => f.ok);
+      const badRows = bad.map(f => `<tr style="background:#fef2f2;"><td>${f.name}</td><td colspan="4" style="color:#b91c1c;font-size:11px;">${f.error}</td></tr>`).join('');
+      const goodRows = good.map(f => `<tr><td>${f.name}</td><td>${f.rsq!=null?f.rsq.toFixed(3):'—'}</td><td>${f.chosen_lag ?? '—'}</td><td>${f.gamma!=null?f.gamma.toFixed(3):'—'}</td><td>${f.n_obs ?? '—'}</td></tr>`).join('');
+      return `<div style="margin-top:10px;"><strong style="font-size:12px;">Equation fits</strong>
+        <table class="mm-table" style="font-size:11px;margin-top:4px;">
+        <thead><tr><th>Name</th><th>R²</th><th>lag</th><th>γ</th><th>N</th></tr></thead>
+        <tbody>${badRows}${goodRows}</tbody></table></div>`;
+    };
+    $('mm-diag-details').innerHTML = renderFetches() + renderFits();
   }
 
   async function loadForecast() {
@@ -285,6 +373,11 @@
 
   $('mm-run-shock').addEventListener('click', runShock);
   $('mm-bt-run').addEventListener('click', runBacktest);
+  $('mm-diag-toggle').addEventListener('click', () => {
+    const el = $('mm-diag-details');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    $('mm-diag-toggle').textContent = el.style.display === 'none' ? 'Details' : 'Hide';
+  });
   Promise.all([loadStatus(), loadForecast(), loadEquations(), loadShocks()]);
 })();
 </script>
