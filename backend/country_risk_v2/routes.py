@@ -33,10 +33,13 @@ def all_scores():
 @country_risk_v2_bp.route('/<country_code>')
 def single_score(country_code):
     code = country_code.upper()
-    if not is_supported(code):
+    # 'EA' is a special alias for the euro-area aggregate; accepted even though
+    # it's not in PRIORITY_ORDER.
+    if not (is_supported(code) or code == 'EA'):
         return jsonify({'error': f'country {code} not yet supported'}), 404
 
-    risk = service.score_country(code)
+    scope = request.args.get('scope', 'eu27').lower()
+    risk = service.score_country(code, scope=scope)
     if risk is None:
         return jsonify({'error': f'no data for {code} (may be a phase not yet wired)'}), 503
     return jsonify(risk.to_dict())

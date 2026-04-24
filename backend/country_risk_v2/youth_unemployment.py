@@ -22,6 +22,7 @@ from typing import Optional
 
 from backend.data_sources.fred_client import fetch_series
 from backend.country_risk_v2.country_configs import YOUTH_UNEMP_SOURCES, FRED_SERIES
+from backend.country_risk_v2.data_sources import ons_labour, eurostat_labour
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +59,9 @@ def _fetch_fred(country_code: str) -> Optional[dict]:
 
 _FETCHERS = {
     'fred': _fetch_fred,
-    # 'ons':      _fetch_ons,       # Phase 2
-    # 'eurostat': _fetch_eurostat,  # Phase 2
-    # 'ilo':      _fetch_ilo,       # Phase 4
+    'ons': lambda code: ons_labour.get_uk_youth_unemployment() if code == 'GB' else None,
+    'eurostat': lambda code: eurostat_labour.get_youth_unemployment(code),
+    # 'ilo':      _fetch_ilo,  # Phase 4
 }
 
 

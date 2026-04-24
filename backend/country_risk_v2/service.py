@@ -22,31 +22,40 @@ _lock = threading.RLock()
 _cache: Dict[str, dict] = {}  # {code: {'risk': CountryRiskV2, 'fetched_at': float}}
 
 
-def score_country(country_code: str, force_refresh: bool = False) -> Optional[CountryRiskV2]:
-    """Return scored CountryRiskV2, or None if unsupported / no data."""
+def score_country(country_code: str, force_refresh: bool = False, scope: str = 'eu27') -> Optional[CountryRiskV2]:
+    """
+    Return scored CountryRiskV2, or None if unsupported / no data.
+
+    `scope` only applies to aggregate codes: 'eu27' (default) or 'ea' for
+    euro-area 20. Both are cached separately.
+    """
     code = country_code.upper()
+    cache_key = f'{code}:{scope}' if code in ('EU', 'EA') else code
 
     with _lock:
-        cached = _cache.get(code)
+        cached = _cache.get(cache_key)
         if cached and not force_refresh and (time.time() - cached['fetched_at']) < CACHE_TTL:
             return cached['risk']
 
-    # EU aggregate wiring is Phase 2; for now, fall through and return None.
-    if code == 'EU':
-        logger.debug("EU aggregate not implemented until Phase 2")
-        return None
-
-    try:
-        risk = compute_composite(code)
-    except Exception as e:
-        logger.exception(f"compute_composite failed for {code}: {e}")
-        return None
+    if code in ('EU', 'EA'):
+        from backend.country_risk_v2.eu_aggregate import build_eu_score
+        try:
+            risk = build_eu_score(scope='ea' if code == 'EA' or scope == 'ea' else 'eu27')
+        except Exception as e:
+            logger.exception(f"build_eu_score failed: {e}")
+            return None
+    else:
+        try:
+            risk = compute_composite(code)
+        except Exception as e:
+            logger.exception(f"compute_composite failed for {code}: {e}")
+            return None
 
     if risk is None:
         return None
 
     with _lock:
-        _cache[code] = {'risk': risk, 'fetched_at': time.time()}
+        _cache[cache_key] = {'risk': risk, 'fetched_at': time.time()}
     return risk
 
 
