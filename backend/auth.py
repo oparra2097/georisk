@@ -56,6 +56,7 @@ def init_auth_db():
             email_verified BOOLEAN DEFAULT 0,
             verification_token TEXT,
             insurance_access BOOLEAN DEFAULT 0,
+            macro_access BOOLEAN DEFAULT 0,
             last_login TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -65,6 +66,7 @@ def init_auth_db():
         ('email_verified', 'BOOLEAN DEFAULT 0'),
         ('verification_token', 'TEXT'),
         ('insurance_access', 'BOOLEAN DEFAULT 0'),
+        ('macro_access', 'BOOLEAN DEFAULT 0'),
         ('last_login', 'TIMESTAMP'),
         ('reset_token', 'TEXT'),
     ]:
@@ -81,12 +83,14 @@ def init_auth_db():
 
 class User(UserMixin):
     def __init__(self, id, email, password_hash, email_verified=False,
-                 insurance_access=False, last_login=None, created_at=None):
+                 insurance_access=False, macro_access=False,
+                 last_login=None, created_at=None):
         self.id = id
         self.email = email
         self.password_hash = password_hash
         self.email_verified = bool(email_verified)
         self.insurance_access = bool(insurance_access)
+        self.macro_access = bool(macro_access)
         self.last_login = last_login
         self.created_at = created_at
 
@@ -94,11 +98,14 @@ class User(UserMixin):
     def _from_row(row):
         if not row:
             return None
+        # Columns added by migration may not exist on older rows — guard with .keys()
+        keys = row.keys() if hasattr(row, 'keys') else []
         return User(
             row['id'], row['email'], row['password_hash'],
             row['email_verified'], row['insurance_access'],
-            row['last_login'] if 'last_login' in row.keys() else None,
-            row['created_at'] if 'created_at' in row.keys() else None,
+            row['macro_access'] if 'macro_access' in keys else False,
+            row['last_login'] if 'last_login' in keys else None,
+            row['created_at'] if 'created_at' in keys else None,
         )
 
     @staticmethod
@@ -162,6 +169,13 @@ class User(UserMixin):
     def set_insurance_access(user_id, access=True):
         conn = _get_db()
         conn.execute('UPDATE users SET insurance_access = ? WHERE id = ?', (1 if access else 0, user_id))
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def set_macro_access(user_id, access=True):
+        conn = _get_db()
+        conn.execute('UPDATE users SET macro_access = ? WHERE id = ?', (1 if access else 0, user_id))
         conn.commit()
         conn.close()
 
@@ -248,6 +262,14 @@ class User(UserMixin):
         if self.email.endswith('@aig.com'):
             return True
         return bool(self.insurance_access)
+
+    def has_macro_access(self):
+        """Access to the US Macro Model product. Admin and whitelisted users only."""
+        if not self.email_verified:
+            return False
+        if self.email == ADMIN_EMAIL:
+            return True
+        return bool(self.macro_access)
 
 
 def user_loader(user_id):
@@ -492,6 +514,7 @@ def admin_dashboard():
         'total': len(users),
         'verified': sum(1 for u in users if u.email_verified),
         'insurance': sum(1 for u in users if u.insurance_access or u.email.endswith('@aig.com')),
+        'macro': sum(1 for u in users if u.has_macro_access()),
         'aig': sum(1 for u in users if u.email.endswith('@aig.com')),
     }
     return render_template('admin.html', users=users, stats=stats, active_page='data')
@@ -507,6 +530,19 @@ def admin_toggle_access(user_id):
         return jsonify({'error': 'User not found'}), 404
     User.set_insurance_access(user_id, not user.insurance_access)
     flash(f'Insurance access {"granted to" if not user.insurance_access else "revoked for"} {user.email}', 'success')
+    return redirect(url_for('auth.admin_dashboard'))
+
+
+@auth_bp.route('/admin/toggle-macro/<int:user_id>', methods=['POST'])
+@login_required
+def admin_toggle_macro(user_id):
+    if not _is_admin():
+        return jsonify({'error': 'Unauthorized'}), 403
+    user = User.get_by_id(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    User.set_macro_access(user_id, not user.macro_access)
+    flash(f'Macro Model access {"granted to" if not user.macro_access else "revoked for"} {user.email}', 'success')
     return redirect(url_for('auth.admin_dashboard'))
 
 

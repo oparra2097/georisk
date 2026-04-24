@@ -1,12 +1,44 @@
 import os
+from functools import wraps
 from flask import Flask, render_template, redirect, url_for, request, jsonify
 from flask_cors import CORS
 from flask_login import LoginManager, current_user, login_required
 from config import Config
+
+
+def macro_access_required(f):
+    """Decorator: requires verified email + admin-granted Macro Model access.
+
+    Returns HTML for page routes (via Flask-Login's unauthorized handler on the
+    login step; 403 page here for the access-denied step), and JSON for /api/*.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Authentication required', 'login_url': '/auth/login'}), 401
+            return redirect(url_for('auth.login', next=request.url))
+        if not current_user.email_verified:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Please verify your email first.'}), 403
+            return render_template('access_denied.html',
+                                   reason='Verify your email to continue.',
+                                   active_page='macro-model'), 403
+        if not current_user.has_macro_access():
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    'error': 'US Macro Model access is granted by the admin. Contact support.',
+                }), 403
+            return render_template('access_denied.html',
+                                   reason='Macro Model access is granted by the admin. Contact support to request access.',
+                                   active_page='macro-model'), 403
+        return f(*args, **kwargs)
+    return decorated
 from backend.routes import api_bp
 from backend.economist import economist_bp
 from backend.auth import auth_bp, user_loader, init_auth_db, ADMIN_EMAIL
 from backend.scheduler import init_scheduler
+from backend.macro_model.routes import macro_model_bp
 
 
 def create_app():
@@ -36,6 +68,7 @@ def create_app():
     # ── Blueprints ───────────────────────────────────────────────────────
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(economist_bp, url_prefix='/api')
+    app.register_blueprint(macro_model_bp, url_prefix='/api/macro-model/us')
     app.register_blueprint(auth_bp, url_prefix='/auth')
 
     # ── Routes ───────────────────────────────────────────────────────────
@@ -69,6 +102,11 @@ def create_app():
     @login_required
     def economist():
         return render_template('economist.html', active_page='economist')
+
+    @app.route('/macro-model')
+    @macro_access_required
+    def macro_model():
+        return render_template('macro_model.html', active_page='macro-model')
 
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
