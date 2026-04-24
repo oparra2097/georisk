@@ -8,6 +8,8 @@ data/*
 !data/consensus.yaml
 !data/benchmarks/
 !data/benchmarks/**
+!data/ae_contingent_liabilities/
+!data/ae_contingent_liabilities/**
 
 # Commodity model cache artifacts (regenerated on monthly refit)
 backend/cache/commodity_models/*.pkl

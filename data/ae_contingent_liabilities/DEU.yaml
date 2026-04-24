@@ -1,0 +1,195 @@
+# Germany — Contingent Liability Stack (v2.0 AE rebuild)
+#
+# Bottom-up replacement for the v1.0 BIS-50% rule.
+# All figures and source URLs verified via agent research April 2026.
+
+iso3: DEU
+name: Germany
+currency: EUR
+as_of: 2024-12-31
+gdp_local_bn: 4305.3
+gdp_usd_bn: 4526.0
+maastricht_debt_pct_gdp: 62.5
+maastricht_debt_local_bn: 2692.0
+maastricht_debt_source: "Deutsche Bundesbank press release, 17 April 2025 (2024 outturn)"
+maastricht_debt_url: "https://www.bundesbank.de/en/press/press-releases/deutsche-staatsschulden-954840"
+maastricht_debt_date: 2025-04-17
+
+components:
+  - id: bundeswehr_sondervermoegen
+    label: "Bundeswehr Sondervermögen (€100bn special defence fund, 2022)"
+    category: special_fund
+    amount_local_bn: 86.6
+    amount_pct_gdp: 2.01
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "BMVg & ESuT, 'Sondervermögen Bundeswehr praktisch vollständig gebunden', Aug 2024"
+    source_url: "https://esut.de/2024/08/meldungen/52448/sondervermoegen-bundeswehr-praktisch-vollstaendig-gebunden/"
+    source_date: 2024-08-01
+    notes: |
+      €86.6bn of €100bn committed by April 2024; effectively fully committed
+      by end-2024. Under ESA 2010 federal Sondervermögen are classified
+      inside general government sector — drawn amounts are ALREADY inside
+      the €2,692bn Maastricht stock. Tracked here for transparency only;
+      do NOT add to extended total.
+
+  - id: infrastructure_climate_fund
+    label: "Sondervermögen Infrastruktur & Klimaneutralität (SVIK, €500bn, 2025)"
+    category: special_fund
+    amount_local_bn: 0.0
+    amount_pct_gdp: 0.0
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "Bundesfinanzministerium SVIK press materials"
+    source_url: "https://www.bundesfinanzministerium.de/Web/EN/Issues/Public-Finances/SVIK/special-fund-infrastructure-and-climate-neutrality.html"
+    source_date: 2025-03-22
+    notes: |
+      €500bn authorised over 12yrs (€100bn Länder / €100bn KTF / €300bn
+      federal) — constitutional amendment signed 22 March 2025. Drawn
+      amount at end-2024 is ZERO (not yet operational). Future issuance
+      will flow directly into Maastricht debt as drawn — this is a
+      future headline-debt item, not current shadow debt.
+
+  - id: wsf_energie
+    label: "Wirtschaftsstabilisierungsfonds (energy crisis residual)"
+    category: special_fund
+    amount_local_bn: 3.96
+    amount_pct_gdp: 0.09
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "Deutsche Finanzagentur, 26 March 2025"
+    source_url: "https://www.deutsche-finanzagentur.de/stabilisierungsmassnahmen/wirtschaftsstabilisierungsfonds/wsf-auf-einen-blick"
+    source_date: 2025-03-26
+    notes: |
+      Legacy energy-crisis liquidity loans €3.96bn outstanding, in
+      wind-down after Nov 2023 Constitutional Court ruling. Already
+      in EDP.
+
+  - id: ktf_klima_transformation
+    label: "Klima- und Transformationsfonds (KTF)"
+    category: special_fund
+    amount_local_bn: 180.0
+    amount_pct_gdp: 4.18
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "OSW Commentary, October 2023 (planning horizon 2024-28)"
+    source_url: "https://www.osw.waw.pl/en/publikacje/osw-commentary/2023-10-16/a-shadow-budget-germany-increases-spending-through-special"
+    source_date: 2023-10-16
+    notes: |
+      ~€180bn planned 2024-28, inside EDP. Tracked for completeness;
+      not a shadow-debt addition.
+
+  - id: kfw_liabilities
+    label: "KfW Group gross liabilities (federally guaranteed)"
+    category: state_bank
+    amount_local_bn: 545.4
+    amount_pct_gdp: 12.67
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.5
+    source: "KfW Financial Report 2024 (balance sheet total 31 Dec 2024)"
+    source_url: "https://www.kfw.de/PDF/Download-Center/Finanzpublikationen/PDF-Dokumente-Berichte-etc/3_Finanzberichte/KfW-Finanzbericht-2024-2.pdf"
+    source_date: 2025-04-01
+    notes: |
+      Explicit federal guarantee (Gewährträgerhaftung + Anstaltslast
+      under §1a KfW-Gesetz). Classified as public financial corporation
+      under ESA 2010; excluded from S.13 general government, so NOT in
+      Maastricht. Over 90% of funding is federal-guaranteed bonds.
+      LGD 0.5 chosen as central case — KfW's loan book covers most of
+      its liabilities, so real sovereign risk is the residual credit
+      risk on that book, not the gross €545bn. Low case 0.2, high 1.0.
+
+  - id: landesbanken_implicit
+    label: "Landesbanken implicit owner support (no explicit guarantee)"
+    category: guarantee
+    amount_local_bn: 940.0
+    amount_pct_gdp: 21.83
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.1
+    source: "Fitch peer credit analysis 2025 (BayernLB IR); aggregate LBBW/BayernLB/Helaba/NordLB/SaarLB"
+    source_url: "https://www.bayernlb.de/internet/media/ir/downloads_1/investor_relations_3/ratingberichte/fitch/2025_20/fitch_peer_credit_analysis.pdf"
+    source_date: 2025-02-01
+    notes: |
+      Anstaltslast/Gewährträgerhaftung ended July 2005 (grandfathered
+      bonds now rolled off). NO explicit state guarantee on current
+      Landesbank debt. Aggregate assets ~€940bn across LBBW €333bn,
+      BayernLB €266bn, Helaba €208bn, NordLB €115bn, SaarLB €20bn.
+      Contingent exposure is implicit Länder backstop — NordLB 2019
+      bailout and HSH wind-down show the tail risk is real but small
+      in expectation. LGD 0.1 is deliberately conservative.
+
+  - id: hermes_export_credit
+    label: "Euler Hermes export credit guarantees (outstanding stock)"
+    category: guarantee
+    amount_local_bn: 400.0
+    amount_pct_gdp: 9.29
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.1
+    source: "Bundeswirtschaftsministerium Export Credit Guarantees Annual Report 2024 (order of magnitude; precise stock not in public summary)"
+    source_url: "https://www.bundeswirtschaftsministerium.de/Redaktion/EN/Publikationen/Aussenwirtschaft/export-credit-guarantees-annual-report-2024.html"
+    source_date: 2025-03-01
+    notes: |
+      Stock figure is order-of-magnitude (~€400bn) — annual report
+      publishes new cover (€17.2bn in 2024) not outstanding stock.
+      Historical loss rates are very low; LGD 0.1 captures the small
+      residual tail.
+
+  - id: esm_callable
+    label: "ESM callable capital (Germany's share)"
+    category: guarantee
+    amount_local_bn: 168.3
+    amount_pct_gdp: 3.91
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.25
+    source: "ESM Annual Report 2024 / Governance page"
+    source_url: "https://www.esm.europa.eu/about-us/governance"
+    source_date: 2024-12-31
+    notes: |
+      Paid-in €21.7bn; callable €168.3bn (27% share, largest member).
+      Mutualised euro-area contingent exposure — not Germany-specific
+      sovereign risk from a fiscal-stress standpoint. Excluded from
+      extended total by default; toggle include_in_extended=true to
+      see high-case impact.
+
+  - id: efsf_guarantee
+    label: "EFSF guarantee commitment (Germany's share)"
+    category: guarantee
+    amount_local_bn: 211.0
+    amount_pct_gdp: 4.90
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.25
+    source: "EFSF Framework Agreement (29.07% key, over-guarantee factor)"
+    source_url: "https://www.esm.europa.eu/about-us/governance/efsf"
+    source_date: 2024-12-31
+    notes: |
+      Same rationale as ESM — mutualised, not Germany-specific. Excluded
+      from default extended total.
+
+extended_debt_estimate:
+  low_pct_gdp: 67.6
+  mid_pct_gdp: 74.0
+  high_pct_gdp: 84.7
+  method: |
+    Low (67.6%): Maastricht 62.5 + KfW at LGD 0.2 (2.5pp) + Landesbank
+    at LGD 0.05 (1.1pp) + Hermes at LGD 0.05 (0.5pp) + ESM excluded.
+    Mid (74.0%): Maastricht 62.5 + KfW at LGD 0.5 (6.3pp) + Landesbank
+    at LGD 0.1 (2.2pp) + Hermes at LGD 0.1 (0.9pp) + ESM/EFSF excluded.
+    High (84.7%): Maastricht + KfW at LGD 1.0 (12.7pp) + Landesbank
+    at LGD 0.15 (3.3pp) + Hermes at LGD 0.2 (1.9pp) + ESM/EFSF at
+    LGD 0.5 (4.4pp).
+    Anything above 85% requires additional justification (full KfW
+    face ignores asset side; pension accrued entitlements are a
+    different accounting concept).
+  defensible_ceiling_pct_gdp: 75.0
+
+_status: ready_for_review
+_ready_blocker: null
+_agent_research_date: 2026-04-24

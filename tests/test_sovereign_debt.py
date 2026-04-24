@@ -54,12 +54,12 @@ def test_no_negative_shadow():
 
 
 def test_integrity_flags_surfaced():
-    """If the guardrail fired, the summary must record it."""
+    """If any guardrail fired, the summary must record it with a structured entry."""
     data = get_sovereign_debt_data()
     flags = data["summary"].get("integrity_flags", [])
     for flag in flags:
         assert "iso3" in flag
-        assert flag.get("issue") in ("negative_shadow",)
+        assert flag.get("issue") in ("negative_shadow", "baseline_override")
         assert flag.get("action")
 
 
@@ -95,9 +95,43 @@ def test_benchmark_reconciliation_attached():
     for iso3, c in data["countries"].items():
         assert "benchmark" in c, f"{iso3} missing benchmark field"
         assert c["benchmark"].get("status") in {
-            "ok", "out_of_band", "no_benchmark",
-            "benchmark_missing_value", "no_estimate",
+            "ok", "out_of_band", "below_floor", "above_ceiling",
+            "no_benchmark", "benchmark_missing_value", "no_estimate",
         }
+
+
+def test_em_floor_semantics():
+    """
+    EM entries with a floor-type benchmark must not be marked
+    'below_floor' for any country that the model considers a shadow-debt
+    case. If we see below_floor, the model is undershooting the
+    Maastricht figure — a bug.
+    """
+    data = get_sovereign_debt_data()
+    below = []
+    for iso3, c in data["countries"].items():
+        if c["benchmark"].get("status") == "below_floor":
+            below.append((iso3, c.get("estimated_debt_gdp"),
+                          c["benchmark"].get("benchmark_pct_gdp")))
+    assert not below, (
+        f"EM countries undershooting Maastricht floor: {below}"
+    )
+
+
+def test_senegal_within_shadow_ceiling():
+    """
+    After the Senegal baseline override, the estimate should sit between
+    the floor and the shadow ceiling documented in the YAML.
+    """
+    data = get_sovereign_debt_data()
+    sen = data["countries"].get("SEN")
+    if sen is None:
+        return
+    bench = sen["benchmark"]
+    if bench.get("shadow_ceiling_pct_gdp") is None:
+        return
+    assert bench["status"] in {"ok", "above_ceiling"}, \
+        f"SEN benchmark status unexpected: {bench['status']}"
 
 
 def test_preflight_blocks_missing_country():

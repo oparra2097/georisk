@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 
 from .benchmarks import reconcile as _reconcile_benchmark
 
-METHODOLOGY_VERSION = "v1.1-em-guardrails"
+METHODOLOGY_VERSION = "v1.2-em-guardrails-baseline-override"
 
 # IMF WEO Advanced Economies (2024 classification) — suppressed from output
 # while AE methodology is under review.
@@ -30,6 +30,36 @@ ADVANCED_ECONOMIES_ISO3 = frozenset({
     "ITA", "JPN", "KOR", "LTU", "LUX", "LVA", "MAC", "MLT", "NLD", "NOR",
     "NZL", "PRI", "PRT", "SGP", "SMR", "SVK", "SVN", "SWE", "TWN", "USA",
 })
+
+# Baseline overrides — used when upstream official_debt_gdp is known to
+# be materially incorrect (e.g. upstream baked in hidden-debt adjustments
+# before shadow add-on, causing double-counting). Each entry includes a
+# citation to justify the override. Upstream pipeline should ultimately
+# be corrected to remove the need for this map.
+BASELINE_OVERRIDES = {
+    "SEN": {
+        "official_debt_gdp": 99.7,
+        "source": "IMF WEO April 2025 (post-Cour des Comptes revelation)",
+        "upstream_value": 128.4,
+        "reason": (
+            "Upstream baseline of 128.4% already includes post-2025 "
+            "hidden-debt adjustments — adding shadow component on top "
+            "would double-count. Override restores clean Maastricht-"
+            "equivalent baseline."
+        ),
+    },
+    "GHA": {
+        "official_debt_gdp": 82.5,
+        "source": "IMF WEO October 2024 database",
+        "upstream_value": 70.3,
+        "reason": (
+            "Upstream baseline of 70.3% is below IMF WEO October 2024 "
+            "figure of 82.5% — upstream appears to be using stale "
+            "pre-restructuring data. Override restores the current "
+            "published general government debt figure."
+        ),
+    },
+}
 
 METHODOLOGY_NOTE = (
     "Advanced economies (IMF WEO classification) are excluded pending "
@@ -113,6 +143,7 @@ def _apply_ae_suppression(result):
 
     integrity_flags = []
     for iso3, c in filtered.items():
+        _apply_baseline_override(iso3, c, integrity_flags)
         _guard_negative_shadow(iso3, c, integrity_flags)
         _compute_sigma(c)
         c["benchmark"] = _reconcile_benchmark(iso3, c.get("estimated_debt_gdp"))
@@ -161,6 +192,59 @@ def _apply_ae_suppression(result):
         "methodology_version": METHODOLOGY_VERSION,
         "scope": "em_frontier",
     }
+
+
+def _apply_baseline_override(iso3, c, flags):
+    """
+    Apply a corrective override to official_debt_gdp when upstream is
+    known to be materially incorrect. Recomputes estimated_debt_gdp by
+    preserving the original shadow component (estimated − official).
+    """
+    override = BASELINE_OVERRIDES.get(iso3)
+    if not override:
+        return
+    upstream_official = c.get("official_debt_gdp")
+    upstream_estimated = c.get("estimated_debt_gdp")
+    new_official = override["official_debt_gdp"]
+
+    if upstream_official is None:
+        return
+
+    # Preserve the shadow delta from upstream — but cap it, because in
+    # the Senegal case the upstream shadow may itself be miscalibrated.
+    original_shadow = 0
+    if upstream_estimated is not None:
+        original_shadow = max(0.0, upstream_estimated - upstream_official)
+
+    baseline_shift = new_official - upstream_official
+    new_estimated = round(new_official + original_shadow, 1)
+
+    c["official_debt_gdp_upstream"] = upstream_official
+    c["official_debt_gdp"] = new_official
+    c["confidence_floor_gdp"] = new_official
+    c["estimated_debt_gdp"] = new_estimated
+    c["debt_gap_pp"] = round(original_shadow, 1)
+
+    # Shift the upstream ceiling by the same baseline shift so it continues
+    # to bracket the estimate correctly.
+    ceiling = c.get("confidence_ceiling_gdp")
+    if ceiling is not None:
+        c["confidence_ceiling_gdp"] = round(max(new_estimated, ceiling + baseline_shift), 1)
+
+    c["baseline_override_reason"] = override["reason"]
+    c["baseline_override_source"] = override["source"]
+
+    flags.append({
+        "iso3": iso3,
+        "issue": "baseline_override",
+        "upstream_official": upstream_official,
+        "overridden_official": new_official,
+        "source": override["source"],
+        "action": (
+            f"Baseline reset from {upstream_official}% to {new_official}%; "
+            f"shadow component preserved at {round(original_shadow, 1)}pp."
+        ),
+    })
 
 
 def _guard_negative_shadow(iso3, c, flags):

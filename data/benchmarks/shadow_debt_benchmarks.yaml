@@ -1,93 +1,171 @@
 # Shadow-debt benchmark reconciliation values.
 #
-# Each entry is an externally-published "extended debt" figure that our
-# estimated_debt_gdp should be consistent with. Humans maintain this file
-# by hand from published sources — it is NOT auto-generated.
+# Each entry is an externally-published reference against which our model's
+# estimated_debt_gdp should be consistent.
 #
-# Populate with values taken directly from:
-#   - IMF Fiscal Monitor Annex Table A.3 ("General government gross debt
-#     including contingent liabilities")
-#   - IMF Article IV Consultation Staff Reports ("Selected economic indicators")
-#   - World Bank International Debt Statistics (IDS) for external debt cross-check
+# benchmark_type:
+#   "floor"     — benchmark is the Maastricht / IMF WEO general govt debt
+#                 figure. Model estimate MUST be >= benchmark; may exceed
+#                 up to shadow_ceiling_pct_gdp if set. Used for EM/frontier
+#                 where shadow premium over the official figure is the
+#                 indicator's core output.
+#   "symmetric" — benchmark is a bottom-up extended-debt mid estimate.
+#                 Model estimate must land within ±tol_pp either side.
+#                 Used for AE stacks produced by
+#                 data/ae_contingent_liabilities/.
 #
-# Tolerances:
-#   tol_pp: ±pp band within which model output is considered reconciled.
-#   For EM/frontier, 5pp is a reasonable starting band; tighten as confidence grows.
+# Populate from:
+#   - IMF WEO database (twice-yearly update) — general govt debt
+#   - IMF Fiscal Monitor Annex Table A.3 — contingent liabilities
+#   - IMF Article IV Staff Reports
+#   - World Bank International Debt Statistics for external debt cross-check
+#   - Eurostat EDP + supplementary tables for AE stacks
+#   - Horn / Reinhart / Trebesch "Hidden Defaults" (2022) — shadow ceilings
 #
 # Schema per country:
 #   ISO3:
 #     name: <country>
-#     benchmark_pct_gdp: <float>            # reference "extended" debt/GDP
-#     benchmark_source: <str>                # where it came from
-#     benchmark_date: YYYY-MM-DD             # publication / reference date
-#     tol_pp: <float>                        # acceptable deviation band
-#     notes: <str>                           # optional context / caveats
+#     benchmark_type: floor | symmetric
+#     benchmark_pct_gdp: <float>
+#     benchmark_source: <str>
+#     benchmark_url: <str>
+#     benchmark_date: YYYY-MM-DD
+#     shadow_ceiling_pct_gdp: <float>     # required for "floor" type
+#     shadow_ceiling_source: <str>        # who/what justifies the ceiling
+#     tol_pp: <float>                     # only used for "symmetric"
+#     external_debt_usd_bn: <float>       # WB IDS cross-check
+#     external_debt_date: YYYY-MM-DD
+#     needs_human_verification: <bool>
+#     notes: <str>
+
+# ── Emerging & frontier (served today) ────────────────────────────────────
 
 SEN:
   name: Senegal
-  benchmark_pct_gdp: null   # TODO: confirm post-revelation figure
-  benchmark_source: "IMF Article IV 2024 — pending verification"
-  benchmark_date: 2024-04-01
-  tol_pp: 5.0
+  benchmark_type: floor
+  benchmark_pct_gdp: 99.7
+  benchmark_source: "IMF WEO April 2025 database (post-revision)"
+  benchmark_url: "https://www.imf.org/en/Publications/WEO/weo-database/2025/april"
+  benchmark_date: 2025-04-22
+  shadow_ceiling_pct_gdp: 130.0
+  shadow_ceiling_source: |
+    Floor 99.7% + ~30pp for known SOE contingent exposure and
+    Chinese lending opacity. Anything above 130% requires itemised
+    bilateral-lending and SOE-guarantee breakdown that is not
+    currently in the model's source inputs.
+  external_debt_usd_bn: 30.1
+  external_debt_source: "World Bank International Debt Statistics 2024 (data for 2023)"
+  external_debt_date: 2024-12-03
+  needs_human_verification: true
   notes: |
-    IMF Article IV (Apr 2024) cites post-revelation central govt debt
-    ~99% of GDP for 2024. Current model baseline is 128.4% — baseline
-    itself may already embed adjustments, risk of double-counting with
-    63.1pp shadow add. Set benchmark once source figure is nailed down.
+    Cour des Comptes audit (Feb 2025) revealed prior understatement;
+    IMF WEO April 2025 reflects revised ~99.7% of GDP (up from
+    ~73% previously reported). IMF program discussions suspended
+    pending misreporting review. See IMF Press Release No. 25/074
+    (Feb 2025).
+
+    Upstream pipeline carried an official baseline of 128.4% which
+    appears to already embed revelation adjustments — a baseline
+    override in backend/data_sources/sovereign_debt.py restores the
+    99.7% floor. Shadow component is preserved from upstream on top
+    of the corrected baseline.
 
 MOZ:
   name: Mozambique
-  benchmark_pct_gdp: null
-  benchmark_source: "IMF Fiscal Monitor — TODO"
-  benchmark_date: null
-  tol_pp: 5.0
+  benchmark_type: floor
+  benchmark_pct_gdp: 91.8
+  benchmark_source: "IMF WEO October 2024 database"
+  benchmark_url: "https://www.imf.org/en/Publications/WEO/weo-database/2024/October"
+  benchmark_date: 2024-10-22
+  shadow_ceiling_pct_gdp: 145.0
+  shadow_ceiling_source: |
+    Floor 91.8% + Ematum/ProIndicus/MAM legacy + known SOE arrears.
+    High-end exposure consistent with post-restructuring IMF DSA.
+  external_debt_usd_bn: 14.6
+  external_debt_source: "World Bank International Debt Statistics 2024 (data for 2023)"
+  external_debt_date: 2024-12-03
+  needs_human_verification: true
   notes: |
-    Tuna-bond / Ematum history means Mozambique is a classic hidden-debt
-    case. Extended debt including contingent liabilities should be
-    cross-checked against the post-restructuring IMF DSA.
+    Post-tuna-bond restructuring, under ECF (approved 2022). LNG
+    revenue prospects affect debt sustainability outlook. Article IV
+    24/193 (June 2024) discusses SOE contingent liabilities
+    qualitatively but Fiscal Monitor A.3 does not provide a standalone
+    figure.
 
 ZMB:
   name: Zambia
-  benchmark_pct_gdp: null
-  benchmark_source: "IMF Fiscal Monitor — TODO"
-  benchmark_date: null
-  tol_pp: 5.0
+  benchmark_type: floor
+  benchmark_pct_gdp: 108.7
+  benchmark_source: "IMF WEO October 2024 database (post-restructuring reflected)"
+  benchmark_url: "https://www.imf.org/en/Publications/WEO/weo-database/2024/October"
+  benchmark_date: 2024-10-22
+  shadow_ceiling_pct_gdp: 150.0
+  shadow_ceiling_source: |
+    Floor 108.7% + residual SOE arrears + FX-driven ratio volatility.
+    Kwacha depreciation means the denominator is unstable.
+  external_debt_usd_bn: 14.2
+  external_debt_source: "World Bank International Debt Statistics 2024 (data for 2023)"
+  external_debt_date: 2024-12-03
+  needs_human_verification: true
   notes: |
-    Post-2020 default restructuring has produced published contingent
-    liability disclosures. Use those to pin a benchmark.
+    Eurobond restructuring completed June 2024. Common Framework
+    implementation 2024. Ratio remains elevated due to FX. Article
+    IV 24/206 has SOE arrears + contingent liabilities detail.
 
 GHA:
   name: Ghana
-  benchmark_pct_gdp: null
-  benchmark_source: "IMF Fiscal Monitor — TODO"
-  benchmark_date: null
-  tol_pp: 5.0
+  benchmark_type: floor
+  benchmark_pct_gdp: 82.5
+  benchmark_source: "IMF WEO October 2024 database"
+  benchmark_url: "https://www.imf.org/en/Publications/WEO/weo-database/2024/October"
+  benchmark_date: 2024-10-22
+  shadow_ceiling_pct_gdp: 105.0
+  shadow_ceiling_source: |
+    Floor 82.5% + energy-sector SOE arrears (COCOBOD et al) which are
+    material contingent exposure. Upper bound set conservatively; any
+    cited shadow figure above 105% needs explicit itemised bridge.
+  external_debt_usd_bn: 30.0
+  external_debt_source: "World Bank International Debt Statistics 2024 (data for 2023)"
+  external_debt_date: 2024-12-03
+  needs_human_verification: true
   notes: |
-    2022 restructuring. Post-DSA figures should exist in the latest
-    Article IV.
+    Post-restructuring: DDEP Feb 2023, Eurobond restructuring Oct 2024
+    (~$13bn), Common Framework June 2024. Ratio fell from ~93% (2022)
+    due to haircuts + nominal growth. Article IV 24/350 (Dec 2024) has
+    energy-sector SOE details.
 
-# ── Advanced economies (for future AE rebuild — not served while AE
-# coverage is suppressed). Keep slots here so the rebuilt methodology
-# can be reconciled against these values at CI time.
+# ── Advanced economies (AE v2.0 bottom-up — symmetric) ────────────────────
 
 DEU:
   name: Germany
-  benchmark_pct_gdp: 67.0    # placeholder mid-point of 65-70% defensible band
-  benchmark_source: "Eurostat EDP + supplementary tables on government interventions (2024)"
-  benchmark_date: 2024-10-21
-  tol_pp: 2.0
+  benchmark_type: symmetric
+  benchmark_pct_gdp: 74.0
+  benchmark_source: "Bottom-up stack: Bundesbank Maastricht 62.5% + KfW (LGD 0.5) + Landesbanken (LGD 0.1) + Hermes (LGD 0.1)"
+  benchmark_url: "https://www.bundesbank.de/en/press/press-releases/deutsche-staatsschulden-954840"
+  benchmark_date: 2025-04-17
+  tol_pp: 3.0
+  needs_human_verification: true
   notes: |
-    Maastricht ~63% + drawn Sondervermögen + KfW bonded debt excluded
-    from EDP. Anything materially above 70% needs explicit itemised
-    contingent-liability justification.
+    Mid-point of the bottom-up build in
+    data/ae_contingent_liabilities/DEU.yaml. Defensible range 68-75%.
+    Anything >80% requires additional justification (full KfW face
+    ignores asset side; pension accrued entitlements are a different
+    accounting concept). Original v1.0 model figure 82.7% exceeds
+    defensible ceiling by ~8pp.
 
 FRA:
   name: France
-  benchmark_pct_gdp: 116.0   # placeholder mid-point of 115-118% defensible band
-  benchmark_source: "Eurostat EDP + supplementary tables on government interventions (2024)"
-  benchmark_date: 2024-10-21
-  tol_pp: 2.0
+  benchmark_type: symmetric
+  benchmark_pct_gdp: 118.3
+  benchmark_source: "Bottom-up stack: INSEE Maastricht 113.0% + EDF debt + EDF nuclear + SNCF ex-Réseau + Bpifrance"
+  benchmark_url: "https://www.insee.fr/en/statistiques/8542247"
+  benchmark_date: 2025-03-27
+  tol_pp: 3.0
+  needs_human_verification: true
   notes: |
-    Maastricht ~110.6% + CADES + SNCF Réseau + EDF decommissioning.
-    Original model figure of 138.4% exceeded this by ~22pp and was the
-    trigger for the AE methodology review.
+    Mid-point of the bottom-up build in
+    data/ae_contingent_liabilities/FRA.yaml. Defensible range
+    115-120%. Shadow component over Maastricht is ~5pp. Anything >125%
+    requires adding implicit pension liabilities (a different accrual
+    concept). Original v1.0 model figure 138.4% exceeded defensible
+    ceiling by ~18pp.

@@ -1,7 +1,8 @@
 # Shadow Debt Indicator — Methodology
 
-**Current version:** `v1.1-em-guardrails`
-**Scope:** Emerging & frontier markets only. Advanced-economy coverage suppressed pending rebuild (see §5).
+**Current version:** `v1.2-em-guardrails-baseline-override` (served product)
+**AE rebuild version:** `ae-v2.0-bottom-up` (separate endpoint, drill-down only)
+**Scope:** Emerging & frontier markets served via the main indicator. Advanced-economy bottom-up stacks available via `/api/ae-contingent-liabilities` but do not flow into the main Shadow Debt Indicator output.
 
 ## 1. Purpose
 
@@ -81,4 +82,38 @@ This is the minimum governance required to avoid a repeat of the DEU/FRA watchli
 |---------|------|--------|
 | v1.0    | pre-2026-04 | Initial upstream-generated parquet; BIS-50% AE rule; flat sigma. |
 | v1.1-em-guardrails | 2026-04-24 | AE suppression; negative-shadow clamp; per-country sigma; benchmark reconciliation; preflight checklist. EM/frontier only. |
-| v2.0 (planned) | TBD | Bottom-up AE rebuild; upstream pipeline under version control; benchmark YAML fully populated; AE reconciliation in CI. |
+| v1.2-em-guardrails-baseline-override | 2026-04-24 | Added baseline overrides (SEN 128.4→99.7, GHA 70.3→82.5, both sourced to IMF WEO); added benchmark_type (floor for EM, symmetric for AE) with shadow_ceiling_pct_gdp upper bound; populated EM benchmarks for SEN/MOZ/ZMB/GHA from IMF WEO Apr 2025 / Oct 2024; floor-semantics test surfaces upstream bugs (GHA stale baseline). |
+| ae-v2.0-bottom-up | 2026-04-24 | Bottom-up AE stack for DEU (mid 74% of GDP, components from Bundesbank/KfW/BMF/ESM) and FRA (mid 118.3%, components from INSEE/CADES/EDF/SNCF/Bpifrance/CDC). Exposed via `/api/ae-contingent-liabilities` as drill-down, not folded into main output. Every component cites a source URL; 12-test CI gate enforces band ordering, no-double-counting, defensible-ceiling adherence. |
+| v2.0 (planned) | TBD | Upstream parquet pipeline migrated into `sovereign_debt_pipeline/` under CI; BIS-50% rule removed entirely; all EM benchmarks populated; AE stacks expanded beyond DEU/FRA to ITA, ESP, BEL, NLD, JPN. |
+
+## 9. What agent research populated (2026-04-24)
+
+The v1.2 and ae-v2.0 updates were driven by three research agents whose full output is archived in the April 2026 session transcript. Key extractions:
+
+### EM benchmarks
+
+- **Senegal**: IMF WEO April 2025 post-revelation = 99.7% of GDP; WB IDS external debt = $30.1bn. Used for baseline override.
+- **Mozambique**: IMF WEO October 2024 = 91.8%; WB IDS external debt = $14.6bn.
+- **Zambia**: IMF WEO October 2024 post-restructuring = 108.7%; WB IDS = $14.2bn.
+- **Ghana**: IMF WEO October 2024 = 82.5%; WB IDS = $30.0bn. Used for baseline override (upstream had 70.3% — stale).
+
+### Germany bottom-up (end-2024)
+
+- Maastricht 62.5% (Bundesbank, €2,692bn / €4,305bn GDP).
+- Bundeswehr Sondervermögen (€100bn auth, €86.6bn committed) — ALREADY in EDP under ESA 2010.
+- Infrastructure/Climate fund (€500bn auth, March 2025) — drawn end-2024 = €0.
+- KfW gross liabilities €545.4bn — NOT in EDP (financial corp); central LGD 0.5 adds ~6.3pp.
+- Landesbanken aggregate assets €940bn (LBBW/BayernLB/Helaba/NordLB/SaarLB) — no explicit guarantee post-2005; LGD 0.1 adds ~2.2pp.
+- Hermes stock ~€400bn at LGD 0.1 adds ~0.9pp.
+- ESM/EFSF excluded from default (mutualised, not Germany-specific sovereign risk).
+- Defensible range 68-75%; mid 74%. v1.0 model's 82.7% exceeded ceiling by 8pp.
+
+### France bottom-up (end-2024)
+
+- Maastricht 113.0% (INSEE, €3,305bn / €2,925bn GDP).
+- CADES €137.9bn, SNCF Réseau €18.9bn, UNEDIC €59bn, ACOSS — ALL already in Maastricht.
+- EDF net debt €54.3bn + EDF nuclear provisions €53.8bn — NOT in Maastricht.
+- SNCF Group ex-Réseau ~€6bn; Bpifrance guarantees ~€40bn; CDC long-term €149bn (contested).
+- Defensible range 115-120%; mid 118.3%. Shadow component over Maastricht is ~5pp. v1.0 model's 138.4% exceeded ceiling by 18pp.
+
+All figures source-cited in `data/benchmarks/shadow_debt_benchmarks.yaml` and `data/ae_contingent_liabilities/{DEU,FRA}.yaml`.

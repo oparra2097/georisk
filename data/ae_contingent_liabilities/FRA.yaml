@@ -1,0 +1,233 @@
+# France — Contingent Liability Stack (v2.0 AE rebuild)
+#
+# Bottom-up replacement for the v1.0 BIS-50% rule.
+# All figures and source URLs verified via agent research April 2026.
+
+iso3: FRA
+name: France
+currency: EUR
+as_of: 2024-12-31
+gdp_local_bn: 2925.0
+gdp_usd_bn: 3050.0
+maastricht_debt_pct_gdp: 113.0
+maastricht_debt_local_bn: 3305.3
+maastricht_debt_source: "INSEE Informations Rapides No. 81, 27 March 2025 (2024 outturn)"
+maastricht_debt_url: "https://www.insee.fr/en/statistiques/8542247"
+maastricht_debt_date: 2025-03-27
+
+components:
+  - id: cades_residual
+    label: "CADES residual social security debt to amortise"
+    category: special_fund
+    amount_local_bn: 137.9
+    amount_pct_gdp: 4.71
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "CADES press release '16 milliards d'euros de dette sociale amortis en 2024', 25 April 2025"
+    source_url: "https://www.cades.fr/pdf/communiques/fr/2025/cp250425vf.pdf"
+    source_date: 2025-04-25
+    notes: |
+      CADES is classified as central government administrative body
+      (ODAC); its debt IS inside the €3,305bn Maastricht stock. 2024
+      amortisation €15.99bn, extinction extended to 2033.
+
+  - id: sncf_reseau
+    label: "SNCF Réseau net debt (fully consolidated in general govt)"
+    category: soe_debt
+    amount_local_bn: 18.9
+    amount_pct_gdp: 0.65
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "SNCF Group Half-Year Financial Report June 2024 (figure broadly stable YE2024)"
+    source_url: "https://www.groupe-sncf.com/medias-publics/2024-08/financial-report-30-june-2024-sncf-group.pdf"
+    source_date: 2024-08-01
+    notes: |
+      SNCF Réseau reclassified into general government (ODAC) in 2016
+      Eurostat decision. €35bn was taken on by state in 2020+2022 via
+      state receivable. Current net debt €18.9bn is ALREADY in
+      Maastricht.
+
+  - id: unedic
+    label: "UNEDIC accumulated debt (unemployment insurance)"
+    category: special_fund
+    amount_local_bn: 59.0
+    amount_pct_gdp: 2.02
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "Unédic Rapport financier 2024"
+    source_url: "https://www.unedic.org/qui-sommes-nous/rapports/rapport-financier-de-l-unedic-2024"
+    source_date: 2025-01-01
+    notes: |
+      Classified as social security fund — already inside Maastricht.
+
+  - id: acoss_urssaf
+    label: "ACOSS / Urssaf Caisse Nationale debt"
+    category: special_fund
+    amount_local_bn: 25.5
+    amount_pct_gdp: 0.87
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "INSEE quarterly Maastricht releases; Securité Sociale evaluation portal"
+    source_url: "https://evaluation.securite-sociale.fr/home/financement/212-equilibre-de-lensemble-des-3.html"
+    source_date: 2024-12-31
+    notes: |
+      2024 debt stock rose €25.5bn. Social security fund, in Maastricht.
+
+  - id: edf_net_debt
+    label: "EDF net financial debt (100% state-owned since 2023)"
+    category: soe_debt
+    amount_local_bn: 54.3
+    amount_pct_gdp: 1.86
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.4
+    source: "EDF 2024 Annual Results press release, 21 Feb 2025"
+    source_url: "https://www.edf.fr/sites/groupe/files/2025-02/annual-results-2024-pr-en-2025-02-21.pdf"
+    source_date: 2025-02-21
+    notes: |
+      EDF fully nationalised 2023; net debt €54.3bn. NOT in Maastricht
+      (market-producer classification). LGD 0.4 reflects partial
+      recoverability via regulated electricity tariffs + asset base.
+
+  - id: edf_nuclear_provisions
+    label: "EDF nuclear provisions (back-end cycle + decommissioning)"
+    category: soe_debt
+    amount_local_bn: 53.8
+    amount_pct_gdp: 1.84
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.5
+    source: "EDF 2024 Consolidated Financial Statements, 31 Dec 2024"
+    source_url: "https://www.edf.fr/sites/groupe/files/2025-03/annual-results-2024-consolidated-financial-statements-2025-03-05.pdf"
+    source_date: 2025-03-05
+    notes: |
+      Breakdown: €31.6bn back-end of cycle (spent fuel/waste) + €22.2bn
+      decommissioning and last cores. Long-dated liabilities ultimately
+      sovereign-backed if EDF cannot fund. LGD 0.5 central case.
+
+  - id: edf_epr2_commitment
+    label: "EDF EPR2 six-reactor programme forecasted cost"
+    category: guarantee
+    amount_local_bn: 72.8
+    amount_pct_gdp: 2.49
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.2
+    source: "EDF press release, 18 Dec 2025"
+    source_url: "https://www.edf.fr/en/the-edf-group/dedicated-sections/journalists/all-press-releases/edf-shares-its-forecasted-cost-estimate-of-the-epr2-programme-for-eu728bn"
+    source_date: 2025-12-18
+    notes: |
+      €72.8bn (2020 euros) for six EPR2 reactors — FID expected late
+      2026. State provides subsidised loan (≥50% of construction) +
+      40-yr CfD + risk-sharing. Forward capex commitment, not current
+      debt — excluded from default extended total.
+
+  - id: sncf_group_ex_reseau
+    label: "SNCF Group residual (SA + Voyageurs, ex-Réseau)"
+    category: soe_debt
+    amount_local_bn: 6.0
+    amount_pct_gdp: 0.21
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.8
+    source: "SNCF Group Full-Year 2024 Results press release, 27 March 2025"
+    source_url: "https://www.groupe-sncf.com/medias-publics/2025-03/pr-sncf-group-2024-full-year-results.pdf"
+    source_date: 2025-03-27
+    notes: |
+      SNCF Group total net debt ~€24.8bn end-2024; Réseau already in
+      Maastricht at €18.9bn, leaving ~€6bn for SA/Voyageurs.
+      Market-sector but rated in line with sovereign (implicit
+      support). LGD 0.8 reflects near-full sovereign flow-through.
+
+  - id: bpifrance_guaranteed
+    label: "Bpifrance guaranteed bonds + net loan exposure"
+    category: state_bank
+    amount_local_bn: 40.0
+    amount_pct_gdp: 1.37
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.25
+    source: "Bpifrance 2024 Business Review, 26 March 2025; EPIC Bpifrance Annual Report 2024"
+    source_url: "https://www.bpifrance.com/2025/03/26/press-release-2024-business-review/"
+    source_date: 2025-03-26
+    notes: |
+      Outstanding loans €43bn, guarantee commitments ~€14bn.
+      Unconditional irrevocable first-demand state guarantee on
+      Bpifrance bonds (flagged as Cour des Comptes reservation).
+      LGD 0.25 reflects recoverability from loan book.
+
+  - id: cdc_long_term_debt
+    label: "CDC (Caisse des Dépôts) long-term debt"
+    category: state_bank
+    amount_local_bn: 149.0
+    amount_pct_gdp: 5.09
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.1
+    source: "CDC 2024 Results presentation, March 2025"
+    source_url: "https://www.caissedesdepots.fr/sites/ms-cdc-fr/files/2025-08/Presentation%20of%202024%20results.pdf"
+    source_date: 2025-03-01
+    notes: |
+      CDC not consolidated into general government (public financial
+      corporation). €149bn long-term debt market-funded. State bears
+      ultimate liability on regulated savings (€398bn), not on market
+      debt. Inclusion contested; excluded from default extended total.
+
+  - id: orano_residual
+    label: "Orano (ex-AREVA) nuclear fuel cycle residual"
+    category: other
+    amount_local_bn: 0.0
+    amount_pct_gdp: 0.0
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.1
+    source: "Orano 2024 Annual Activity Report, 31 Dec 2024"
+    source_url: "https://cdn.orano.group/orano/docs/default-source/orano-doc/finance/publications-financieres-et-reglementees/2024/orano_annual-activity-report_2024_online.pdf"
+    source_date: 2025-03-01
+    notes: |
+      Net cash position (−€0.78bn net debt = net cash). End-of-lifecycle
+      nuclear commitments 100% covered by earmarked assets since 2023.
+      Residual sovereign exposure limited; excluded.
+
+  - id: state_guarantees_explicit
+    label: "Explicit state guarantees on private financing (off-balance)"
+    category: guarantee
+    amount_local_bn: 200.0
+    amount_pct_gdp: 6.84
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.1
+    source: "Cour des Comptes, Certification des comptes de l'État 2024"
+    source_url: "https://www.ccomptes.fr/sites/default/files/2025-04/20250416-certification-comptes-Etat-exercice-2024.pdf"
+    source_date: 2025-04-16
+    notes: |
+      Gross off-balance state engagements reported at €3,769bn in 2024
+      — this aggregate includes future pension liabilities (largest
+      item) plus explicit guarantees. Stripped-down explicit guarantees
+      on private financing ~€200bn order of magnitude. Excluded from
+      default extended total; toggle on for high-case only.
+
+extended_debt_estimate:
+  low_pct_gdp: 114.9
+  mid_pct_gdp: 118.3
+  high_pct_gdp: 125.0
+  method: |
+    Low (114.9%): Maastricht 113.0 + EDF net debt at LGD 0.4 (0.74pp)
+    + SNCF ex-Réseau at LGD 0.8 (0.17pp) + Bpifrance at LGD 0.1 (0.14pp)
+    + nuclear provisions excluded + CDC excluded.
+    Mid (118.3%): adds EDF nuclear provisions at LGD 0.5 (0.92pp) +
+    Bpifrance at LGD 0.25 (0.34pp) + higher EDF LGD.
+    High (125%): mid plus CDC long-term at LGD 0.1 (0.51pp) +
+    25% crystallisation of explicit state guarantees.
+    Anything above 125% requires adding implicit pension liabilities,
+    which is a different (accrual) accounting concept and NOT
+    comparable to Maastricht gross debt.
+  defensible_ceiling_pct_gdp: 120.0
+
+_status: ready_for_review
+_ready_blocker: null
+_agent_research_date: 2026-04-24

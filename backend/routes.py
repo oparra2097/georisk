@@ -1922,6 +1922,38 @@ def list_sovereign_debt_benchmarks():
     return jsonify({'benchmarks': load_benchmarks()})
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# AE REBUILD (v2.0 BOTTOM-UP CONTINGENT LIABILITY STACKS)
+# Not served through the main Shadow Debt Indicator until CI gates pass
+# for all AEs; exposed as a separate endpoint for review/drilldown.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_bp.route('/ae-contingent-liabilities')
+def list_ae_contingent_liabilities():
+    """Summary of all AE contingent-liability stacks — ready + under construction."""
+    from backend.data_sources.ae_contingent_liabilities import get_ae_extended_debt
+    return jsonify({
+        'methodology_version': 'ae-v2.0-bottom-up',
+        'scope_note': (
+            'Bottom-up replacement for the v1.0 BIS-50% rule. Served '
+            'only as drill-down; AE coverage does not flow into the '
+            'main Shadow Debt Indicator until every served AE clears '
+            'the CI gate in data/ae_contingent_liabilities/SCHEMA.md.'
+        ),
+        'countries': get_ae_extended_debt(),
+    })
+
+
+@api_bp.route('/ae-contingent-liabilities/<iso3>')
+def ae_contingent_liabilities_detail(iso3):
+    """Full component-level breakdown for a single AE."""
+    from backend.data_sources.ae_contingent_liabilities import get_ae_detail
+    detail = get_ae_detail(iso3.upper())
+    if not detail:
+        return jsonify({'error': f'No AE stack for {iso3.upper()}'}), 404
+    return jsonify(detail)
+
+
 @api_bp.route('/sovereign-debt/export')
 def export_sovereign_debt_excel():
     """Generate Excel file with sovereign debt indicator data."""

@@ -42,6 +42,18 @@ def preflight_check(iso3, country):
             f"from benchmark {rec['benchmark_pct_gdp']}% "
             f"(tolerance ±{rec['tol_pp']}pp, source: {rec['benchmark_source']})"
         )
+    elif rec["status"] == "below_floor":
+        reasons.append(
+            f"Estimate {estimated}% is below Maastricht floor "
+            f"{rec['benchmark_pct_gdp']}% — shadow indicator should "
+            "never undershoot the official published figure."
+        )
+    elif rec["status"] == "above_ceiling":
+        reasons.append(
+            f"Estimate {estimated}% exceeds the documented shadow "
+            f"ceiling {rec['shadow_ceiling_pct_gdp']}% — add citation "
+            "before publishing, or tighten the estimate."
+        )
     elif rec["status"] in ("no_benchmark", "benchmark_missing_value"):
         warnings.append(
             "No external benchmark recorded — add a row to "
