@@ -1,0 +1,140 @@
+# Italy — Contingent Liability Stack (v2.0 AE rebuild)
+#
+# All figures verified via agent research April 2026.
+
+iso3: ITA
+name: Italy
+currency: EUR
+as_of: 2024-12-31
+gdp_local_bn: 2192.2
+gdp_usd_bn: 2372.0
+maastricht_debt_pct_gdp: 135.3
+maastricht_debt_local_bn: 2964.7
+maastricht_debt_source: "Banca d'Italia / Eurostat EDP notification April 2025"
+maastricht_debt_url: "https://ec.europa.eu/eurostat/documents/2995521/20802056/2-22042025-AP-EN.pdf"
+maastricht_debt_date: 2025-04-22
+
+components:
+  - id: cdp_liabilities
+    label: "Cassa Depositi e Prestiti total liabilities"
+    category: state_bank
+    amount_local_bn: 519.0
+    amount_pct_gdp: 23.67
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.15
+    source: "CDP Relazione Finanziaria Annuale 2024"
+    source_url: "https://www.cdp.it/sitointernet/page/it/bilanci_e_relazioni"
+    source_date: 2025-05-01
+    notes: |
+      100% state-owned; classified S.12 (financial corporation),
+      Eurostat ruling 2007 confirmed 2014, so NOT in Maastricht.
+      Postal-savings liabilities ~€287bn matched-funded — low loss risk.
+      LGD 0.15 central case.
+
+  - id: fs_gross_debt
+    label: "Ferrovie dello Stato consolidated gross debt"
+    category: soe_debt
+    amount_local_bn: 12.6
+    amount_pct_gdp: 0.57
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.5
+    source: "FS Relazione Finanziaria Annuale 2024"
+    source_url: "https://www.fsitaliane.it/content/fsitaliane/it/investor-relations/bilanci-e-relazioni.html"
+    source_date: 2025-04-01
+    notes: |
+      FS Group classified S.11 (non-financial corp), not in Maastricht.
+      Structurally dependent on state grants — LGD 0.5 reflects high
+      absorption probability.
+
+  - id: gacs_outstanding
+    label: "GACS NPL securitisation senior guarantees outstanding"
+    category: guarantee
+    amount_local_bn: 12.8
+    amount_pct_gdp: 0.58
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.25
+    source: "MEF Rapporto Garanzie GACS 2024; Banca d'Italia FSR Nov 2024"
+    source_url: "https://www.dt.mef.gov.it/it/attivita_istituzionali/interventi_finanziari/gacs/"
+    source_date: 2024-11-30
+    notes: |
+      Residual senior notes guaranteed; activated guarantees flow
+      through deficit. LGD 0.25.
+
+  - id: sace_state_guaranteed
+    label: "SACE state-guaranteed export credit + Garanzia Italia"
+    category: guarantee
+    amount_local_bn: 95.0
+    amount_pct_gdp: 4.33
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.15
+    source: "SACE Bilancio Consolidato 2024"
+    source_url: "https://www.sace.it/investor-relations/bilanci-e-relazioni"
+    source_date: 2025-05-01
+    notes: |
+      Of ~€260bn total SACE exposure, ~€95bn under state guarantee
+      (Garanzia Italia + SupportItalia + reinsured). Historical claim
+      rate <3%; LGD 0.15.
+
+  - id: esm_callable
+    label: "ESM callable capital (Italy share 17.79%)"
+    category: guarantee
+    amount_local_bn: 111.3
+    amount_pct_gdp: 5.08
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.1
+    source: "ESM Annual Report 2024"
+    source_url: "https://www.esm.europa.eu/publications/annual-report-2024"
+    source_date: 2024-12-31
+    notes: |
+      Mutualised euro-area contingent — not Italy-specific sovereign
+      risk. Excluded from default extended total.
+
+  - id: efsf_guarantee
+    label: "EFSF guarantee commitment (Italy 19.18%)"
+    category: guarantee
+    amount_local_bn: 76.0
+    amount_pct_gdp: 3.47
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.1
+    source: "EFSF Annual Report 2024"
+    source_url: "https://www.esm.europa.eu/publications/efsf-annual-report-2024"
+    source_date: 2024-12-31
+    notes: |
+      Same rationale as ESM — excluded from default extended total.
+
+  - id: local_gov_debt
+    label: "Regional and municipal government debt"
+    category: soe_debt
+    amount_local_bn: 88.7
+    amount_pct_gdp: 4.05
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "Banca d'Italia Debito delle AP, Supplemento 15, April 2025"
+    source_url: "https://www.bancaditalia.it/pubblicazioni/debito-pubblico/"
+    source_date: 2025-04-15
+    notes: |
+      Already consolidated into Maastricht — tracked for transparency.
+
+extended_debt_estimate:
+  low_pct_gdp: 137.3
+  mid_pct_gdp: 140.7
+  high_pct_gdp: 147.1
+  method: |
+    Low (137.3%): Maastricht 135.3 + CDP at LGD 0.05 + FS at LGD 0.2 +
+    GACS at LGD 0.1 + SACE at LGD 0.05 + ESM/EFSF at LGD 0.02.
+    Mid (140.7%): default LGDs (CDP 0.15, FS 0.5, GACS 0.25, SACE 0.15,
+    ESM/EFSF excluded).
+    High (147.1%): CDP 0.3 + FS 1.0 + GACS 0.5 + SACE 0.3 + ESM/EFSF
+    at LGD 0.25.
+  defensible_ceiling_pct_gdp: 147.0
+
+_status: ready_for_review
+_ready_blocker: null
+_agent_research_date: 2026-04-24

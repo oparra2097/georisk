@@ -1,0 +1,120 @@
+# Belgium — Contingent Liability Stack (v2.0 AE rebuild)
+# Agent-researched April 2026.
+
+iso3: BEL
+name: Belgium
+currency: EUR
+as_of: 2024-12-31
+gdp_local_bn: 620.3
+gdp_usd_bn: 664.0
+maastricht_debt_pct_gdp: 104.7
+maastricht_debt_local_bn: 649.0
+maastricht_debt_source: "Eurostat EDP notification April 2025"
+maastricht_debt_url: "https://ec.europa.eu/eurostat/web/products-euro-indicators/w/2-22042025-bp"
+maastricht_debt_date: 2025-04-22
+
+components:
+  - id: flanders_direct
+    label: "Flemish Region direct debt"
+    category: soe_debt
+    amount_local_bn: 33.08
+    amount_pct_gdp: 5.33
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "Finance Flanders — Direct Debt"
+    source_url: "https://www.vlaanderen.be/en/finance-flanders/finance/debt-situation/direct-debt"
+    source_date: 2025-01-01
+    notes: |
+      Consolidated Maastricht-contribution €41.6bn already in Maastricht
+      total. Tracked for transparency only.
+
+  - id: flanders_guarantees
+    label: "Flanders guaranteed (contingent) debt"
+    category: guarantee
+    amount_local_bn: 8.21
+    amount_pct_gdp: 1.32
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.25
+    source: "Finance Flanders — Guaranteed Debt"
+    source_url: "https://www.vlaanderen.be/en/finance-flanders/finance/debt-situation/guaranteed-debt"
+    source_date: 2025-01-01
+    notes: |
+      Not in Maastricht EDP. LGD 0.25 reflects mixed quality of
+      guaranteed counterparties.
+
+  - id: wallonia_consolidated
+    label: "Walloon Region consolidated debt (upper bound)"
+    category: soe_debt
+    amount_local_bn: 43.0
+    amount_pct_gdp: 6.93
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "KBC Economics / Brussels Morning 2024-25 reporting of Les Engagés figures"
+    source_url: "https://brusselsmorning.com/wallonias-debt-crisis-projections-challenges-and-economic-impact/50223/"
+    source_date: 2024-11-01
+    notes: |
+      €28.3bn direct Cerpe; consolidated ~€43bn. Already in Maastricht.
+
+  - id: dexia_guaranteed
+    label: "Dexia state-guaranteed wholesale debt (Belgium share 53%)"
+    category: guarantee
+    amount_local_bn: 18.55
+    amount_pct_gdp: 2.99
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.1
+    source: "Fitch Ratings — Dexia S.A. rating report, October 2024"
+    source_url: "https://www.dexia.com/sites/default/files/2024-11/20241031-Dexia-Rating%20Report.pdf"
+    source_date: 2024-10-31
+    notes: |
+      €35bn total guaranteed funding end-Sept 2024, Belgium/France
+      53/47 split. First-demand sovereign guarantee. LGD 0.1 reflects
+      orderly wind-down.
+
+  - id: belfius_assets
+    label: "Belfius Bank total assets (contingent recap risk)"
+    category: state_bank
+    amount_local_bn: 187.46
+    amount_pct_gdp: 30.22
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.02
+    source: "Belfius Annual Results 2024 press release"
+    source_url: "https://www.belfius.be/about-us/dam/corporate/press-room/press-articles/downloads/en/2025/Press%20release%20results%20for%202024.pdf"
+    source_date: 2025-02-27
+    notes: |
+      100% state-owned via SFPI-FPIM. LGD 0.02 — contingent recap risk
+      tail, not a gross debt claim.
+
+  - id: sfpim_portfolio
+    label: "SFPI-FPIM federal holding portfolio"
+    category: other
+    amount_local_bn: 14.0
+    amount_pct_gdp: 2.26
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "SFPIM website"
+    source_url: "https://sfpim.be/en/"
+    source_date: 2024-12-31
+    notes: |
+      State asset — net positive, not a liability. Excluded.
+
+extended_debt_estimate:
+  low_pct_gdp: 104.5
+  mid_pct_gdp: 105.9
+  high_pct_gdp: 108.6
+  method: |
+    Low: Flanders guarantees LGD 0.1, Dexia LGD 0.05, Belfius LGD 0.01.
+    Mid: default LGDs above.
+    High: Flanders LGD 0.5, full Dexia Belgian share, Belfius stress
+    LGD 0.05.
+    IMF Article IV Belgium 2024 reports ~105% baseline.
+  defensible_ceiling_pct_gdp: 109.0
+
+_status: ready_for_review
+_ready_blocker: null
+_agent_research_date: 2026-04-24

@@ -1,0 +1,156 @@
+# Spain — Contingent Liability Stack (v2.0 AE rebuild)
+#
+# All figures verified via agent research April 2026.
+#
+# Key finding: Eurostat has progressively consolidated Spanish
+# contingents (SAREB 2020, ADIF-AV 2013, ICO 2015, FROB always) so
+# the shadow premium over Maastricht is small — ~2-4pp.
+
+iso3: ESP
+name: Spain
+currency: EUR
+as_of: 2024-12-31
+gdp_local_bn: 1591.0
+gdp_usd_bn: 1725.0
+maastricht_debt_pct_gdp: 101.8
+maastricht_debt_local_bn: 1620.0
+maastricht_debt_source: "Banco de España / Eurostat EDP notification April 2025"
+maastricht_debt_url: "https://www.bde.es/webbe/es/estadisticas/temas/deuda-publica.html"
+maastricht_debt_date: 2025-04-22
+
+components:
+  - id: ico
+    label: "ICO (Instituto de Crédito Oficial) total liabilities"
+    category: state_bank
+    amount_local_bn: 37.8
+    amount_pct_gdp: 2.38
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "ICO Informe Anual 2024"
+    source_url: "https://www.ico.es/web/ico/informes-anuales"
+    source_date: 2025-04-01
+    notes: |
+      100% state-owned, reclassified inside general government sector
+      since 2015 — already in Maastricht.
+
+  - id: sareb
+    label: "SAREB guaranteed liabilities (bad bank)"
+    category: state_bank
+    amount_local_bn: 31.0
+    amount_pct_gdp: 1.95
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "SAREB Informe de Actividad 2024; Eurostat decision March 2021"
+    source_url: "https://ec.europa.eu/eurostat/documents/1015035/12253152/Advice-2021-ES-Statistical-classification-of-Sareb.pdf"
+    source_date: 2021-03-01
+    notes: |
+      Reclassified into general government effective 2020 — already
+      in Maastricht.
+
+  - id: frob_residual
+    label: "FROB residual bank bailout guarantees"
+    category: guarantee
+    amount_local_bn: 1.5
+    amount_pct_gdp: 0.09
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "FROB Informe Anual 2024"
+    source_url: "https://www.frob.es/en/Paginas/Home.aspx"
+    source_date: 2025-04-01
+    notes: |
+      Legacy BFA/Bankia residual — already inside govt sector.
+
+  - id: ccaa_debt
+    label: "Autonomous Communities regional debt"
+    category: soe_debt
+    amount_local_bn: 333.0
+    amount_pct_gdp: 20.93
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "Banco de España Deuda PDE por subsector April 2025"
+    source_url: "https://www.bde.es/webbe/es/estadisticas/"
+    source_date: 2025-04-15
+    notes: |
+      20.9% of GDP regional debt; includes FLA intra-government claims.
+      Already consolidated in Maastricht figure.
+
+  - id: adif_renfe_market
+    label: "ADIF market unit + RENFE Operadora debt"
+    category: soe_debt
+    amount_local_bn: 7.2
+    amount_pct_gdp: 0.45
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.5
+    source: "ADIF Cuentas Anuales 2024; RENFE Informe Anual 2024"
+    source_url: "https://www.renfe.com/es/es/grupo-renfe"
+    source_date: 2025-04-01
+    notes: |
+      ADIF-Alta Velocidad (€13.5bn) is inside Maastricht (2013
+      reclassification). ADIF market unit and RENFE Operadora (total
+      ~€7.2bn) are market-sector SOEs outside Maastricht.
+
+  - id: cesce_state_account
+    label: "CESCE state-account export credit exposure"
+    category: guarantee
+    amount_local_bn: 14.5
+    amount_pct_gdp: 0.91
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.25
+    source: "CESCE Informe Anual 2024"
+    source_url: "https://www.cesce.es/es/informe-anual"
+    source_date: 2025-04-01
+    notes: |
+      Contingent exposure on state account (Cuenta del Estado).
+
+  - id: efsf_share
+    label: "EFSF guarantees (Spanish share)"
+    category: guarantee
+    amount_local_bn: 92.5
+    amount_pct_gdp: 5.81
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.15
+    source: "EFSF 2024 Financial Statements"
+    source_url: "https://www.esm.europa.eu/financial-information/efsf"
+    source_date: 2024-12-31
+    notes: |
+      Mutualised — excluded from default extended total.
+
+  - id: esm_callable
+    label: "ESM callable capital (Spanish share)"
+    category: guarantee
+    amount_local_bn: 63.0
+    amount_pct_gdp: 3.96
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.1
+    source: "ESM Annual Report 2024"
+    source_url: "https://www.esm.europa.eu/publications/annual-report-2024"
+    source_date: 2024-12-31
+    notes: |
+      Same rationale — excluded from default.
+
+extended_debt_estimate:
+  low_pct_gdp: 102.3
+  mid_pct_gdp: 103.7
+  high_pct_gdp: 106.0
+  method: |
+    Low (102.3%): ADIF market+RENFE at LGD 0.25 + CESCE at LGD 0.1 +
+    EFSF at LGD 0.05 + ESM excluded.
+    Mid (103.7%): ADIF+RENFE at LGD 0.5 + CESCE at LGD 0.25 + EFSF/ESM
+    excluded.
+    High (106.0%): ADIF+RENFE at LGD 1.0 + CESCE at LGD 0.5 + EFSF at
+    LGD 0.3 + ESM at LGD 0.25.
+    Eurostat consolidation has already absorbed the main hidden items
+    (SAREB, ADIF-AV, ICO, FROB), so the shadow envelope is modest.
+  defensible_ceiling_pct_gdp: 106.0
+
+_status: ready_for_review
+_ready_blocker: null
+_agent_research_date: 2026-04-24

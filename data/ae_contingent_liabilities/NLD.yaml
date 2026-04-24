@@ -1,0 +1,105 @@
+# Netherlands — Contingent Liability Stack (v2.0 AE rebuild)
+# Agent-researched April 2026.
+
+iso3: NLD
+name: Netherlands
+currency: EUR
+as_of: 2024-12-31
+gdp_local_bn: 1135.0
+gdp_usd_bn: 1214.6
+maastricht_debt_pct_gdp: 43.3
+maastricht_debt_local_bn: 491.6
+maastricht_debt_source: "CBS — Government deficit rose to 0.9% GDP in 2024, March 2025"
+maastricht_debt_url: "https://www.cbs.nl/en-gb/news/2025/13/government-deficit-rose-to-0-9-percent-of-gdp-in-2024"
+maastricht_debt_date: 2025-03-24
+
+components:
+  - id: bng_bank
+    label: "BNG Bank total liabilities (municipal lender, 50% state)"
+    category: state_bank
+    amount_local_bn: 127.94
+    amount_pct_gdp: 11.27
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.01
+    source: "BNG Bank Annual Report 2024"
+    source_url: "https://www.bngbank.com/Financials/Annual-report-2024"
+    source_date: 2025-04-01
+    notes: |
+      50% state-owned, rest provinces/municipalities. AAA-rated,
+      municipal-lending focus. LGD 0.01 — very low tail risk.
+
+  - id: nwb_bank
+    label: "NWB Bank total liabilities (water-board lender, 17% state)"
+    category: state_bank
+    amount_local_bn: 78.77
+    amount_pct_gdp: 6.94
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.01
+    source: "NWB Bank Pillar 3 Disclosure 2024"
+    source_url: "https://nwbbank.com/application/files/9417/4981/1016/Pillar_3_Full_Year_Disclosure_2024.pdf"
+    source_date: 2025-04-01
+    notes: |
+      17% state, 81% water boards. Similar profile to BNG. LGD 0.01.
+
+  - id: tennet_shareholder_loan
+    label: "TenneT state shareholder-loan facility commitment (NL share)"
+    category: soe_debt
+    amount_local_bn: 22.0
+    amount_pct_gdp: 1.94
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.05
+    source: "TenneT Integrated Annual Report 2024"
+    source_url: "https://www.tennet.eu/about-tennet/publications/welcome-our-integrated-annual-report-2024"
+    source_date: 2025-03-01
+    notes: |
+      Dutch state committed €44bn shareholder-loan facilities jointly
+      with Germany for 2025-26 grid investment. NL share ~€22bn
+      commitment; LGD 0.05 for grid infrastructure with recoverable
+      assets.
+
+  - id: nlfi_abn_amro
+    label: "NLFI / ABN AMRO residual stake"
+    category: other
+    amount_local_bn: 4.0
+    amount_pct_gdp: 0.35
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "ABN AMRO Oct 2024 news release"
+    source_url: "https://www.abnamro.com/en/news/dutch-state-reduces-stake-in-abn-amro-group-to-63"
+    source_date: 2024-10-01
+    notes: |
+      State asset (30.5% stake), not a liability. Excluded.
+
+  - id: wsw_guarantee
+    label: "WSW social-housing guarantee portfolio"
+    category: guarantee
+    amount_local_bn: 92.0
+    amount_pct_gdp: 8.11
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.05
+    source: "Waarborgfonds Sociale Woningbouw press release 2024"
+    source_url: "https://www.wsw.nl/over-wsw/nieuws-publicaties/laatste-nieuws/nieuwsdetail/geborgde-leningenportefeuille-gestegen-tot-recordbedrag-van-ruim-eur-90-miljard"
+    source_date: 2024-06-01
+    notes: |
+      >€90bn Q1 2024, rising through year. Backstopped by state and
+      municipalities; LGD 0.05.
+
+extended_debt_estimate:
+  low_pct_gdp: 43.7
+  mid_pct_gdp: 44.2
+  high_pct_gdp: 46.0
+  method: |
+    Low: BNG/NWB LGD 0.005, TenneT LGD 0.02, WSW LGD 0.02.
+    Mid: default LGDs.
+    High: WSW LGD 0.15, TenneT LGD 0.15, state-bank LGD 0.03.
+    IMF Article IV Netherlands 2024 confirms ~43% baseline.
+  defensible_ceiling_pct_gdp: 46.0
+
+_status: ready_for_review
+_ready_blocker: null
+_agent_research_date: 2026-04-24

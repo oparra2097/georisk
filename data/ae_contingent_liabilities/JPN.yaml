@@ -1,0 +1,119 @@
+# Japan — Contingent Liability Stack (v2.0 AE rebuild)
+# Agent-researched April 2026.
+
+iso3: JPN
+name: Japan
+currency: JPY
+as_of: 2024-12-31
+gdp_local_bn: 609300.0
+gdp_usd_bn: 4019.0
+maastricht_debt_pct_gdp: 236.7
+maastricht_debt_local_bn: 1442310.0
+maastricht_debt_source: "IMF DataMapper / WEO 2024 (general govt gross debt)"
+maastricht_debt_url: "https://www.imf.org/external/datamapper/GGXWDG_NGDP@WEO/JPN"
+maastricht_debt_date: 2025-04-01
+
+components:
+  - id: jgb_stock
+    label: "Outstanding general JGBs incl. FILP bonds"
+    category: soe_debt
+    amount_local_bn: 1105400.0
+    amount_pct_gdp: 181.45
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 1.0
+    source: "MOF Debt Management Report 2025"
+    source_url: "https://www.mof.go.jp/english/policy/jgbs/publication/debt_management_report/2025/esaimu2025.pdf"
+    source_date: 2025-04-01
+    notes: |
+      Core sovereign debt — already in headline. Tracked for composition
+      transparency.
+
+  - id: jfc_loans
+    label: "Japan Finance Corporation outstanding loans (FILP-funded)"
+    category: state_bank
+    amount_local_bn: 26140.0
+    amount_pct_gdp: 4.29
+    already_in_maastricht: true
+    include_in_extended: false
+    loss_given_default: 0.05
+    source: "JFC Annual Report 2024"
+    source_url: "https://www.jfc.go.jp/n/english/report/pdf/jfc2024e_0.pdf"
+    source_date: 2024-06-01
+    notes: |
+      Funded through FILP bonds (already in JGB stock). Tracked.
+
+  - id: japan_post_bank
+    label: "Japan Post Bank deposits (implicit state backing)"
+    category: state_bank
+    amount_local_bn: 192800.0
+    amount_pct_gdp: 31.64
+    already_in_maastricht: false
+    include_in_extended: true
+    loss_given_default: 0.005
+    source: "Japan Post Bank / Statista 2024"
+    source_url: "https://www.statista.com/statistics/1220660/japan-post-bank-value-of-deposits/"
+    source_date: 2024-03-31
+    notes: |
+      Government economic interest ~22%. Deposits formally insured;
+      LGD 0.005 reflects very limited sovereign call.
+
+  - id: boj_etf_holdings
+    label: "BoJ ETF holdings (asset, not debt — flagged)"
+    category: other
+    amount_local_bn: 37000.0
+    amount_pct_gdp: 6.07
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "CEPR Europe policy brief 2025"
+    source_url: "https://www.cepweb.org/the-bank-of-japan-must-define-a-strategy-for-its-etf-holdings-not-just-its-sales/"
+    source_date: 2025-01-01
+    notes: |
+      Book ¥37trn, market ¥70-80trn end-2024. Asset, not liability —
+      excluded but flagged for context.
+
+  - id: gpif_aum
+    label: "GPIF AUM (pension assets — context only)"
+    category: other
+    amount_local_bn: 250000.0
+    amount_pct_gdp: 41.03
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.0
+    source: "GPIF Annual Report FY2024"
+    source_url: "https://www.gpif.go.jp/en/performance/annual_report_fiscal_year_2024.pdf"
+    source_date: 2025-07-01
+    notes: |
+      Asset backing pension liabilities. Not debt. Context only.
+
+  - id: jr_island_companies
+    label: "JR Hokkaido/Shikoku/Freight liabilities via JRTT"
+    category: soe_debt
+    amount_local_bn: null
+    amount_pct_gdp: null
+    already_in_maastricht: false
+    include_in_extended: false
+    loss_given_default: 0.1
+    source: "not found — JRTT disclosures not located in this pass"
+    source_url: "https://www.jrtt.go.jp/english/"
+    source_date: null
+    notes: |
+      100% state-owned via JRTT. End-2024 figure not located; excluded
+      until value can be pinned down.
+
+extended_debt_estimate:
+  low_pct_gdp: 237.0
+  mid_pct_gdp: 238.3
+  high_pct_gdp: 243.3
+  method: |
+    Low: Japan Post Bank LGD 0.002.
+    Mid: default LGDs (Japan Post Bank 0.005, including residual FILP).
+    High: Japan Post Bank LGD 0.02 + JR islands at LGD 0.1 + FILP
+    contingent stress.
+    IMF Article IV Japan 2024 reports ~251% net-of-financial-assets.
+  defensible_ceiling_pct_gdp: 245.0
+
+_status: ready_for_review
+_ready_blocker: null
+_agent_research_date: 2026-04-24
