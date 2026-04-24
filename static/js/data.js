@@ -604,6 +604,7 @@
                 borderColor: COLORS[i % COLORS.length],
                 backgroundColor: 'transparent',
                 borderWidth: 2, fill: false, pointRadius: 0, pointHitRadius: 8, tension: 0.3,
+                spanGaps: true,
             };
         });
 
