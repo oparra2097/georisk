@@ -83,7 +83,17 @@ def get_debug():
     from backend.log_capture import snapshot
     from backend.macro_model.service import _PERSIST_PATH
 
-    fred_set = bool(getattr(Config, 'FRED_API_KEY', '') or os.environ.get('FRED_API_KEY', ''))
+    # Use the same resolver fred_client uses, so /debug reports exactly
+    # what's reaching the FRED API calls.
+    from backend.data_sources.fred_client import _get_api_key
+    fred_key = _get_api_key()
+    fred_set = bool(fred_key)
+    fred_meta = {
+        'detected': fred_set,
+        'length': len(fred_key) if fred_key else 0,
+        'first4': (fred_key[:4] + '…') if fred_key else None,
+        'source_priority': ['Config.FRED_API_KEY', 'env FRED_API_KEY', 'env FRED_KEY', 'env FRED_TOKEN'],
+    }
 
     pickle_info = {'path': _PERSIST_PATH, 'exists': os.path.exists(_PERSIST_PATH)}
     if pickle_info['exists']:
@@ -97,6 +107,7 @@ def get_debug():
         'product': 'macro-model',
         'env': {
             'FRED_API_KEY_set': fred_set,
+            'FRED_API_KEY_meta': fred_meta,
             'DATA_DIR': Config.DATA_DIR,
             'data_dir_exists': os.path.isdir(Config.DATA_DIR),
             'data_dir_writable': os.access(Config.DATA_DIR, os.W_OK) if os.path.isdir(Config.DATA_DIR) else False,

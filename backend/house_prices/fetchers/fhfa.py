@@ -127,16 +127,26 @@ def _parse_master_csv(text: str) -> list[HpiRow]:
         level_counts[raw_level] = level_counts.get(raw_level, 0) + 1
         level = _LEVEL_MAP.get(raw_level)
         if level is None:
-            # Split 'USA or Census Division' based on place_id
+            # Fallback when FHFA returns an unrecognized 'level' value.
+            # Order matters: 2-char alpha = state (CA, TX), 2-char numeric =
+            # state FIPS, 3-char alpha = region/division (NE, WSC), 5-char
+            # numeric = MSA CBSA code.
             pid = col(r, 'place_id').strip()
+            place_name = col(r, 'place_name').strip()
             if pid in ('USA', '00'):
                 level = 'national'
-            elif pid and len(pid) <= 3:  # short codes like 'NE', 'WSC' = region
-                level = 'region'
-            elif pid and len(pid) == 2:
+            elif pid and len(pid) == 2 and pid.isalpha():
                 level = 'state'
+            elif pid and len(pid) == 2 and pid.isdigit():
+                level = 'state'  # 2-digit numeric state FIPS
+            elif pid and len(pid) == 3 and pid.isalpha():
+                level = 'region'
             elif pid and len(pid) == 5 and pid.isdigit():
                 level = 'msa'
+            elif raw_level and 'state' in raw_level.lower():
+                level = 'state'
+            elif raw_level and ('region' in raw_level.lower() or 'division' in raw_level.lower()):
+                level = 'region'
             else:
                 level = 'region'
 
@@ -236,6 +246,93 @@ def _save_disk(path: str, rows: list[HpiRow]):
 
 
 # ── Public API ──────────────────────────────────────────────────────────
+
+# Per-level fallback URLs — FHFA publishes individual files in addition to
+# the master CSV. If the master parses successfully these are unused; if
+# states/regions come back empty (column-rename, schema shift) we fall
+# back to fetching the dedicated state/division CSVs which have a known,
+# narrower schema that's been stable for years.
+_FALLBACK_STATE_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_bdl_state.csv'
+_FALLBACK_DIVISION_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_bdl_division.csv'
+
+
+def _parse_per_level_csv(text: str, level: str) -> list[HpiRow]:
+    """Parser for the dedicated per-level FHFA files (state / division).
+
+    Schema (case-insensitive): place_name, place_id, yr, qtr (or period),
+    index_nsa, index_sa. Both files share this layout.
+    """
+    rows: list[HpiRow] = []
+    reader = csv.DictReader(io.StringIO(text))
+    fieldnames = reader.fieldnames or []
+    if not fieldnames:
+        return []
+
+    col_map = {f.strip().lower(): f for f in fieldnames}
+    logger.info(f'fhfa per-level ({level}): columns = {list(col_map.keys())}')
+
+    def col(row, key, default=''):
+        actual = col_map.get(key)
+        return row.get(actual, default) if actual else default
+
+    for r in reader:
+        pid = col(r, 'place_id').strip()
+        name = col(r, 'place_name').strip()
+        if not pid:
+            continue
+        try:
+            yr = int(col(r, 'yr'))
+            period = int(col(r, 'qtr') or col(r, 'period'))
+        except (ValueError, TypeError):
+            continue
+
+        def _f(key):
+            v = col(r, key).strip()
+            if v in ('', '.', '-'):
+                return None
+            try:
+                return float(v)
+            except ValueError:
+                return None
+
+        rows.append(HpiRow(
+            level=level,
+            code=pid,
+            name=name,
+            year=yr,
+            period=period,
+            freq='quarterly',
+            index_nsa=_f('index_nsa'),
+            index_sa=_f('index_sa'),
+        ))
+    return rows
+
+
+def _fetch_fallback(level: str, url: str) -> list[HpiRow]:
+    """Download and parse a per-level FHFA file. Records diagnostics."""
+    try:
+        resp = requests.get(url, timeout=60,
+                            headers={'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'})
+        if resp.status_code != 200:
+            msg = f'HTTP {resp.status_code}'
+            logger.warning(f'fhfa per-level {level}: {msg}')
+            diagnostics.record_fetch_fail(f'fhfa_{level}_fallback', f'FHFA {level} (fallback)', msg)
+            return []
+        rows = _parse_per_level_csv(resp.text, level)
+        logger.info(f'fhfa per-level {level}: parsed {len(rows)} rows')
+        if rows:
+            diagnostics.record_fetch_ok(f'fhfa_{level}_fallback', f'FHFA {level} (fallback)', len(rows))
+        else:
+            diagnostics.record_fetch_fail(
+                f'fhfa_{level}_fallback', f'FHFA {level} (fallback)',
+                f'parsed 0 rows; first 200 chars: {resp.text[:200]!r}',
+            )
+        return rows
+    except Exception as e:
+        logger.error(f'fhfa per-level {level} fetch failed: {e}')
+        diagnostics.record_fetch_fail(f'fhfa_{level}_fallback', f'FHFA {level} (fallback)', str(e))
+        return []
+
 
 def fetch_master(force: bool = False) -> list[HpiRow]:
     """FHFA quarterly master (national / region / state / MSA)."""
