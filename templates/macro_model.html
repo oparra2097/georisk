@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}US Macro Model — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+  .mm-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+  .mm-header { margin-bottom: 18px; }
+  .mm-title { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .mm-subtitle { font-size: 13px; color: #6b7280; margin: 0; }
+  .mm-status { font-size: 12px; color: #6b7280; margin-top: 6px; }
+  .mm-status.ok { color: #065f46; }
+  .mm-status.err { color: #b91c1c; }
+
+  .mm-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 20px; }
+  @media (max-width: 900px) { .mm-layout { grid-template-columns: 1fr; } }
+
+  .mm-card { border: 1px solid #e5e7eb; background: #fff; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
+  .mm-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; letter-spacing: 0.02em; text-transform: uppercase; color: #374151; }
+
+  table.mm-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  table.mm-table th, table.mm-table td { text-align: right; padding: 4px 8px; border-bottom: 1px solid #f3f4f6; }
+  table.mm-table th:first-child, table.mm-table td:first-child { text-align: left; font-family: monospace; color: #6b7280; }
+  table.mm-table thead th { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .mm-equation { border: 1px solid #f3f4f6; border-radius: 4px; padding: 8px; margin-bottom: 8px; font-size: 11px; }
+  .mm-equation strong { font-size: 12px; display: block; margin-bottom: 4px; }
+  .mm-equation .diag { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 10px; color: #4b5563; }
+  .mm-equation .diag-ok { color: #065f46; }
+  .mm-equation .diag-bad { color: #b91c1c; }
+
+  .shock-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .shock-chip { padding: 4px 10px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 12px; cursor: pointer; background: #fff; }
+  .shock-chip.active { background: #111827; color: #fff; border-color: #111827; }
+  .btn { padding: 6px 12px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; background: #fff; }
+  .btn.primary { background: #111827; color: #fff; border-color: #111827; }
+
+  .loading { color: #9ca3af; font-size: 12px; padding: 12px; text-align: center; }
+  .delta-pos { color: #b91c1c; }
+  .delta-neg { color: #065f46; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mm-page">
+  <div class="mm-header">
+    <h1 class="mm-title">US Macro Model <span style="font-weight:400;color:#9ca3af;font-size:14px">/ FRB/US-lite v1</span></h1>
+    <p class="mm-subtitle">Reduced-form error-correction model of the US economy. 11 behavioral equations across spending, prices, labor, and financial blocks, estimated on quarterly FRED data from 1980Q1. Solved jointly via damped Gauss-Seidel.</p>
+    <div class="mm-status" id="mm-status">Checking model status…</div>
+  </div>
+
+  <div class="mm-layout">
+    <div>
+      <div class="mm-card">
+        <h3>20-quarter baseline forecast</h3>
+        <div id="mm-forecast"><div class="loading">Loading forecast…</div></div>
+      </div>
+
+      <div class="mm-card">
+        <h3>Estimated equations</h3>
+        <div id="mm-equations"><div class="loading">Loading equations…</div></div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="mm-card">
+        <h3>Scenario — shock a variable</h3>
+        <div class="shock-chips" id="mm-shock-chips"></div>
+        <button class="btn primary" id="mm-run-shock" style="width:100%;margin-top:6px;">Run shock</button>
+        <div id="mm-shock-result" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="mm-card">
+        <h3>Notes</h3>
+        <div style="font-size:11px;color:#4b5563;line-height:1.5;">
+          <p style="margin:0 0 6px">Endogenous (11): GDP identity, consumption, investment, exports, imports, core PCE, wage, employment, unemployment, Fed funds, 10Y, DXY.</p>
+          <p style="margin:0 0 6px">Exogenous: government spending, oil, OECD GDP, NAIRU, productivity, LFPR, CPI tracks core PCE via identity.</p>
+          <p style="margin:0;color:#9ca3af;font-size:10px;">Rebuild takes 20-60s on first request (fetches FRED, fits 11 equations). Subsequent requests are cached.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const API = '/api/macro-model/us';
+  const $ = (id) => document.getElementById(id);
+
+  let state = { shocks: [], selectedShock: null };
+
+  function fmtNum(v, d=2) {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    if (Math.abs(v) > 1000) return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return v.toFixed(d);
+  }
+
+  async function loadStatus() {
+    const r = await fetch(`${API}/status`);
+    const b = await r.json();
+    const el = $('mm-status');
+    if (b.built) {
+      el.textContent = `Model built — ${b.n_equations} equations.`;
+      el.className = 'mm-status ok';
+    } else if (b.fit_error) {
+      el.textContent = `Fit error: ${b.fit_error}`;
+      el.className = 'mm-status err';
+    } else {
+      el.textContent = 'Model not yet built — first request triggers a fit.';
+      el.className = 'mm-status';
+    }
+  }
+
+  async function loadForecast() {
+    const r = await fetch(`${API}/forecast?horizon=20`);
+    if (!r.ok) { $('mm-forecast').innerHTML = `<div class="loading">Fit in progress — retry in a moment.</div>`; return; }
+    const b = await r.json();
+    const cols = ['gdp', 'cons', 'inv', 'unemp', 'pce_core', 'fedfunds', 'tsy10', 'dxy'];
+    const head = `<tr><th>Qtr</th>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+    const rows = b.path.map(p => {
+      const cells = cols.map(c => `<td>${fmtNum(p[c])}</td>`).join('');
+      return `<tr><td>${p.quarter}</td>${cells}</tr>`;
+    }).join('');
+    $('mm-forecast').innerHTML = `<table class="mm-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  }
+
+  async function loadEquations() {
+    const r = await fetch(`${API}/fit`);
+    if (!r.ok) { $('mm-equations').innerHTML = `<div class="loading">Fit in progress…</div>`; return; }
+    const b = await r.json();
+    const eqs = Object.values(b.equations || {});
+    $('mm-equations').innerHTML = eqs.map(e => {
+      const dw = e.diagnostics.durbin_watson;
+      const dwClass = (dw > 1.5 && dw < 2.5) ? 'diag-ok' : 'diag-bad';
+      const gamma = e.short_run.error_correction_coef;
+      const gammaClass = (gamma < 0 && gamma > -1) ? 'diag-ok' : 'diag-bad';
+      return `<div class="mm-equation">
+        <strong>${e.name}</strong>
+        <div class="diag">
+          <span>N=${e.sample.n}</span>
+          <span>R²=${e.short_run.rsq}</span>
+          <span class="${dwClass}">DW=${dw}</span>
+          <span class="${gammaClass}">γ=${gamma ?? '—'}</span>
+          <span>lag=${e.short_run.chosen_lag}</span>
+          <span>AIC=${e.short_run.aic}</span>
+          <span>coint p=${e.long_run.cointegration_p ?? '—'}</span>
+          <span>${e.sample.start} → ${e.sample.end}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadShocks() {
+    const r = await fetch(`${API}/shocks`);
+    const b = await r.json();
+    state.shocks = b.shocks;
+    $('mm-shock-chips').innerHTML = state.shocks.map(s =>
+      `<span class="shock-chip" data-id="${s.id}" title="${s.variable}: ${s.magnitude}">${s.label}</span>`
+    ).join('');
+    document.querySelectorAll('.shock-chip').forEach(el => {
+      el.onclick = () => {
+        document.querySelectorAll('.shock-chip').forEach(c => c.classList.remove('active'));
+        el.classList.add('active');
+        state.selectedShock = el.dataset.id;
+      };
+    });
+  }
+
+  async function runShock() {
+    const out = $('mm-shock-result');
+    if (!state.selectedShock) { out.innerHTML = '<div class="loading">Pick a shock first.</div>'; return; }
+    out.innerHTML = '<div class="loading">Running shock…</div>';
+    const r = await fetch(`${API}/shock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: state.selectedShock, horizon: 12 }),
+    });
+    if (!r.ok) { out.innerHTML = `<div class="loading">Error: ${r.statusText}</div>`; return; }
+    const b = await r.json();
+    const cols = ['pce_core', 'unemp', 'fedfunds', 'tsy10', 'gdp'];
+    const head = `<tr><th>Qtr</th>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+    const rows = b.irf.slice(0, 12).map(p => {
+      const cells = cols.map(c => {
+        const v = p[c];
+        if (v === null || v === undefined) return '<td>—</td>';
+        const cls = v > 0 ? 'delta-pos' : (v < 0 ? 'delta-neg' : '');
+        return `<td class="${cls}">${fmtNum(v, 4)}</td>`;
+      }).join('');
+      return `<tr><td>${p.quarter}</td>${cells}</tr>`;
+    }).join('');
+    out.innerHTML = `<div style="font-size:11px;color:#6b7280;margin-bottom:6px;">IRF (shocked − baseline), ${b.shock.label}</div>
+      <table class="mm-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  }
+
+  $('mm-run-shock').addEventListener('click', runShock);
+  Promise.all([loadStatus(), loadForecast(), loadEquations(), loadShocks()]);
+})();
+</script>
+{% endblock %}

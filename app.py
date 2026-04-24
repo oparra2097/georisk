@@ -7,6 +7,7 @@ from backend.routes import api_bp
 from backend.economist import economist_bp
 from backend.auth import auth_bp, user_loader, init_auth_db, ADMIN_EMAIL
 from backend.scheduler import init_scheduler
+from backend.macro_model.routes import macro_model_bp
 
 
 def create_app():
@@ -36,6 +37,7 @@ def create_app():
     # ── Blueprints ───────────────────────────────────────────────────────
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(economist_bp, url_prefix='/api')
+    app.register_blueprint(macro_model_bp, url_prefix='/api/macro-model/us')
     app.register_blueprint(auth_bp, url_prefix='/auth')
 
     # ── Routes ───────────────────────────────────────────────────────────
@@ -69,6 +71,10 @@ def create_app():
     @login_required
     def economist():
         return render_template('economist.html', active_page='economist')
+
+    @app.route('/macro-model')
+    def macro_model():
+        return render_template('macro_model.html', active_page='macro-model')
 
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
