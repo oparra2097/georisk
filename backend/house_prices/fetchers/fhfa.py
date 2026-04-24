@@ -35,6 +35,7 @@ from typing import Iterable, Optional
 import requests
 
 from config import Config
+from backend.house_prices import diagnostics
 from backend.house_prices.sources import SOURCES
 
 logger = logging.getLogger(__name__)
@@ -204,6 +205,7 @@ def fetch_master(force: bool = False) -> list[HpiRow]:
         if disk_rows is not None:
             parsed = [HpiRow(**r) for r in disk_rows]
             _mem['master'] = parsed
+            diagnostics.record_fetch_ok('fhfa_master', 'FHFA HPI master (cached)', len(parsed))
             return parsed
 
     logger.info('fhfa: downloading master file…')
@@ -211,16 +213,20 @@ def fetch_master(force: bool = False) -> list[HpiRow]:
         resp = requests.get(_source('fhfa_master'), timeout=90,
                             headers={'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'})
         if resp.status_code != 200:
-            logger.warning(f'fhfa master HTTP {resp.status_code}')
+            msg = f'HTTP {resp.status_code}'
+            logger.warning(f'fhfa master {msg}')
+            diagnostics.record_fetch_fail('fhfa_master', 'FHFA HPI master', msg)
             return []
         rows = _parse_master_csv(resp.text)
         logger.info(f'fhfa master: parsed {len(rows)} rows')
         with _lock:
             _mem['master'] = rows
         _save_disk(_CACHE_FILE, rows)
+        diagnostics.record_fetch_ok('fhfa_master', 'FHFA HPI master', len(rows))
         return rows
     except Exception as e:
         logger.error(f'fhfa master fetch failed: {e}')
+        diagnostics.record_fetch_fail('fhfa_master', 'FHFA HPI master', str(e))
         return []
 
 
@@ -233,6 +239,7 @@ def fetch_county(force: bool = False) -> list[HpiRow]:
         if disk_rows is not None:
             parsed = [HpiRow(**r) for r in disk_rows]
             _mem['county'] = parsed
+            diagnostics.record_fetch_ok('fhfa_county', 'FHFA County HPI (cached)', len(parsed))
             return parsed
 
     logger.info('fhfa: downloading county file…')
@@ -240,16 +247,20 @@ def fetch_county(force: bool = False) -> list[HpiRow]:
         resp = requests.get(_source('fhfa_county'), timeout=90,
                             headers={'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'})
         if resp.status_code != 200:
-            logger.warning(f'fhfa county HTTP {resp.status_code}')
+            msg = f'HTTP {resp.status_code}'
+            logger.warning(f'fhfa county {msg}')
+            diagnostics.record_fetch_fail('fhfa_county', 'FHFA County HPI', msg)
             return []
         rows = _parse_county_csv(resp.text)
         logger.info(f'fhfa county: parsed {len(rows)} rows')
         with _lock:
             _mem['county'] = rows
         _save_disk(_CACHE_FILE_COUNTY, rows)
+        diagnostics.record_fetch_ok('fhfa_county', 'FHFA County HPI', len(rows))
         return rows
     except Exception as e:
         logger.error(f'fhfa county fetch failed: {e}')
+        diagnostics.record_fetch_fail('fhfa_county', 'FHFA County HPI', str(e))
         return []
 
 

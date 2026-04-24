@@ -63,6 +63,17 @@
     </div>
   </section>
 
+  <!-- System check (shows while building or on error) -->
+  <section id="hp-diagnostics-card" class="hp-card" style="display:none;">
+    <h3 style="display:flex;align-items:center;gap:8px;">
+      System check
+      <span id="hp-diag-badge" style="font-size:10px;padding:2px 8px;border-radius:10px;"></span>
+      <button class="hp-tab" id="hp-diag-toggle" style="margin-left:auto;font-size:11px;padding:3px 10px;">Details</button>
+    </h3>
+    <div id="hp-diag-summary" style="font-size:12px;color:#4b5563;"></div>
+    <div id="hp-diag-details" style="display:none;margin-top:10px;"></div>
+  </section>
+
   <!-- Toolbar -->
   <div class="hp-toolbar">
     <button class="hp-tab active" data-level="state">States</button>
@@ -165,6 +176,72 @@
     state.entities = b.entities || [];
     $('hp-count').textContent = `${state.entities.length} entities`;
     renderTable();
+    // If the API said the build is still pending, kick off a poll
+    if (b.pending || state.entities.length === 0) {
+      schedulePoll();
+    }
+  }
+
+  let _pollTimer = null;
+  let _pollCount = 0;
+  function schedulePoll() {
+    if (_pollTimer) return;
+    _pollCount = 0;
+    _pollTimer = setInterval(async () => {
+      _pollCount++;
+      await loadDiagnostics();
+      const s = await fetch(`${API}/status`).then(r => r.json()).catch(() => ({}));
+      if (s.built || s.build_error || _pollCount > 36) {
+        clearInterval(_pollTimer); _pollTimer = null;
+        if (s.built) {
+          // Reload the current level + summary now that data is ready
+          loadHero(); loadLevel(state.level);
+        }
+      }
+    }, 5000);
+  }
+
+  async function loadDiagnostics() {
+    const r = await fetch(`${API}/diagnostics`);
+    if (!r.ok) return;
+    const body = await r.json();
+    const s = body.status, d = body.diagnostics;
+    const card = $('hp-diagnostics-card');
+
+    // Hide the card entirely once we're built and no errors
+    if (s.built && !s.build_error && d.n_sources_fail === 0) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+
+    const badge = $('hp-diag-badge');
+    if (s.build_error) {
+      badge.textContent = 'ERROR'; badge.style.background = '#fee2e2'; badge.style.color = '#991b1b';
+    } else if (s.building) {
+      badge.textContent = 'BUILDING'; badge.style.background = '#fef3c7'; badge.style.color = '#78350f';
+    } else if (s.built && d.n_sources_fail > 0) {
+      badge.textContent = 'PARTIAL'; badge.style.background = '#fed7aa'; badge.style.color = '#9a3412';
+    } else if (s.built) {
+      badge.textContent = 'OK'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46';
+    } else {
+      badge.textContent = 'QUEUED'; badge.style.background = '#e5e7eb'; badge.style.color = '#4b5563';
+    }
+
+    const summary = `<strong>Sources:</strong> ${d.n_sources_ok} ok, ${d.n_sources_fail} failed
+                     ${s.build_error ? `<br><span style="color:#b91c1c;">${s.build_error}</span>` : ''}
+                     ${s.building ? '<br><span style="color:#78350f;">Downloading FHFA + Case-Shiller + Zillow CSVs (typically 60-120s on first load)…</span>' : ''}`;
+    $('hp-diag-summary').innerHTML = summary;
+
+    const rows = d.fetches.map(f => {
+      const cls = f.ok ? '' : 'style="background:#fef2f2;"';
+      const status = f.ok ? `<span class="pos">${f.n_rows.toLocaleString()} rows</span>`
+                           : `<span class="neg" style="font-size:11px;">${f.error || 'failed'}</span>`;
+      return `<tr ${cls}><td>${f.label}</td><td><code>${f.source_id}</code></td><td>${status}</td></tr>`;
+    }).join('');
+    $('hp-diag-details').innerHTML = `<table class="hp-table" style="font-size:11px;">
+      <thead><tr><th>Source</th><th>ID</th><th>Status</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" style="color:#9ca3af;">No fetches recorded yet.</td></tr>'}</tbody></table>`;
   }
 
   function renderTable() {
@@ -280,8 +357,13 @@
     });
   });
   $('hp-search').addEventListener('input', (e) => { state.search = e.target.value; renderTable(); });
+  $('hp-diag-toggle').addEventListener('click', () => {
+    const el = $('hp-diag-details');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    $('hp-diag-toggle').textContent = el.style.display === 'none' ? 'Details' : 'Hide';
+  });
 
-  Promise.all([loadHero(), loadLevel('state'), loadSources()]);
+  Promise.all([loadDiagnostics(), loadHero(), loadLevel('state'), loadSources()]);
 })();
 </script>
 {% endblock %}
