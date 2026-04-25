@@ -26,11 +26,13 @@ import io
 import json
 import logging
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Iterable, Optional
+from urllib.parse import urljoin
 
 import requests
 
@@ -327,6 +329,149 @@ def _save_disk(path: str, rows: list[HpiRow]):
         logger.warning(f'fhfa cache save failed: {e}')
 
 
+# ── URL resolution (404-tolerant) ───────────────────────────────────────
+#
+# FHFA reorganizes download paths periodically (the 2025Q4 reshuffle moved
+# `quarterly_datasets/` -> `monthly/` and `annually_datasets/` -> `annually/`).
+# Hardcoding a single URL makes the dashboard go red the moment FHFA shifts
+# things. To survive future reorgs without code changes we:
+#   1. Try the URL configured in sources.py (the "primary").
+#   2. Fall through to a list of historically-valid candidate paths.
+#   3. As a last resort scrape the FHFA HPI Datasets landing page and pick
+#      the first anchor whose href matches the target filename.
+# Any URL that returns 200 is cached per-process so subsequent fetches in
+# the same Render dyno skip straight to the working URL.
+
+_FHFA_DATASETS_URL = 'https://www.fhfa.gov/data/hpi/datasets'
+_USER_AGENT = 'Mozilla/5.0 (compatible; ParraMacro/1.0)'
+
+# Ordered fallback URLs — first 200 wins. Keep both pre- and post-2025Q4
+# layouts here so we self-heal in either direction if FHFA reverts.
+_URL_CANDIDATES: dict[str, list[str]] = {
+    'fhfa_master': [
+        'https://www.fhfa.gov/hpi/download/monthly/hpi_master.csv',
+        'https://www.fhfa.gov/hpi/download/quarterly/hpi_master.csv',
+        'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_master.csv',
+    ],
+    'fhfa_county': [
+        'https://www.fhfa.gov/hpi/download/annually/hpi_at_bdl_county.xlsx',
+        'https://www.fhfa.gov/hpi/download/annually/hpi_at_bdl_county.csv',
+        'https://www.fhfa.gov/hpi/download/annually_datasets/hpi_at_bdl_county.xlsx',
+        'https://www.fhfa.gov/hpi/download/annually_datasets/hpi_at_bdl_county.csv',
+    ],
+    'fhfa_state_fallback': [
+        'https://www.fhfa.gov/hpi/download/quarterly/hpi_at_state.csv',
+        'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_state.csv',
+        'https://www.fhfa.gov/hpi/download/monthly/hpi_at_state.csv',
+    ],
+    'fhfa_region_fallback': [
+        'https://www.fhfa.gov/hpi/download/quarterly/hpi_at_us_and_census.txt',
+        'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_us_and_census.txt',
+        'https://www.fhfa.gov/hpi/download/monthly/hpi_at_us_and_census.txt',
+    ],
+}
+
+# Filename patterns used to recognize the right anchor when scraping the
+# FHFA datasets landing page. Order of extensions inside the alternation
+# expresses preference (CSV preferred over XLSX where both exist, etc.).
+_FILENAME_PATTERNS: dict[str, re.Pattern] = {
+    'fhfa_master':          re.compile(r'/hpi_master\.(?:csv|xlsx)(?:$|[?#])', re.I),
+    'fhfa_county':          re.compile(r'/hpi_at_bdl_county\.(?:xlsx|csv)(?:$|[?#])', re.I),
+    'fhfa_state_fallback':  re.compile(r'/hpi_at_state\.(?:csv|xlsx)(?:$|[?#])', re.I),
+    'fhfa_region_fallback': re.compile(r'/hpi_at_us_and_census\.(?:txt|csv|xlsx)(?:$|[?#])', re.I),
+}
+
+_discovered_lock = threading.RLock()
+_discovered_urls: dict[str, str] = {}     # source_key -> last URL that returned 200
+_landing_cache: dict = {'urls': None, 'fetched_at': 0.0}
+_LANDING_TTL_SEC = 6 * 3600               # re-scrape at most every 6h
+
+
+def _scrape_landing_urls() -> dict[str, str]:
+    """Scrape the FHFA HPI Datasets page and return {source_key: absolute_url}
+    for any filename pattern we can match. Cached for 6 hours."""
+    now = time.time()
+    if _landing_cache['urls'] is not None and (now - _landing_cache['fetched_at']) < _LANDING_TTL_SEC:
+        return _landing_cache['urls']
+    try:
+        resp = requests.get(_FHFA_DATASETS_URL, timeout=30, headers={'User-Agent': _USER_AGENT})
+        if resp.status_code != 200:
+            logger.warning(f'fhfa landing page: HTTP {resp.status_code}')
+            _landing_cache['urls'] = {}
+            _landing_cache['fetched_at'] = now
+            return {}
+        hrefs = re.findall(r'href=[\'"]([^\'"]+)[\'"]', resp.text)
+        abs_hrefs = [urljoin(_FHFA_DATASETS_URL, h) for h in hrefs]
+        out: dict[str, str] = {}
+        for key, pat in _FILENAME_PATTERNS.items():
+            for h in abs_hrefs:
+                if pat.search(h):
+                    out[key] = h
+                    break
+        if out:
+            logger.info(f'fhfa landing page: discovered {out}')
+        else:
+            logger.warning('fhfa landing page: no anchors matched any expected filename')
+        _landing_cache['urls'] = out
+        _landing_cache['fetched_at'] = now
+        return out
+    except Exception as e:
+        logger.warning(f'fhfa landing page scrape failed: {e}')
+        _landing_cache['urls'] = {}
+        _landing_cache['fetched_at'] = now
+        return {}
+
+
+def _resolve_and_fetch(source_key: str, primary_url: str,
+                       timeout: int = 90) -> tuple[str, Optional[requests.Response]]:
+    """Return (final_url, 200-response) by trying primary -> candidates ->
+    landing-page scrape. Returns (primary_url, None) when every candidate
+    fails so the caller can record a sensible diagnostic."""
+    headers = {'User-Agent': _USER_AGENT}
+
+    with _discovered_lock:
+        cached = _discovered_urls.get(source_key)
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for u in ([cached] if cached else []) + [primary_url] + _URL_CANDIDATES.get(source_key, []):
+        if u and u not in seen:
+            seen.add(u)
+            ordered.append(u)
+
+    statuses: list[str] = []
+    for url in ordered:
+        try:
+            r = requests.get(url, timeout=timeout, headers=headers, allow_redirects=True)
+        except requests.RequestException as e:
+            statuses.append(f'{url} -> ERR({type(e).__name__})')
+            continue
+        if r.status_code == 200:
+            with _discovered_lock:
+                _discovered_urls[source_key] = url
+            if url != primary_url:
+                logger.info(f'fhfa {source_key}: primary failed, hit {url}')
+            return url, r
+        statuses.append(f'{url} -> {r.status_code}')
+
+    # Last resort — scrape FHFA datasets landing page.
+    discovered = _scrape_landing_urls().get(source_key)
+    if discovered and discovered not in seen:
+        try:
+            r = requests.get(discovered, timeout=timeout, headers=headers, allow_redirects=True)
+            if r.status_code == 200:
+                with _discovered_lock:
+                    _discovered_urls[source_key] = discovered
+                logger.info(f'fhfa {source_key}: scraped URL succeeded: {discovered}')
+                return discovered, r
+            statuses.append(f'{discovered}(scraped) -> {r.status_code}')
+        except requests.RequestException as e:
+            statuses.append(f'{discovered}(scraped) -> ERR({type(e).__name__})')
+
+    logger.warning(f'fhfa {source_key}: all candidates failed: {statuses}')
+    return primary_url, None
+
+
 # ── Public API ──────────────────────────────────────────────────────────
 
 # Per-level fallback URLs — FHFA publishes individual files in addition
@@ -340,8 +485,8 @@ def _save_disk(path: str, rows: list[HpiRow]):
 #   9 census divisions + 4 census regions.
 # Legacy 6-column shape (place_name, place_id, yr, qtr, index_nsa, index_sa)
 # is also handled in case FHFA reverts.
-_FALLBACK_STATE_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_state.csv'
-_FALLBACK_DIVISION_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_us_and_census.txt'
+_FALLBACK_STATE_URL = 'https://www.fhfa.gov/hpi/download/quarterly/hpi_at_state.csv'
+_FALLBACK_DIVISION_URL = 'https://www.fhfa.gov/hpi/download/quarterly/hpi_at_us_and_census.txt'
 
 
 def _parse_per_level_csv(text: str, level: str) -> list[HpiRow]:
@@ -440,27 +585,26 @@ def _parse_per_level_csv(text: str, level: str) -> list[HpiRow]:
 
 def _fetch_fallback(level: str, url: str) -> list[HpiRow]:
     """Download and parse a per-level FHFA file. Records diagnostics."""
+    source_key = f'fhfa_{level}_fallback'
+    label = f'FHFA {level} (fallback)'
     try:
-        resp = requests.get(url, timeout=60,
-                            headers={'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'})
-        if resp.status_code != 200:
-            msg = f'HTTP {resp.status_code}'
-            logger.warning(f'fhfa per-level {level}: {msg}')
-            diagnostics.record_fetch_fail(f'fhfa_{level}_fallback', f'FHFA {level} (fallback)', msg)
+        final_url, resp = _resolve_and_fetch(source_key, url, timeout=60)
+        if resp is None:
+            diagnostics.record_fetch_fail(source_key, label, 'HTTP 404 (all candidates failed)')
             return []
         rows = _parse_per_level_csv(resp.text, level)
-        logger.info(f'fhfa per-level {level}: parsed {len(rows)} rows')
+        logger.info(f'fhfa per-level {level}: parsed {len(rows)} rows from {final_url}')
         if rows:
-            diagnostics.record_fetch_ok(f'fhfa_{level}_fallback', f'FHFA {level} (fallback)', len(rows))
+            diagnostics.record_fetch_ok(source_key, label, len(rows))
         else:
             diagnostics.record_fetch_fail(
-                f'fhfa_{level}_fallback', f'FHFA {level} (fallback)',
-                f'parsed 0 rows; first 200 chars: {resp.text[:200]!r}',
+                source_key, label,
+                f'parsed 0 rows from {final_url}; first 200 chars: {resp.text[:200]!r}',
             )
         return rows
     except Exception as e:
         logger.error(f'fhfa per-level {level} fetch failed: {e}')
-        diagnostics.record_fetch_fail(f'fhfa_{level}_fallback', f'FHFA {level} (fallback)', str(e))
+        diagnostics.record_fetch_fail(source_key, label, str(e))
         return []
 
 
@@ -478,15 +622,13 @@ def fetch_master(force: bool = False) -> list[HpiRow]:
 
     logger.info('fhfa: downloading master file…')
     try:
-        resp = requests.get(_source('fhfa_master'), timeout=90,
-                            headers={'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'})
-        if resp.status_code != 200:
-            msg = f'HTTP {resp.status_code}'
-            logger.warning(f'fhfa master {msg}')
-            diagnostics.record_fetch_fail('fhfa_master', 'FHFA HPI master', msg)
+        final_url, resp = _resolve_and_fetch('fhfa_master', _source('fhfa_master'))
+        if resp is None:
+            diagnostics.record_fetch_fail('fhfa_master', 'FHFA HPI master',
+                                          'HTTP 404 (all candidates failed)')
             return []
         rows = _parse_master_csv(resp.text)
-        logger.info(f'fhfa master: parsed {len(rows)} rows')
+        logger.info(f'fhfa master: parsed {len(rows)} rows from {final_url}')
         if len(rows) == 0:
             # HTTP 200 but parser produced nothing — usually means FHFA changed
             # the schema (column names) or the URL now returns an HTML/redirect
@@ -519,23 +661,20 @@ def fetch_county(force: bool = False) -> list[HpiRow]:
             diagnostics.record_fetch_ok('fhfa_county', 'FHFA County HPI (cached)', len(parsed))
             return parsed
 
-    url = _source('fhfa_county')
     logger.info('fhfa: downloading county file…')
     try:
-        resp = requests.get(url, timeout=90,
-                            headers={'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'})
-        if resp.status_code != 200:
-            msg = f'HTTP {resp.status_code}'
-            logger.warning(f'fhfa county {msg}')
-            diagnostics.record_fetch_fail('fhfa_county', 'FHFA County HPI', msg)
+        final_url, resp = _resolve_and_fetch('fhfa_county', _source('fhfa_county'))
+        if resp is None:
+            diagnostics.record_fetch_fail('fhfa_county', 'FHFA County HPI',
+                                          'HTTP 404 (all candidates failed)')
             return []
-        if url.lower().endswith('.xlsx'):
+        if final_url.lower().endswith('.xlsx'):
             rows = _parse_county_xlsx(resp.content)
             fmt = 'XLSX'
         else:
             rows = _parse_county_csv(resp.text)
             fmt = 'CSV'
-        logger.info(f'fhfa county ({fmt}): parsed {len(rows)} rows')
+        logger.info(f'fhfa county ({fmt}): parsed {len(rows)} rows from {final_url}')
         if len(rows) == 0:
             preview = resp.text[:200].replace('\n', ' \\n ') if fmt == 'CSV' else f'<{len(resp.content)} bytes XLSX>'
             msg = f'FHFA county {fmt} parsed to 0 rows (header/schema mismatch). First 200 chars: {preview!r}'
