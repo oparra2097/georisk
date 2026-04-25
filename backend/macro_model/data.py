@@ -162,6 +162,27 @@ def build_panel(start: str = DEFAULT_START, codes: Optional[list[str]] = None,
         panel = panel[panel.index >= pd.Timestamp(start)]
         panel = panel.dropna(how='all')
 
+        # Trim trailing rows where ANY endogenous variable is NaN. Daily FRED
+        # series (DGS10, DXY, oil) extend into the current quarter the moment
+        # we cross a quarter boundary, but BEA quarterly aggregates and the
+        # monthly labor / price series lag by 1-3 months. Without this trim
+        # the panel's last row has tsy10/dxy filled but gdp/cons/pce_core/etc.
+        # all NaN — which the solver's warm-start then carries forward as
+        # NaN into every forecast quarter (root cause of the all-em-dash
+        # forecast table observed Apr 2026).
+        endog_codes = [v.code for v in wanted if v.endogenous and v.code in panel.columns]
+        if endog_codes and len(panel) > 0:
+            complete = panel[endog_codes].notna().all(axis=1)
+            if complete.any():
+                last_complete = complete[complete].index.max()
+                trimmed = (panel.index > last_complete).sum()
+                if trimmed:
+                    logger.info(
+                        f'macro_model.data: trimming {trimmed} trailing partial '
+                        f'rows after last-complete quarter {last_complete.date()}'
+                    )
+                    panel = panel.loc[:last_complete]
+
     with _lock:
         if codes is None:
             _panel_cache[cache_key] = (panel, now)
