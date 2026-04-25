@@ -231,6 +231,72 @@ def _parse_county_csv(text: str) -> list[HpiRow]:
     return rows
 
 
+def _parse_county_xlsx(content: bytes) -> list[HpiRow]:
+    """FHFA developmental county HPI is now published as XLSX only.
+
+    Same logical schema as the legacy CSV (state, county, FIPS, year, HPI),
+    just wrapped in an Excel workbook. We use openpyxl in read-only mode to
+    keep memory bounded; the file is large but a single sheet.
+    """
+    import openpyxl  # local import — only needed when XLSX URL is configured
+    from io import BytesIO
+
+    wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
+    ws = wb.active
+    rows_iter = ws.iter_rows(values_only=True)
+    header = next(rows_iter, None)
+    if not header:
+        return []
+    col_idx: dict[str, int] = {}
+    for i, c in enumerate(header):
+        if c is None:
+            continue
+        col_idx[str(c).strip().lower()] = i
+
+    def _get(row, *keys):
+        for k in keys:
+            idx = col_idx.get(k)
+            if idx is not None and idx < len(row):
+                v = row[idx]
+                if v is not None:
+                    return v
+        return None
+
+    out: list[HpiRow] = []
+    for r in rows_iter:
+        if r is None:
+            continue
+        yr_v = _get(r, 'year', 'yr')
+        hpi_v = _get(r, 'hpi', 'index_nsa')
+        fips_v = _get(r, 'fips code', 'fips', 'fips_code')
+        if yr_v is None or hpi_v is None or fips_v is None:
+            continue
+        try:
+            yr = int(yr_v)
+            hpi_f = float(hpi_v)
+        except (ValueError, TypeError):
+            continue
+        fips = str(fips_v).strip()
+        if fips.endswith('.0'):
+            fips = fips[:-2]
+        if not fips:
+            continue
+        name = str(_get(r, 'county') or '').strip()
+        state = str(_get(r, 'state') or '').strip()
+
+        out.append(HpiRow(
+            level='county',
+            code=fips.zfill(5),
+            name=f'{name}, {state}' if state else name,
+            year=yr,
+            period=1,
+            freq='annual',
+            index_nsa=hpi_f,
+            index_sa=None,
+        ))
+    return out
+
+
 # ── Cache layer ─────────────────────────────────────────────────────────
 
 def _load_disk(path: str):
@@ -265,43 +331,72 @@ def _save_disk(path: str, rows: list[HpiRow]):
 
 # Per-level fallback URLs — FHFA publishes individual files in addition
 # to the master CSV. If the master parses 0 rows for a given level (schema
-# drift), we fall back to these dedicated files. Verified against the
-# FHFA HPI Datasets page (April 2026 audit).
+# drift), we fall back to these dedicated files.
 #
-# State CSV: comma-delimited, columns place_id (e.g. 'CA'), place_name,
-#   yr, qtr, index_nsa, index_sa.
-# US-and-Census TXT: tab-delimited (NOT comma!), covers national + 9
-#   census divisions + 4 census regions. Columns: Place_Name, Place_ID,
-#   yr, qtr, index_nsa, index_sa.
+# State CSV (`hpi_at_state.csv`): comma-delimited, currently HEADERLESS —
+#   4 columns: place_id, yr, qtr, index_nsa.
+# US-and-Census TXT (`hpi_at_us_and_census.txt`): tab-delimited, currently
+#   HEADERLESS — 4 columns: place_id, yr, qtr, index_nsa. Covers national +
+#   9 census divisions + 4 census regions.
+# Legacy 6-column shape (place_name, place_id, yr, qtr, index_nsa, index_sa)
+# is also handled in case FHFA reverts.
 _FALLBACK_STATE_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_state.csv'
 _FALLBACK_DIVISION_URL = 'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_at_us_and_census.txt'
 
 
 def _parse_per_level_csv(text: str, level: str) -> list[HpiRow]:
-    """Parser for the dedicated per-level FHFA files (state CSV /
-    us_and_census TXT).
+    """Parser for the dedicated per-level FHFA files.
 
-    Schema (case-insensitive): place_name, place_id, yr, qtr (or period),
-    index_nsa, index_sa. The us_and_census file is **tab-delimited**, not
-    comma — sniff before parsing.
+    Detects whether the file has a header row by checking if the second
+    field of the first non-empty line parses as a 4-digit year. If so we
+    treat the file as headerless and supply explicit fieldnames matching
+    the column count.
     """
-    # Sniff delimiter — first non-empty line tells us
     first = next((l for l in text.splitlines() if l.strip()), '')
-    delim = '\t' if (first.count('\t') > first.count(',')) else ','
-
-    rows: list[HpiRow] = []
-    reader = csv.DictReader(io.StringIO(text), delimiter=delim)
-    fieldnames = reader.fieldnames or []
-    if not fieldnames:
+    if not first:
         return []
+    delim = '\t' if (first.count('\t') > first.count(',')) else ','
+    sample_fields = first.split(delim)
 
-    col_map = {f.strip().lower(): f for f in fieldnames}
-    logger.info(f'fhfa per-level ({level}): columns = {list(col_map.keys())}')
+    headerless = False
+    if len(sample_fields) >= 2:
+        f1 = sample_fields[1].strip()
+        if len(f1) == 4 and f1.isdigit():
+            try:
+                y = int(f1)
+                if 1900 < y < 2200:
+                    headerless = True
+            except ValueError:
+                pass
+
+    if headerless:
+        n = len(sample_fields)
+        if n == 4:
+            fieldnames = ['place_id', 'yr', 'qtr', 'index_nsa']
+        elif n == 5:
+            fieldnames = ['place_id', 'yr', 'qtr', 'index_nsa', 'index_sa']
+        elif n >= 6:
+            fieldnames = ['place_name', 'place_id', 'yr', 'qtr', 'index_nsa', 'index_sa']
+        else:
+            logger.warning(f'fhfa per-level ({level}): headerless with only {n} cols, cannot parse')
+            return []
+        reader = csv.DictReader(io.StringIO(text), fieldnames=fieldnames, delimiter=delim)
+        col_map = {f: f for f in fieldnames}
+        logger.info(f'fhfa per-level ({level}): headerless, assigned cols = {fieldnames}')
+    else:
+        reader = csv.DictReader(io.StringIO(text), delimiter=delim)
+        fieldnames = reader.fieldnames or []
+        if not fieldnames:
+            return []
+        col_map = {f.strip().lower(): f for f in fieldnames}
+        logger.info(f'fhfa per-level ({level}): columns = {list(col_map.keys())}')
 
     def col(row, key, default=''):
         actual = col_map.get(key)
-        return row.get(actual, default) if actual else default
+        v = row.get(actual, default) if actual else default
+        return '' if v is None else str(v)
 
+    rows: list[HpiRow] = []
     for r in reader:
         pid = col(r, 'place_id').strip()
         name = col(r, 'place_name').strip()
@@ -424,20 +519,26 @@ def fetch_county(force: bool = False) -> list[HpiRow]:
             diagnostics.record_fetch_ok('fhfa_county', 'FHFA County HPI (cached)', len(parsed))
             return parsed
 
+    url = _source('fhfa_county')
     logger.info('fhfa: downloading county file…')
     try:
-        resp = requests.get(_source('fhfa_county'), timeout=90,
+        resp = requests.get(url, timeout=90,
                             headers={'User-Agent': 'Mozilla/5.0 (compatible; ParraMacro/1.0)'})
         if resp.status_code != 200:
             msg = f'HTTP {resp.status_code}'
             logger.warning(f'fhfa county {msg}')
             diagnostics.record_fetch_fail('fhfa_county', 'FHFA County HPI', msg)
             return []
-        rows = _parse_county_csv(resp.text)
-        logger.info(f'fhfa county: parsed {len(rows)} rows')
+        if url.lower().endswith('.xlsx'):
+            rows = _parse_county_xlsx(resp.content)
+            fmt = 'XLSX'
+        else:
+            rows = _parse_county_csv(resp.text)
+            fmt = 'CSV'
+        logger.info(f'fhfa county ({fmt}): parsed {len(rows)} rows')
         if len(rows) == 0:
-            preview = resp.text[:200].replace('\n', ' \\n ')
-            msg = f'FHFA county CSV parsed to 0 rows (header/schema mismatch). First 200 chars: {preview!r}'
+            preview = resp.text[:200].replace('\n', ' \\n ') if fmt == 'CSV' else f'<{len(resp.content)} bytes XLSX>'
+            msg = f'FHFA county {fmt} parsed to 0 rows (header/schema mismatch). First 200 chars: {preview!r}'
             logger.warning(msg)
             diagnostics.record_fetch_fail('fhfa_county', 'FHFA County HPI', msg)
             return rows
