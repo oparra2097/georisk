@@ -143,7 +143,28 @@ def _save_persist():
         logger.warning(f'house_prices: persist failed: {e}')
 
 
+def _delete_pickle(reason: str = ''):
+    try:
+        os.remove(_PERSIST_PATH)
+        logger.info(f'house_prices: removed pickle at {_PERSIST_PATH}'
+                    + (f' ({reason})' if reason else ''))
+    except OSError:
+        pass
+
+
+def invalidate_pickle_on_boot():
+    """Called once at app boot. Removes any leftover pickle from a previous
+    deploy. The pickle is regenerated after the fresh build completes and
+    is then useful for sibling-worker hot-loads within this deploy."""
+    if os.path.exists(_PERSIST_PATH):
+        _delete_pickle('app boot — cross-deploy invalidation')
+
+
 def _try_load_persist() -> bool:
+    """Hot-load a previously-pickled build. Validates that the pickle has
+    real data — pickles from older deploys with 0 entities or missing
+    state/region rows are treated as corrupt and discarded so the new
+    code path actually runs."""
     try:
         if not os.path.exists(_PERSIST_PATH):
             logger.info('house_prices: no pickle on disk, will build fresh')
@@ -156,23 +177,35 @@ def _try_load_persist() -> bool:
         logger.info(f'house_prices: loading pickle ({size_mb:.1f}MB, {age:.0f}s old)…')
         with open(_PERSIST_PATH, 'rb') as f:
             data = pickle.load(f)
+
+        # Sanity-check: pickle from a broken older deploy may have empty
+        # summaries or 0 states/regions. Reject and rebuild so PR #52's
+        # fallback logic actually fires.
+        summaries = data.get('summaries') or {}
+        if len(summaries) == 0:
+            logger.warning('house_prices: pickle has 0 entities — discarding')
+            _delete_pickle('discarded: 0 entities')
+            return False
+        n_states = sum(1 for k in summaries if k[0] == 'state')
+        n_regions = sum(1 for k in summaries if k[0] == 'region')
+        if n_states == 0 or n_regions == 0:
+            logger.warning(f'house_prices: pickle missing state/region '
+                           f'(states={n_states}, regions={n_regions}) — discarding')
+            _delete_pickle(f'discarded: states={n_states}, regions={n_regions}')
+            return False
+
         with _lock:
             _state['rows'] = data['rows']
             _state['grouped'] = data['grouped']
-            _state['summaries'] = data['summaries']
+            _state['summaries'] = summaries
             _state['build_error'] = None
             _state['built_at'] = data.get('saved_at', time.time())
         logger.info(f'house_prices: hot-loaded persisted state '
-                    f'({len(data["summaries"])} entities)')
+                    f'({len(summaries)} entities, {n_states} states, {n_regions} regions)')
         return True
     except Exception as e:
         logger.warning(f'house_prices: persist load failed: {e}')
-        # Delete corrupt pickle so subsequent cold-starts don't repeat the failure.
-        try:
-            os.remove(_PERSIST_PATH)
-            logger.info(f'house_prices: removed broken pickle at {_PERSIST_PATH}')
-        except OSError:
-            pass
+        _delete_pickle(f'load exception: {e}')
         return False
 
 
