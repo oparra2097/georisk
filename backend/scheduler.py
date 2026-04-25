@@ -184,6 +184,22 @@ def init_scheduler(app):
                 logger.error(f"GDP nowcast warmup failed: {e}")
         threading.Thread(target=_warm_gdp_nowcast, daemon=True).start()
 
+    # Cross-deploy pickle invalidation: every fresh app boot wipes any
+    # leftover pickles from an earlier deploy so new code always builds
+    # fresh against current FRED data and current equation specs. Pickles
+    # are regenerated after the new build completes and are then useful
+    # for sibling-worker hot-loads within this deploy.
+    try:
+        from backend.macro_model.service import invalidate_pickle_on_boot as _mm_invalidate
+        _mm_invalidate()
+    except Exception as e:
+        logger.warning(f'macro_model pickle invalidation failed: {e}')
+    try:
+        from backend.house_prices.service import invalidate_pickle_on_boot as _hpi_invalidate
+        _hpi_invalidate()
+    except Exception as e:
+        logger.warning(f'house_prices pickle invalidation failed: {e}')
+
     # Pre-warm macro-model: try the disk pickle first (instant if a sibling
     # worker built recently), only kick off the expensive fit_all if no
     # fresh pickle exists. Runs as a daemon thread so it doesn't block boot.

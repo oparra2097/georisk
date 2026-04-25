@@ -78,7 +78,14 @@ def _save_persist(report, sim, panel):
 
 
 def _try_load_persist() -> bool:
-    """Hot-load a previously-pickled build. Returns True on success."""
+    """Hot-load a previously-pickled build. Returns True on success.
+
+    Validates the loaded data — a pickle with 0 equations or an empty/all-NaN
+    panel is treated as corrupt and deleted, forcing a fresh build. This
+    protects against the case where an old deploy wrote a hollow pickle
+    that would otherwise serve a misleading 'Model built — 11 equations'
+    status with empty forecast tables.
+    """
     try:
         if not os.path.exists(_PERSIST_PATH):
             logger.info('macro_model.service: no pickle on disk, will build fresh')
@@ -91,9 +98,34 @@ def _try_load_persist() -> bool:
         logger.info(f'macro_model.service: loading pickle ({size_mb:.1f}MB, {age:.0f}s old)…')
         with open(_PERSIST_PATH, 'rb') as f:
             data = pickle.load(f)
+
+        # Sanity-check the loaded artifacts before adopting them.
+        report = data.get('report')
+        sim = data.get('simulator')
+        if not report or len(report.fits) == 0:
+            logger.warning('macro_model.service: pickle has 0 fitted equations — discarding')
+            _delete_pickle('discarded: 0 equations in pickle')
+            return False
+        if sim is None or sim.panel is None or len(sim.panel) == 0:
+            logger.warning('macro_model.service: pickle simulator has empty panel — discarding')
+            _delete_pickle('discarded: empty panel')
+            return False
+        # Last row of behavioral columns shouldn't be all-NaN
+        try:
+            last_row = sim.panel.iloc[-1]
+            behav = [c for c in getattr(sim, 'behavioral_order', []) if c in sim.panel.columns]
+            if behav and all(pd.isna(last_row[c]) for c in behav):
+                logger.warning('macro_model.service: pickle simulator panel last row is all-NaN — discarding')
+                _delete_pickle('discarded: all-NaN final row')
+                return False
+        except Exception as e:
+            logger.warning(f'macro_model.service: pickle sanity-check raised ({e}) — discarding')
+            _delete_pickle('discarded: sanity-check error')
+            return False
+
         with _lock:
-            _state['report'] = data['report']
-            _state['simulator'] = data['simulator']
+            _state['report'] = report
+            _state['simulator'] = sim
             _state['baseline'] = None
             _state['bootstrap'] = None
             _state['shock_results'] = {}
@@ -101,17 +133,31 @@ def _try_load_persist() -> bool:
             _state['fit_error'] = None
             _state['built_at'] = data.get('saved_at', time.time())
         logger.info(f'macro_model.service: hot-loaded persisted state '
-                    f'({len(data["report"].fits)} equations)')
+                    f'({len(report.fits)} equations, panel {sim.panel.shape})')
         return True
     except Exception as e:
         logger.warning(f'macro_model.service: persist load failed (will rebuild): {e}')
-        # Bad pickle — delete so we don't hit the same failure on every cold start.
-        try:
-            os.remove(_PERSIST_PATH)
-            logger.info(f'macro_model.service: removed broken pickle at {_PERSIST_PATH}')
-        except OSError:
-            pass
+        _delete_pickle(f'load exception: {e}')
         return False
+
+
+def _delete_pickle(reason: str = ''):
+    try:
+        os.remove(_PERSIST_PATH)
+        logger.info(f'macro_model.service: removed pickle at {_PERSIST_PATH}'
+                    + (f' ({reason})' if reason else ''))
+    except OSError:
+        pass
+
+
+def invalidate_pickle_on_boot():
+    """Called once at app boot. Removes any leftover pickle from a previous
+    deploy so the new code always builds fresh against current FRED data
+    and current equation specs. The pickle is recreated after the new build
+    completes and is then useful for sibling-worker hot-loads within this
+    deploy lifetime."""
+    if os.path.exists(_PERSIST_PATH):
+        _delete_pickle('app boot — cross-deploy invalidation')
 
 
 def _build_locked(start: str = '1980-01-01', force_refresh: bool = False):
