@@ -162,30 +162,40 @@ def build_panel(start: str = DEFAULT_START, codes: Optional[list[str]] = None,
         panel = panel[panel.index >= pd.Timestamp(start)]
         panel = panel.dropna(how='all')
 
-        # Trim trailing rows where ANY model variable (endogenous OR exogenous)
-        # is NaN. Daily FRED series (DGS10, DXY, oil) extend into the current
-        # quarter the moment we cross a quarter boundary, but BEA quarterly
-        # aggregates and the monthly labor / price series lag by 1-3 months;
-        # the CBO natural-rate (NROU) and OECD ROW GDP can lag further. Without
-        # this trim the panel's last row mixes filled daily series with NaN
-        # quarterly/monthly series, and the solver's warm-start + flat-exog
-        # carry-forward then propagate NaN through every forecast quarter
-        # (root cause of the all-em-dash forecast table observed Apr 2026).
-        model_codes = [v.code for v in wanted if v.code in panel.columns]
-        if model_codes and len(panel) > 0:
-            complete = panel[model_codes].notna().all(axis=1)
+        # Trim trailing rows where any ENDOGENOUS variable is NaN. We
+        # previously also required exogenous variables (gov, oil, row_gdp,
+        # nrou, prod, lfpr) to be non-NaN, but FRED's OECD series
+        # (NAEXKP01OEQ661S = row_gdp) often lags 5+ years and that
+        # regressed the trim back to ~2015, making the "20-quarter
+        # forecast" table show 2016-2020 historical dates. The
+        # solver/simulator already use `last_valid` (PR #55) when
+        # carrying forward exogenous values into the forecast horizon,
+        # so a NaN exog cell at the panel end is now safe.
+        endog_codes = [v.code for v in wanted if v.endogenous and v.code in panel.columns]
+        all_codes = [v.code for v in wanted if v.code in panel.columns]
+        if endog_codes and len(panel) > 0:
+            complete = panel[endog_codes].notna().all(axis=1)
             if complete.any():
                 last_complete = complete[complete].index.max()
                 trimmed = (panel.index > last_complete).sum()
                 if trimmed:
                     last_row = panel.iloc[-1]
-                    nan_cols = [c for c in model_codes if pd.isna(last_row[c])]
+                    nan_endog = [c for c in endog_codes if pd.isna(last_row[c])]
+                    nan_exog  = [c for c in all_codes if c not in endog_codes and pd.isna(last_row[c])]
                     logger.info(
                         f'macro_model.data: trimming {trimmed} trailing partial '
-                        f'rows after last-complete quarter {last_complete.date()} '
-                        f'(NaN cols at panel end: {nan_cols})'
+                        f'rows after last-complete-endog quarter {last_complete.date()} '
+                        f'(endog NaN: {nan_endog}, exog NaN tolerated: {nan_exog})'
                     )
                     panel = panel.loc[:last_complete]
+                else:
+                    last_row = panel.iloc[-1]
+                    nan_exog = [c for c in all_codes if c not in endog_codes and pd.isna(last_row[c])]
+                    if nan_exog:
+                        logger.info(
+                            f'macro_model.data: panel end has NaN exog cells '
+                            f'(forecast carry-forward will use last_valid for these): {nan_exog}'
+                        )
 
     with _lock:
         if codes is None:
