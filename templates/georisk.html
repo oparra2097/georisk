@@ -4,6 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GeoRisk Monitor - Parra Macro</title>
+
+    {% set _og_title = og_title if og_title is defined else 'GeoRisk Monitor — Parra Macro' %}
+    {% set _og_description = og_description if og_description is defined else 'Real-time geopolitical risk dashboard: country risk scores, hotspots, and live news signals.' %}
+    {% set _og_image = og_image if og_image is defined else '/og/preview.png?chart=georisk' %}
+    {% set _og_url = og_url if og_url is defined else request.path %}
+    {% set _og_image_abs = _og_image if _og_image.startswith('http') else (request.url_root.rstrip('/') + _og_image) %}
+    {% set _og_url_abs = _og_url if _og_url.startswith('http') else (request.url_root.rstrip('/') + _og_url) %}
+
+    <meta name="description" content="{{ _og_description }}">
+    <meta property="og:site_name" content="Parra Macro">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ _og_title }}">
+    <meta property="og:description" content="{{ _og_description }}">
+    <meta property="og:url" content="{{ _og_url_abs }}">
+    <meta property="og:image" content="{{ _og_image_abs }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{{ _og_title }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@theparrable">
+    <meta name="twitter:title" content="{{ _og_title }}">
+    <meta name="twitter:description" content="{{ _og_description }}">
+    <meta name="twitter:image" content="{{ _og_image_abs }}">
+    <link rel="canonical" href="{{ _og_url_abs }}">
+
     <link rel="stylesheet" href="/static/css/main.css">
     <link rel="stylesheet" href="/static/css/map.css">
     <link rel="stylesheet" href="/static/css/panel.css">
@@ -76,6 +101,10 @@
             <div class="panel-header">
                 <h2 id="panel-country-name"></h2>
                 <div id="panel-composite-score" class="composite-badge"></div>
+                <button id="panel-share-btn" class="panel-share-btn" title="Copy shareable link">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    <span class="share-btn-label">Share</span>
+                </button>
             </div>
             <div class="panel-score-tiers">
                 <div class="score-tier">

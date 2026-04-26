@@ -4,6 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Parra Macro{% endblock %}</title>
+
+    {# ─── Open Graph / Twitter Card (shareable link previews) ─── #}
+    {% set _og_title = og_title if og_title is defined else (self.title()|trim if self.title is defined else 'Parra Macro') %}
+    {% set _og_description = og_description if og_description is defined else 'Macro research & geopolitical risk analysis — inflation, commodities, reserves, sovereign risk.' %}
+    {% set _og_image = og_image if og_image is defined else '/og/default.png' %}
+    {% set _og_url = og_url if og_url is defined else request.path %}
+    {% set _og_type = og_type if og_type is defined else 'website' %}
+    {% set _og_image_abs = _og_image if _og_image.startswith('http') else (request.url_root.rstrip('/') + _og_image) %}
+    {% set _og_url_abs = _og_url if _og_url.startswith('http') else (request.url_root.rstrip('/') + _og_url) %}
+
+    <meta name="description" content="{{ _og_description }}">
+    <meta property="og:site_name" content="Parra Macro">
+    <meta property="og:type" content="{{ _og_type }}">
+    <meta property="og:title" content="{{ _og_title }}">
+    <meta property="og:description" content="{{ _og_description }}">
+    <meta property="og:url" content="{{ _og_url_abs }}">
+    <meta property="og:image" content="{{ _og_image_abs }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{{ _og_title }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@theparrable">
+    <meta name="twitter:creator" content="@theparrable">
+    <meta name="twitter:title" content="{{ _og_title }}">
+    <meta name="twitter:description" content="{{ _og_description }}">
+    <meta name="twitter:image" content="{{ _og_image_abs }}">
+    <link rel="canonical" href="{{ _og_url_abs }}">
+
     <link rel="stylesheet" href="/static/css/site.css">
     {% block extra_css %}{% endblock %}
 </head>
