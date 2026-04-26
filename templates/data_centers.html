@@ -120,6 +120,13 @@
   </section>
 
   <div class="dc-toolbar">
+    <button class="dc-tab active" data-mode="markets">Markets</button>
+    <button class="dc-tab" data-mode="facilities">Facilities</button>
+    <span class="spacer"></span>
+    <span class="legend-inline" id="mode-help">Bubble area &prop; pipeline MW · color = selected metric</span>
+  </div>
+
+  <div class="dc-toolbar" id="markets-toolbar">
     <button class="dc-tab active" data-tier="all">All tiers</button>
     <button class="dc-tab" data-tier="primary">Primary (CBRE 7)</button>
     <button class="dc-tab" data-tier="secondary">Secondary</button>
@@ -130,18 +137,43 @@
     <button class="dc-tab" id="metric-share" data-metric="inventory_share">Concentration</button>
   </div>
 
+  <div class="dc-toolbar" id="facilities-toolbar" style="display:none;">
+    <button class="dc-tab active" data-status="all">All status</button>
+    <button class="dc-tab" data-status="built">Built</button>
+    <button class="dc-tab" data-status="under_construction">Under construction</button>
+    <button class="dc-tab" data-status="planned">Planned</button>
+    <span class="spacer"></span>
+    <select id="funding-filter" class="dc-tab" style="cursor:pointer;">
+      <option value="all">All funding sources</option>
+    </select>
+  </div>
+
   <div class="dc-layout">
     <div>
       <div class="dc-card">
         <div id="dc-map-host" class="dc-map-host">
           <div class="dc-tooltip" id="dc-tooltip"></div>
         </div>
-        <div class="dc-legend">
+        <div class="dc-legend" id="legend-markets">
           <span><span class="grad-bar"></span> &nbsp;low &rarr; high (selected metric)</span>
           <span><span class="swatch" style="background:#1d4ed8"></span>Primary</span>
           <span><span class="swatch" style="background:#0e7490"></span>Secondary</span>
           <span><span class="swatch" style="background:#b45309"></span>Emerging</span>
           <span style="margin-left:auto">Bubble area &prop; pipeline MW (UC + planned)</span>
+        </div>
+        <div class="dc-legend" id="legend-facilities" style="display:none;">
+          <span><span class="swatch" style="background:#6366f1"></span>Hyperscaler self-fund</span>
+          <span><span class="swatch" style="background:#059669"></span>Public REIT</span>
+          <span><span class="swatch" style="background:#d97706"></span>Infra fund / PE</span>
+          <span><span class="swatch" style="background:#be123c"></span>Sovereign / strategic JV</span>
+          <span><span class="swatch" style="background:#0891b2"></span>Specialty / venture</span>
+          <span><span class="swatch" style="background:#7c3aed"></span>Public specialty</span>
+          <span style="width:100%;color:#6b7280;font-size:10px;">
+            <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#374151;vertical-align:middle;margin-right:4px;"></span>built
+            &nbsp; <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;border:2px dashed #374151;vertical-align:middle;margin-right:4px;"></span>under construction
+            &nbsp; <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;border:1.4px solid #374151;vertical-align:middle;margin-right:4px;"></span>planned
+            &nbsp;&nbsp; · radius &prop; &radic;MW
+          </span>
         </div>
       </div>
 
@@ -194,15 +226,38 @@
           <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
         </table>
       </div>
+
+      <div class="dc-card">
+        <h3>Capital stack (by funding source)</h3>
+        <table class="dc-table" id="funding-table">
+          <thead>
+            <tr><th>Source</th><th class="num">#</th><th class="num">MW</th><th class="num">% MW</th></tr>
+          </thead>
+          <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="dc-card">
+        <h3>Top developers</h3>
+        <table class="dc-table" id="developer-table">
+          <thead>
+            <tr><th>Developer</th><th></th><th class="num">MW</th><th class="num">% MW</th></tr>
+          </thead>
+          <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
   <div class="footer-note">
     Tiering follows CBRE's Global Data Center Trends classification (primary = the seven largest US wholesale markets;
     secondary = mature smaller markets; emerging = recently-active build-out markets). Market-level MW figures are
-    illustrative seed values rounded to published industry ranges and intended to demonstrate the framework;
-    swap in a live data feed via <code>/api/data-centers/refresh</code>. <strong>Spec ratio</strong> = under-construction MW × (1 − pre-leased %) ÷ built MW;
+    illustrative seed values rounded to published industry ranges; the Facilities layer seeds 30+ named buildings with
+    operator, developer, and funding source. Refresh via <code>POST /api/data-centers/refresh</code>.
+    <strong>Spec ratio</strong> = under-construction MW × (1 − pre-leased %) ÷ built MW;
     <strong>pipeline ratio</strong> = (UC + planned) ÷ built; <strong>concentration</strong> = market share of national built MW.
+    <strong>Funding-source</strong> taxonomy: hyperscaler self-fund, public REIT, infra fund / PE,
+    sovereign/strategic JV (e.g. Stargate), specialty/venture, public specialty.
   </div>
 </div>
 

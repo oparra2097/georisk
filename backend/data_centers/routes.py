@@ -27,6 +27,21 @@ def get_summary():
     return jsonify(service.get_summary())
 
 
+@data_centers_bp.route('/facilities')
+def get_facilities():
+    status_q = request.args.get('status')
+    funding_q = request.args.get('funding_type')
+    market_q = request.args.get('market')
+    if status_q and status_q.lower() not in {'built', 'under_construction', 'planned'}:
+        return jsonify({'error': 'status must be built|under_construction|planned'}), 400
+    if funding_q and funding_q.lower() not in service.FUNDING_TYPES:
+        return jsonify({'error': f'funding_type must be one of {list(service.FUNDING_TYPES)}'}), 400
+    return jsonify({
+        'facilities': service.get_facilities(status_q, funding_q, market_q),
+        'funding_types': service.FUNDING_TYPES,
+    })
+
+
 @data_centers_bp.route('/refresh', methods=['POST'])
 def refresh():
     data = service.build(force=True)
@@ -34,4 +49,5 @@ def refresh():
         'built': data.get('built', False),
         'build_error': data.get('build_error'),
         'market_count': len(data.get('markets', [])),
+        'facility_count': len(data.get('facilities', [])),
     })

@@ -1,0 +1,35 @@
+name,market,lat,lon,status,mw,operator,developer,funding_type,funding_detail,tenant,announced_year,target_online,notes
+"Microsoft Mt. Pleasant (Wisconsin AI campus)",Chicago,42.7261,-87.9023,under_construction,1000,Microsoft,Microsoft,hyperscaler,"Microsoft balance sheet",Microsoft,2023,2026,"AI training campus; multi-phase to ~3.3 GW"
+"Microsoft Boydton VA campus",Northern Virginia,36.6648,-78.3892,built,640,Microsoft,Microsoft,hyperscaler,"Microsoft balance sheet",Microsoft,2010,2014,"Largest Azure US-East cluster"
+"Microsoft West Des Moines",Des Moines,41.5868,-93.6250,built,300,Microsoft,Microsoft,hyperscaler,"Microsoft balance sheet",Microsoft,2008,2011,"Multi-phase Iowa cluster"
+"Microsoft Cheyenne",Cheyenne,41.1400,-104.8202,under_construction,250,Microsoft,Microsoft,hyperscaler,"Microsoft balance sheet",Microsoft,2022,2025,"Wyoming AI capacity"
+"Meta Richland Parish (Louisiana AI campus)",Memphis,32.4068,-91.7920,under_construction,2000,Meta,Meta,hyperscaler,"Meta balance sheet",Meta,2024,2027,"$10B 4M sqft AI training campus"
+"Meta Temple Texas",Dallas-Fort Worth,31.0982,-97.3428,built,500,Meta,Meta,hyperscaler,"Meta balance sheet",Meta,2021,2024,
+"Meta Eagle Mountain Utah",Salt Lake City,40.3158,-112.0114,built,700,Meta,Meta,hyperscaler,"Meta balance sheet",Meta,2018,2022,"6-building campus"
+"Meta Kuna Idaho",Boise,43.4915,-116.4202,under_construction,800,Meta,Meta,hyperscaler,"Meta balance sheet",Meta,2023,2026,
+"AWS Loudoun cluster",Northern Virginia,39.0438,-77.4874,built,1500,Amazon,Amazon,hyperscaler,"Amazon balance sheet",Amazon,2006,2024,"Largest US-East-1 region"
+"AWS New Albany Ohio",Columbus,40.0807,-82.7993,under_construction,750,Amazon,Amazon,hyperscaler,"Amazon balance sheet",Amazon,2020,2026,"$10B Ohio expansion"
+"Google Council Bluffs",Omaha-Council Bluffs,41.2598,-95.8517,built,500,Google,Google,hyperscaler,"Alphabet balance sheet",Google,2007,2024,"Multi-phase iowa-1 cluster"
+"Google New Albany Ohio",Columbus,40.0892,-82.8081,under_construction,500,Google,Google,hyperscaler,"Alphabet balance sheet",Google,2019,2026,
+"Apple Reno Nevada",Reno-Las Vegas,39.5800,-119.4400,built,180,Apple,Apple,hyperscaler,"Apple balance sheet",Apple,2012,2024,"Solar-anchored"
+"Oracle Stargate Abilene (Crusoe)",Dallas-Fort Worth,32.4487,-99.7331,under_construction,1200,Oracle,Crusoe,sovereign_jv,"Stargate JV: MGX / SoftBank / OpenAI / Oracle",OpenAI,2024,2026,"Phase 1 of Stargate; built by Crusoe leased to Oracle for OpenAI"
+"xAI Colossus Memphis",Memphis,35.0458,-90.0289,under_construction,1000,xAI,xAI,specialty_pe,"Valor Equity Partners / xAI Series C",xAI,2024,2025,"100k+ H100 cluster; gas-turbine onsite power"
+"QTS Manassas (Gainesville campus)",Northern Virginia,38.7509,-77.6128,under_construction,750,QTS,QTS,infra_fund,"Blackstone Infrastructure",Multiple hyperscalers,2022,2026,"Largest Blackstone DC asset"
+"QTS Atlanta DC1",Atlanta,33.7780,-84.4400,built,150,QTS,QTS,infra_fund,"Blackstone Infrastructure",Multiple,2009,2018,"Legacy converted mill"
+"AirTrunk North America (Phoenix)",Phoenix,33.4420,-112.5850,planned,400,AirTrunk,AirTrunk,infra_fund,"Blackstone (acquired AirTrunk 2024)",TBD,2025,2027,"First US AirTrunk site"
+"Vantage VA12/14 Ashburn",Northern Virginia,39.0166,-77.4750,built,250,Vantage,Vantage,infra_fund,"DigitalBridge / Silver Lake",Multiple,2020,2024,
+"CyrusOne Sterling NoVA",Northern Virginia,39.0138,-77.4070,built,210,CyrusOne,CyrusOne,infra_fund,"KKR / GIP",Multiple,2018,2023,"Acquired from public 2022"
+"Aligned Phoenix PHX-12",Phoenix,33.4350,-111.9650,built,140,Aligned,Aligned,infra_fund,"Macquarie Asset Management",Multiple,2020,2023,
+"Compass Red Oak Texas",Dallas-Fort Worth,32.4990,-96.7960,built,250,Compass,Compass,infra_fund,"Brookfield / Ontario Teachers",Multiple,2017,2023,
+"Stack NoVA01 Ashburn",Northern Virginia,39.0240,-77.4700,built,150,Stack,Stack,infra_fund,"IPI Partners",Multiple,2020,2023,
+"EdgeConneX Phoenix PHX01",Phoenix,33.4670,-112.0500,built,80,EdgeConneX,EdgeConneX,infra_fund,"EQT / GIC",Multiple,2019,2022,
+"Crusoe Abilene Phase 2",Dallas-Fort Worth,32.4500,-99.7400,planned,800,Oracle,Crusoe,sovereign_jv,"Stargate JV: MGX / SoftBank / OpenAI / Oracle",OpenAI,2024,2027,"Stargate expansion phase"
+"Equinix DC15 Ashburn",Northern Virginia,39.0151,-77.4658,built,80,Equinix,Equinix,reit,"Equinix Inc. (NASDAQ: EQIX) public equity + debt",Multiple enterprise,2018,2020,
+"Equinix LA4 El Segundo",Silicon Valley,33.9170,-118.4019,built,40,Equinix,Equinix,reit,"Equinix Inc. (NASDAQ: EQIX)",Multiple,2017,2019,"Connectivity hub"
+"Digital Realty ATL1 Atlanta",Atlanta,33.7700,-84.3700,built,90,Digital Realty,Digital Realty,reit,"Digital Realty Trust (NYSE: DLR)",Multiple,2010,2015,
+"Digital Realty CH1 Chicago",Chicago,41.8533,-87.6406,built,100,Digital Realty,Digital Realty,reit,"Digital Realty Trust (NYSE: DLR)",Multiple,2012,2017,"350 E Cermak"
+"Iron Mountain VA-1 Manassas",Northern Virginia,38.7510,-77.4750,built,140,Iron Mountain,Iron Mountain,reit,"Iron Mountain (NYSE: IRM)",Multiple,2017,2022,
+"Switch Citadel Tahoe-Reno",Reno-Las Vegas,39.5418,-119.4630,built,650,Switch,Switch,public_specialty,"DigitalBridge (acquired 2022)",Multiple,2016,2024,"Was public; now PE"
+"Sabey Quincy WA",Seattle,47.2350,-119.8525,built,180,Sabey,Sabey,public_specialty,"Sabey Corporation (private)",Multiple,2008,2022,
+"T5 Atlanta GA-2",Atlanta,33.7180,-84.4150,built,60,T5,T5,infra_fund,"QuadReal / IPI",Multiple,2014,2020,
+"Prime Data Centers Reno",Reno-Las Vegas,39.5300,-119.7900,under_construction,200,Prime Data Centers,Prime,infra_fund,"Schroders Greencoat / private",TBD,2023,2025,

@@ -38,13 +38,30 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _LOCK = threading.Lock()
-_CACHE: dict[str, Any] = {'built': False, 'markets': [], 'national': {}}
+_CACHE: dict[str, Any] = {'built': False, 'markets': [], 'national': {}, 'facilities': []}
 
 _CSV_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     'data',
     'datacenter_markets.csv',
 )
+_FACILITIES_CSV_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'data',
+    'datacenter_facilities.csv',
+)
+
+# Funding-source taxonomy.  Top-level buckets so the map can color cleanly.
+FUNDING_TYPES = {
+    'hyperscaler':      'Hyperscaler self-fund',
+    'reit':             'Public REIT',
+    'infra_fund':       'Infra fund / PE',
+    'sovereign_jv':     'Sovereign / strategic JV',
+    'specialty_pe':     'Specialty / venture',
+    'public_specialty': 'Public specialty',
+}
+
+VALID_STATUSES = {'built', 'under_construction', 'planned'}
 
 # Risk thresholds — used both for color scaling and for flagging "watch" markets.
 # spec_ratio > 0.35  ≈ unleased near-term supply > 35% of installed base.
@@ -75,6 +92,33 @@ def _load_csv() -> list[dict[str, Any]]:
                 'preleased_pct': _to_float(r['preleased_pct']),
                 'vacancy_pct': _to_float(r['vacancy_pct']),
                 'power_note': r.get('power_note', ''),
+            })
+    return rows
+
+
+def _load_facilities_csv() -> list[dict[str, Any]]:
+    if not os.path.exists(_FACILITIES_CSV_PATH):
+        return []
+    rows: list[dict[str, Any]] = []
+    with open(_FACILITIES_CSV_PATH, newline='', encoding='utf-8') as f:
+        for r in csv.DictReader(f):
+            status = (r.get('status') or '').strip().lower()
+            funding = (r.get('funding_type') or '').strip().lower()
+            rows.append({
+                'name': r['name'],
+                'market': r['market'],
+                'lat': _to_float(r['lat']),
+                'lon': _to_float(r['lon']),
+                'status': status if status in VALID_STATUSES else 'planned',
+                'mw': _to_float(r.get('mw', 0)),
+                'operator': r.get('operator', ''),
+                'developer': r.get('developer', ''),
+                'funding_type': funding if funding in FUNDING_TYPES else 'infra_fund',
+                'funding_detail': r.get('funding_detail', ''),
+                'tenant': r.get('tenant', ''),
+                'announced_year': r.get('announced_year', ''),
+                'target_online': r.get('target_online', ''),
+                'notes': r.get('notes', ''),
             })
     return rows
 
@@ -137,6 +181,7 @@ def build(force: bool = False) -> dict[str, Any]:
             data = _enrich(rows)
             _CACHE['markets'] = data['markets']
             _CACHE['national'] = data['national']
+            _CACHE['facilities'] = _load_facilities_csv()
             _CACHE['built'] = True
             _CACHE['build_error'] = None
         except Exception as e:
@@ -151,11 +196,30 @@ def status() -> dict[str, Any]:
         'built': _CACHE.get('built', False),
         'build_error': _CACHE.get('build_error'),
         'market_count': len(_CACHE.get('markets', [])),
+        'facility_count': len(_CACHE.get('facilities', [])),
+        'funding_types': FUNDING_TYPES,
         'thresholds': {
             'spec_ratio_hot': SPEC_RATIO_HOT,
             'pipeline_ratio_hot': PIPELINE_RATIO_HOT,
         },
     }
+
+
+def get_facilities(
+    status: str | None = None,
+    funding_type: str | None = None,
+    market: str | None = None,
+) -> list[dict[str, Any]]:
+    if not _CACHE.get('built'):
+        build()
+    fac = _CACHE.get('facilities', [])
+    if status:
+        fac = [f for f in fac if f['status'] == status.lower()]
+    if funding_type:
+        fac = [f for f in fac if f['funding_type'] == funding_type.lower()]
+    if market:
+        fac = [f for f in fac if f['market'] == market]
+    return fac
 
 
 def get_markets(tier: str | None = None) -> list[dict[str, Any]]:
@@ -199,10 +263,50 @@ def get_summary() -> dict[str, Any]:
     top_concentration = sorted(markets, key=lambda x: x['inventory_share'], reverse=True)[:5]
     top_pipeline_share = sorted(markets, key=lambda x: x['pipeline_share'], reverse=True)[:5]
 
+    # ─── Facility-level roll-ups ────────────────────────────────────────
+    facilities = _CACHE.get('facilities', [])
+    by_funding: dict[str, dict[str, Any]] = {}
+    by_developer: dict[str, dict[str, Any]] = {}
+    fac_total_mw = sum(f['mw'] for f in facilities) or 1.0
+
+    for f in facilities:
+        ft = f['funding_type']
+        b = by_funding.setdefault(ft, {
+            'funding_type': ft,
+            'label': FUNDING_TYPES.get(ft, ft),
+            'count': 0, 'mw': 0.0,
+            'built_mw': 0.0, 'uc_mw': 0.0, 'planned_mw': 0.0,
+        })
+        b['count'] += 1
+        b['mw'] += f['mw']
+        if f['status'] == 'built':              b['built_mw']  += f['mw']
+        elif f['status'] == 'under_construction': b['uc_mw']     += f['mw']
+        else:                                   b['planned_mw'] += f['mw']
+
+        dev = f['developer'] or 'Unknown'
+        d = by_developer.setdefault(dev, {
+            'developer': dev, 'count': 0, 'mw': 0.0,
+            'funding_type': f['funding_type'],
+        })
+        d['count'] += 1
+        d['mw'] += f['mw']
+
+    for b in by_funding.values():
+        b['share'] = round(b['mw'] / fac_total_mw, 4)
+        for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw'):
+            b[k] = round(b[k], 1)
+
+    for d in by_developer.values():
+        d['share'] = round(d['mw'] / fac_total_mw, 4)
+        d['mw'] = round(d['mw'], 1)
+
     return {
         'national': nat,
         'by_tier': sorted(by_tier.values(), key=lambda x: -x['inventory_mw']),
         'top_overbuild': top_overbuild,
         'top_concentration': top_concentration,
         'top_pipeline_share': top_pipeline_share,
+        'facility_total_mw': round(fac_total_mw, 1),
+        'by_funding': sorted(by_funding.values(), key=lambda x: -x['mw']),
+        'top_developers': sorted(by_developer.values(), key=lambda x: -x['mw'])[:10],
     }
