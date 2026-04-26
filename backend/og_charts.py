@@ -191,18 +191,19 @@ def _fetch_cofer_nowcast(cat, ds, sv, qs) -> Optional[ChartData]:
 # ─── COFER (FX/Gold/Total Reserves by country) ────────────────────────────
 
 def _fetch_cofer_country(cat, ds, sv, qs) -> Optional[ChartData]:
-    """COFER country-level reserves (chosen via ?type=total|fx|gold)."""
-    cache = REPO_ROOT / "data" / "reserves_cache.json"
-    if not cache.exists():
-        return None
+    """COFER country-level reserves (chosen via ?type=total|fx|gold).
+
+    Calls get_cofer_data() — the same accessor the /api/cofer route uses —
+    so if the live page renders, this fetcher has the same data available.
+    """
     try:
-        with open(cache) as fh:
-            d = json.load(fh)
-    except Exception:
+        from backend.data_sources.imf_cofer import get_cofer_data
+        d = get_cofer_data() or {}
+    except Exception as e:
+        logger.warning("cofer fetch failed: %s", e)
         return None
-    payload = d.get("data") or {}
-    years = payload.get("years") or []
-    countries = payload.get("countries") or []
+    years = d.get("years") or []
+    countries = d.get("countries") or []
     if not years or not countries:
         return None
 

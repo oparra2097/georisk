@@ -461,6 +461,44 @@ def og_preview():
     return resp
 
 
+@sharing_bp.route("/og/debug")
+def og_debug():
+    """Inspect what the OG renderer would do for a given chart.
+
+    Public, read-only — returns JSON describing whether the real-data
+    fetcher succeeded, the headline value it picked, and how many points
+    it has. Useful for diagnosing why a preview falls back to the
+    template card.
+    """
+    from flask import jsonify
+    chart = request.args.get("chart", "").strip().lower()
+    cat = request.args.get("cat", "").strip().lower()
+    ds = request.args.get("ds", "").strip().lower()
+    sv = request.args.get("sv", "").strip()
+    extra = {k: v for k, v in request.args.items() if k not in ("chart", "cat", "ds", "sv")}
+    out = {"cat": cat, "ds": ds, "sv": sv, "extra": extra, "real_data": None, "fallback_meta": None}
+    try:
+        from backend.og_charts import fetch_chart_data
+        data = fetch_chart_data(cat, ds, sv, extra)
+        if data is None:
+            out["real_data"] = {"ok": False, "reason": "fetcher returned None"}
+        else:
+            out["real_data"] = {
+                "ok": True,
+                "title": data.title,
+                "headline_value": data.headline_value,
+                "headline_label": data.headline_label,
+                "n_points": len(data.points),
+                "x_first": data.x_label_first,
+                "x_last": data.x_label_last,
+            }
+    except Exception as e:
+        out["real_data"] = {"ok": False, "reason": f"exception: {type(e).__name__}: {e}"}
+    title, desc, source = _meta_for_params(chart, cat, ds, sv)
+    out["fallback_meta"] = {"title": title, "description": desc, "source": source}
+    return jsonify(out)
+
+
 @sharing_bp.route("/og/default.png")
 def og_default():
     cache_file = _cache_path("v2|default")
