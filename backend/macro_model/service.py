@@ -110,24 +110,23 @@ def _try_load_persist() -> bool:
             logger.warning('macro_model.service: pickle simulator has empty panel — discarding')
             _delete_pickle('discarded: empty panel')
             return False
-        # Last row of every BEHAVIORAL (endogenous) variable must have NO
-        # NaN — these drive the warm-start in solver.simulate_quarter and
-        # any NaN there propagates through the entire forecast horizon.
-        # Exogenous NaN at the panel end is now tolerated: PR #55's
-        # solver.forecast/_make_baseline_exog_paths use `last_valid` for
-        # exog carry-forward, so a stale OECD/CBO row doesn't break the
-        # forecast — but it WOULD if we kept the strict "all model
-        # variables non-NaN" check (which made the panel regress to ~2015
-        # when row_gdp's FRED OECD series stalled and made the dashboard
-        # display 2016-2020 historical dates as a "20-quarter forecast").
+        # Sanity check: the last historical row must have NO NaN in either
+        # behavioral OR exogenous columns. The solver reads lag-1 values of
+        # exogenous regressors (row_gdp, nrou, prod, lfpr, gov, oil) when
+        # evaluating the first forecast quarter — a NaN there propagates
+        # NaN deltas into every endogenous equation. The earlier behavioral-
+        # only check let this through; build_panel now ffills exog columns
+        # within the kept window so the last row is always clean by the time
+        # we get here.
         try:
+            from backend.macro_model.variables import VARIABLES
             last_row = sim.panel.iloc[-1]
-            behav = [c for c in getattr(sim, 'behavioral_order', []) if c in sim.panel.columns]
-            bad = [c for c in behav if pd.isna(last_row[c])]
+            check_cols = [v.code for v in VARIABLES if v.code in sim.panel.columns]
+            bad = [c for c in check_cols if pd.isna(last_row[c])]
             if bad:
                 logger.warning(
                     f'macro_model.service: pickle simulator panel last row has '
-                    f'NaN for behavioral cols {bad} — discarding'
+                    f'NaN for cols {bad} — discarding so a fresh build can re-trim/ffill'
                 )
                 _delete_pickle(f'discarded: NaN in final row for {bad}')
                 return False

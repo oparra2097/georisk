@@ -188,14 +188,27 @@ def build_panel(start: str = DEFAULT_START, codes: Optional[list[str]] = None,
                         f'(endog NaN: {nan_endog}, exog NaN tolerated: {nan_exog})'
                     )
                     panel = panel.loc[:last_complete]
-                else:
-                    last_row = panel.iloc[-1]
-                    nan_exog = [c for c in all_codes if c not in endog_codes and pd.isna(last_row[c])]
-                    if nan_exog:
-                        logger.info(
-                            f'macro_model.data: panel end has NaN exog cells '
-                            f'(forecast carry-forward will use last_valid for these): {nan_exog}'
-                        )
+
+            # Forward-fill exogenous columns within the kept window so the
+            # solver's lag-1 reads from the last historical row never return
+            # NaN. The forecast-window fill in solver.forecast (PR #55) only
+            # covered FUTURE rows; equations evaluated for the first forecast
+            # quarter still read lag-1 from the LAST HISTORICAL row, and a
+            # NaN in (e.g.) row_gdp there propagated NaN deltas through every
+            # endog and yielded an all-em-dash forecast table again.
+            # Endogenous columns are intentionally left untouched — those are
+            # the model's dependents and ffilling would mask genuinely-missing
+            # observations the regression needs to drop.
+            exog_codes = [c for c in all_codes if c not in endog_codes]
+            if exog_codes:
+                before_nan = int(panel[exog_codes].isna().sum().sum())
+                panel[exog_codes] = panel[exog_codes].ffill()
+                after_nan = int(panel[exog_codes].isna().sum().sum())
+                if before_nan > after_nan:
+                    logger.info(
+                        f'macro_model.data: forward-filled exog NaN cells '
+                        f'{before_nan} → {after_nan} so solver lag-reads see real values'
+                    )
 
     with _lock:
         if codes is None:
