@@ -138,7 +138,10 @@ def get_debug():
 @_hpi_gate
 def get_states():
     """List of states with fitted forecast models + per-state fit metadata."""
-    return jsonify({'states': service.get_state_list()})
+    # service.get_state_list() now returns a dict with states + skipped +
+    # diagnostics. Pass through directly so the UI can surface skipped
+    # states and the building flag.
+    return jsonify(service.get_state_list())
 
 
 @hpi_forecast_bp.route('/state/<code>/baseline')

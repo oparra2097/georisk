@@ -1080,7 +1080,7 @@
     } catch (e) { console.error('loadForecastShocks:', e); }
   }
 
-  async function loadForecastStates() {
+  async function loadForecastStates(retry = 0) {
     try {
       const r = await fetch(`${FCAST}/states`);
       if (!r.ok) return;
@@ -1089,6 +1089,12 @@
       const sel = $('hp-forecast-state');
       sel.innerHTML = '<option value="national">United States (national)</option>' +
         fcast.states.map(s => `<option value="${s.code}">${s.code} · R²=${s.rsq}</option>`).join('');
+      // If state models are still being fitted, retry every 8s up to 5
+      // times (~40s total) so the dropdown populates as soon as they
+      // finish without a manual refresh.
+      if (b.building && retry < 5) {
+        setTimeout(() => loadForecastStates(retry + 1), 8000);
+      }
     } catch (e) { console.error('loadForecastStates:', e); }
   }
 
