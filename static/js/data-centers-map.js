@@ -54,7 +54,8 @@ const DataCenterMap = {
   summary: null,
   tooltipEl: null,
   mode: 'markets',           // 'markets' | 'facilities'
-  colorBy: 'funding',        // 'funding' | 'tenant' | 'developer'
+  scenario: 'moderate',      // 'mild' | 'moderate' | 'severe'
+  colorBy: 'funding',        // 'funding' | 'tenant' | 'developer' | 'risk'
   activeTier: 'all',
   activeMetric: 'spec_ratio',
   activeStatus: 'all',
@@ -135,6 +136,14 @@ const DataCenterMap = {
         this.setMode(btn.dataset.mode);
       });
     });
+    document.querySelectorAll('.dc-tab[data-scenario]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.dc-tab[data-scenario]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.scenario = btn.dataset.scenario;
+        this.applyScenario();
+      });
+    });
     document.querySelectorAll('.dc-tab[data-tier]').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.dc-tab[data-tier]').forEach(b => b.classList.remove('active'));
@@ -187,6 +196,28 @@ const DataCenterMap = {
     if (reset) reset.addEventListener('click', () => this.resetFacilityFilters());
   },
 
+  // Read the right scenario value off any rollup row.
+  scenarioAtRiskMw(row) {
+    if (row?.at_risk_mw_by_scenario) return row.at_risk_mw_by_scenario[this.scenario] || 0;
+    return row?.at_risk_mw || 0;
+  },
+  scenarioAtRiskShare(row) {
+    if (row?.at_risk_share_by_scenario) return row.at_risk_share_by_scenario[this.scenario] || 0;
+    return row?.at_risk_share || 0;
+  },
+
+  applyScenario() {
+    const help = document.getElementById('scenario-help');
+    if (help && this.summary?.scenarios) {
+      help.textContent = this.summary.scenarios[this.scenario] || '';
+    }
+    this.renderKPIs();
+    this.renderFundingTable();
+    this.renderStrandedTable();
+    this.renderTenantTable();
+    if (this.mode === 'facilities') this.renderFacilities();
+  },
+
   resetFacilityFilters() {
     this.activeFunding = 'all';
     this.activeTenant = 'all';
@@ -234,6 +265,7 @@ const DataCenterMap = {
     this.renderFacilityLegend();
     this.renderBubbles();
     this.renderFacilities();
+    this.applyScenario();  // sets scenario-help text + scenario KPIs
   },
 
   buildDeveloperColorScale() {
@@ -286,7 +318,9 @@ const DataCenterMap = {
       return '#dc2626';
     };
     tbody.innerHTML = rows.map(r => {
-      const pct = (r.at_risk_share || 0) * 100;
+      const at_risk = this.scenarioAtRiskMw(r);
+      const at_share = this.scenarioAtRiskShare(r);
+      const pct = at_share * 100;
       return `
         <tr data-funding="${r.funding_type}">
           <td>
@@ -294,7 +328,7 @@ const DataCenterMap = {
             ${r.label}
           </td>
           <td class="num">${Math.round(r.mw).toLocaleString()}</td>
-          <td class="num">${Math.round(r.at_risk_mw).toLocaleString()}</td>
+          <td class="num">${Math.round(at_risk).toLocaleString()}</td>
           <td class="num" style="color:${riskColor(pct)};font-weight:600;">${pct.toFixed(1)}%</td>
         </tr>`;
     }).join('');
@@ -320,6 +354,8 @@ const DataCenterMap = {
     tbody.innerHTML = rows.map(r => {
       const c = scale(r.stranded_risk || 0);
       const shortName = r.name.length > 36 ? r.name.slice(0, 34) + '…' : r.name;
+      const at_risk = (r.at_risk_mw_by_scenario && r.at_risk_mw_by_scenario[this.scenario])
+                       ?? r.at_risk_mw;
       return `
         <tr title="${r.name}\nTenant: ${r.tenant_norm} (${r.tenant_credit_label})\nFunding: ${r.funding_detail || r.funding_type}\nStatus: ${r.status}">
           <td>${shortName}</td>
@@ -330,7 +366,7 @@ const DataCenterMap = {
             ${(r.stranded_risk || 0).toFixed(0)}
           </td>
           <td class="num">${Math.round(r.mw).toLocaleString()}</td>
-          <td class="num" style="color:#991b1b;font-weight:600;">${Math.round(r.at_risk_mw).toLocaleString()}</td>
+          <td class="num" style="color:#991b1b;font-weight:600;">${Math.round(at_risk).toLocaleString()}</td>
         </tr>`;
     }).join('');
   },
@@ -341,15 +377,18 @@ const DataCenterMap = {
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="loading">no data</td></tr>'; return; }
     tbody.innerHTML = rows.map(r => {
       const color = TENANT_COLOR[r.tenant] || TENANT_FALLBACK;
+      const at_risk = this.scenarioAtRiskMw(r);
+      const fcfTooltip = (r.tenant_fcf_b != null && r.tenant_capex_b != null)
+        ? ` title="~$${r.tenant_capex_b}B AI capex on ~$${r.tenant_fcf_b}B FCF (illustrative)"` : '';
       return `
-        <tr data-tenant="${r.tenant}">
+        <tr data-tenant="${r.tenant}"${fcfTooltip}>
           <td>
             <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle;"></span>
             ${r.tenant}
           </td>
           <td class="num">${r.count}</td>
           <td class="num">${Math.round(r.mw).toLocaleString()}</td>
-          <td class="num">${(r.share * 100).toFixed(1)}%</td>
+          <td class="num" style="color:${at_risk > 0 ? '#991b1b' : '#9ca3af'};">${Math.round(at_risk).toLocaleString()}</td>
         </tr>`;
     }).join('');
     tbody.querySelectorAll('tr').forEach(tr => {
@@ -417,13 +456,15 @@ const DataCenterMap = {
       document.getElementById('kpi-pipeline-sub').textContent =
         n.pipeline_ratio > 1 ? 'pipeline exceeds installed base' : 'pipeline below installed base';
     }
-    const ew = this.summary?.expected_writedown_mw;
-    const ewShare = this.summary?.expected_writedown_share;
+    const ew  = this.summary?.expected_writedown_mw_by_scenario?.[this.scenario]
+              ?? this.summary?.expected_writedown_mw;
+    const ewS = this.summary?.expected_writedown_share_by_scenario?.[this.scenario]
+              ?? this.summary?.expected_writedown_share;
     const wEl = document.getElementById('kpi-writedown');
     const sEl = document.getElementById('kpi-writedown-sub');
     if (wEl && ew != null) {
       wEl.textContent = Math.round(ew).toLocaleString();
-      sEl.textContent = `${(ewShare * 100).toFixed(1)}% of named MW`;
+      sEl.textContent = `${(ewS * 100).toFixed(1)}% of named MW · ${this.scenario}`;
     }
   },
 
@@ -690,12 +731,27 @@ const DataCenterMap = {
         <div style="font-size:10px;color:#94a3b8;margin-top:4px;line-height:1.5;">
           tenant ${drv.tenant_concentration ?? 0} · credit ${drv.tenant_credit ?? 0} ·
           spec ${drv.speculative_build ?? 0} · funding ${drv.funding_resilience ?? 0} ·
-          geo ${drv.geographic_correlation ?? 0}
+          geo ${drv.geographic_correlation ?? 0} · stretch ${drv.tenant_stretch ?? 0}
         </div>
-        <div style="font-size:10px;color:#fca5a5;margin-top:3px;">
-          At-risk: ${Math.round(d.at_risk_mw || 0).toLocaleString()} MW
-          (${((d.writedown_prob || 0) * 100).toFixed(0)}% prob × MW)
-        </div>
+        ${(d.tenant_fcf_b != null && d.tenant_capex_b != null) ? `
+          <div style="font-size:10px;color:#cbd5e1;margin-top:3px;">
+            ${d.tenant} ~$${d.tenant_capex_b}B 2025 AI capex on ~$${d.tenant_fcf_b}B FCF
+          </div>` : ''}
+        ${(() => {
+          const sb = d.at_risk_mw_by_scenario || {};
+          const pb = d.writedown_prob_by_scenario || {};
+          const cur = this.scenario;
+          return `<div style="font-size:10px;color:#fca5a5;margin-top:5px;line-height:1.5;">
+            <div style="font-weight:600;">At-risk MW (${cur}): ${Math.round(sb[cur] ?? d.at_risk_mw ?? 0).toLocaleString()}
+              <span style="color:#94a3b8;font-weight:400;">
+                · ${((pb[cur] ?? d.writedown_prob ?? 0) * 100).toFixed(0)}% prob × MW
+              </span>
+            </div>
+            <div style="color:#94a3b8;">
+              mild ${Math.round(sb.mild ?? 0)} · moderate ${Math.round(sb.moderate ?? 0)} · severe ${Math.round(sb.severe ?? 0)} MW
+            </div>
+          </div>`;
+        })()}
       </div>
       ${d.notes ? `<div class="note" style="margin-top:6px;">${d.notes}</div>` : ''}
     `;

@@ -132,7 +132,14 @@
     <button class="dc-tab active" data-mode="markets">Markets</button>
     <button class="dc-tab" data-mode="facilities">Facilities</button>
     <span class="spacer"></span>
-    <span class="legend-inline" id="mode-help">Bubble area &prop; pipeline MW · color = selected metric</span>
+    <span class="legend-inline" style="margin-right:6px;">Scenario:</span>
+    <button class="dc-tab" data-scenario="mild">Mild</button>
+    <button class="dc-tab active" data-scenario="moderate">Moderate</button>
+    <button class="dc-tab" data-scenario="severe">Severe</button>
+  </div>
+  <div class="dc-toolbar" style="border-top:none;padding-top:0;">
+    <span class="legend-inline" id="mode-help" style="flex:1;">Bubble area &prop; pipeline MW · color = selected metric</span>
+    <span class="legend-inline" id="scenario-help" style="color:#374151;font-style:italic;"></span>
   </div>
 
   <div class="dc-toolbar" id="markets-toolbar">
@@ -280,10 +287,13 @@
         <h3>Tenant concentration</h3>
         <table class="dc-table" id="tenant-table">
           <thead>
-            <tr><th>Tenant</th><th class="num">#</th><th class="num">MW</th><th class="num">% MW</th></tr>
+            <tr><th>Tenant</th><th class="num">#</th><th class="num">MW</th><th class="num">At-risk</th></tr>
           </thead>
           <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
         </table>
+        <div style="font-size:10px;color:#6b7280;margin-top:6px;line-height:1.4;">
+          Hover a row for the tenant's published AI capex / FCF context. At-risk MW reflects the active scenario.
+        </div>
       </div>
 
       <div class="dc-card">
@@ -308,15 +318,17 @@
     <strong>Funding-source</strong> taxonomy: hyperscaler self-fund, public REIT, infra fund / PE,
     sovereign/strategic JV (e.g. Stargate), specialty/venture, public specialty.
     <br><br>
-    <strong>Stranded-asset risk</strong> = tenant concentration (single-tenant / unleased / colo, 0–40)
-    + tenant credit quality (investment grade ↔ venture-backed, 0–25)
-    + speculative build component (planned/UC unleased &gt; built locked-in, 0–15)
-    + funding-source resilience (PE-leveraged &gt; sovereign &gt; REIT &gt; hyperscaler, 0–10)
-    + geographic correlation (metro spec_ratio, 0–10).
-    <strong>At-risk MW</strong> applies a default-probability matrix on (tenant tier × status):
-    e.g. venture-backed tenant + UC ⇒ ~50%, IG tenant + built ⇒ 0%.
+    <strong>Stranded-asset risk</strong> (0–100) = tenant concentration (0–30)
+    + tenant credit quality (0–20)
+    + speculative build component (0–15)
+    + funding-source resilience (0–10)
+    + geographic correlation (0–10)
+    + <strong>tenant balance-sheet stretch</strong> (committed AI capex vs. tenant FCF, 0–15).
+    <strong>At-risk MW</strong> applies a default-probability matrix on (tenant tier × status × scenario).
+    The <strong>scenario</strong> selector at the top of the page swaps in three calibrations:
+    Mild (capex normalizes), Moderate (demand neutralizes), Severe (AI demand crash).
     Calibration is illustrative — substitute house probabilities by editing
-    <code>_WRITEDOWN_PROB</code> in <code>backend/data_centers/service.py</code>.
+    <code>_SCENARIOS</code> and <code>TENANT_FCF_HEADROOM</code> in <code>backend/data_centers/service.py</code>.
   </div>
 </div>
 

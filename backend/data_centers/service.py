@@ -120,13 +120,13 @@ TENANT_TIER_LABEL = {
     'unknown':                  'Unknown',
 }
 
-_CREDIT_RISK = {  # 0–25
+_CREDIT_RISK = {  # 0–20
     'investment_grade':         3,
-    'high_growth_unprofitable': 18,
-    'venture_backed':           25,
+    'high_growth_unprofitable': 14,
+    'venture_backed':           20,
     'diversified':              5,
-    'speculative':              22,
-    'unknown':                  12,
+    'speculative':              17,
+    'unknown':                  10,
 }
 
 _FUNDING_RESILIENCE = {  # 0–10  (higher = investor more exposed)
@@ -138,15 +138,61 @@ _FUNDING_RESILIENCE = {  # 0–10  (higher = investor more exposed)
     'public_specialty':  4,
 }
 
-# Default probability of writedown by (tenant tier, status).
-_WRITEDOWN_PROB = {
-    'investment_grade':         {'built': 0.00, 'under_construction': 0.03, 'planned': 0.08},
-    'high_growth_unprofitable': {'built': 0.10, 'under_construction': 0.30, 'planned': 0.55},
-    'venture_backed':           {'built': 0.20, 'under_construction': 0.50, 'planned': 0.70},
-    'diversified':              {'built': 0.02, 'under_construction': 0.10, 'planned': 0.20},
-    'speculative':              {'built': 0.15, 'under_construction': 0.55, 'planned': 0.80},
-    'unknown':                  {'built': 0.05, 'under_construction': 0.20, 'planned': 0.40},
+# Tenant balance-sheet stretch: how exposed is the tenant's reported
+# capacity-build to its own free-cash-flow generation?  Manually-set
+# scores grounded in published 2024–2025 capex guidance and FCF runs.
+# Higher = thinner cushion if AI demand disappoints.
+#
+# fcf_b   ≈ trailing FCF (USD billions)
+# capex_b ≈ committed/guided AI-related capex (USD billions, annualized)
+# stretch ≈ 0–10 score (manually weighted)
+TENANT_FCF_HEADROOM = {
+    'Microsoft': {'fcf_b':  74, 'capex_b':  85, 'stretch': 1.5},
+    'Google':    {'fcf_b':  73, 'capex_b':  75, 'stretch': 2.0},
+    'Meta':      {'fcf_b':  52, 'capex_b':  65, 'stretch': 3.0},
+    'Amazon':    {'fcf_b':  35, 'capex_b': 100, 'stretch': 4.0},
+    'Apple':     {'fcf_b': 110, 'capex_b':   8, 'stretch': 0.5},
+    'Oracle':    {'fcf_b':  15, 'capex_b':  35, 'stretch': 7.5},
+    'OpenAI':    {'fcf_b':  -5, 'capex_b':  50, 'stretch': 9.0},
+    'xAI':       {'fcf_b':  -3, 'capex_b':  15, 'stretch':10.0},
 }
+_DEFAULT_STRETCH = 5.0  # for Colo / Unleased / unknown tenants
+
+# Three demand-environment scenarios.  Each maps (tenant tier, status) →
+# probability that the facility is written down.  The point estimate
+# reported in the summary KPI is moderate; the slider re-runs the rollup
+# under mild and severe matrices.
+_SCENARIOS = {
+    'mild': {  # AI capex normalizes — modest air comes out
+        'label': 'Mild — capex normalizes',
+        'investment_grade':         {'built': 0.00, 'under_construction': 0.01, 'planned': 0.03},
+        'high_growth_unprofitable': {'built': 0.04, 'under_construction': 0.15, 'planned': 0.30},
+        'venture_backed':           {'built': 0.10, 'under_construction': 0.25, 'planned': 0.40},
+        'diversified':              {'built': 0.00, 'under_construction': 0.05, 'planned': 0.10},
+        'speculative':              {'built': 0.08, 'under_construction': 0.30, 'planned': 0.50},
+        'unknown':                  {'built': 0.02, 'under_construction': 0.10, 'planned': 0.20},
+    },
+    'moderate': {  # demand neutralizes — base case
+        'label': 'Moderate — demand neutralizes',
+        'investment_grade':         {'built': 0.00, 'under_construction': 0.03, 'planned': 0.08},
+        'high_growth_unprofitable': {'built': 0.10, 'under_construction': 0.30, 'planned': 0.55},
+        'venture_backed':           {'built': 0.20, 'under_construction': 0.50, 'planned': 0.70},
+        'diversified':              {'built': 0.02, 'under_construction': 0.10, 'planned': 0.20},
+        'speculative':              {'built': 0.15, 'under_construction': 0.55, 'planned': 0.80},
+        'unknown':                  {'built': 0.05, 'under_construction': 0.20, 'planned': 0.40},
+    },
+    'severe': {  # AI demand crash — broad unwind
+        'label': 'Severe — AI demand crash',
+        'investment_grade':         {'built': 0.03, 'under_construction': 0.10, 'planned': 0.20},
+        'high_growth_unprofitable': {'built': 0.25, 'under_construction': 0.60, 'planned': 0.80},
+        'venture_backed':           {'built': 0.40, 'under_construction': 0.75, 'planned': 0.90},
+        'diversified':              {'built': 0.08, 'under_construction': 0.25, 'planned': 0.40},
+        'speculative':              {'built': 0.30, 'under_construction': 0.80, 'planned': 0.95},
+        'unknown':                  {'built': 0.15, 'under_construction': 0.40, 'planned': 0.60},
+    },
+}
+SCENARIO_KEYS = ('mild', 'moderate', 'severe')
+DEFAULT_SCENARIO = 'moderate'
 
 
 def _credit_tier(tenant_norm: str) -> str:
@@ -157,15 +203,15 @@ def _facility_risk(f: dict, market_spec_ratio: float) -> dict:
     tn = f['tenant_norm']
     tier = _credit_tier(tn)
 
-    # 1. Tenant concentration (0-40)
+    # 1. Tenant concentration (0-30)
     if tn == 'Colo (multi-tenant)':
         c_concentration = 5
     elif tn == 'Unleased':
-        c_concentration = 30
+        c_concentration = 22
     else:
-        c_concentration = 40
+        c_concentration = 30
 
-    # 2. Tenant credit quality (0-25)
+    # 2. Tenant credit quality (0-20)
     c_credit = _CREDIT_RISK[tier]
 
     # 3. Speculative build (0-15) — locked-in built capacity scores 0
@@ -183,23 +229,40 @@ def _facility_risk(f: dict, market_spec_ratio: float) -> dict:
     # 5. Geographic correlation (0-10) — facility's metro spec_ratio scaled
     c_geo = max(0.0, min(10.0, (market_spec_ratio or 0.0) * 25.0))
 
-    score = round(min(100.0, c_concentration + c_credit + c_spec + c_funding + c_geo), 1)
-    prob = _WRITEDOWN_PROB[tier][f['status']]
-    at_risk = round(f['mw'] * prob, 1)
+    # 6. Tenant balance-sheet stretch (0-15) — committed AI capex vs. tenant FCF
+    headroom = TENANT_FCF_HEADROOM.get(tn, {})
+    stretch = headroom.get('stretch', _DEFAULT_STRETCH)
+    c_stretch = round(stretch * 1.5, 1)  # 0–10 stretch → 0–15 component
+
+    score = round(min(100.0, c_concentration + c_credit + c_spec + c_funding + c_geo + c_stretch), 1)
+
+    # Per-scenario at-risk MW for client-side scenario switching.
+    at_risk_by_scenario = {
+        s: round(f['mw'] * _SCENARIOS[s][tier][f['status']], 1)
+        for s in SCENARIO_KEYS
+    }
 
     return {
         'tenant_credit_tier': tier,
         'tenant_credit_label': TENANT_TIER_LABEL[tier],
         'stranded_risk': score,
         'risk_drivers': {
-            'tenant_concentration': c_concentration,
-            'tenant_credit':         c_credit,
-            'speculative_build':     c_spec,
-            'funding_resilience':    c_funding,
+            'tenant_concentration':   c_concentration,
+            'tenant_credit':          c_credit,
+            'speculative_build':      c_spec,
+            'funding_resilience':     c_funding,
             'geographic_correlation': round(c_geo, 1),
+            'tenant_stretch':         c_stretch,
         },
-        'writedown_prob': prob,
-        'at_risk_mw': at_risk,
+        'tenant_fcf_b':   headroom.get('fcf_b'),
+        'tenant_capex_b': headroom.get('capex_b'),
+        'writedown_prob_by_scenario': {
+            s: _SCENARIOS[s][tier][f['status']] for s in SCENARIO_KEYS
+        },
+        'at_risk_mw_by_scenario': at_risk_by_scenario,
+        # Legacy: keep moderate scenario fields for back-compat
+        'writedown_prob': _SCENARIOS[DEFAULT_SCENARIO][tier][f['status']],
+        'at_risk_mw': at_risk_by_scenario[DEFAULT_SCENARIO],
     }
 
 # Risk thresholds — used both for color scaling and for flagging "watch" markets.
@@ -424,9 +487,16 @@ def get_summary() -> dict[str, Any]:
     by_developer: dict[str, dict[str, Any]] = {}
     by_tenant: dict[str, dict[str, Any]] = {}
     fac_total_mw = sum(f['mw'] for f in facilities) or 1.0
-    total_at_risk_mw = sum(f.get('at_risk_mw', 0.0) for f in facilities)
+    total_at_risk_by_scenario = {
+        s: sum(f.get('at_risk_mw_by_scenario', {}).get(s, 0.0) for f in facilities)
+        for s in SCENARIO_KEYS
+    }
+    total_at_risk_mw = total_at_risk_by_scenario[DEFAULT_SCENARIO]
+
+    def _zero_scen(): return {s: 0.0 for s in SCENARIO_KEYS}
 
     for f in facilities:
+        f_at_risk = f.get('at_risk_mw_by_scenario', {})
         ft = f['funding_type']
         b = by_funding.setdefault(ft, {
             'funding_type': ft,
@@ -434,10 +504,13 @@ def get_summary() -> dict[str, Any]:
             'count': 0, 'mw': 0.0,
             'built_mw': 0.0, 'uc_mw': 0.0, 'planned_mw': 0.0,
             'at_risk_mw': 0.0,
+            'at_risk_mw_by_scenario': _zero_scen(),
         })
         b['count'] += 1
         b['mw'] += f['mw']
         b['at_risk_mw'] += f.get('at_risk_mw', 0.0)
+        for s in SCENARIO_KEYS:
+            b['at_risk_mw_by_scenario'][s] += f_at_risk.get(s, 0.0)
         if f['status'] == 'built':              b['built_mw']  += f['mw']
         elif f['status'] == 'under_construction': b['uc_mw']     += f['mw']
         else:                                   b['planned_mw'] += f['mw']
@@ -455,11 +528,16 @@ def get_summary() -> dict[str, Any]:
             'tenant': tn, 'count': 0, 'mw': 0.0,
             'built_mw': 0.0, 'uc_mw': 0.0, 'planned_mw': 0.0,
             'at_risk_mw': 0.0,
+            'at_risk_mw_by_scenario': _zero_scen(),
             'tenant_credit_tier': f.get('tenant_credit_tier', 'unknown'),
+            'tenant_fcf_b': f.get('tenant_fcf_b'),
+            'tenant_capex_b': f.get('tenant_capex_b'),
         })
         t['count'] += 1
         t['mw'] += f['mw']
         t['at_risk_mw'] += f.get('at_risk_mw', 0.0)
+        for s in SCENARIO_KEYS:
+            t['at_risk_mw_by_scenario'][s] += f_at_risk.get(s, 0.0)
         if f['status'] == 'built':              t['built_mw']  += f['mw']
         elif f['status'] == 'under_construction': t['uc_mw']     += f['mw']
         else:                                   t['planned_mw'] += f['mw']
@@ -467,6 +545,12 @@ def get_summary() -> dict[str, Any]:
     for b in by_funding.values():
         b['share'] = round(b['mw'] / fac_total_mw, 4)
         b['at_risk_share'] = round(b['at_risk_mw'] / b['mw'], 3) if b['mw'] else 0.0
+        b['at_risk_share_by_scenario'] = {
+            s: round(b['at_risk_mw_by_scenario'][s] / b['mw'], 3) if b['mw'] else 0.0
+            for s in SCENARIO_KEYS
+        }
+        for s in SCENARIO_KEYS:
+            b['at_risk_mw_by_scenario'][s] = round(b['at_risk_mw_by_scenario'][s], 1)
         for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw', 'at_risk_mw'):
             b[k] = round(b[k], 1)
 
@@ -477,6 +561,12 @@ def get_summary() -> dict[str, Any]:
     for t in by_tenant.values():
         t['share'] = round(t['mw'] / fac_total_mw, 4)
         t['at_risk_share'] = round(t['at_risk_mw'] / t['mw'], 3) if t['mw'] else 0.0
+        t['at_risk_share_by_scenario'] = {
+            s: round(t['at_risk_mw_by_scenario'][s] / t['mw'], 3) if t['mw'] else 0.0
+            for s in SCENARIO_KEYS
+        }
+        for s in SCENARIO_KEYS:
+            t['at_risk_mw_by_scenario'][s] = round(t['at_risk_mw_by_scenario'][s], 1)
         for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw', 'at_risk_mw'):
             t[k] = round(t[k], 1)
 
@@ -497,9 +587,20 @@ def get_summary() -> dict[str, Any]:
         'facility_total_mw': round(fac_total_mw, 1),
         'expected_writedown_mw': round(total_at_risk_mw, 1),
         'expected_writedown_share': round(total_at_risk_mw / fac_total_mw, 3) if fac_total_mw else 0.0,
+        'expected_writedown_mw_by_scenario': {
+            s: round(total_at_risk_by_scenario[s], 1) for s in SCENARIO_KEYS
+        },
+        'expected_writedown_share_by_scenario': {
+            s: round(total_at_risk_by_scenario[s] / fac_total_mw, 3) if fac_total_mw else 0.0
+            for s in SCENARIO_KEYS
+        },
         'by_funding': sorted(by_funding.values(), key=lambda x: -x['at_risk_mw']),
         'top_developers': sorted(by_developer.values(), key=lambda x: -x['mw'])[:12],
         'by_tenant': sorted(by_tenant.values(), key=lambda x: -x['mw']),
         'top_stranded_risk': top_risk,
         'tenant_tier_labels': TENANT_TIER_LABEL,
+        'scenarios': {
+            s: _SCENARIOS[s]['label'] for s in SCENARIO_KEYS
+        },
+        'default_scenario': DEFAULT_SCENARIO,
     }
