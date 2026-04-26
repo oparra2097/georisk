@@ -122,6 +122,16 @@ def post_refresh():
     return jsonify(service.status())
 
 
+@hpi_forecast_bp.route('/debug')
+@_hpi_gate
+def get_debug():
+    """Expose the model's panel state so we can verify what data is feeding
+    the forecast. Returns: last 8 historical (year, quarter, hpi_level) rows
+    for the national model + driver levels at panel end. Used to diagnose
+    +143% YoY snap-back issues that come from data scale mismatches."""
+    return jsonify(service.debug_panel())
+
+
 # ── Per-state ───────────────────────────────────────────────────────────
 
 @hpi_forecast_bp.route('/states')
