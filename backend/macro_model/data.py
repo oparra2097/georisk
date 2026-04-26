@@ -162,24 +162,28 @@ def build_panel(start: str = DEFAULT_START, codes: Optional[list[str]] = None,
         panel = panel[panel.index >= pd.Timestamp(start)]
         panel = panel.dropna(how='all')
 
-        # Trim trailing rows where ANY endogenous variable is NaN. Daily FRED
-        # series (DGS10, DXY, oil) extend into the current quarter the moment
-        # we cross a quarter boundary, but BEA quarterly aggregates and the
-        # monthly labor / price series lag by 1-3 months. Without this trim
-        # the panel's last row has tsy10/dxy filled but gdp/cons/pce_core/etc.
-        # all NaN — which the solver's warm-start then carries forward as
-        # NaN into every forecast quarter (root cause of the all-em-dash
-        # forecast table observed Apr 2026).
-        endog_codes = [v.code for v in wanted if v.endogenous and v.code in panel.columns]
-        if endog_codes and len(panel) > 0:
-            complete = panel[endog_codes].notna().all(axis=1)
+        # Trim trailing rows where ANY model variable (endogenous OR exogenous)
+        # is NaN. Daily FRED series (DGS10, DXY, oil) extend into the current
+        # quarter the moment we cross a quarter boundary, but BEA quarterly
+        # aggregates and the monthly labor / price series lag by 1-3 months;
+        # the CBO natural-rate (NROU) and OECD ROW GDP can lag further. Without
+        # this trim the panel's last row mixes filled daily series with NaN
+        # quarterly/monthly series, and the solver's warm-start + flat-exog
+        # carry-forward then propagate NaN through every forecast quarter
+        # (root cause of the all-em-dash forecast table observed Apr 2026).
+        model_codes = [v.code for v in wanted if v.code in panel.columns]
+        if model_codes and len(panel) > 0:
+            complete = panel[model_codes].notna().all(axis=1)
             if complete.any():
                 last_complete = complete[complete].index.max()
                 trimmed = (panel.index > last_complete).sum()
                 if trimmed:
+                    last_row = panel.iloc[-1]
+                    nan_cols = [c for c in model_codes if pd.isna(last_row[c])]
                     logger.info(
                         f'macro_model.data: trimming {trimmed} trailing partial '
-                        f'rows after last-complete quarter {last_complete.date()}'
+                        f'rows after last-complete quarter {last_complete.date()} '
+                        f'(NaN cols at panel end: {nan_cols})'
                     )
                     panel = panel.loc[:last_complete]
 

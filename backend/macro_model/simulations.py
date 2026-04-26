@@ -92,7 +92,13 @@ def _spec_from_id(shock_id: str) -> Shock:
 # ── Simulation primitives ───────────────────────────────────────────────
 
 def _make_baseline_exog_paths(sim: Simulator, horizon: int) -> pd.DataFrame:
-    """Flat-carry-forward exogenous paths for the forecast horizon."""
+    """Flat-carry-forward exogenous paths for the forecast horizon.
+
+    Uses each column's last NON-NaN historical value rather than iloc[-1],
+    so the baseline path stays valid even if the panel's final row has a
+    NaN cell for some exogenous (e.g. NROU not yet refreshed for the
+    current quarter).
+    """
     exog_cols = [c for c in ('gov', 'oil', 'row_gdp', 'nrou', 'prod', 'lfpr')
                  if c in sim.panel.columns]
     last = sim.panel.index[-1]
@@ -100,9 +106,12 @@ def _make_baseline_exog_paths(sim: Simulator, horizon: int) -> pd.DataFrame:
         start=(last + pd.offsets.QuarterEnd(1)).normalize(),
         periods=horizon, freq='QE',
     )
-    last_row = sim.panel.iloc[-1]
+    fills: dict[str, float] = {}
+    for c in exog_cols:
+        valid = sim.panel[c].dropna()
+        fills[c] = float(valid.iloc[-1]) if len(valid) else 0.0
     return pd.DataFrame(
-        {c: np.full(horizon, float(last_row[c])) for c in exog_cols},
+        {c: np.full(horizon, fills[c]) for c in exog_cols},
         index=dates,
     )
 

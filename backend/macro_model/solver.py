@@ -298,12 +298,18 @@ class Simulator:
         )
         # Extend panel with NaN rows for the horizon
         new_rows = pd.DataFrame(index=new_dates, columns=self.panel.columns, dtype=float)
-        # Fill exogenous: either from supplied paths or flat from last value
+        # Fill exogenous: either from supplied paths or flat from the last
+        # non-NaN historical value. Using last_valid_index instead of iloc[-1]
+        # protects against the case where build_panel left a trailing NaN cell
+        # for an exogenous variable that would otherwise propagate into every
+        # forecast quarter as NaN.
         for col in exog_cols:
             if exog_paths is not None and col in exog_paths.columns:
                 new_rows[col] = exog_paths[col].reindex(new_dates).values
             else:
-                new_rows[col] = float(self.panel.iloc[-1][col])
+                last_valid = self.panel[col].dropna()
+                fill = float(last_valid.iloc[-1]) if len(last_valid) else 0.0
+                new_rows[col] = fill
         self.panel = pd.concat([self.panel, new_rows])
 
         diagnostics = []
