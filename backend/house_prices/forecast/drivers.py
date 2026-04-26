@@ -129,6 +129,49 @@ def fetch_state_unemp(state_code: str, start: str = '1980-01-01') -> pd.Series:
     return _to_quarterly(raw, 'M').rename('state_unemp')
 
 
+# ── FHFA all-transactions HPI via FRED (stable URLs) ──────────────────
+#
+# Going through FRED instead of FHFA's master CSV sidesteps multiple
+# reliability issues we hit in the master-parsing path (rebased indices,
+# experimental flavor variants under the same place_id, schema drift).
+# FRED hosts each state's HPI under <STATE>STHPI and the national under
+# USSTHPI — these are FHFA's official all-transactions quarterly series,
+# updated within a day of FHFA's release. The values match FHFA's master
+# CSV exactly when both are working, and the FRED feed has been stable
+# across the recent FHFA site reorgs.
+
+NATIONAL_HPI_FRED_ID = 'USSTHPI'
+STATE_HPI_FRED_IDS: dict[str, str] = {c: f'{c}STHPI' for c in _US_STATE_CODES}
+
+
+def _fetch_fred_hpi(fred_id: str, label: str, start: str) -> pd.Series:
+    try:
+        raw = fred_client.fetch_series(fred_id, start_date=start)
+    except Exception as e:
+        logger.warning(f'hpi_forecast.drivers: {label} fetch raised: {e}')
+        return pd.Series(dtype=float)
+    if not raw:
+        logger.warning(f'hpi_forecast.drivers: {label} empty FRED response')
+        return pd.Series(dtype=float)
+    return _to_quarterly(raw, 'Q').rename('hpi')
+
+
+def fetch_national_hpi(start: str = '1980-01-01') -> pd.Series:
+    """National FHFA all-transactions HPI in raw level, via FRED USSTHPI.
+    Caller takes log to feed the model."""
+    return _fetch_fred_hpi(NATIONAL_HPI_FRED_ID, 'national HPI (USSTHPI)', start)
+
+
+def fetch_state_hpi(state_code: str, start: str = '1980-01-01') -> pd.Series:
+    """Per-state FHFA all-transactions HPI in raw level via FRED <STATE>STHPI.
+    Returns an empty Series for state codes FRED doesn't carry (handful of
+    territories) so the caller can decide to skip that state."""
+    fred_id = STATE_HPI_FRED_IDS.get(state_code.upper())
+    if fred_id is None:
+        return pd.Series(dtype=float)
+    return _fetch_fred_hpi(fred_id, f'state HPI ({fred_id})', start)
+
+
 def build_panel(start: str = '1980-01-01') -> pd.DataFrame:
     """Quarterly panel with all macro drivers (no HPI yet — caller joins).
 

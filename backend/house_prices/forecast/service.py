@@ -25,7 +25,10 @@ import pandas as pd
 from backend.house_prices import service as hpi_service
 from backend.house_prices.forecast.drivers import (
     build_panel as build_drivers,
+    fetch_national_hpi,
+    fetch_state_hpi,
     fetch_state_unemp,
+    STATE_HPI_FRED_IDS,
 )
 from backend.house_prices.forecast.model import (
     HpiForecastModel,
@@ -97,51 +100,35 @@ def _hpi_log_series(level: str, code: str) -> Optional[pd.Series]:
 def _national_hpi_log() -> Optional[pd.Series]:
     """National HPI series in log-level for the forecast model.
 
-    Source priority matches the dashboard summary tiles in
-    backend/house_prices/service.get_summary():
-        1. FHFA all-transactions national  (place_id='USA')
-        2. Case-Shiller US National Composite  (place_id='CS_NATIONAL')
-        3. Any other 'national'-level entity in the grouped table.
-
-    This consistency matters: previously the summary tile fell back to
-    Case-Shiller when FHFA was unavailable but the forecast model
-    didn't, producing visibly different "US HPI" numbers between the
-    two cards on the same dashboard.
+    Pulls FHFA's all-transactions HPI directly from FRED (USSTHPI) —
+    stable feed, updated within a day of FHFA's release, sidesteps the
+    master-CSV parsing issues (rebased indices, experimental flavor
+    variants, schema drift) that have repeatedly caused snap-up
+    forecasts. Only falls through to the house_prices.grouped table
+    if FRED is unavailable.
     """
+    raw = fetch_national_hpi(start='1980-01-01')
+    if raw is not None and len(raw) >= 30:
+        return np.log(raw.where(raw > 0)).dropna()
+    # Fallback: whatever the dashboard service gives us — at least
+    # the forecast won't crash out completely if FRED is down.
     s = _hpi_log_series('national', 'USA')
     if s is not None and len(s) >= 30:
         return s
     s = _hpi_log_series('national', 'CS_NATIONAL')
     if s is not None and len(s) >= 30:
-        logger.info('hpi_forecast.service: FHFA national unavailable, using Case-Shiller')
         return s
-    # Last-ditch: any national entry
-    grouped = hpi_service._state.get('grouped') or {}
-    for (lvl, code) in grouped:
-        if lvl == 'national':
-            s = _hpi_log_series('national', code)
-            if s is not None and len(s) >= 30:
-                logger.info(f'hpi_forecast.service: falling back to national/{code}')
-                return s
     return None
 
 
 def _national_source_used() -> Optional[str]:
-    """Which national series the forecast actually used. For debug + the
-    summary card so the UI can show 'forecast: FHFA' vs 'forecast: Case-
-    Shiller'."""
-    s = _hpi_log_series('national', 'USA')
-    if s is not None and len(s) >= 30:
-        return 'FHFA all-transactions (USA)'
-    s = _hpi_log_series('national', 'CS_NATIONAL')
-    if s is not None and len(s) >= 30:
-        return 'Case-Shiller National Composite'
-    grouped = hpi_service._state.get('grouped') or {}
-    for (lvl, code) in grouped:
-        if lvl == 'national':
-            s = _hpi_log_series('national', code)
-            if s is not None and len(s) >= 30:
-                return f'national/{code}'
+    raw = fetch_national_hpi(start='1980-01-01')
+    if raw is not None and len(raw) >= 30:
+        return 'FHFA all-transactions via FRED (USSTHPI)'
+    if _hpi_log_series('national', 'USA') is not None:
+        return 'FHFA via house_prices.grouped (USA)'
+    if _hpi_log_series('national', 'CS_NATIONAL') is not None:
+        return 'Case-Shiller National Composite (fallback)'
     return None
 
 
@@ -207,28 +194,33 @@ def _build_locked():
 
 
 def _build_state_models(drivers: pd.DataFrame):
-    """Fit a per-state ECM for every state with sufficient FHFA history.
-    Skipped states get recorded into `_state['state_errors']` so the API
+    """Fit a per-state model for every state FRED has an HPI series for.
+    Pulls each state's HPI directly from FRED (<STATE>STHPI) instead of
+    going through the FHFA master CSV, which has been the source of
+    repeated parsing pain (rebased indices, mixed flavor variants,
+    schema drift). FRED's per-state HPI feed is stable and matches
+    FHFA's official quarterly all-transactions release within a day.
+
+    Skipped states get recorded into _state['state_errors'] so the API
     can surface why a particular state has no forecast available."""
-    state_codes = _list_state_codes()
-    if not state_codes:
-        logger.warning('hpi_forecast.service: no state codes from house_prices service')
-        return
+    state_codes = sorted(STATE_HPI_FRED_IDS.keys())
     with _lock:
         _state['states_building'] = True
     fitted: dict[str, HpiForecastModel] = {}
     errors: dict[str, str] = {}
     for code in state_codes:
         try:
-            hpi = _hpi_log_series('state', code)
-            if hpi is None or len(hpi) < 30:
-                errors[code] = f'series too short (n={0 if hpi is None else len(hpi)})'
+            raw = fetch_state_hpi(code)
+            if raw is None or raw.empty:
+                errors[code] = 'FRED returned empty'
+                continue
+            hpi = np.log(raw.where(raw > 0)).dropna()
+            if len(hpi) < 30:
+                errors[code] = f'series too short (n={len(hpi)})'
                 continue
             # Per-state driver panel: national drivers + this state's own
-            # unemployment rate from FRED. If the state's series is missing
-            # (PR isn't in the FRED <STATE>UR scheme, or DC has limited
-            # history), fall back to the national 'unemp' column under the
-            # name 'state_unemp' so the spec still matches.
+            # unemployment rate from FRED. Fall back to national 'unemp'
+            # if FRED has no <STATE>UR series for this code.
             state_drivers = drivers.copy()
             su = fetch_state_unemp(code)
             if su is not None and not su.empty:
