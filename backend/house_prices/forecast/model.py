@@ -83,12 +83,25 @@ logger = logging.getLogger(__name__)
 # short_run_levels matters under the flat-driver baseline. With drivers
 # carried forward at their last historical values, every Δdriver term in
 # the equation evaluates to zero — so the only thing keeping the baseline
-# tied to the current macro environment is the LEVEL terms. Including
-# mortgage30 and unemp in short_run_levels means: if rates are currently
-# 7%, that 7% level keeps applying a (typically negative) coefficient to
-# Δlog(HPI) every quarter, so the baseline forecast is suppressed
-# whenever rates are elevated and lifted whenever rates are low. That's
-# what "the baseline should follow interest rates" actually requires.
+# tied to the current macro environment is the LEVEL terms.
+#
+# Why include_lagged_dep=False: an AR(p) component fit on 1980-2025 data
+# picks up the COVID-boom shock (2021-2022 saw 6%+ quarterly Δlog(HPI))
+# as if it were a persistent dynamic, and at max_lags=4 the autoregressive
+# polynomial sometimes has roots near the unit circle. That projects 30%+
+# quarterly jumps in the first forecast quarter (visible on the dashboard
+# as +101% YoY snap-up). Dropping lagged_dep and shrinking max_lags to 2
+# eliminates that pathology — the model now relates Δlog(HPI) directly to
+# current macro state and short-run cyclicals.
+#
+# CLIP_DELTA is a defensive guardrail in `_forecast_path`: if a quarter's
+# computed Δlog(HPI) ever exceeds ±0.04 (~16% annualized), we clip it.
+# Housing index growth has never exceeded that quarterly even in the
+# COVID boom, so this is a safe ceiling that can't trim legitimate
+# dynamics.
+
+CLIP_DELTA = 0.04   # ±4%/q in log terms (~16% annualized)
+
 
 NATIONAL_SPEC = EquationSpec(
     name='HPI national',
@@ -96,27 +109,25 @@ NATIONAL_SPEC = EquationSpec(
     long_run=[],                                                  # no cointegration
     short_run_diffs=['real_income', 'mortgage30', 'unemp'],       # cyclical impulses
     short_run_levels=['mortgage30', 'unemp'],                     # current macro state
-    max_lags=4,
-    include_lagged_dep=True,
-    notes='AR(p) + exogenous cyclicals + macro state levels (mortgage30, unemp).',
+    max_lags=2,
+    include_lagged_dep=False,
+    notes='Macro-driven Δlog(HPI) — short-run diffs + current level state. No AR component.',
 )
 
 
 def _state_spec(state_code: str) -> EquationSpec:
     """Per-state spec — same shape as national, with the state's own
     unemployment rate (FRED <STATE>UR) as both a cyclical impulse and a
-    persistent level driver. Local unemployment levels matter for state
-    HPI even when the national rate is stable, so the level term ties
-    each state's baseline to its own labor-market state."""
+    persistent level driver."""
     return EquationSpec(
         name=f'HPI {state_code}',
         dependent='hpi',
         long_run=[],
         short_run_diffs=['real_income', 'mortgage30', 'state_unemp'],
         short_run_levels=['mortgage30', 'state_unemp'],
-        max_lags=4,
-        include_lagged_dep=True,
-        notes=f'State-level AR(p) + cyclicals + macro state ({state_code}).',
+        max_lags=2,
+        include_lagged_dep=False,
+        notes=f'State-level macro-driven Δlog(HPI) ({state_code}); state-specific unemp.',
     )
 
 
@@ -295,6 +306,19 @@ def _forecast_path(model: HpiForecastModel, driver_paths: pd.DataFrame,
                 delta += coef * panel.iloc[t_idx - lag][reg]
         if resid_draws is not None and i < len(resid_draws):
             delta += float(resid_draws[i])
+        # Defensive clip: housing-index Δlog has never exceeded ±0.04
+        # (~16% annualized) per quarter, even in the COVID boom. If the
+        # estimated equation produces a larger Δ that's almost always a
+        # specification pathology rather than a real signal — clip and
+        # log so it's diagnosable.
+        if delta > CLIP_DELTA:
+            logger.warning(f'hpi_forecast.model: clipping Δlog({fit.spec.name}) '
+                           f'{delta:+.4f} → {CLIP_DELTA:+.4f} at q={driver_paths.index[i].date()}')
+            delta = CLIP_DELTA
+        elif delta < -CLIP_DELTA:
+            logger.warning(f'hpi_forecast.model: clipping Δlog({fit.spec.name}) '
+                           f'{delta:+.4f} → {-CLIP_DELTA:+.4f} at q={driver_paths.index[i].date()}')
+            delta = -CLIP_DELTA
         new_hpi = float(panel.iloc[t_idx - 1]['hpi'] + delta)
         panel.iloc[t_idx, panel.columns.get_loc('hpi')] = new_hpi
         forecast.append(new_hpi)

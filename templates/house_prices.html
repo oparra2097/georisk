@@ -642,25 +642,44 @@
   // narrow and continuous interpolation would smear everything into
   // mid-grey. Reverse RdBu (blue = low, red = high) with a near-white
   // tile in the middle for whatever the median state currently sits at.
-  // RdYlBu reversed: deep blue → light blue → YELLOW middle → orange → deep red.
-  // Yellow middle is far more visible than the near-white middle of RdBu —
-  // critical because quantile bucketing puts ~5/9 of all states in the middle
-  // three buckets. Also pulls in #fee08b for the centre tile (saturated yellow)
-  // so the median bucket is obvious instead of ghosting into the page bg.
+  // 9 buckets, RdYlBu reversed: deep blue → light blue → yellow middle →
+  // orange → deep red. Index 4 (yellow `#fee08b`) is the "neutral" tile
+  // mapped to value 0 — the diverging scale below always anchors index 4
+  // at 0 regardless of the data, so blue=negative / red=positive holds at
+  // every level. Earlier we used a quantile scale, which assigned colors
+  // by RANK within the visible set — that meant when drilled into a state
+  // where every county had positive YoY, the bottom-quartile counties got
+  // deep blue (the "negative" colour) and the user perceived a flip.
   const COLOR_BUCKETS = ['#313695','#4575b4','#74add1','#abd9e9','#fee08b','#fdae61','#f46d43','#d73027','#a50026'];
 
   function buildScale(values, metric) {
+    // Sign-anchored diverging scale. Cut points are placed at fractions
+    // of the symmetric data extent (max(|min|, |max|)) so:
+    //   value < 0  → blue shades (always)
+    //   value ≈ 0  → yellow tile (always)
+    //   value > 0  → red shades (always)
+    // Independent of whether the visible set is country-wide or
+    // a single state's counties, the colour of a polygon corresponds
+    // to the SIGN+MAGNITUDE of its value, not its rank.
     const finite = values.filter(v => v !== null && v !== undefined && !isNaN(v));
     if (!finite.length) {
       return { colorOf: () => '#f5f5f4', edges: [], lo: 0, hi: 0 };
     }
-    const scale = d3.scaleQuantile().domain(finite).range(COLOR_BUCKETS);
     const sorted = finite.slice().sort((a, b) => a - b);
+    const lo = sorted[0], hi = sorted[sorted.length - 1];
+    const r = Math.max(Math.abs(lo), Math.abs(hi));
+    // Floor so a quiet quarter doesn't collapse the colour range.
+    const floor = (metric === 'zscore_yoy') ? 0.4 : 1.0;
+    const ext = Math.max(r, floor);
+    // 9 buckets, 8 cutpoints, symmetric around 0.
+    const edges = [
+      -0.85*ext, -0.55*ext, -0.30*ext, -0.10*ext,
+      +0.10*ext, +0.30*ext, +0.55*ext, +0.85*ext,
+    ];
+    const scale = d3.scaleThreshold().domain(edges).range(COLOR_BUCKETS);
     return {
       colorOf: (v) => (v === null || v === undefined || isNaN(v)) ? '#f5f5f4' : scale(v),
-      edges: scale.quantiles(),
-      lo: sorted[0],
-      hi: sorted[sorted.length - 1],
+      edges, lo, hi, ext,
     };
   }
 
@@ -782,15 +801,16 @@
 
   function updateLegendBounds(values) {
     const finite = (values || []).filter(v => v !== null && v !== undefined && !isNaN(v));
-    const lo = map.scale ? map.scale.lo : 0;
-    const hi = map.scale ? map.scale.hi : 0;
-    $('hp-legend-min').textContent = fmtTick(lo, map.metric);
-    $('hp-legend-mid').textContent = fmtTick((lo + hi) / 2, map.metric);
-    $('hp-legend-max').textContent = fmtTick(hi, map.metric);
+    // Diverging-scale tick labels: anchored at -ext / 0 / +ext, NOT at the
+    // observed data min/mid/max. The middle tile is always exactly 0%.
+    const ext = map.scale ? (map.scale.ext || 0) : 0;
+    $('hp-legend-min').textContent = fmtTick(-ext, map.metric);
+    $('hp-legend-mid').textContent = fmtTick(0, map.metric);
+    $('hp-legend-max').textContent = fmtTick(+ext, map.metric);
     $('hp-legend-metric').textContent = $('hp-map-metric').selectedOptions[0]?.text || 'YoY %';
     const noun = map.selectedFips ? 'counties' : 'states';
     $('hp-legend-stats').textContent = finite.length
-      ? `${finite.length} ${noun} · 9 quantile buckets (~${Math.round(finite.length / 9)} per bucket)`
+      ? `${finite.length} ${noun} · diverging scale anchored at 0 (blue = negative, red = positive)`
       : `0 ${noun} colored`;
   }
 
