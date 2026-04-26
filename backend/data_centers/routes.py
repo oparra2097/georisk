@@ -32,12 +32,16 @@ def get_facilities():
     status_q = request.args.get('status')
     funding_q = request.args.get('funding_type')
     market_q = request.args.get('market')
+    tenant_q = request.args.get('tenant')
+    developer_q = request.args.get('developer')
     if status_q and status_q.lower() not in {'built', 'under_construction', 'planned'}:
         return jsonify({'error': 'status must be built|under_construction|planned'}), 400
     if funding_q and funding_q.lower() not in service.FUNDING_TYPES:
         return jsonify({'error': f'funding_type must be one of {list(service.FUNDING_TYPES)}'}), 400
     return jsonify({
-        'facilities': service.get_facilities(status_q, funding_q, market_q),
+        'facilities': service.get_facilities(
+            status_q, funding_q, market_q, tenant_q, developer_q,
+        ),
         'funding_types': service.FUNDING_TYPES,
     })
 

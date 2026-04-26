@@ -15,6 +15,23 @@ const FUNDING_COLOR = {
   public_specialty: '#7c3aed',
 };
 
+// Tenant brand-ish palette. Falls back to gray for any unmapped tenant.
+const TENANT_COLOR = {
+  'Microsoft':            '#0078d4',
+  'Meta':                 '#0668e1',
+  'Google':               '#ea4335',
+  'Amazon':               '#ff9900',
+  'OpenAI':               '#10a37f',
+  'xAI':                  '#1f2937',
+  'Apple':                '#6b7280',
+  'Oracle':               '#c74634',
+  'Colo (multi-tenant)':  '#94a3b8',
+  'Unleased':             '#fbbf24',
+};
+const TENANT_FALLBACK = '#9ca3af';
+
+let _developerColor = null;  // built lazily once we know the developer set
+
 const METRIC_LABEL = {
   spec_ratio:      'Overbuild risk',
   pipeline_ratio:  'Pipeline intensity',
@@ -37,10 +54,13 @@ const DataCenterMap = {
   summary: null,
   tooltipEl: null,
   mode: 'markets',           // 'markets' | 'facilities'
+  colorBy: 'funding',        // 'funding' | 'tenant' | 'developer'
   activeTier: 'all',
   activeMetric: 'spec_ratio',
   activeStatus: 'all',
   activeFunding: 'all',
+  activeTenant: 'all',
+  activeDeveloper: 'all',
   selectedMarket: null,
 
   async init() {
@@ -139,13 +159,41 @@ const DataCenterMap = {
         this.renderFacilities();
       });
     });
-    const sel = document.getElementById('funding-filter');
-    if (sel) {
-      sel.addEventListener('change', () => {
-        this.activeFunding = sel.value;
+    document.querySelectorAll('.dc-tab[data-colorby]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.dc-tab[data-colorby]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.colorBy = btn.dataset.colorby;
+        this.renderFacilityLegend();
         this.renderFacilities();
       });
-    }
+    });
+    const fundSel = document.getElementById('funding-filter');
+    if (fundSel) fundSel.addEventListener('change', () => {
+      this.activeFunding = fundSel.value;
+      this.renderFacilities();
+    });
+    const tenSel = document.getElementById('tenant-filter');
+    if (tenSel) tenSel.addEventListener('change', () => {
+      this.activeTenant = tenSel.value;
+      this.renderFacilities();
+    });
+    const devSel = document.getElementById('developer-filter');
+    if (devSel) devSel.addEventListener('change', () => {
+      this.activeDeveloper = devSel.value;
+      this.renderFacilities();
+    });
+    const reset = document.getElementById('reset-filters');
+    if (reset) reset.addEventListener('click', () => this.resetFacilityFilters());
+  },
+
+  resetFacilityFilters() {
+    this.activeFunding = 'all';
+    this.activeTenant = 'all';
+    this.activeDeveloper = 'all';
+    const ids = ['funding-filter', 'tenant-filter', 'developer-filter'];
+    ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = 'all'; });
+    this.renderFacilities();
   },
 
   setMode(mode) {
@@ -153,27 +201,44 @@ const DataCenterMap = {
     const isFacilities = mode === 'facilities';
     document.getElementById('markets-toolbar').style.display = isFacilities ? 'none' : '';
     document.getElementById('facilities-toolbar').style.display = isFacilities ? '' : 'none';
+    const filtersBar = document.getElementById('facilities-toolbar-filters');
+    if (filtersBar) filtersBar.style.display = isFacilities ? '' : 'none';
     document.getElementById('legend-markets').style.display = isFacilities ? 'none' : '';
     document.getElementById('legend-facilities').style.display = isFacilities ? '' : 'none';
     document.getElementById('mode-help').textContent = isFacilities
-      ? 'Marker color = funding source · shape = build status · radius ∝ √MW'
+      ? `Marker color = ${this.colorBy} · shape = build status · radius ∝ √MW`
       : 'Bubble area ∝ pipeline MW · color = selected metric';
     this.bubbleLayer.style('display', isFacilities ? 'none' : '');
     this.facilityLayer.style('display', isFacilities ? '' : 'none');
-    if (isFacilities) this.renderFacilities();
-    else this.renderBubbles();
+    if (isFacilities) {
+      this.renderFacilityLegend();
+      this.renderFacilities();
+    } else {
+      this.renderBubbles();
+    }
   },
 
   // ─── Render ────────────────────────────────────────────────────────────
   render() {
+    this.buildDeveloperColorScale();
     this.renderKPIs();
     this.renderTierTable();
     this.renderTopTables();
     this.renderFundingTable();
+    this.renderTenantTable();
     this.renderDeveloperTable();
     this.populateFundingFilter();
+    this.populateTenantFilter();
+    this.populateDeveloperFilter();
+    this.renderFacilityLegend();
     this.renderBubbles();
     this.renderFacilities();
+  },
+
+  buildDeveloperColorScale() {
+    const devs = Array.from(new Set(this.facilities.map(f => f.developer))).filter(Boolean).sort();
+    const palette = (d3.schemeTableau10 || []).concat(d3.schemeSet3 || []);
+    _developerColor = d3.scaleOrdinal().domain(devs).range(palette);
   },
 
   populateFundingFilter() {
@@ -183,6 +248,30 @@ const DataCenterMap = {
     const opts = ['<option value="all">All funding sources</option>']
       .concat(Object.entries(types).map(([k, v]) => `<option value="${k}">${v}</option>`));
     sel.innerHTML = opts.join('');
+  },
+
+  populateTenantFilter() {
+    const sel = document.getElementById('tenant-filter');
+    if (!sel) return;
+    const tenants = Array.from(new Set(this.facilities.map(f => f.tenant_norm || 'Unleased')))
+      .sort((a, b) => a.localeCompare(b));
+    sel.innerHTML = ['<option value="all">All tenants</option>']
+      .concat(tenants.map(t => `<option value="${t}">${t}</option>`)).join('');
+  },
+
+  populateDeveloperFilter() {
+    const sel = document.getElementById('developer-filter');
+    if (!sel) return;
+    const devs = Array.from(new Set(this.facilities.map(f => f.developer))).filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+    sel.innerHTML = ['<option value="all">All developers</option>']
+      .concat(devs.map(d => `<option value="${d}">${d}</option>`)).join('');
+  },
+
+  _switchToFacilitiesMode() {
+    document.querySelectorAll('.dc-tab[data-mode]').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === 'facilities'));
+    this.setMode('facilities');
   },
 
   renderFundingTable() {
@@ -201,11 +290,49 @@ const DataCenterMap = {
       </tr>`).join('');
     tbody.querySelectorAll('tr').forEach(tr => {
       tr.addEventListener('click', () => {
-        document.querySelectorAll('.dc-tab[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === 'facilities'));
-        this.setMode('facilities');
+        this._switchToFacilitiesMode();
         this.activeFunding = tr.dataset.funding;
-        const sel = document.getElementById('funding-filter');
-        if (sel) sel.value = this.activeFunding;
+        this.activeTenant = 'all';
+        this.activeDeveloper = 'all';
+        const f = document.getElementById('funding-filter');     if (f) f.value = this.activeFunding;
+        const t = document.getElementById('tenant-filter');      if (t) t.value = 'all';
+        const d = document.getElementById('developer-filter');   if (d) d.value = 'all';
+        this.renderFacilities();
+      });
+    });
+  },
+
+  renderTenantTable() {
+    const tbody = document.querySelector('#tenant-table tbody');
+    const rows = this.summary?.by_tenant || [];
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="loading">no data</td></tr>'; return; }
+    tbody.innerHTML = rows.map(r => {
+      const color = TENANT_COLOR[r.tenant] || TENANT_FALLBACK;
+      return `
+        <tr data-tenant="${r.tenant}">
+          <td>
+            <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle;"></span>
+            ${r.tenant}
+          </td>
+          <td class="num">${r.count}</td>
+          <td class="num">${Math.round(r.mw).toLocaleString()}</td>
+          <td class="num">${(r.share * 100).toFixed(1)}%</td>
+        </tr>`;
+    }).join('');
+    tbody.querySelectorAll('tr').forEach(tr => {
+      tr.addEventListener('click', () => {
+        this._switchToFacilitiesMode();
+        this.activeTenant = tr.dataset.tenant;
+        this.activeFunding = 'all';
+        this.activeDeveloper = 'all';
+        const f = document.getElementById('funding-filter');     if (f) f.value = 'all';
+        const t = document.getElementById('tenant-filter');      if (t) t.value = this.activeTenant;
+        const d = document.getElementById('developer-filter');   if (d) d.value = 'all';
+        // Auto-switch color encoding to tenant for clarity
+        document.querySelectorAll('.dc-tab[data-colorby]').forEach(b =>
+          b.classList.toggle('active', b.dataset.colorby === 'tenant'));
+        this.colorBy = 'tenant';
+        this.renderFacilityLegend();
         this.renderFacilities();
       });
     });
@@ -215,15 +342,34 @@ const DataCenterMap = {
     const tbody = document.querySelector('#developer-table tbody');
     const rows = this.summary?.top_developers || [];
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="loading">no data</td></tr>'; return; }
-    tbody.innerHTML = rows.map(r => `
-      <tr>
-        <td>${r.developer}</td>
-        <td>
-          <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${FUNDING_COLOR[r.funding_type] || '#9ca3af'};vertical-align:middle;"></span>
-        </td>
-        <td class="num">${Math.round(r.mw).toLocaleString()}</td>
-        <td class="num">${(r.share * 100).toFixed(1)}%</td>
-      </tr>`).join('');
+    tbody.innerHTML = rows.map(r => {
+      const devColor = (_developerColor && _developerColor(r.developer)) || '#9ca3af';
+      return `
+        <tr data-developer="${r.developer}">
+          <td>${r.developer}</td>
+          <td>
+            <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${devColor};vertical-align:middle;"></span>
+          </td>
+          <td class="num">${Math.round(r.mw).toLocaleString()}</td>
+          <td class="num">${(r.share * 100).toFixed(1)}%</td>
+        </tr>`;
+    }).join('');
+    tbody.querySelectorAll('tr').forEach(tr => {
+      tr.addEventListener('click', () => {
+        this._switchToFacilitiesMode();
+        this.activeDeveloper = tr.dataset.developer;
+        this.activeFunding = 'all';
+        this.activeTenant = 'all';
+        const f = document.getElementById('funding-filter');     if (f) f.value = 'all';
+        const t = document.getElementById('tenant-filter');      if (t) t.value = 'all';
+        const d = document.getElementById('developer-filter');   if (d) d.value = this.activeDeveloper;
+        document.querySelectorAll('.dc-tab[data-colorby]').forEach(b =>
+          b.classList.toggle('active', b.dataset.colorby === 'developer'));
+        this.colorBy = 'developer';
+        this.renderFacilityLegend();
+        this.renderFacilities();
+      });
+    });
   },
 
   renderKPIs() {
@@ -377,15 +523,28 @@ const DataCenterMap = {
     return d3.scaleSqrt().domain([0, max]).range([3, 22]);
   },
 
+  colorForFacility(d) {
+    if (this.colorBy === 'tenant') {
+      const key = d.tenant_norm || 'Unleased';
+      return TENANT_COLOR[key] || TENANT_FALLBACK;
+    }
+    if (this.colorBy === 'developer') {
+      return (_developerColor && _developerColor(d.developer)) || '#9ca3af';
+    }
+    return FUNDING_COLOR[d.funding_type] || '#9ca3af';
+  },
+
+  facilityPasses(f) {
+    if (this.activeStatus !== 'all' && f.status !== this.activeStatus) return false;
+    if (this.activeFunding !== 'all' && f.funding_type !== this.activeFunding) return false;
+    if (this.activeTenant !== 'all' && (f.tenant_norm || 'Unleased') !== this.activeTenant) return false;
+    if (this.activeDeveloper !== 'all' && f.developer !== this.activeDeveloper) return false;
+    return true;
+  },
+
   renderFacilities() {
     if (!this.facilities.length) return;
     const radius = this.facilityRadius();
-
-    const visible = this.facilities.filter(f => {
-      if (this.activeStatus !== 'all' && f.status !== this.activeStatus) return false;
-      if (this.activeFunding !== 'all' && f.funding_type !== this.activeFunding) return false;
-      return true;
-    });
 
     const join = this.facilityLayer.selectAll('circle.dc-fac')
       .data(this.facilities, d => d.name);
@@ -397,16 +556,41 @@ const DataCenterMap = {
       .attr('cx', d => { const p = this.projection([d.lon, d.lat]); return p ? p[0] : -9999; })
       .attr('cy', d => { const p = this.projection([d.lon, d.lat]); return p ? p[1] : -9999; })
       .attr('r', d => radius(d.mw))
-      .attr('fill', d => d.status === 'planned' ? '#fff' : (FUNDING_COLOR[d.funding_type] || '#9ca3af'))
+      .attr('fill', d => d.status === 'planned' ? '#fff' : this.colorForFacility(d))
       .attr('fill-opacity', d => d.status === 'planned' ? 0 : (d.status === 'under_construction' ? 0.55 : 0.85))
-      .attr('stroke', d => FUNDING_COLOR[d.funding_type] || '#374151')
+      .attr('stroke', d => this.colorForFacility(d))
       .attr('stroke-width', d => d.status === 'planned' ? 1.6 : (d.status === 'under_construction' ? 1.8 : 0.8))
       .attr('stroke-dasharray', d => d.status === 'under_construction' ? '3 2' : null)
-      .style('opacity', d => visible.includes(d) ? 1 : 0.08)
+      .style('opacity', d => this.facilityPasses(d) ? 1 : 0.08)
       .style('cursor', 'pointer')
       .on('mouseover', (e, d) => this.showFacilityTip(e, d))
       .on('mousemove', (e) => this.moveTip(e))
       .on('mouseout', () => this.hideTip());
+
+    document.getElementById('mode-help').textContent =
+      `Marker color = ${this.colorBy} · shape = build status · radius ∝ √MW`;
+  },
+
+  renderFacilityLegend() {
+    const host = document.getElementById('legend-facilities-swatches');
+    if (!host) return;
+    const swatch = (color, label) =>
+      `<span><span class="swatch" style="background:${color}"></span>${label}</span>`;
+
+    let items = [];
+    if (this.colorBy === 'funding') {
+      const types = this.fundingTypes || {};
+      items = Object.entries(types).map(([k, label]) => swatch(FUNDING_COLOR[k] || '#9ca3af', label));
+    } else if (this.colorBy === 'tenant') {
+      const present = (this.summary?.by_tenant || []).map(t => t.tenant);
+      items = present.map(name => swatch(TENANT_COLOR[name] || TENANT_FALLBACK, name));
+    } else {
+      // developer — show top 8 to keep it readable, plus an "other" swatch
+      const top = (this.summary?.top_developers || []).slice(0, 8).map(d => d.developer);
+      items = top.map(dev => swatch((_developerColor && _developerColor(dev)) || '#9ca3af', dev));
+      items.push(`<span style="color:#6b7280;font-size:10px;">…hover any marker for full attribution</span>`);
+    }
+    host.innerHTML = items.join('');
   },
 
   showFacilityTip(event, d) {

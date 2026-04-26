@@ -63,6 +63,25 @@ FUNDING_TYPES = {
 
 VALID_STATUSES = {'built', 'under_construction', 'planned'}
 
+# ── Tenant normalization ─────────────────────────────────────────────────
+# The CSV stores free-text tenants. Bucket multi-tenant strings and TBD
+# values so concentration rollups read cleanly.
+_MULTI_TENANT_TOKENS = {
+    'multiple', 'multiple hyperscalers', 'multiple enterprise',
+    'colo', 'multi-tenant', 'multi tenant', 'mixed',
+}
+_UNLEASED_TOKENS = {'tbd', 'unknown', 'n/a', '', 'none'}
+
+
+def _normalize_tenant(raw: str) -> str:
+    s = (raw or '').strip()
+    low = s.lower()
+    if low in _UNLEASED_TOKENS:
+        return 'Unleased'
+    if low in _MULTI_TENANT_TOKENS or low.startswith('multiple'):
+        return 'Colo (multi-tenant)'
+    return s
+
 # Risk thresholds — used both for color scaling and for flagging "watch" markets.
 # spec_ratio > 0.35  ≈ unleased near-term supply > 35% of installed base.
 # pipeline_ratio > 1.0 ≈ announced+UC capacity exceeds existing inventory.
@@ -116,6 +135,7 @@ def _load_facilities_csv() -> list[dict[str, Any]]:
                 'funding_type': funding if funding in FUNDING_TYPES else 'infra_fund',
                 'funding_detail': r.get('funding_detail', ''),
                 'tenant': r.get('tenant', ''),
+                'tenant_norm': _normalize_tenant(r.get('tenant', '')),
                 'announced_year': r.get('announced_year', ''),
                 'target_online': r.get('target_online', ''),
                 'notes': r.get('notes', ''),
@@ -209,6 +229,8 @@ def get_facilities(
     status: str | None = None,
     funding_type: str | None = None,
     market: str | None = None,
+    tenant: str | None = None,
+    developer: str | None = None,
 ) -> list[dict[str, Any]]:
     if not _CACHE.get('built'):
         build()
@@ -219,6 +241,10 @@ def get_facilities(
         fac = [f for f in fac if f['funding_type'] == funding_type.lower()]
     if market:
         fac = [f for f in fac if f['market'] == market]
+    if tenant:
+        fac = [f for f in fac if f['tenant_norm'] == tenant]
+    if developer:
+        fac = [f for f in fac if f['developer'] == developer]
     return fac
 
 
@@ -267,6 +293,7 @@ def get_summary() -> dict[str, Any]:
     facilities = _CACHE.get('facilities', [])
     by_funding: dict[str, dict[str, Any]] = {}
     by_developer: dict[str, dict[str, Any]] = {}
+    by_tenant: dict[str, dict[str, Any]] = {}
     fac_total_mw = sum(f['mw'] for f in facilities) or 1.0
 
     for f in facilities:
@@ -291,6 +318,17 @@ def get_summary() -> dict[str, Any]:
         d['count'] += 1
         d['mw'] += f['mw']
 
+        tn = f['tenant_norm'] or 'Unleased'
+        t = by_tenant.setdefault(tn, {
+            'tenant': tn, 'count': 0, 'mw': 0.0,
+            'built_mw': 0.0, 'uc_mw': 0.0, 'planned_mw': 0.0,
+        })
+        t['count'] += 1
+        t['mw'] += f['mw']
+        if f['status'] == 'built':              t['built_mw']  += f['mw']
+        elif f['status'] == 'under_construction': t['uc_mw']     += f['mw']
+        else:                                   t['planned_mw'] += f['mw']
+
     for b in by_funding.values():
         b['share'] = round(b['mw'] / fac_total_mw, 4)
         for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw'):
@@ -300,6 +338,11 @@ def get_summary() -> dict[str, Any]:
         d['share'] = round(d['mw'] / fac_total_mw, 4)
         d['mw'] = round(d['mw'], 1)
 
+    for t in by_tenant.values():
+        t['share'] = round(t['mw'] / fac_total_mw, 4)
+        for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw'):
+            t[k] = round(t[k], 1)
+
     return {
         'national': nat,
         'by_tier': sorted(by_tier.values(), key=lambda x: -x['inventory_mw']),
@@ -308,5 +351,6 @@ def get_summary() -> dict[str, Any]:
         'top_pipeline_share': top_pipeline_share,
         'facility_total_mw': round(fac_total_mw, 1),
         'by_funding': sorted(by_funding.values(), key=lambda x: -x['mw']),
-        'top_developers': sorted(by_developer.values(), key=lambda x: -x['mw'])[:10],
+        'top_developers': sorted(by_developer.values(), key=lambda x: -x['mw'])[:12],
+        'by_tenant': sorted(by_tenant.values(), key=lambda x: -x['mw']),
     }

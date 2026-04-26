@@ -22,6 +22,10 @@
   .dc-tab.active { background: #111827; color: #fff; border-color: #111827; }
   .dc-toolbar .spacer { flex: 1; }
   .dc-toolbar .legend-inline { font-size: 11px; color: #6b7280; }
+  .dc-select { padding: 5px 10px; font-size: 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 4px;
+                color: #374151; cursor: pointer; max-width: 200px; }
+  .dc-select:hover { border-color: #9ca3af; }
+  .dc-select:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px #dbeafe; }
 
   .dc-card { border: 1px solid #e5e7eb; background: #fff; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
   .dc-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.03em; color: #374151; }
@@ -143,9 +147,24 @@
     <button class="dc-tab" data-status="under_construction">Under construction</button>
     <button class="dc-tab" data-status="planned">Planned</button>
     <span class="spacer"></span>
-    <select id="funding-filter" class="dc-tab" style="cursor:pointer;">
+    <span class="legend-inline" style="margin-right:6px;">Color by</span>
+    <button class="dc-tab active" data-colorby="funding">Funding</button>
+    <button class="dc-tab" data-colorby="tenant">Tenant</button>
+    <button class="dc-tab" data-colorby="developer">Developer</button>
+  </div>
+  <div class="dc-toolbar" id="facilities-toolbar-filters" style="display:none;">
+    <span class="legend-inline">Filter:</span>
+    <select id="funding-filter" class="dc-select">
       <option value="all">All funding sources</option>
     </select>
+    <select id="tenant-filter" class="dc-select">
+      <option value="all">All tenants</option>
+    </select>
+    <select id="developer-filter" class="dc-select">
+      <option value="all">All developers</option>
+    </select>
+    <span class="spacer"></span>
+    <button class="dc-tab" id="reset-filters">Clear filters</button>
   </div>
 
   <div class="dc-layout">
@@ -162,12 +181,7 @@
           <span style="margin-left:auto">Bubble area &prop; pipeline MW (UC + planned)</span>
         </div>
         <div class="dc-legend" id="legend-facilities" style="display:none;">
-          <span><span class="swatch" style="background:#6366f1"></span>Hyperscaler self-fund</span>
-          <span><span class="swatch" style="background:#059669"></span>Public REIT</span>
-          <span><span class="swatch" style="background:#d97706"></span>Infra fund / PE</span>
-          <span><span class="swatch" style="background:#be123c"></span>Sovereign / strategic JV</span>
-          <span><span class="swatch" style="background:#0891b2"></span>Specialty / venture</span>
-          <span><span class="swatch" style="background:#7c3aed"></span>Public specialty</span>
+          <span id="legend-facilities-swatches" style="display:flex;flex-wrap:wrap;gap:14px;flex:1 1 100%;"></span>
           <span style="width:100%;color:#6b7280;font-size:10px;">
             <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#374151;vertical-align:middle;margin-right:4px;"></span>built
             &nbsp; <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;border:2px dashed #374151;vertical-align:middle;margin-right:4px;"></span>under construction
@@ -232,6 +246,16 @@
         <table class="dc-table" id="funding-table">
           <thead>
             <tr><th>Source</th><th class="num">#</th><th class="num">MW</th><th class="num">% MW</th></tr>
+          </thead>
+          <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="dc-card">
+        <h3>Tenant concentration</h3>
+        <table class="dc-table" id="tenant-table">
+          <thead>
+            <tr><th>Tenant</th><th class="num">#</th><th class="num">MW</th><th class="num">% MW</th></tr>
           </thead>
           <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
         </table>
