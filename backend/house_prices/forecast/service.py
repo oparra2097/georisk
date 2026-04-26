@@ -95,8 +95,54 @@ def _hpi_log_series(level: str, code: str) -> Optional[pd.Series]:
 
 
 def _national_hpi_log() -> Optional[pd.Series]:
-    """National FHFA HPI series in log-level."""
-    return _hpi_log_series('national', 'USA')
+    """National HPI series in log-level for the forecast model.
+
+    Source priority matches the dashboard summary tiles in
+    backend/house_prices/service.get_summary():
+        1. FHFA all-transactions national  (place_id='USA')
+        2. Case-Shiller US National Composite  (place_id='CS_NATIONAL')
+        3. Any other 'national'-level entity in the grouped table.
+
+    This consistency matters: previously the summary tile fell back to
+    Case-Shiller when FHFA was unavailable but the forecast model
+    didn't, producing visibly different "US HPI" numbers between the
+    two cards on the same dashboard.
+    """
+    s = _hpi_log_series('national', 'USA')
+    if s is not None and len(s) >= 30:
+        return s
+    s = _hpi_log_series('national', 'CS_NATIONAL')
+    if s is not None and len(s) >= 30:
+        logger.info('hpi_forecast.service: FHFA national unavailable, using Case-Shiller')
+        return s
+    # Last-ditch: any national entry
+    grouped = hpi_service._state.get('grouped') or {}
+    for (lvl, code) in grouped:
+        if lvl == 'national':
+            s = _hpi_log_series('national', code)
+            if s is not None and len(s) >= 30:
+                logger.info(f'hpi_forecast.service: falling back to national/{code}')
+                return s
+    return None
+
+
+def _national_source_used() -> Optional[str]:
+    """Which national series the forecast actually used. For debug + the
+    summary card so the UI can show 'forecast: FHFA' vs 'forecast: Case-
+    Shiller'."""
+    s = _hpi_log_series('national', 'USA')
+    if s is not None and len(s) >= 30:
+        return 'FHFA all-transactions (USA)'
+    s = _hpi_log_series('national', 'CS_NATIONAL')
+    if s is not None and len(s) >= 30:
+        return 'Case-Shiller National Composite'
+    grouped = hpi_service._state.get('grouped') or {}
+    for (lvl, code) in grouped:
+        if lvl == 'national':
+            s = _hpi_log_series('national', code)
+            if s is not None and len(s) >= 30:
+                return f'national/{code}'
+    return None
 
 
 def _list_state_codes() -> list[str]:
@@ -329,12 +375,21 @@ def debug_panel() -> dict:
                     else:
                         rec[col] = round(float(v), 4)
             rows.append(rec)
+        states_built = list(_state['states'].keys())
+        state_errors = dict(_state['state_errors'])
+        states_building = bool(_state.get('states_building'))
         return {
             'n_obs': int(len(panel)),
             'panel_start': panel.index.min().date().isoformat(),
             'panel_end': panel.index.max().date().isoformat(),
             'last_8_quarters': rows,
-            'raw_hpi_records': _hpi_records_debug('USA'),
+            'raw_hpi_records_USA': _hpi_records_debug('USA'),
+            'raw_hpi_records_CS_NATIONAL': _hpi_records_debug('CS_NATIONAL'),
+            'national_source_used': _national_source_used(),
+            'state_codes_in_grouped': _list_state_codes(),
+            'states_building': states_building,
+            'states_fitted': sorted(states_built),
+            'states_skipped': state_errors,
         }
 
 
@@ -361,23 +416,36 @@ def _hpi_records_debug(code: str) -> list[dict]:
 
 # ── Per-state accessors ─────────────────────────────────────────────────
 
-def get_state_list() -> list[dict]:
-    """All states with a fitted forecast model, plus quick fit metadata
-    so the UI can populate a dropdown without a roundtrip per state."""
+def get_state_list() -> dict:
+    """All states with a fitted forecast model, plus skipped states with
+    the reason they were skipped, plus the source-of-truth notice. Always
+    returns a dict so the UI can show 'no states fitted because…' instead
+    of just an empty dropdown."""
     ensure_built()
     with _lock:
-        out = []
+        fitted = []
         for code, m in _state['states'].items():
-            out.append({
+            fitted.append({
                 'code': code,
                 'panel_start': m.panel_start.date().isoformat(),
                 'panel_end': m.panel_end.date().isoformat(),
                 'rsq': round(float(m.fit.rsq), 3),
                 'n_obs': int(m.fit.n_obs),
-                'gamma': round(float(m.fit.error_correction_coef()), 3),
             })
-        out.sort(key=lambda d: d['code'])
-    return out
+        fitted.sort(key=lambda d: d['code'])
+        skipped = [
+            {'code': code, 'reason': reason}
+            for code, reason in sorted(_state['state_errors'].items())
+        ]
+        building = bool(_state.get('states_building'))
+        built_at = _state.get('states_built_at')
+    return {
+        'states': fitted,
+        'skipped': skipped,
+        'building': building,
+        'built_at': built_at,
+        'available_state_codes': _list_state_codes(),
+    }
 
 
 def get_state_baseline(state_code: str, horizon: int = 8) -> Optional[list[dict]]:
