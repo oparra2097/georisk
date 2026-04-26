@@ -45,59 +45,66 @@ logger = logging.getLogger(__name__)
 
 # ── Spec ────────────────────────────────────────────────────────────────
 #
-# Long-run cointegrating relationship: HPI ~ real_income + cpi.
+# **Pure short-run dynamic spec — no Engle-Granger cointegration.**
 #
-# Including BOTH real income and CPI in the long-run is the right
-# specification for nominal HPI: real_income captures the income-elasticity
-# channel ("homes are normal goods"), and cpi absorbs the price-level drift
-# that's otherwise dumped into the residual. An income-only spec
-# under-explained the post-1995 housing-price climb (HPI grew ~7x while
-# real income only ~3x), leaving a 15-20% positive residual at sample end;
-# with γ ≈ -0.4 that produced a -18% forecast YoY in Q1 (snap-back to the
-# implied "equilibrium"), which is unrealistic.
+# We tried two cointegrating long-run specs and both produced wild first-
+# quarter snap-backs:
+#   - long_run = [real_income]            → +50% then -40%/-45%/-47% YoY
+#                                            (income-only under-explained
+#                                             the post-1995 HPI climb,
+#                                             EC residual ~+18% at end of
+#                                             sample, γ ≈ -0.41 snapped
+#                                             HPI down hard)
+#   - long_run = [real_income, cpi]       → +40% snap UP next quarter
+#                                            (CPI's post-2020 surge made
+#                                             current HPI look "below
+#                                             equilibrium", reversed sign
+#                                             of the snap)
 #
-# The previous spec also tried mortgage30 + unemp in the long-run, but
-# OLS picked a POSITIVE coefficient on mortgage rates (economically
-# backwards) over the long upward-trending sample. Mortgage rate and
-# unemployment stay in the short-run-only block where their signs come
-# out correctly negative.
+# Root cause: the 1980-2025 sample has multiple structural breaks
+# (post-1995 financialization, 2007-09 crash, 2020 COVID boom) and a
+# constant-coefficient cointegrating relationship between HPI and any
+# fixed combination of macro variables doesn't actually hold — OLS
+# finds *some* line, but the implied "equilibrium" residual is fragile
+# and produces snap-back forecasts that don't match recent dynamics.
+#
+# Pure short-run dynamic (long_run=[]) replaces that with a stationary
+# AR(p) + exogenous-cyclical model:
+#
+#   Δlog(HPI)_t = α + Σ φ_k Δlog(HPI)_{t-k}
+#               + Σ β  Δdriver_t (mortgage30, real_income, unemp)
+#               + ε_t
+#
+# With drivers carried forward flat, the forecast naturally converges
+# to the unconditional mean Δlog(HPI) — historically ~5%/yr — instead
+# of snapping toward a spurious target. Shock IRFs still work via the
+# β coefficients on the driver differences.
 
 NATIONAL_SPEC = EquationSpec(
     name='HPI national',
     dependent='hpi',
-    long_run=['real_income', 'cpi'],                             # income + price level
-    short_run_diffs=['real_income', 'mortgage30', 'unemp'],      # rates + unemp cyclicals
+    long_run=[],                                                  # no cointegration
+    short_run_diffs=['real_income', 'mortgage30', 'unemp'],
     short_run_levels=[],
     max_lags=4,
     include_lagged_dep=True,
-    notes='Long-run: HPI ~ real disposable income + CPI. Short-run: mortgage rate, unemployment.',
+    notes='Pure short-run AR(p) + exogenous cyclicals. No error-correction.',
 )
 
 
 def _state_spec(state_code: str) -> EquationSpec:
-    """Per-state ECM spec.
-
-    Long-run keeps national real_income + cpi (state-level real income is
-    only annual on FRED). Short-run swaps the national unemployment rate
-    for the **state's own** unemp series — labor markets diverge a lot
-    across states (TX 1986 oil bust, CA 1991 tech, FL post-2008) and using
-    each state's local unemp lifts R² well past the national-only spec.
-    The fallback (when FRED has no state series for a given code) is
-    handled at the panel-build level: if state_unemp is missing, the
-    service injects national 'unemp' under that name.
-
-    max_lags bumped from 3 to 4 — state series are noisier, AIC sometimes
-    finds value in deeper lags, and a wider search costs nothing.
-    """
+    """Per-state spec — same pure-short-run shape as national, with the
+    state's own unemployment rate (from FRED's <STATE>UR series) replacing
+    the national rate as a cyclical driver."""
     return EquationSpec(
         name=f'HPI {state_code}',
         dependent='hpi',
-        long_run=['real_income', 'cpi'],
+        long_run=[],
         short_run_diffs=['real_income', 'mortgage30', 'state_unemp'],
         short_run_levels=[],
         max_lags=4,
         include_lagged_dep=True,
-        notes=f'State-level HPI ECM ({state_code}); national long-run + state-specific unemp.',
+        notes=f'State-level dynamic spec ({state_code}); state-specific unemp.',
     )
 
 
@@ -153,13 +160,15 @@ def _fit_with_spec(hpi_log: pd.Series, drivers: pd.DataFrame,
         raise RuntimeError(f'panel too short for {label} fit (n={len(panel)} < {min_obs})')
     fit = fit_equation(panel, spec)
     gamma = fit.error_correction_coef()
-    logger.info(f'hpi_forecast.model: fitted {label} ECM, '
+    has_ec = bool(spec.long_run)        # γ is meaningful only when there's a long_run stage
+    label_kind = 'ECM' if has_ec else 'short-run dynamic'
+    logger.info(f'hpi_forecast.model: fitted {label} {label_kind}, '
                 f'γ={gamma:+.3f}, R²={fit.rsq:.3f}, '
                 f'N={fit.n_obs}, sample {panel.index.min().date()}→{panel.index.max().date()}')
     # Sanity check: a well-specified housing ECM should have γ in (-0.4, 0).
-    # Anything outside that range usually means the cointegrating regression
-    # is picking up spurious correlation and the forecast will overshoot.
-    if not (-0.4 < gamma < 0):
+    # Skip when there's no long_run stage — γ is NaN by construction in
+    # the pure short-run dynamic spec.
+    if has_ec and not (-0.4 < gamma < 0):
         logger.warning(
             f'hpi_forecast.model: {label} γ={gamma:+.3f} outside (-0.4, 0) — '
             f'forecasts may overshoot. Check long_run spec for confounded regressors.'
