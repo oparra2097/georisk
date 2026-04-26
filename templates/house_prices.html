@@ -13,7 +13,11 @@
   .hp-hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 16px; }
   .hp-hero-stat { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); }
   .hp-hero-stat .num { font-size: 22px; font-weight: 600; color: #f1f5f9; }
-  .hp-hero-stat .lbl { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .hp-hero-stat .lbl {
+    font-size: 11px; color: #94a3b8; text-transform: uppercase;
+    letter-spacing: 0.06em; margin-top: 2px;
+    overflow-wrap: anywhere; line-height: 1.25;
+  }
   .hp-hero-stat .chg { font-size: 13px; color: #86efac; margin-top: 4px; }
   .hp-hero-stat .chg.neg { color: #fca5a5; }
 
@@ -45,7 +49,9 @@
     .hp-hero h2 { font-size: 21px; }
     .hp-hero p { font-size: 13px; }
     .hp-hero-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .hp-hero-stat { padding: 10px; }
     .hp-hero-stat .num { font-size: 18px; }
+    .hp-hero-stat .lbl { font-size: 10px; letter-spacing: 0.04em; }
     .hp-card { padding: 12px; margin-bottom: 12px; }
     .hp-toolbar { gap: 6px; }
     .hp-tab { padding: 5px 10px; font-size: 11px; }
@@ -887,14 +893,26 @@
 
     // Project to fit just this state
     map.projection.fitSize([map.width, map.height], d);
-    map.gStates.selectAll('path.geo').classed('dim', s2 => String(s2.id).padStart(2, '0') !== stateFips);
+
+    // Hide every state polygon and every state label while drilled in. The
+    // previous .dim approach (opacity 0.25) left the selected state's fill
+    // sitting on TOP of its counties (gStates is rendered after gCounties,
+    // so last-rendered wins) — the user saw an empty Texas outline because
+    // its choropleth fill obscured every county beneath. Hiding the layer
+    // entirely also kills pointer-events to that layer (so hovers go to
+    // counties, not the state) and removes the AK/HI Albers-inset cruft.
+    map.gStates.selectAll('path.geo').style('display', 'none');
+    map.gLabels.selectAll('text.state-label').style('display', 'none');
 
     paintCounties(stateCounties);
 
-    // Re-project the state outline so it stays crisp, and hide labels
-    // (they'd distract while drilled in)
-    map.gStates.selectAll('path.geo').attr('d', map.path);
-    map.gLabels.selectAll('text.state-label').classed('dim', true);
+    // Draw a no-fill outline for the selected state into gOutline (which
+    // sits above gCounties), so the boundary stays crisp without blocking
+    // the counties or capturing pointer events.
+    map.gOutline.selectAll('path.state-outline').remove();
+    map.gOutline.append('path')
+      .attr('class', 'state-outline')
+      .attr('d', map.path(d));
 
     // Filter the table below to this state's counties
     state.level = 'county';
@@ -939,17 +957,33 @@
     map.selectedFips = null;
     $('hp-map-sub').textContent = 'United States — click any state to drill into counties';
     $('hp-map-reset').disabled = true;
+
+    // Clear drill-in artefacts — counties + the outline path that sat on top.
     map.gCounties.selectAll('path').remove();
-    map.gLabels.selectAll('text.state-label').classed('dim', false);
-    map.gStates.selectAll('path.geo').classed('dim', false);
+    map.gOutline.selectAll('path.state-outline').remove();
+
+    // Restore state polygons and labels (they were display:none during drill-in).
+    map.gStates.selectAll('path.geo').style('display', null).classed('selected', false);
+    map.gLabels.selectAll('text.state-label').style('display', null);
+
     const states = topojson.feature(map.statesTopo, map.statesTopo.objects.states);
     map.projection.fitSize([map.width, map.height], states);
     map.gStates.selectAll('path.geo').transition().duration(300).attr('d', map.path);
+    map.gLabels.selectAll('text.state-label').transition().duration(300)
+      .attr('transform', d => {
+        const c = map.path.centroid(d);
+        return `translate(${c[0]},${c[1] + 3})`;
+      });
     paintStates();
+
     state.level = 'state';
     document.querySelectorAll('.hp-tab[data-level]').forEach(t =>
       t.classList.toggle('active', t.dataset.level === 'state'));
-    loadLevel('state');
+    // The state entities are already cached in map.stateData — repopulate
+    // the table from there instead of re-fetching /level/state.
+    state.entities = Object.values(map.stateData);
+    $('hp-count').textContent = `${state.entities.length} entities`;
+    renderTable();
   }
 
   // Wire map controls
