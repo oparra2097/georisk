@@ -23,7 +23,10 @@ import numpy as np
 import pandas as pd
 
 from backend.house_prices import service as hpi_service
-from backend.house_prices.forecast.drivers import build_panel as build_drivers
+from backend.house_prices.forecast.drivers import (
+    build_panel as build_drivers,
+    fetch_state_unemp,
+)
 from backend.house_prices.forecast.model import (
     HpiForecastModel,
     baseline_forecast,
@@ -166,7 +169,18 @@ def _build_state_models(drivers: pd.DataFrame):
             if hpi is None or len(hpi) < 30:
                 errors[code] = f'series too short (n={0 if hpi is None else len(hpi)})'
                 continue
-            model = fit_state(hpi, drivers, code)
+            # Per-state driver panel: national drivers + this state's own
+            # unemployment rate from FRED. If the state's series is missing
+            # (PR isn't in the FRED <STATE>UR scheme, or DC has limited
+            # history), fall back to the national 'unemp' column under the
+            # name 'state_unemp' so the spec still matches.
+            state_drivers = drivers.copy()
+            su = fetch_state_unemp(code)
+            if su is not None and not su.empty:
+                state_drivers['state_unemp'] = su
+            else:
+                state_drivers['state_unemp'] = state_drivers['unemp']
+            model = fit_state(hpi, state_drivers, code)
             fitted[code] = model
         except Exception as e:
             errors[code] = str(e)
