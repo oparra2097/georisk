@@ -1087,12 +1087,18 @@
       const b = await r.json();
       fcast.states = b.states || [];
       const sel = $('hp-forecast-state');
+      // Preserve the user's current selection across re-renders so polling
+      // doesn't snap them back to the national view mid-build.
+      const prev = sel.value;
       sel.innerHTML = '<option value="national">United States (national)</option>' +
         fcast.states.map(s => `<option value="${s.code}">${s.code} · R²=${s.rsq}</option>`).join('');
-      // If state models are still being fitted, retry every 8s up to 5
-      // times (~40s total) so the dropdown populates as soon as they
-      // finish without a manual refresh.
-      if (b.building && retry < 5) {
+      if (prev && Array.from(sel.options).some(o => o.value === prev)) {
+        sel.value = prev;
+      }
+      // Retry every 8s up to 15 times (2 minutes) while state models are
+      // still being fitted. State HPI fetches ~100 FRED series sequentially
+      // with retry-on-429 backoff; on a cold deploy that can take ~90s.
+      if ((b.building || fcast.states.length === 0) && retry < 15) {
         setTimeout(() => loadForecastStates(retry + 1), 8000);
       }
     } catch (e) { console.error('loadForecastStates:', e); }
