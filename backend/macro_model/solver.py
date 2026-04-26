@@ -310,6 +310,18 @@ class Simulator:
                 last_valid = self.panel[col].dropna()
                 fill = float(last_valid.iloc[-1]) if len(last_valid) else 0.0
                 new_rows[col] = fill
+        # Extend the deterministic time trend (decimal years since panel
+        # start) into the forecast horizon. This was the missing piece that
+        # made the spending equations' trend coefficient have nothing to
+        # apply to in forecast quarters — without it, the long-run pred
+        # froze at the last historical row and the EC residual immediately
+        # collapsed, snapping the forecast.
+        if 'trend' in self.panel.columns:
+            valid_trend = self.panel['trend'].dropna()
+            if len(valid_trend) >= 2:
+                last_t = float(valid_trend.iloc[-1])
+                step = float(valid_trend.iloc[-1] - valid_trend.iloc[-2]) or 0.25  # ~1 quarter in years
+                new_rows['trend'] = [last_t + (i + 1) * step for i in range(horizon)]
         self.panel = pd.concat([self.panel, new_rows])
 
         diagnostics = []
