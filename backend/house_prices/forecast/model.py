@@ -80,31 +80,43 @@ logger = logging.getLogger(__name__)
 # of snapping toward a spurious target. Shock IRFs still work via the
 # β coefficients on the driver differences.
 
+# short_run_levels matters under the flat-driver baseline. With drivers
+# carried forward at their last historical values, every Δdriver term in
+# the equation evaluates to zero — so the only thing keeping the baseline
+# tied to the current macro environment is the LEVEL terms. Including
+# mortgage30 and unemp in short_run_levels means: if rates are currently
+# 7%, that 7% level keeps applying a (typically negative) coefficient to
+# Δlog(HPI) every quarter, so the baseline forecast is suppressed
+# whenever rates are elevated and lifted whenever rates are low. That's
+# what "the baseline should follow interest rates" actually requires.
+
 NATIONAL_SPEC = EquationSpec(
     name='HPI national',
     dependent='hpi',
     long_run=[],                                                  # no cointegration
-    short_run_diffs=['real_income', 'mortgage30', 'unemp'],
-    short_run_levels=[],
+    short_run_diffs=['real_income', 'mortgage30', 'unemp'],       # cyclical impulses
+    short_run_levels=['mortgage30', 'unemp'],                     # current macro state
     max_lags=4,
     include_lagged_dep=True,
-    notes='Pure short-run AR(p) + exogenous cyclicals. No error-correction.',
+    notes='AR(p) + exogenous cyclicals + macro state levels (mortgage30, unemp).',
 )
 
 
 def _state_spec(state_code: str) -> EquationSpec:
-    """Per-state spec — same pure-short-run shape as national, with the
-    state's own unemployment rate (from FRED's <STATE>UR series) replacing
-    the national rate as a cyclical driver."""
+    """Per-state spec — same shape as national, with the state's own
+    unemployment rate (FRED <STATE>UR) as both a cyclical impulse and a
+    persistent level driver. Local unemployment levels matter for state
+    HPI even when the national rate is stable, so the level term ties
+    each state's baseline to its own labor-market state."""
     return EquationSpec(
         name=f'HPI {state_code}',
         dependent='hpi',
         long_run=[],
         short_run_diffs=['real_income', 'mortgage30', 'state_unemp'],
-        short_run_levels=[],
+        short_run_levels=['mortgage30', 'state_unemp'],
         max_lags=4,
         include_lagged_dep=True,
-        notes=f'State-level dynamic spec ({state_code}); state-specific unemp.',
+        notes=f'State-level AR(p) + cyclicals + macro state ({state_code}).',
     )
 
 
