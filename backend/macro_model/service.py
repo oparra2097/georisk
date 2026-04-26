@@ -110,20 +110,20 @@ def _try_load_persist() -> bool:
             logger.warning('macro_model.service: pickle simulator has empty panel — discarding')
             _delete_pickle('discarded: empty panel')
             return False
-        # Last row of behavioral columns must have NO NaN. A partially-NaN
-        # final row (which happens when daily FRED series extend the panel
-        # past the quarter for which BEA / monthly aggregates are published)
-        # is enough to make the warm-start propagate NaN into every forecast
-        # quarter — that bug shipped a "Model built — 11 equations" status
-        # alongside an all-em-dash forecast table.
+        # Last row of every model variable (behavioral + exogenous) must have
+        # NO NaN. Even a single NaN in the last row — including in exogenous
+        # variables like NROU or productivity — propagates as NaN through
+        # every forecast quarter via the flat-exog carry-forward and the
+        # solver warm-start. (See #54 for the all-em-dash forecast incident.)
         try:
+            from backend.macro_model.variables import VARIABLES
             last_row = sim.panel.iloc[-1]
-            behav = [c for c in getattr(sim, 'behavioral_order', []) if c in sim.panel.columns]
-            if behav and any(pd.isna(last_row[c]) for c in behav):
-                bad = [c for c in behav if pd.isna(last_row[c])]
+            check_cols = [v.code for v in VARIABLES if v.code in sim.panel.columns]
+            bad = [c for c in check_cols if pd.isna(last_row[c])]
+            if bad:
                 logger.warning(
                     f'macro_model.service: pickle simulator panel last row has '
-                    f'NaN for behavioral cols {bad} — discarding'
+                    f'NaN for cols {bad} — discarding'
                 )
                 _delete_pickle(f'discarded: NaN in final row for {bad}')
                 return False
