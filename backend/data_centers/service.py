@@ -158,6 +158,29 @@ TENANT_FCF_HEADROOM = {
 }
 _DEFAULT_STRETCH = 5.0  # for Colo / Unleased / unknown tenants
 
+# ── Implied credit profile per tenant ─────────────────────────────────────
+# Annual default probability is illustrative. Spread = annual_pd × LGD × 1e4
+# with LGD ≈ 60% (40% recovery on senior unsecured / lease obligations).
+# Hyperscalers anchor at AAA-equivalent; OpenAI / xAI use private-equity
+# implied ratings.  Colo blends across enterprise tenants.
+TENANT_CREDIT_PROFILE = {
+    'Microsoft': {'rating': 'AAA',  'annual_pd': 0.0005, 'spread_bps':   3},
+    'Apple':     {'rating': 'AAA',  'annual_pd': 0.0005, 'spread_bps':   3},
+    'Google':    {'rating': 'AA+',  'annual_pd': 0.0008, 'spread_bps':   5},
+    'Amazon':    {'rating': 'AA',   'annual_pd': 0.0020, 'spread_bps':  12},
+    'Meta':      {'rating': 'A+',   'annual_pd': 0.0025, 'spread_bps':  15},
+    'Oracle':    {'rating': 'BBB+', 'annual_pd': 0.0050, 'spread_bps':  30},
+    'OpenAI':    {'rating': 'B-',   'annual_pd': 0.0500, 'spread_bps': 300},
+    'xAI':       {'rating': 'CCC',  'annual_pd': 0.1200, 'spread_bps': 720},
+    'Colo (multi-tenant)': {'rating': 'BB blended', 'annual_pd': 0.0150, 'spread_bps': 90},
+}
+_DEFAULT_CREDIT = {'rating': 'NR', 'annual_pd': None, 'spread_bps': None}
+
+
+def _credit_profile(tenant_norm: str) -> dict:
+    return TENANT_CREDIT_PROFILE.get(tenant_norm, _DEFAULT_CREDIT)
+
+
 # Three demand-environment scenarios.  Each maps (tenant tier, status) →
 # probability that the facility is written down.  The point estimate
 # reported in the summary KPI is moderate; the slider re-runs the rollup
@@ -193,6 +216,58 @@ _SCENARIOS = {
 }
 SCENARIO_KEYS = ('mild', 'moderate', 'severe')
 DEFAULT_SCENARIO = 'moderate'
+
+# Texas-grid markets used by the ERCOT stress predicate.
+_ERCOT_MARKETS = {'Dallas-Fort Worth', 'Houston', 'Austin-San Antonio'}
+
+# Named stress tests overlay a per-facility modifier on top of the moderate
+# baseline.  Each entry has a `predicate` (which facilities are affected),
+# and either a `multiplier` or an additive `add` applied to the baseline
+# default probability.  Ordering preserves UI presentation order.
+_STRESS_TESTS = {
+    'stress_openai': {
+        'label':       'Stress · OpenAI revenue plan misses 50%',
+        'description': 'OpenAI revenue ramp halves; Stargate-anchored facilities at-risk × 1.8.',
+        'base':        'moderate',
+        'predicate':   lambda f: f.get('tenant_norm') == 'OpenAI',
+        'multiplier':  1.8,
+    },
+    'stress_hyperscaler_pause': {
+        'label':       'Stress · Hyperscaler capex pause (2Q)',
+        'description': 'Investment-grade tenants pause spec UC for 2 quarters; UC/planned at-risk × 1.6.',
+        'base':        'moderate',
+        'predicate':   lambda f: f.get('tenant_credit_tier') == 'investment_grade'
+                                  and f.get('status') != 'built',
+        'multiplier':  1.6,
+    },
+    'stress_ercot': {
+        'label':       'Stress · ERCOT power crisis',
+        'description': 'Texas grid capacity crunch; ERCOT-region facilities + 0.15 default prob.',
+        'base':        'moderate',
+        'predicate':   lambda f: f.get('market') in _ERCOT_MARKETS,
+        'add':         0.15,
+    },
+}
+STRESS_KEYS = tuple(_STRESS_TESTS.keys())
+ALL_SCENARIO_KEYS = SCENARIO_KEYS + STRESS_KEYS
+
+
+def _writedown_prob(facility: dict, scenario_key: str) -> float:
+    """Probability of writedown for the given facility under the given scenario."""
+    tier = facility['tenant_credit_tier']
+    status = facility['status']
+    if scenario_key in _SCENARIOS:
+        return _SCENARIOS[scenario_key][tier][status]
+    if scenario_key in _STRESS_TESTS:
+        st = _STRESS_TESTS[scenario_key]
+        base = _SCENARIOS[st['base']][tier][status]
+        if st['predicate'](facility):
+            if 'multiplier' in st:
+                base = min(0.95, base * st['multiplier'])
+            elif 'add' in st:
+                base = min(0.95, base + st['add'])
+        return base
+    return _SCENARIOS[DEFAULT_SCENARIO][tier][status]
 
 
 def _credit_tier(tenant_norm: str) -> str:
@@ -236,15 +311,20 @@ def _facility_risk(f: dict, market_spec_ratio: float) -> dict:
 
     score = round(min(100.0, c_concentration + c_credit + c_spec + c_funding + c_geo + c_stretch), 1)
 
-    # Per-scenario at-risk MW for client-side scenario switching.
-    at_risk_by_scenario = {
-        s: round(f['mw'] * _SCENARIOS[s][tier][f['status']], 1)
-        for s in SCENARIO_KEYS
-    }
+    # Tenant credit profile (rating + PD + spread) — used in tooltip.
+    credit = _credit_profile(tn)
+
+    # Per-scenario at-risk MW (covers demand environments AND named stress tests).
+    f_with_tier = {**f, 'tenant_credit_tier': tier}
+    prob_by_scen = {sk: _writedown_prob(f_with_tier, sk) for sk in ALL_SCENARIO_KEYS}
+    at_risk_by_scenario = {sk: round(f['mw'] * p, 1) for sk, p in prob_by_scen.items()}
 
     return {
         'tenant_credit_tier': tier,
         'tenant_credit_label': TENANT_TIER_LABEL[tier],
+        'tenant_rating':      credit['rating'],
+        'tenant_annual_pd':   credit['annual_pd'],
+        'tenant_spread_bps':  credit['spread_bps'],
         'stranded_risk': score,
         'risk_drivers': {
             'tenant_concentration':   c_concentration,
@@ -256,9 +336,7 @@ def _facility_risk(f: dict, market_spec_ratio: float) -> dict:
         },
         'tenant_fcf_b':   headroom.get('fcf_b'),
         'tenant_capex_b': headroom.get('capex_b'),
-        'writedown_prob_by_scenario': {
-            s: _SCENARIOS[s][tier][f['status']] for s in SCENARIO_KEYS
-        },
+        'writedown_prob_by_scenario': prob_by_scen,
         'at_risk_mw_by_scenario': at_risk_by_scenario,
         # Legacy: keep moderate scenario fields for back-compat
         'writedown_prob': _SCENARIOS[DEFAULT_SCENARIO][tier][f['status']],
@@ -489,11 +567,11 @@ def get_summary() -> dict[str, Any]:
     fac_total_mw = sum(f['mw'] for f in facilities) or 1.0
     total_at_risk_by_scenario = {
         s: sum(f.get('at_risk_mw_by_scenario', {}).get(s, 0.0) for f in facilities)
-        for s in SCENARIO_KEYS
+        for s in ALL_SCENARIO_KEYS
     }
     total_at_risk_mw = total_at_risk_by_scenario[DEFAULT_SCENARIO]
 
-    def _zero_scen(): return {s: 0.0 for s in SCENARIO_KEYS}
+    def _zero_scen(): return {s: 0.0 for s in ALL_SCENARIO_KEYS}
 
     for f in facilities:
         f_at_risk = f.get('at_risk_mw_by_scenario', {})
@@ -509,7 +587,7 @@ def get_summary() -> dict[str, Any]:
         b['count'] += 1
         b['mw'] += f['mw']
         b['at_risk_mw'] += f.get('at_risk_mw', 0.0)
-        for s in SCENARIO_KEYS:
+        for s in ALL_SCENARIO_KEYS:
             b['at_risk_mw_by_scenario'][s] += f_at_risk.get(s, 0.0)
         if f['status'] == 'built':              b['built_mw']  += f['mw']
         elif f['status'] == 'under_construction': b['uc_mw']     += f['mw']
@@ -532,11 +610,14 @@ def get_summary() -> dict[str, Any]:
             'tenant_credit_tier': f.get('tenant_credit_tier', 'unknown'),
             'tenant_fcf_b': f.get('tenant_fcf_b'),
             'tenant_capex_b': f.get('tenant_capex_b'),
+            'tenant_rating': f.get('tenant_rating'),
+            'tenant_annual_pd': f.get('tenant_annual_pd'),
+            'tenant_spread_bps': f.get('tenant_spread_bps'),
         })
         t['count'] += 1
         t['mw'] += f['mw']
         t['at_risk_mw'] += f.get('at_risk_mw', 0.0)
-        for s in SCENARIO_KEYS:
+        for s in ALL_SCENARIO_KEYS:
             t['at_risk_mw_by_scenario'][s] += f_at_risk.get(s, 0.0)
         if f['status'] == 'built':              t['built_mw']  += f['mw']
         elif f['status'] == 'under_construction': t['uc_mw']     += f['mw']
@@ -547,9 +628,9 @@ def get_summary() -> dict[str, Any]:
         b['at_risk_share'] = round(b['at_risk_mw'] / b['mw'], 3) if b['mw'] else 0.0
         b['at_risk_share_by_scenario'] = {
             s: round(b['at_risk_mw_by_scenario'][s] / b['mw'], 3) if b['mw'] else 0.0
-            for s in SCENARIO_KEYS
+            for s in ALL_SCENARIO_KEYS
         }
-        for s in SCENARIO_KEYS:
+        for s in ALL_SCENARIO_KEYS:
             b['at_risk_mw_by_scenario'][s] = round(b['at_risk_mw_by_scenario'][s], 1)
         for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw', 'at_risk_mw'):
             b[k] = round(b[k], 1)
@@ -563,9 +644,9 @@ def get_summary() -> dict[str, Any]:
         t['at_risk_share'] = round(t['at_risk_mw'] / t['mw'], 3) if t['mw'] else 0.0
         t['at_risk_share_by_scenario'] = {
             s: round(t['at_risk_mw_by_scenario'][s] / t['mw'], 3) if t['mw'] else 0.0
-            for s in SCENARIO_KEYS
+            for s in ALL_SCENARIO_KEYS
         }
-        for s in SCENARIO_KEYS:
+        for s in ALL_SCENARIO_KEYS:
             t['at_risk_mw_by_scenario'][s] = round(t['at_risk_mw_by_scenario'][s], 1)
         for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw', 'at_risk_mw'):
             t[k] = round(t[k], 1)
@@ -588,11 +669,11 @@ def get_summary() -> dict[str, Any]:
         'expected_writedown_mw': round(total_at_risk_mw, 1),
         'expected_writedown_share': round(total_at_risk_mw / fac_total_mw, 3) if fac_total_mw else 0.0,
         'expected_writedown_mw_by_scenario': {
-            s: round(total_at_risk_by_scenario[s], 1) for s in SCENARIO_KEYS
+            s: round(total_at_risk_by_scenario[s], 1) for s in ALL_SCENARIO_KEYS
         },
         'expected_writedown_share_by_scenario': {
             s: round(total_at_risk_by_scenario[s] / fac_total_mw, 3) if fac_total_mw else 0.0
-            for s in SCENARIO_KEYS
+            for s in ALL_SCENARIO_KEYS
         },
         'by_funding': sorted(by_funding.values(), key=lambda x: -x['at_risk_mw']),
         'top_developers': sorted(by_developer.values(), key=lambda x: -x['mw'])[:12],
@@ -600,7 +681,16 @@ def get_summary() -> dict[str, Any]:
         'top_stranded_risk': top_risk,
         'tenant_tier_labels': TENANT_TIER_LABEL,
         'scenarios': {
-            s: _SCENARIOS[s]['label'] for s in SCENARIO_KEYS
+            **{s: _SCENARIOS[s]['label'] for s in SCENARIO_KEYS},
+            **{s: _STRESS_TESTS[s]['label'] for s in STRESS_KEYS},
+        },
+        'scenario_groups': {
+            'demand_environment': list(SCENARIO_KEYS),
+            'stress_tests': list(STRESS_KEYS),
+        },
+        'scenario_descriptions': {
+            **{s: '' for s in SCENARIO_KEYS},
+            **{s: _STRESS_TESTS[s]['description'] for s in STRESS_KEYS},
         },
         'default_scenario': DEFAULT_SCENARIO,
     }

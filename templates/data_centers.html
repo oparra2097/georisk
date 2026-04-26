@@ -133,9 +133,18 @@
     <button class="dc-tab" data-mode="facilities">Facilities</button>
     <span class="spacer"></span>
     <span class="legend-inline" style="margin-right:6px;">Scenario:</span>
-    <button class="dc-tab" data-scenario="mild">Mild</button>
-    <button class="dc-tab active" data-scenario="moderate">Moderate</button>
-    <button class="dc-tab" data-scenario="severe">Severe</button>
+    <select id="scenario-select" class="dc-select" style="max-width:280px;">
+      <optgroup label="Demand environment">
+        <option value="mild">Mild — capex normalizes</option>
+        <option value="moderate" selected>Moderate — demand neutralizes</option>
+        <option value="severe">Severe — AI demand crash</option>
+      </optgroup>
+      <optgroup label="Stress tests (overlay on moderate)">
+        <option value="stress_openai">OpenAI revenue plan misses 50%</option>
+        <option value="stress_hyperscaler_pause">Hyperscaler capex pause (2Q)</option>
+        <option value="stress_ercot">ERCOT power crisis</option>
+      </optgroup>
+    </select>
   </div>
   <div class="dc-toolbar" style="border-top:none;padding-top:0;">
     <span class="legend-inline" id="mode-help" style="flex:1;">Bubble area &prop; pipeline MW · color = selected metric</span>

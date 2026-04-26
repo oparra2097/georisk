@@ -136,14 +136,13 @@ const DataCenterMap = {
         this.setMode(btn.dataset.mode);
       });
     });
-    document.querySelectorAll('.dc-tab[data-scenario]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.dc-tab[data-scenario]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.scenario = btn.dataset.scenario;
+    const scenSel = document.getElementById('scenario-select');
+    if (scenSel) {
+      scenSel.addEventListener('change', () => {
+        this.scenario = scenSel.value;
         this.applyScenario();
       });
-    });
+    }
     document.querySelectorAll('.dc-tab[data-tier]').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.dc-tab[data-tier]').forEach(b => b.classList.remove('active'));
@@ -209,7 +208,9 @@ const DataCenterMap = {
   applyScenario() {
     const help = document.getElementById('scenario-help');
     if (help && this.summary?.scenarios) {
-      help.textContent = this.summary.scenarios[this.scenario] || '';
+      const lbl = this.summary.scenarios[this.scenario] || '';
+      const desc = this.summary.scenario_descriptions?.[this.scenario] || '';
+      help.textContent = desc || lbl;
     }
     this.renderKPIs();
     this.renderFundingTable();
@@ -378,13 +379,22 @@ const DataCenterMap = {
     tbody.innerHTML = rows.map(r => {
       const color = TENANT_COLOR[r.tenant] || TENANT_FALLBACK;
       const at_risk = this.scenarioAtRiskMw(r);
-      const fcfTooltip = (r.tenant_fcf_b != null && r.tenant_capex_b != null)
-        ? ` title="~$${r.tenant_capex_b}B AI capex on ~$${r.tenant_fcf_b}B FCF (illustrative)"` : '';
+      const tip = [];
+      if (r.tenant_capex_b != null && r.tenant_fcf_b != null)
+        tip.push(`~$${r.tenant_capex_b}B 2025 AI capex on ~$${r.tenant_fcf_b}B FCF`);
+      if (r.tenant_rating && r.tenant_spread_bps != null)
+        tip.push(`${r.tenant_rating} · ~${r.tenant_spread_bps} bps spread (illustrative)`);
+      const tipAttr = tip.length ? ` title="${tip.join(' · ')}"` : '';
+      const ratingCell = r.tenant_rating
+        ? `<span style="font-size:10px;color:#6b7280;">${r.tenant_rating}</span>
+           <span style="font-size:10px;color:#9ca3af;margin-left:4px;">${r.tenant_spread_bps != null ? r.tenant_spread_bps + 'bps' : ''}</span>`
+        : `<span style="color:#cbd5e1;font-size:10px;">—</span>`;
       return `
-        <tr data-tenant="${r.tenant}"${fcfTooltip}>
+        <tr data-tenant="${r.tenant}"${tipAttr}>
           <td>
             <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle;"></span>
             ${r.tenant}
+            <div>${ratingCell}</div>
           </td>
           <td class="num">${r.count}</td>
           <td class="num">${Math.round(r.mw).toLocaleString()}</td>
@@ -718,6 +728,7 @@ const DataCenterMap = {
         <dt>Funding</dt><dd><span style="color:${FUNDING_COLOR[d.funding_type] || '#fff'};font-weight:600;">${fundingLabel}</span></dd>
         <dt></dt><dd style="color:#cbd5e1;">${d.funding_detail || ''}</dd>
         ${d.tenant ? `<dt>Tenant</dt><dd>${d.tenant} <span style="color:#94a3b8;">(${credit})</span></dd>` : ''}
+        ${d.tenant_rating ? `<dt>Rating</dt><dd>${d.tenant_rating} <span style="color:#94a3b8;">· ${d.tenant_spread_bps != null ? d.tenant_spread_bps + ' bps spread' : 'no spread'} · ~${(d.tenant_annual_pd*100).toFixed(2)}% PD/yr</span></dd>` : ''}
         <dt>Market</dt><dd>${d.market}</dd>
       </dl>
       <div style="margin-top:8px;padding-top:6px;border-top:1px solid #334155;">
