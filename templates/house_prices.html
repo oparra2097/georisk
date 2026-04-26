@@ -189,6 +189,8 @@
   }
   @media (max-width: 800px) { .hp-forecast-grid { grid-template-columns: 1fr; } }
   .hp-forecast-meta { font-size: 11px; }
+  .hp-forecast-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .hp-forecast-table-wrap table { min-width: 520px; }
   .hp-forecast-chart-host {
     width: 100%; aspect-ratio: 5 / 2; min-height: 180px; max-height: 260px;
     background: #fafbfc; border: 1px solid #f3f4f6; border-radius: 4px;
@@ -283,10 +285,12 @@
     <div class="hp-forecast-grid">
       <div>
         <div id="hp-forecast-chart" class="hp-forecast-chart-host"></div>
-        <table class="hp-table" id="hp-forecast-table">
-          <thead><tr><th>Quarter</th><th class="num">Baseline HPI</th><th class="num">Baseline YoY</th><th class="num">Scenario HPI</th><th class="num">Δ vs baseline</th></tr></thead>
-          <tbody><tr><td colspan="5" class="loading">Awaiting first build…</td></tr></tbody>
-        </table>
+        <div class="hp-forecast-table-wrap">
+          <table class="hp-table" id="hp-forecast-table">
+            <thead><tr><th>Quarter</th><th class="num">Baseline HPI</th><th class="num">Baseline YoY</th><th class="num">Scenario HPI</th><th class="num">Δ vs baseline</th></tr></thead>
+            <tbody><tr><td colspan="5" class="loading">Awaiting first build…</td></tr></tbody>
+          </table>
+        </div>
       </div>
       <div class="hp-forecast-meta">
         <div id="hp-forecast-fit" style="font-size:11px;color:#6b7280;line-height:1.5;">
@@ -738,10 +742,13 @@
   function paintStates() {
     const vals = Object.values(map.stateData).map(s => s[map.metric]);
     map.scale = buildScale(vals, map.metric);
+    // Use .style() (inline CSS) NOT .attr('fill') — CSS rules on .geo
+    // override SVG presentation attributes, which is why the map looked
+    // entirely grey despite buildScale producing the right colors.
     map.gStates.selectAll('path.geo')
       .classed('no-data', d => !map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]])
       .transition().duration(280)
-      .attr('fill', d => {
+      .style('fill', d => {
         const s = map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]];
         if (!s) return '#f3f4f6';
         return hpiColor(s[map.metric]);
@@ -949,7 +956,7 @@
       .on('mousemove', (e) => positionTooltip(e))
       .on('mouseleave', () => { setHoverCode(null); hideTooltip(); })
       .transition().duration(300)
-      .attr('fill', f => {
+      .style('fill', f => {
         const fips = String(f.id).padStart(5, '0');
         const c = map.countyData[fips];
         return c ? hpiColor(c[map.metric]) : '#f3f4f6';
@@ -1264,10 +1271,14 @@
       g.append('path').datum(sPts).attr('class', 'scenario-line').attr('d', histLine);
     }
 
-    // Axes
+    // Axes — pick a quarter-aware tick format. With ~12 quarters of history
+    // + 8 quarters of forecast spanning 2-3 years, %Y produced lots of
+    // duplicate "2026 2026 2026" labels. Use year-quarter (e.g. 2025Q1)
+    // and limit to ~5 ticks so they don't crowd on mobile.
+    const qFmt = (d) => `${d.getFullYear()}Q${Math.floor(d.getMonth() / 3) + 1}`;
     g.append('g').attr('class', 'axis')
       .attr('transform', `translate(0,${h})`)
-      .call(d3.axisBottom(x).ticks(6).tickFormat(d3.timeFormat("%Y")));
+      .call(d3.axisBottom(x).ticks(W < 480 ? 4 : 6).tickFormat(qFmt));
     g.append('g').attr('class', 'axis')
       .call(d3.axisLeft(y).ticks(5));
 
