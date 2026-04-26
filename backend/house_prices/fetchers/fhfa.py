@@ -236,19 +236,41 @@ def _parse_county_csv(text: str) -> list[HpiRow]:
 def _parse_county_xlsx(content: bytes) -> list[HpiRow]:
     """FHFA developmental county HPI is now published as XLSX only.
 
-    Same logical schema as the legacy CSV (state, county, FIPS, year, HPI),
-    just wrapped in an Excel workbook. We use openpyxl in read-only mode to
-    keep memory bounded; the file is large but a single sheet.
+    The workbook usually has a title row and a few notes rows ABOVE the
+    real column header — we scan the first 15 rows to find the row whose
+    cells include a recognizable column name (FIPS / Year / HPI / etc.)
+    and treat that as the header. Logs the detected header row so the
+    diagnostics endpoint can surface format drift if it shifts again.
     """
     import openpyxl  # local import — only needed when XLSX URL is configured
     from io import BytesIO
 
     wb = openpyxl.load_workbook(BytesIO(content), read_only=True, data_only=True)
     ws = wb.active
+
+    HEADER_KEYS = {'fips', 'fips code', 'fips_code', 'year', 'yr',
+                   'hpi', 'index_nsa', 'county', 'state'}
+
     rows_iter = ws.iter_rows(values_only=True)
-    header = next(rows_iter, None)
-    if not header:
+    header = None
+    header_row_idx = -1
+    for i, row in enumerate(rows_iter):
+        if i > 14:
+            break
+        if not row:
+            continue
+        cells = [str(c).strip().lower() if c is not None else '' for c in row]
+        if any(c in HEADER_KEYS for c in cells):
+            header = row
+            header_row_idx = i
+            break
+
+    if header is None:
+        logger.warning('fhfa county XLSX: no recognizable header row in first 15 rows')
         return []
+    logger.info(f'fhfa county XLSX: header on row {header_row_idx + 1}: '
+                f'{[str(c) if c is not None else None for c in header]}')
+
     col_idx: dict[str, int] = {}
     for i, c in enumerate(header):
         if c is None:
