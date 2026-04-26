@@ -166,6 +166,16 @@ def meta_for_path(path: str) -> dict:
                 params = {"cat": cat, "ds": ds}
                 if sv:
                     params["sv"] = sv
+                # Forward request query params (e.g. ?type=gold, ?freq=yoy)
+                # so each variant gets its own preview image and cache key.
+                try:
+                    extra = request.args.to_dict(flat=True) if request else {}
+                except Exception:
+                    extra = {}
+                for k, v in extra.items():
+                    if k in ("cat", "ds", "sv", "chart"):
+                        continue
+                    params[k] = v
                 return {
                     **base,
                     "og_title": full_title,
@@ -399,25 +409,52 @@ def og_preview():
     ds = request.args.get("ds", "").strip().lower()
     sv = request.args.get("sv", "").strip()
 
-    title, desc, source = _meta_for_params(chart, cat, ds, sv)
-    cache_key = f"v2|{chart}|{cat}|{ds}|{sv}|{title}"
+    # Cache key includes the full set of request args so query-param
+    # variants (?type=gold, ?freq=yoy, …) produce distinct images.
+    extra = {k: v for k, v in request.args.items() if k not in ("chart", "cat", "ds", "sv")}
+    extra_key = "|".join(f"{k}={v}" for k, v in sorted(extra.items()))
+    # Bump the version prefix any time the renderer changes so old cached
+    # PNGs don't show up after a deploy.
+    cache_key = f"v3|{chart}|{cat}|{ds}|{sv}|{extra_key}"
     cache_file = _cache_path(cache_key)
 
     if not os.path.exists(cache_file):
+        png = None
+        # Try the real-data renderer first — produces a card with an actual
+        # line chart and headline stat for known datasets.
         try:
-            png = _render_card(title, desc, source)
-            with open(cache_file, "wb") as fh:
-                fh.write(png)
-        except Exception:
-            # Image generation is best-effort — return the default if something goes wrong.
-            default = os.path.join(_og_cache_dir(), "default.png")
-            if not os.path.exists(default):
-                try:
-                    with open(default, "wb") as fh:
-                        fh.write(_render_card(DEFAULT_TITLE, DEFAULT_DESC, "Parra Macro"))
-                except Exception:
-                    abort(500)
-            cache_file = default
+            from backend.og_charts import fetch_chart_data, render_chart_card
+            data = fetch_chart_data(cat, ds, sv, extra)
+            if data and data.points:
+                png = render_chart_card(data)
+        except Exception as e:
+            # Don't let a data-source hiccup break the preview — fall through.
+            import logging
+            logging.getLogger(__name__).warning("OG real-data render failed: %s", e)
+            png = None
+
+        if png is None:
+            # Fall back to the simpler branded template card.
+            title, desc, source = _meta_for_params(chart, cat, ds, sv)
+            try:
+                png = _render_card(title, desc, source)
+            except Exception:
+                default = os.path.join(_og_cache_dir(), "default.png")
+                if not os.path.exists(default):
+                    try:
+                        with open(default, "wb") as fh:
+                            fh.write(_render_card(DEFAULT_TITLE, DEFAULT_DESC, "Parra Macro"))
+                    except Exception:
+                        abort(500)
+                cache_file = default
+                png = None
+
+        if png is not None:
+            try:
+                with open(cache_file, "wb") as fh:
+                    fh.write(png)
+            except Exception:
+                pass
 
     resp = send_file(cache_file, mimetype="image/png", max_age=60 * 60 * 24)
     resp.headers["Cache-Control"] = "public, max-age=86400, immutable"
