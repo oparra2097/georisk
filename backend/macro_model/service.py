@@ -329,6 +329,29 @@ def get_baseline(horizon: int = 20) -> Optional[list[dict]]:
     return _forecast_to_records(df)
 
 
+def get_history(n_quarters: int = 20) -> Optional[list[dict]]:
+    """Return the last `n_quarters` historical observations from the
+    simulator's panel, with log-transforms inverted so quantity variables
+    come back as interpretable levels (matches the format /forecast uses).
+    """
+    ensure_built()
+    with _lock:
+        sim = _state['simulator']
+        if sim is None:
+            return None
+        # The simulator's panel may have been EXTENDED by a prior forecast
+        # call (forecast() concatenates new rows). Slice to historical only:
+        # any baseline cache tells us where history ended; otherwise
+        # fall back to the panel's last quarter.
+        baseline = _state['baseline']
+        if baseline is not None and len(baseline) > 0:
+            end = baseline.index.min() - pd.offsets.QuarterEnd(1)
+            hist = sim.panel.loc[:end].tail(n_quarters)
+        else:
+            hist = sim.panel.tail(n_quarters)
+    return _forecast_to_records(hist)
+
+
 def get_bootstrap(horizon: int = 12, n_draws: int = 30) -> Optional[dict]:
     """
     Returns {variable_code: [{quarter, p10, p50, p90}, ...]}. Smaller default

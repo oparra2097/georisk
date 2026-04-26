@@ -148,6 +148,21 @@ def get_forecast():
     return jsonify({'horizon': horizon, 'path': records})
 
 
+@macro_model_bp.route('/history')
+@_macro_gate
+def get_history():
+    """Recent historical observations from the simulator's panel.
+    Same record shape as /forecast (one dict per quarter, log-transformed
+    quantities inverted), so the UI can splice history + forecast onto a
+    single timeline."""
+    n = max(1, min(80, int(request.args.get('n', 20))))
+    records = service.get_history(n_quarters=n)
+    if records is None:
+        msg, s = _building_detail()
+        return jsonify({'error': msg, 'status': s}), 503
+    return jsonify({'n': n, 'history': records})
+
+
 @macro_model_bp.route('/fan')
 @_macro_gate
 def get_fan():

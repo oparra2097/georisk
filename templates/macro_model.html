@@ -58,6 +58,23 @@
      instead of squashing 9 columns into 360px. */
   .mm-forecast-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+  /* History + forecast chart */
+  .mm-chart-card h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mm-chart-host {
+    width: 100%; aspect-ratio: 5 / 2; min-height: 200px; max-height: 320px;
+    background: #fafbfc; border: 1px solid #f3f4f6; border-radius: 4px;
+    position: relative;
+  }
+  .mm-chart-host svg { width: 100%; height: 100%; display: block; }
+  .mm-chart-host .axis text { fill: #6b7280; font-size: 10px; }
+  .mm-chart-host .axis line, .mm-chart-host .axis path { stroke: #e5e7eb; shape-rendering: crispEdges; }
+  .mm-chart-host .gridline { stroke: #f3f4f6; stroke-dasharray: 2,2; }
+  .mm-chart-host .fan-band { fill: #93c5fd; opacity: 0.35; }
+  .mm-chart-host .fan-median { fill: none; stroke: #1d4ed8; stroke-width: 2; }
+  .mm-chart-host .hist-line { fill: none; stroke: #1f2937; stroke-width: 1.5; }
+  .mm-chart-host .legend-row { font-size: 10px; fill: #4b5563; }
+  .mm-chart-host .empty { color: #9ca3af; font-size: 12px; padding: 24px; text-align: center; }
+
   /* ── Mobile (≤640px) ───────────────────────────────────────────── */
   @media (max-width: 640px) {
     .mm-page { padding: 12px; }
@@ -131,6 +148,27 @@
 
   <div class="mm-layout">
     <div>
+      <div class="mm-card mm-chart-card">
+        <h3>
+          History &amp; forecast
+          <span style="font-weight:400;font-size:11px;color:#6b7280;">last 5 years actual + 20-quarter baseline + p10/p90 fan</span>
+          <select id="mm-chart-var" style="margin-left:auto;font-size:11px;padding:3px 6px;border:1px solid #d1d5db;border-radius:3px;">
+            <option value="gdp">Real GDP</option>
+            <option value="cons">Real consumption</option>
+            <option value="inv">Real investment</option>
+            <option value="unemp">Unemployment rate</option>
+            <option value="pce_core">Core PCE inflation</option>
+            <option value="cpi">CPI</option>
+            <option value="wage">Avg hourly earnings</option>
+            <option value="emp">Nonfarm payrolls</option>
+            <option value="fedfunds">Fed funds rate</option>
+            <option value="tsy10">10Y Treasury yield</option>
+            <option value="dxy">USD trade-weighted index</option>
+          </select>
+        </h3>
+        <div id="mm-chart" class="mm-chart-host"></div>
+      </div>
+
       <div class="mm-card">
         <h3>20-quarter baseline forecast</h3>
         <div class="mm-forecast-wrap"><div id="mm-forecast"><div class="loading">Loading forecast…</div></div></div>
@@ -184,6 +222,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script>
 (function() {
   const API = '/api/macro-model/us';
@@ -233,7 +272,7 @@
       const b = await r.json();
       if (b.built || b.fit_error || _pollCount > 24) {
         clearInterval(_pollTimer); _pollTimer = null;
-        if (b.built) { loadForecast(); loadEquations(); }  // refresh when ready
+        if (b.built) { loadForecast(); loadEquations(); loadChartData(); }  // refresh when ready
       }
     }, 5000);
   }
@@ -407,6 +446,177 @@
     $('mm-diag-toggle').textContent = el.style.display === 'none' ? 'Details' : 'Hide';
   });
 
+  // ────────────────────────────────────────────────────────────────────
+  //  History + forecast chart (d3 SVG)
+  // ────────────────────────────────────────────────────────────────────
+
+  const chart = { history: null, forecast: null, fan: null, varCode: 'gdp' };
+
+  // Variables that need YoY% transformation in the chart instead of level.
+  // Inflation series and quantity-log levels are easier to read as growth
+  // rates; rates and indexes already show as levels.
+  const CHART_AS_YOY = new Set(['pce_core', 'cpi', 'wage']);
+
+  async function loadChartData() {
+    const [hR, fR, fanR] = await Promise.all([
+      fetch(`${API}/history?n=20`),
+      fetch(`${API}/forecast?horizon=20`),
+      fetch(`${API}/fan?horizon=12&n_draws=30`),
+    ]);
+    chart.history  = hR.ok ? (await hR.json()).history : null;
+    chart.forecast = fR.ok ? (await fR.json()).path    : null;
+    chart.fan      = fanR.ok ? (await fanR.json()).bands : null;
+    renderChart();
+  }
+
+  function _yoy(series) {
+    // Transform a [{quarter, val}, …] series into YoY % growth.
+    return series.map((p, i) => {
+      const lag = series[i - 4];
+      const v = (lag && lag.v != null && p.v != null && lag.v !== 0)
+        ? (p.v / lag.v - 1.0) * 100.0
+        : null;
+      return { quarter: p.quarter, v };
+    });
+  }
+
+  function renderChart() {
+    const host = d3.select('#mm-chart');
+    host.selectAll('*').remove();
+    const c = chart.varCode;
+    const hist = (chart.history || []).map(r => ({ quarter: r.quarter, v: r[c] }));
+    const fcst = (chart.forecast || []).map(r => ({ quarter: r.quarter, v: r[c] }));
+    const fanBands = (chart.fan && chart.fan[c]) || null;
+    if (!hist.length && !fcst.length) {
+      host.append('div').attr('class', 'empty').text('Waiting on first build…');
+      return;
+    }
+
+    let histSeries, fcstSeries, fanSeries;
+    const asYoy = CHART_AS_YOY.has(c);
+    if (asYoy) {
+      const all = hist.concat(fcst);
+      const yoy = _yoy(all);
+      histSeries = yoy.slice(0, hist.length);
+      fcstSeries = yoy.slice(hist.length);
+      fanSeries  = fanBands ? _yoy(hist.concat(fanBands.map(b => ({ quarter: b.quarter, v: b.p50 })))).slice(hist.length) : null;
+      // Bands need full reconstruction: lag-4 anchor for p10/p50/p90
+      if (fanBands) {
+        const lagFor = (q) => {
+          const idx = hist.findIndex(h => h.quarter === q);
+          if (idx >= 0) return hist[idx];
+          // forecast quarter — lag 4 quarters back
+          const fIdx = fcst.findIndex(f => f.quarter === q);
+          if (fIdx >= 4) return fcst[fIdx - 4];
+          if (fIdx >= 0) return hist[hist.length + fIdx - 4];
+          return null;
+        };
+        fanSeries = fanBands.map(b => {
+          const ref = lagFor(b.quarter);
+          if (!ref || ref.v == null || ref.v === 0) return { quarter: b.quarter, p10: null, p50: null, p90: null };
+          return {
+            quarter: b.quarter,
+            p10: (b.p10 / ref.v - 1.0) * 100.0,
+            p50: (b.p50 / ref.v - 1.0) * 100.0,
+            p90: (b.p90 / ref.v - 1.0) * 100.0,
+          };
+        });
+      }
+    } else {
+      histSeries = hist;
+      fcstSeries = fcst;
+      fanSeries  = fanBands ? fanBands.map(b => ({ quarter: b.quarter, p10: b.p10, p50: b.p50, p90: b.p90 })) : null;
+    }
+
+    const node = host.node();
+    const W = node.clientWidth, H = node.clientHeight;
+    const M = { top: 14, right: 14, bottom: 22, left: 56 };
+    const w = W - M.left - M.right, h = H - M.top - M.bottom;
+
+    const parse = q => new Date(q);
+    const allPts = histSeries.concat(fcstSeries).filter(p => p.v != null);
+    if (!allPts.length) {
+      host.append('div').attr('class', 'empty').text('No data for this variable.');
+      return;
+    }
+    const x = d3.scaleTime()
+      .domain(d3.extent(allPts, d => parse(d.quarter)))
+      .range([0, w]);
+    const yMin = Math.min(
+      d3.min(allPts, d => d.v),
+      fanSeries ? d3.min(fanSeries.filter(b => b.p10 != null), b => b.p10) : Infinity,
+    );
+    const yMax = Math.max(
+      d3.max(allPts, d => d.v),
+      fanSeries ? d3.max(fanSeries.filter(b => b.p90 != null), b => b.p90) : -Infinity,
+    );
+    const pad = (yMax - yMin) * 0.06;
+    const y = d3.scaleLinear().domain([yMin - pad, yMax + pad]).range([h, 0]).nice();
+
+    const svg = host.append('svg').attr('viewBox', `0 0 ${W} ${H}`);
+    const g = svg.append('g').attr('transform', `translate(${M.left},${M.top})`);
+
+    g.append('g').attr('class', 'gridlines')
+      .selectAll('line').data(y.ticks(5)).join('line')
+      .attr('class', 'gridline')
+      .attr('x1', 0).attr('x2', w)
+      .attr('y1', d => y(d)).attr('y2', d => y(d));
+
+    if (fanSeries && fanSeries.length) {
+      const valid = fanSeries.filter(b => b.p10 != null && b.p90 != null);
+      const area = d3.area()
+        .x(d => x(parse(d.quarter)))
+        .y0(d => y(d.p10))
+        .y1(d => y(d.p90))
+        .curve(d3.curveMonotoneX);
+      g.append('path').datum(valid).attr('class', 'fan-band').attr('d', area);
+      const median = d3.line()
+        .x(d => x(parse(d.quarter)))
+        .y(d => y(d.p50))
+        .curve(d3.curveMonotoneX);
+      g.append('path').datum(valid).attr('class', 'fan-median').attr('d', median);
+    }
+
+    if (histSeries.length) {
+      const histLine = d3.line()
+        .x(d => x(parse(d.quarter)))
+        .y(d => y(d.v))
+        .curve(d3.curveMonotoneX);
+      const validHist = histSeries.filter(p => p.v != null);
+      const bridge = validHist.concat(fcstSeries.slice(0, 1).filter(p => p.v != null));
+      g.append('path').datum(bridge).attr('class', 'hist-line').attr('d', histLine);
+    }
+
+    const qFmt = d => `${d.getFullYear()}Q${Math.floor(d.getMonth() / 3) + 1}`;
+    g.append('g').attr('class', 'axis')
+      .attr('transform', `translate(0,${h})`)
+      .call(d3.axisBottom(x).ticks(W < 480 ? 4 : 7).tickFormat(qFmt));
+    const yFmt = asYoy ? (v => v.toFixed(1) + '%') : d3.format(',.1f');
+    g.append('g').attr('class', 'axis').call(d3.axisLeft(y).ticks(5).tickFormat(yFmt));
+
+    const legend = g.append('g').attr('class', 'legend-row').attr('transform', 'translate(8,8)');
+    legend.append('line').attr('x1', 0).attr('x2', 14).attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#1f2937').attr('stroke-width', 1.5);
+    legend.append('text').attr('x', 18).attr('y', 3).text('History');
+    legend.append('line').attr('x1', 70).attr('x2', 84).attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#1d4ed8').attr('stroke-width', 2);
+    legend.append('text').attr('x', 88).attr('y', 3).text('Median forecast');
+    if (fanSeries) {
+      legend.append('rect').attr('x', 170).attr('y', -4).attr('width', 14).attr('height', 8)
+        .attr('fill', '#93c5fd').attr('opacity', 0.35);
+      legend.append('text').attr('x', 188).attr('y', 3).text('p10–p90');
+    }
+    if (asYoy) {
+      legend.append('text').attr('x', w - 60).attr('y', 3).attr('text-anchor', 'end')
+        .text('shown as YoY %');
+    }
+  }
+
+  $('mm-chart-var').addEventListener('change', (e) => {
+    chart.varCode = e.target.value;
+    renderChart();
+  });
+
   // Show System check immediately + run init with visible error feedback
   $('mm-diagnostics-card').style.display = 'block';
   $('mm-diag-summary').innerHTML = '<em style="color:#6b7280;">Checking model status…</em>';
@@ -415,6 +625,7 @@
     loadForecast().catch(e => console.error('loadForecast:', e)),
     loadEquations().catch(e => console.error('loadEquations:', e)),
     loadShocks().catch(e => console.error('loadShocks:', e)),
+    loadChartData().catch(e => console.error('loadChartData:', e)),
   ]).catch(e => {
     $('mm-diag-summary').innerHTML = `<span style="color:#b91c1c;">Init failed: ${e.message}. Open DevTools → Console for details.</span>`;
   });
