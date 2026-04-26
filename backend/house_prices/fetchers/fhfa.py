@@ -354,10 +354,18 @@ _URL_CANDIDATES: dict[str, list[str]] = {
         'https://www.fhfa.gov/hpi/download/quarterly_datasets/hpi_master.csv',
     ],
     'fhfa_county': [
+        # FHFA's 2025 site refresh: `annually/` -> `annual/` (singular), and
+        # the BDL prefix dropped from the filename. The new canonical XLSX
+        # is at `/hpi/download/annual/hpi_at_county.xlsx`. We keep the older
+        # paths as fallbacks in case FHFA partially reverts.
+        'https://www.fhfa.gov/hpi/download/annual/hpi_at_county.xlsx',
+        'https://www.fhfa.gov/hpi/download/annually/hpi_at_county.xlsx',
+        'https://www.fhfa.gov/hpi/download/annual/hpi_at_bdl_county.xlsx',
         'https://www.fhfa.gov/hpi/download/annually/hpi_at_bdl_county.xlsx',
         'https://www.fhfa.gov/hpi/download/annually/hpi_at_bdl_county.csv',
         'https://www.fhfa.gov/hpi/download/annually_datasets/hpi_at_bdl_county.xlsx',
         'https://www.fhfa.gov/hpi/download/annually_datasets/hpi_at_bdl_county.csv',
+        'https://www.fhfa.gov/DataTools/Downloads/Documents/HPI/HPI_AT_BDL_county.xlsx',
     ],
     'fhfa_state_fallback': [
         'https://www.fhfa.gov/hpi/download/quarterly/hpi_at_state.csv',
@@ -376,7 +384,7 @@ _URL_CANDIDATES: dict[str, list[str]] = {
 # expresses preference (CSV preferred over XLSX where both exist, etc.).
 _FILENAME_PATTERNS: dict[str, re.Pattern] = {
     'fhfa_master':          re.compile(r'/hpi_master\.(?:csv|xlsx)(?:$|[?#])', re.I),
-    'fhfa_county':          re.compile(r'/hpi_at_bdl_county\.(?:xlsx|csv)(?:$|[?#])', re.I),
+    'fhfa_county':          re.compile(r'/hpi_at_(?:bdl_)?county\.(?:xlsx|csv)(?:$|[?#])', re.I),
     'fhfa_state_fallback':  re.compile(r'/hpi_at_state\.(?:csv|xlsx)(?:$|[?#])', re.I),
     'fhfa_region_fallback': re.compile(r'/hpi_at_us_and_census\.(?:txt|csv|xlsx)(?:$|[?#])', re.I),
 }

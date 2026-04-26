@@ -29,6 +29,7 @@ from backend.house_prices.forecast.model import (
     baseline_forecast,
     bootstrap_forecast,
     fit_national,
+    fit_state,
     get_shock_catalogue,
     shock_forecast,
 )
@@ -45,28 +46,33 @@ _state: dict = {
     'shocks': {},             # {shock_id: dict}
     'building': False,
     'built_at': None,
+    # Per-state forecasts
+    'states': {},             # {state_code: HpiForecastModel}
+    'state_errors': {},       # {state_code: str}
+    'state_baseline': {},     # {(state_code, horizon): DataFrame}
+    'state_fan': {},          # {(state_code, horizon, n_draws): DataFrame}
+    'states_built_at': None,
+    'states_building': False,
 }
 
 
-def _national_hpi_log() -> Optional[pd.Series]:
-    """Pull the national FHFA HPI series from the existing house_prices
-    service and convert to a quarterly log-level pandas Series.
-
-    Returns None if HPI hasn't been built yet (caller should ensure_built
-    first).
-    """
+def _hpi_log_series(level: str, code: str) -> Optional[pd.Series]:
+    """Read a quarterly log-HPI series for the given (level, code) from the
+    existing house_prices service. Returns None if the entity has no rows
+    in the grouped table or if every row's index_nsa is missing."""
     grouped = hpi_service._state.get('grouped')
     if not grouped:
         return None
-    rows = grouped.get(('national', 'USA'))
+    rows = grouped.get((level, code))
     if not rows:
         return None
-    # HpiRow.year, .period (1-4), .index_nsa
     records: list[dict] = []
     for r in rows:
         if r.index_nsa is None or r.year is None or r.period is None:
             continue
-        # Quarter-end timestamp
+        # Only quarterly rows are usable for the ECM
+        if getattr(r, 'freq', '') != 'quarterly':
+            continue
         month = r.period * 3
         ts = pd.Timestamp(year=r.year, month=month, day=1) + pd.offsets.MonthEnd(0)
         records.append({'date': ts, 'index': float(r.index_nsa)})
@@ -74,6 +80,19 @@ def _national_hpi_log() -> Optional[pd.Series]:
         return None
     df = pd.DataFrame(records).sort_values('date').drop_duplicates('date').set_index('date')
     return np.log(df['index'])
+
+
+def _national_hpi_log() -> Optional[pd.Series]:
+    """National FHFA HPI series in log-level."""
+    return _hpi_log_series('national', 'USA')
+
+
+def _list_state_codes() -> list[str]:
+    """Every state code that the house_prices service has data for."""
+    grouped = hpi_service._state.get('grouped')
+    if not grouped:
+        return []
+    return sorted({code for (lvl, code) in grouped if lvl == 'state'})
 
 
 def _build_locked():
@@ -114,6 +133,11 @@ def _build_locked():
             _state['shocks'] = {}
             _state['built_at'] = time.time()
         logger.info('hpi_forecast.service: national model built')
+
+        # Now fit each state in the same thread — drivers are already loaded
+        # and the inner OLS is fast (~50ms per state). We deliberately reuse
+        # the same drivers panel across states.
+        _build_state_models(drivers)
     except Exception as e:
         logger.exception('hpi_forecast.service: build failed')
         with _lock:
@@ -122,6 +146,40 @@ def _build_locked():
     finally:
         with _lock:
             _state['building'] = False
+
+
+def _build_state_models(drivers: pd.DataFrame):
+    """Fit a per-state ECM for every state with sufficient FHFA history.
+    Skipped states get recorded into `_state['state_errors']` so the API
+    can surface why a particular state has no forecast available."""
+    state_codes = _list_state_codes()
+    if not state_codes:
+        logger.warning('hpi_forecast.service: no state codes from house_prices service')
+        return
+    with _lock:
+        _state['states_building'] = True
+    fitted: dict[str, HpiForecastModel] = {}
+    errors: dict[str, str] = {}
+    for code in state_codes:
+        try:
+            hpi = _hpi_log_series('state', code)
+            if hpi is None or len(hpi) < 30:
+                errors[code] = f'series too short (n={0 if hpi is None else len(hpi)})'
+                continue
+            model = fit_state(hpi, drivers, code)
+            fitted[code] = model
+        except Exception as e:
+            errors[code] = str(e)
+            logger.warning(f'hpi_forecast.service: fit_state({code}) failed: {e}')
+    with _lock:
+        _state['states'] = fitted
+        _state['state_errors'] = errors
+        _state['state_baseline'] = {}
+        _state['state_fan'] = {}
+        _state['states_built_at'] = time.time()
+        _state['states_building'] = False
+    logger.info(f'hpi_forecast.service: fitted {len(fitted)}/{len(state_codes)} state models '
+                f'({len(errors)} skipped)')
 
 
 def _build_in_background():
@@ -221,6 +279,90 @@ def get_fan(horizon: int = 8, n_draws: int = 200) -> Optional[list[dict]]:
 
 def get_shock_list() -> list[dict]:
     return get_shock_catalogue()
+
+
+# ── Per-state accessors ─────────────────────────────────────────────────
+
+def get_state_list() -> list[dict]:
+    """All states with a fitted forecast model, plus quick fit metadata
+    so the UI can populate a dropdown without a roundtrip per state."""
+    ensure_built()
+    with _lock:
+        out = []
+        for code, m in _state['states'].items():
+            out.append({
+                'code': code,
+                'panel_start': m.panel_start.date().isoformat(),
+                'panel_end': m.panel_end.date().isoformat(),
+                'rsq': round(float(m.fit.rsq), 3),
+                'n_obs': int(m.fit.n_obs),
+                'gamma': round(float(m.fit.error_correction_coef()), 3),
+            })
+        out.sort(key=lambda d: d['code'])
+    return out
+
+
+def get_state_baseline(state_code: str, horizon: int = 8) -> Optional[list[dict]]:
+    ensure_built()
+    with _lock:
+        m = _state['states'].get(state_code)
+        if m is None:
+            return None
+        cached = _state['state_baseline'].get((state_code, horizon))
+    if cached is None:
+        df = baseline_forecast(m, horizon=horizon)
+        with _lock:
+            _state['state_baseline'][(state_code, horizon)] = df
+    else:
+        df = cached
+    return _df_to_records(df)
+
+
+def get_state_fan(state_code: str, horizon: int = 8, n_draws: int = 200) -> Optional[list[dict]]:
+    ensure_built()
+    with _lock:
+        m = _state['states'].get(state_code)
+        if m is None:
+            return None
+        cached = _state['state_fan'].get((state_code, horizon, n_draws))
+    if cached is None:
+        df = bootstrap_forecast(m, horizon=horizon, n_draws=n_draws)
+        with _lock:
+            _state['state_fan'][(state_code, horizon, n_draws)] = df
+    else:
+        df = cached
+    return _df_to_records(df)
+
+
+def get_state_fit(state_code: str) -> Optional[dict]:
+    ensure_built()
+    with _lock:
+        m = _state['states'].get(state_code)
+        if m is None:
+            return None
+    return {
+        'state_code': state_code,
+        'panel_start': m.panel_start.date().isoformat(),
+        'panel_end': m.panel_end.date().isoformat(),
+        'fit': m.fit.to_dict(),
+    }
+
+
+def run_state_shock(state_code: str, shock_id: str, horizon: int = 8) -> Optional[dict]:
+    """Per-state shock IRF — uses the same shock catalogue as national."""
+    from backend.house_prices.forecast.model import shock_forecast
+    ensure_built()
+    with _lock:
+        m = _state['states'].get(state_code)
+        if m is None:
+            return None
+    result = shock_forecast(m, shock_id, horizon=horizon)
+    return {
+        'shock':    result['shock'],
+        'baseline': _df_to_records(result['baseline']),
+        'shocked':  _df_to_records(result['shocked']),
+        'irf':      _df_to_records(result['irf']),
+    }
 
 
 def run_shock(shock_id: str, horizon: int = 8) -> Optional[dict]:

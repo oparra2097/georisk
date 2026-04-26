@@ -57,6 +57,27 @@ NATIONAL_SPEC = EquationSpec(
 )
 
 
+def _state_spec(state_code: str) -> EquationSpec:
+    """Per-state ECM spec. Uses the same NATIONAL macro drivers because
+    state-level mortgage rates and income aren't readily available from
+    FRED at quarterly cadence — the cross-state variation we capture is
+    the BETA of each state's HPI to the national macro environment.
+
+    max_lags is reduced from 4 to 3 since state-level series are slightly
+    noisier; lagged dep stays on.
+    """
+    return EquationSpec(
+        name=f'HPI {state_code}',
+        dependent='hpi',
+        long_run=['real_income', 'mortgage30', 'unemp'],
+        short_run_diffs=['real_income', 'mortgage30', 'unemp'],
+        short_run_levels=[],
+        max_lags=3,
+        include_lagged_dep=True,
+        notes=f'State-level HPI ECM ({state_code}); national drivers.',
+    )
+
+
 # ── Shock catalogue ─────────────────────────────────────────────────────
 
 @dataclass
@@ -100,21 +121,35 @@ class HpiForecastModel:
         self.panel_end = self.panel.index.max()
 
 
+def _fit_with_spec(hpi_log: pd.Series, drivers: pd.DataFrame,
+                   spec: EquationSpec, label: str,
+                   min_obs: int = 40) -> HpiForecastModel:
+    panel = drivers.join(hpi_log.rename('hpi'), how='inner')
+    panel = panel.dropna(how='any')
+    if len(panel) < min_obs:
+        raise RuntimeError(f'panel too short for {label} fit (n={len(panel)} < {min_obs})')
+    fit = fit_equation(panel, spec)
+    logger.info(f'hpi_forecast.model: fitted {label} ECM, '
+                f'γ={fit.error_correction_coef():+.3f}, R²={fit.rsq:.3f}, '
+                f'N={fit.n_obs}, sample {panel.index.min().date()}→{panel.index.max().date()}')
+    return HpiForecastModel(fit=fit, panel=panel)
+
+
 def fit_national(hpi_log: pd.Series, drivers: pd.DataFrame) -> HpiForecastModel:
     """Fit the national ECM. `hpi_log` must be a quarterly log-HPI series
     indexed by end-of-quarter Timestamps. `drivers` is the macro driver
     panel from `forecast.drivers.build_panel`.
     """
-    panel = drivers.join(hpi_log.rename('hpi'), how='inner')
-    panel = panel.dropna(how='any')
-    if len(panel) < 40:
-        raise RuntimeError(f'panel too short for HPI national fit (n={len(panel)})')
+    return _fit_with_spec(hpi_log, drivers, NATIONAL_SPEC, label='national')
 
-    fit = fit_equation(panel, NATIONAL_SPEC)
-    logger.info(f'hpi_forecast.model: fitted national ECM, '
-                f'γ={fit.error_correction_coef():+.3f}, R²={fit.rsq:.3f}, '
-                f'N={fit.n_obs}, sample {panel.index.min().date()}→{panel.index.max().date()}')
-    return HpiForecastModel(fit=fit, panel=panel)
+
+def fit_state(hpi_log: pd.Series, drivers: pd.DataFrame, state_code: str) -> HpiForecastModel:
+    """Fit a per-state ECM. State HPI series are typically shorter than the
+    national one (some Sun Belt states only start ~1980), so we cap the
+    minimum sample size at 30 quarters (~7.5 years).
+    """
+    return _fit_with_spec(hpi_log, drivers, _state_spec(state_code),
+                          label=f'state {state_code}', min_obs=30)
 
 
 # ── Forecast ────────────────────────────────────────────────────────────
@@ -177,7 +212,7 @@ def _forecast_path(model: HpiForecastModel, driver_paths: pd.DataFrame,
                 # u_{t-1} = log(HPI)_{t-1} − [δ0 + δ1·real_income_{t-1} + δ2·mortgage30_{t-1} + …]
                 hpi_lag = panel.iloc[t_idx - 1]['hpi']
                 lr_pred = float(long_run_coefs.get('const', 0.0))
-                for r in NATIONAL_SPEC.long_run:
+                for r in fit.spec.long_run:
                     lr_pred += float(long_run_coefs[r]) * panel.iloc[t_idx - 1][r]
                 delta += coef * (hpi_lag - lr_pred)
                 continue

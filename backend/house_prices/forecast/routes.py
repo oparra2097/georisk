@@ -120,3 +120,60 @@ def post_shock():
 def post_refresh():
     service.refresh()
     return jsonify(service.status())
+
+
+# ── Per-state ───────────────────────────────────────────────────────────
+
+@hpi_forecast_bp.route('/states')
+@_hpi_gate
+def get_states():
+    """List of states with fitted forecast models + per-state fit metadata."""
+    return jsonify({'states': service.get_state_list()})
+
+
+@hpi_forecast_bp.route('/state/<code>/baseline')
+@_hpi_gate
+def get_state_baseline(code):
+    h = max(1, min(24, int(request.args.get('h', 8))))
+    records = service.get_state_baseline(code.upper(), horizon=h)
+    if records is None:
+        return jsonify({'error': f'no forecast model for state {code}',
+                        'status': service.status()}), 404
+    return jsonify({'state_code': code.upper(), 'horizon': h, 'path': records})
+
+
+@hpi_forecast_bp.route('/state/<code>/fan')
+@_hpi_gate
+def get_state_fan(code):
+    h = max(1, min(20, int(request.args.get('h', 8))))
+    n = max(20, min(500, int(request.args.get('n', 200))))
+    records = service.get_state_fan(code.upper(), horizon=h, n_draws=n)
+    if records is None:
+        return jsonify({'error': f'no forecast model for state {code}'}), 404
+    return jsonify({'state_code': code.upper(), 'horizon': h, 'n_draws': n, 'bands': records})
+
+
+@hpi_forecast_bp.route('/state/<code>/fit')
+@_hpi_gate
+def get_state_fit(code):
+    report = service.get_state_fit(code.upper())
+    if report is None:
+        return jsonify({'error': f'no forecast model for state {code}'}), 404
+    return jsonify(report)
+
+
+@hpi_forecast_bp.route('/state/<code>/shock', methods=['POST'])
+@_hpi_gate
+def post_state_shock(code):
+    body = request.get_json(silent=True) or {}
+    shock_id = body.get('id')
+    if not shock_id:
+        return jsonify({'error': "'id' is required"}), 400
+    h = max(1, min(20, int(body.get('h', 8))))
+    try:
+        result = service.run_state_shock(code.upper(), shock_id, horizon=h)
+    except KeyError as e:
+        return jsonify({'error': f'unknown shock: {e}'}), 404
+    if result is None:
+        return jsonify({'error': f'no forecast model for state {code}'}), 404
+    return jsonify(result)
