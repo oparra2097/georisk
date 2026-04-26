@@ -94,11 +94,14 @@ logger = logging.getLogger(__name__)
 # eliminates that pathology — the model now relates Δlog(HPI) directly to
 # current macro state and short-run cyclicals.
 #
-# CLIP_DELTA is a defensive guardrail in `_forecast_path`: if a quarter's
-# computed Δlog(HPI) ever exceeds ±0.04 (~16% annualized), we clip it.
-# Housing index growth has never exceeded that quarterly even in the
-# COVID boom, so this is a safe ceiling that can't trim legitimate
-# dynamics.
+# CLIP_DELTA is a defensive guardrail in `_forecast_path` for the
+# DETERMINISTIC paths only (baseline + shock IRFs). It catches spec
+# pathologies that would otherwise produce ±30%/q snap forecasts. The
+# bootstrap path skips the clip entirely so the residual draws flow
+# through to the p10/p90 fan unmodified — clipping in bootstrap was
+# collapsing the fan to a thin ribbon (the symmetric clip + frequent
+# residual hits past the threshold made the variance much narrower
+# than the actual fitted-residual distribution).
 
 CLIP_DELTA = 0.04   # ±4%/q in log terms (~16% annualized)
 
@@ -304,21 +307,26 @@ def _forecast_path(model: HpiForecastModel, driver_paths: pd.DataFrame,
                 if t_idx - lag < 0:
                     continue
                 delta += coef * panel.iloc[t_idx - lag][reg]
-        if resid_draws is not None and i < len(resid_draws):
+        is_bootstrap = resid_draws is not None
+        if is_bootstrap and i < len(resid_draws):
             delta += float(resid_draws[i])
-        # Defensive clip: housing-index Δlog has never exceeded ±0.04
-        # (~16% annualized) per quarter, even in the COVID boom. If the
-        # estimated equation produces a larger Δ that's almost always a
-        # specification pathology rather than a real signal — clip and
-        # log so it's diagnosable.
-        if delta > CLIP_DELTA:
-            logger.warning(f'hpi_forecast.model: clipping Δlog({fit.spec.name}) '
-                           f'{delta:+.4f} → {CLIP_DELTA:+.4f} at q={driver_paths.index[i].date()}')
-            delta = CLIP_DELTA
-        elif delta < -CLIP_DELTA:
-            logger.warning(f'hpi_forecast.model: clipping Δlog({fit.spec.name}) '
-                           f'{delta:+.4f} → {-CLIP_DELTA:+.4f} at q={driver_paths.index[i].date()}')
-            delta = -CLIP_DELTA
+        # Defensive clip — DETERMINISTIC paths only (baseline + shock).
+        # Skipped under bootstrap so the residual draws flow through to
+        # the p10/p90 fan unmodified. With the clip on, residuals past
+        # the ±4%/q threshold get truncated symmetrically and the fan
+        # collapses to a ribbon much thinner than the actual fitted-
+        # residual distribution. Clipping baseline (where residuals are
+        # zero) still catches spec pathologies that would surface as
+        # ±30%/q snap forecasts.
+        if not is_bootstrap:
+            if delta > CLIP_DELTA:
+                logger.warning(f'hpi_forecast.model: clipping baseline Δlog({fit.spec.name}) '
+                               f'{delta:+.4f} → {CLIP_DELTA:+.4f} at q={driver_paths.index[i].date()}')
+                delta = CLIP_DELTA
+            elif delta < -CLIP_DELTA:
+                logger.warning(f'hpi_forecast.model: clipping baseline Δlog({fit.spec.name}) '
+                               f'{delta:+.4f} → {-CLIP_DELTA:+.4f} at q={driver_paths.index[i].date()}')
+                delta = -CLIP_DELTA
         new_hpi = float(panel.iloc[t_idx - 1]['hpi'] + delta)
         panel.iloc[t_idx, panel.columns.get_loc('hpi')] = new_hpi
         forecast.append(new_hpi)

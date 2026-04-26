@@ -1235,7 +1235,12 @@
 
     // Combine onto one timeline (Date objects keyed by quarter)
     const parse = (q) => new Date(q);
-    const histPts = hist.map(h => ({ d: parse(h.date), v: h.index, kind: 'hist' }));
+    // History records from /forecast/history are keyed by `quarter`
+    // (same as baseline/forecast), NOT `date`. Reading h.date returned
+    // undefined, parse() gave Invalid Date, every histPts.d was NaN, and
+    // d3 silently drew nothing — chart legend showed "History" but no
+    // line was visible. Use h.quarter to match the service contract.
+    const histPts = hist.map(h => ({ d: parse(h.quarter), v: h.index, kind: 'hist' }));
     const basePts = baseline.map(p => ({ d: parse(p.quarter), v: p.hpi_index, kind: 'base' }));
     const allPts = histPts.concat(basePts);
 
