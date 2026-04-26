@@ -59,7 +59,19 @@
   .mm-forecast-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   /* History + forecast chart */
-  .mm-chart-card h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mm-chart-card h3 {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .mm-chart-card h3 > span {
+    font-weight: 400; font-size: 11px; color: #6b7280;
+    flex: 1 1 100%; text-transform: none; letter-spacing: 0;
+  }
+  .mm-chart-card h3 > select {
+    margin-left: auto;
+  }
+  @media (min-width: 720px) {
+    .mm-chart-card h3 > span { flex: 0 1 auto; }
+  }
   .mm-chart-host {
     width: 100%; aspect-ratio: 5 / 2; min-height: 200px; max-height: 320px;
     background: #fafbfc; border: 1px solid #f3f4f6; border-radius: 4px;
@@ -500,20 +512,27 @@
       histSeries = yoy.slice(0, hist.length);
       fcstSeries = yoy.slice(hist.length);
       fanSeries  = fanBands ? _yoy(hist.concat(fanBands.map(b => ({ quarter: b.quarter, v: b.p50 })))).slice(hist.length) : null;
-      // Bands need full reconstruction: lag-4 anchor for p10/p50/p90
+      // Bands need full reconstruction: lag-4 anchor for p10/p50/p90.
+      // For the first ≤4 forecast quarters the natural lag falls inside
+      // history, so we walk the combined hist+fcst array to find the
+      // lag-4 reference. If that lookup misses (fan extends past hist
+      // or hist is shorter than 4), fall back to the last historical
+      // value rather than emitting null — so the fan ribbon doesn't
+      // gap out for the first year of forecasts.
       if (fanBands) {
+        const combined = hist.concat(fcst);
+        const fallbackRef = (hist.length ? hist[hist.length - 1] : null);
         const lagFor = (q) => {
-          const idx = hist.findIndex(h => h.quarter === q);
-          if (idx >= 0) return hist[idx];
-          // forecast quarter — lag 4 quarters back
-          const fIdx = fcst.findIndex(f => f.quarter === q);
-          if (fIdx >= 4) return fcst[fIdx - 4];
-          if (fIdx >= 0) return hist[hist.length + fIdx - 4];
-          return null;
+          const idx = combined.findIndex(p => p.quarter === q);
+          if (idx >= 4) return combined[idx - 4];
+          return fallbackRef;
         };
         fanSeries = fanBands.map(b => {
           const ref = lagFor(b.quarter);
-          if (!ref || ref.v == null || ref.v === 0) return { quarter: b.quarter, p10: null, p50: null, p90: null };
+          if (!ref || ref.v == null || ref.v === 0 ||
+              b.p10 == null || b.p50 == null || b.p90 == null) {
+            return { quarter: b.quarter, p10: null, p50: null, p90: null };
+          }
           return {
             quarter: b.quarter,
             p10: (b.p10 / ref.v - 1.0) * 100.0,
@@ -529,7 +548,14 @@
     }
 
     const node = host.node();
-    const W = node.clientWidth, H = node.clientHeight;
+    // Floor W/H to safe minimums. clientHeight can be 0 on first paint
+    // (aspect-ratio doesn't always give a usable height before layout
+    // settles, especially when the dashboard column collapses to one
+    // column on mobile). A 0-height viewBox renders an invisible chart
+    // even when the data is fine. The ResizeObserver below re-runs
+    // renderChart() once the host gains real dimensions.
+    const W = Math.max(node.clientWidth, 320);
+    const H = Math.max(node.clientHeight, 200);
     const M = { top: 14, right: 14, bottom: 22, left: 56 };
     const w = W - M.left - M.right, h = H - M.top - M.bottom;
 
@@ -616,6 +642,26 @@
     chart.varCode = e.target.value;
     renderChart();
   });
+
+  // Re-render the chart when the host gains real dimensions. Without this
+  // the SVG is committed to whatever clientHeight was at first paint
+  // (which can be 0 before layout settles or while the card is offscreen)
+  // and stays that size even after the layout completes.
+  if (typeof ResizeObserver !== 'undefined') {
+    let lastW = 0, lastH = 0;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (Math.abs(width - lastW) > 4 || Math.abs(height - lastH) > 4) {
+          lastW = width; lastH = height;
+          // Only re-render if we have data; otherwise the empty-state
+          // message handles itself.
+          if (chart.history || chart.forecast) renderChart();
+        }
+      }
+    });
+    ro.observe($('mm-chart'));
+  }
 
   // Show System check immediately + run init with visible error feedback
   $('mm-diagnostics-card').style.display = 'block';
