@@ -187,8 +187,16 @@ def fit_state(hpi_log: pd.Series, drivers: pd.DataFrame, state_code: str) -> Hpi
 # ── Forecast ────────────────────────────────────────────────────────────
 
 def _make_baseline_driver_paths(panel: pd.DataFrame, horizon: int) -> pd.DataFrame:
-    """Flat-carry-forward each driver from its last non-NaN historical value."""
-    drivers = [d.code for d in DRIVERS_BY_CODE.values() if d.code in panel.columns]
+    """Flat-carry-forward each driver from its last non-NaN historical value.
+
+    Iterate ALL panel columns except the dependent (`hpi`) — not just the
+    five registered DRIVERS — so per-state extra columns like `state_unemp`
+    are also carried forward into forecast quarters. Without this the
+    state spec's `Δstate_unemp` regressor read NaN at the first forecast
+    quarter and produced an all-null per-state forecast (PR #64
+    regression).
+    """
+    drivers = [c for c in panel.columns if c != 'hpi']
     last = panel.index[-1]
     new_dates = pd.date_range(
         start=(last + pd.offsets.QuarterEnd(1)).normalize(),
