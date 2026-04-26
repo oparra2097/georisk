@@ -118,6 +118,31 @@
     background: rgba(249,250,251,0.85); color: #6b7280; font-size: 13px; pointer-events: none;
   }
   .hp-map-overlay.hidden { display: none; }
+
+  /* ── Forecast card ─────────────────────────────────────────────── */
+  .hp-forecast-card { padding: 18px 20px; }
+  .hp-forecast-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .hp-forecast-head h3 {
+    margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.03em; color: #374151;
+  }
+  .hp-forecast-head h3 .sub { font-size: 11px; font-weight: 400; color: #9ca3af; text-transform: none; letter-spacing: 0; margin-left: 8px; }
+  .hp-forecast-status {
+    font-size: 11px; padding: 3px 8px; border-radius: 10px; background: #f3f4f6; color: #4b5563;
+  }
+  .hp-forecast-status.ok    { background: #d1fae5; color: #065f46; }
+  .hp-forecast-status.err   { background: #fee2e2; color: #991b1b; }
+  .hp-forecast-status.build { background: #fef3c7; color: #78350f; }
+  .hp-forecast-controls { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .hp-forecast-controls select { padding: 4px 8px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 3px; background: #fff; color: #1f2937; }
+  .hp-forecast-controls button { padding: 4px 12px; font-size: 11px; border: 1px solid #d1d5db; background: #fff; border-radius: 3px; cursor: pointer; color: #374151; }
+  .hp-forecast-controls button:hover { background: #f3f4f6; }
+  .hp-forecast-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hp-forecast-grid {
+    display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 16px;
+  }
+  @media (max-width: 800px) { .hp-forecast-grid { grid-template-columns: 1fr; } }
+  .hp-forecast-meta { font-size: 11px; }
 </style>
 {% endblock %}
 
@@ -176,6 +201,31 @@
       <div class="meta">
         <div><strong id="hp-legend-metric">YoY %</strong> · diverging scale around 0</div>
         <div id="hp-legend-stats">— states colored</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8-quarter national forecast (ECM with mortgage / income / unemp drivers) -->
+  <section class="hp-card hp-forecast-card">
+    <div class="hp-forecast-head">
+      <h3>National HPI forecast <span class="sub">8 quarters · ECM with FRED macro drivers</span></h3>
+      <span id="hp-forecast-status" class="hp-forecast-status">Building model…</span>
+      <div class="hp-forecast-controls">
+        <select id="hp-forecast-shock"><option value="">No shock — baseline only</option></select>
+        <button class="btn-reset" id="hp-forecast-run">Run scenario</button>
+      </div>
+    </div>
+    <div class="hp-forecast-grid">
+      <div>
+        <table class="hp-table" id="hp-forecast-table">
+          <thead><tr><th>Quarter</th><th class="num">Baseline HPI</th><th class="num">Baseline YoY</th><th class="num">Scenario HPI</th><th class="num">Δ vs baseline</th></tr></thead>
+          <tbody><tr><td colspan="5" class="loading">Awaiting first build…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="hp-forecast-meta">
+        <div id="hp-forecast-fit" style="font-size:11px;color:#6b7280;line-height:1.5;">
+          Fit diagnostics will appear here once the model is built.
+        </div>
       </div>
     </div>
   </section>
@@ -836,14 +886,134 @@
   });
   $('hp-map-reset').addEventListener('click', resetMap);
 
+  // ────────────────────────────────────────────────────────────────────
+  //  National HPI forecast (ECM with FRED macro drivers)
+  // ────────────────────────────────────────────────────────────────────
+  const FCAST = '/api/house-prices/forecast';
+  const fcast = { baseline: null, scenario: null, shocks: [] };
+
+  function setForecastStatus(text, cls) {
+    const el = $('hp-forecast-status');
+    el.textContent = text;
+    el.className = 'hp-forecast-status ' + (cls || '');
+  }
+
+  async function loadForecastShocks() {
+    try {
+      const r = await fetch(`${FCAST}/shocks`);
+      if (!r.ok) return;
+      const b = await r.json();
+      fcast.shocks = b.shocks || [];
+      const sel = $('hp-forecast-shock');
+      sel.innerHTML = '<option value="">No shock — baseline only</option>' +
+        fcast.shocks.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    } catch (e) { console.error('loadForecastShocks:', e); }
+  }
+
+  async function loadForecastBaseline() {
+    setForecastStatus('Building model…', 'build');
+    const r = await fetch(`${FCAST}/baseline?h=8`);
+    if (r.status === 503) {
+      setForecastStatus('Building model…', 'build');
+      setTimeout(loadForecastBaseline, 8000);
+      return;
+    }
+    if (!r.ok) { setForecastStatus('Build failed', 'err'); return; }
+    const b = await r.json();
+    fcast.baseline = b.path;
+    fcast.scenario = null;
+    renderForecastTable();
+    setForecastStatus('Built', 'ok');
+    loadForecastFitMeta().catch(e => console.error('forecast fit meta:', e));
+  }
+
+  async function loadForecastFitMeta() {
+    const r = await fetch(`${FCAST}/fit`);
+    if (!r.ok) return;
+    const b = await r.json();
+    const f = b.fit || {};
+    const sr = f.short_run || {};
+    const lr = f.long_run || {};
+    const dx = f.diagnostics || {};
+    const lrCoefs = Object.entries(lr.coefs || {})
+      .filter(([k]) => k !== 'const')
+      .map(([k, v]) => `${k}: ${v.toFixed(3)}`).join(' · ');
+    $('hp-forecast-fit').innerHTML = `
+      <div><strong>Engle-Granger ECM</strong> · panel ${b.panel_start} → ${b.panel_end} · N=${(f.sample||{}).n||'—'}</div>
+      <div style="margin-top:6px;">
+        <span>γ <code>${sr.error_correction_coef ?? '—'}</code></span> ·
+        <span>R² <code>${sr.rsq ?? '—'}</code></span> ·
+        <span>DW <code>${dx.durbin_watson ?? '—'}</code></span>
+      </div>
+      <div style="margin-top:6px;color:#9ca3af;">Long-run: ${lrCoefs || '—'}</div>
+    `;
+  }
+
+  async function runScenario() {
+    const id = $('hp-forecast-shock').value;
+    if (!id) {
+      // No shock — just clear scenario column
+      fcast.scenario = null;
+      renderForecastTable();
+      return;
+    }
+    $('hp-forecast-run').disabled = true;
+    setForecastStatus('Running scenario…', 'build');
+    try {
+      const r = await fetch(`${FCAST}/shock`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id, h: 8}),
+      });
+      if (!r.ok) { setForecastStatus('Scenario failed', 'err'); return; }
+      const b = await r.json();
+      // Use the shock endpoint's baseline to keep the comparison apples-to-apples
+      fcast.baseline = b.baseline;
+      fcast.scenario = b.shocked;
+      renderForecastTable();
+      setForecastStatus(`Scenario: ${b.shock.label}`, 'ok');
+    } finally {
+      $('hp-forecast-run').disabled = false;
+    }
+  }
+
+  function renderForecastTable() {
+    const baseline = fcast.baseline || [];
+    const scenario = fcast.scenario || [];
+    const tbody = $('hp-forecast-table').querySelector('tbody');
+    if (!baseline.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="loading">No data yet.</td></tr>';
+      return;
+    }
+    const rows = baseline.map((p, i) => {
+      const s = scenario[i] || {};
+      const diff = (scenario.length && p.hpi_index != null && s.hpi_index != null)
+        ? (s.hpi_index - p.hpi_index) : null;
+      const diffCls = diff === null ? 'zero' : (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : 'zero'));
+      const diffStr = diff === null ? '—' : `<span class="${diffCls}">${diff > 0 ? '+' : ''}${diff.toFixed(2)}</span>`;
+      return `<tr>
+        <td>${p.quarter}</td>
+        <td class="num">${p.hpi_index != null ? p.hpi_index.toFixed(2) : '—'}</td>
+        <td class="num">${fmtPct(p.yoy_pct, 2)}</td>
+        <td class="num">${s.hpi_index != null ? s.hpi_index.toFixed(2) : '—'}</td>
+        <td class="num">${diffStr}</td>
+      </tr>`;
+    }).join('');
+    tbody.innerHTML = rows;
+  }
+
+  $('hp-forecast-run').addEventListener('click', runScenario);
+
   // Init: load diagnostics + hero + initial state data (also populates map cache via loadLevel)
-  // + map topology + sources, all with explicit error catches so silent failures are visible.
+  // + map topology + sources + forecast, all with explicit error catches.
   Promise.all([
     loadDiagnostics().catch(e => console.error('loadDiagnostics:', e)),
     loadHero().catch(e => console.error('loadHero:', e)),
     loadLevel('state').catch(e => console.error('loadLevel:', e)),
     loadSources().catch(e => console.error('loadSources:', e)),
     initMap().catch(e => console.error('initMap:', e)),
+    loadForecastShocks().catch(e => console.error('loadForecastShocks:', e)),
+    loadForecastBaseline().catch(e => console.error('loadForecastBaseline:', e)),
   ]);
 })();
 </script>
