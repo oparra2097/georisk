@@ -239,44 +239,51 @@ def _build_state_models(drivers: pd.DataFrame):
     fitted: dict[str, HpiForecastModel] = {}
     errors: dict[str, str] = {}
     fetch_attempts = 0
-    for code in state_codes:
-        try:
-            hpi = _state_hpi_log(code)
-            fetch_attempts += 1
-            if hpi is None:
-                errors[code] = 'no usable HPI series (FHFA grouped + FRED both empty/short)'
-                continue
-            state_drivers = drivers.copy()
+    # Wrap the whole loop in try/finally so `states_building` always clears,
+    # even if an unhandled exception slips out of the per-state try/except
+    # (e.g. a pandas / numpy error in drivers.copy() or the final lock
+    # block). Otherwise the flag stays True forever, the UI keeps polling,
+    # and the dropdown never settles.
+    try:
+        for code in state_codes:
             try:
-                su = fetch_state_unemp(code)
+                hpi = _state_hpi_log(code)
+                fetch_attempts += 1
+                if hpi is None:
+                    errors[code] = 'no usable HPI series (FHFA grouped + FRED both empty/short)'
+                    continue
+                state_drivers = drivers.copy()
+                try:
+                    su = fetch_state_unemp(code)
+                except Exception as e:
+                    logger.warning(f'hpi_forecast.service: state unemp fetch raised for {code}: {e}')
+                    su = None
+                if su is not None and not su.empty:
+                    state_drivers['state_unemp'] = su
+                else:
+                    # Last-resort: alias national unemp under state_unemp so the
+                    # spec still matches. This can produce a near-collinear
+                    # design matrix for that state — _forecast_path now skips
+                    # NaN coefficients defensively so it doesn't 500.
+                    state_drivers['state_unemp'] = state_drivers['unemp']
+                model = fit_state(hpi, state_drivers, code)
+                fitted[code] = model
             except Exception as e:
-                logger.warning(f'hpi_forecast.service: state unemp fetch raised for {code}: {e}')
-                su = None
-            if su is not None and not su.empty:
-                state_drivers['state_unemp'] = su
-            else:
-                state_drivers['state_unemp'] = state_drivers['unemp']
-            model = fit_state(hpi, state_drivers, code)
-            fitted[code] = model
-        except Exception as e:
-            errors[code] = str(e)
-            logger.warning(f'hpi_forecast.service: fit_state({code}) failed: {e}')
-        # Tiny sleep to stay well under FRED's 120/min rate cap on the
-        # cold build (we fetch 2 series per state on top of the 5 driver
-        # series; without this we can clip the limit and start getting
-        # 429s mid-loop).
-        time.sleep(0.05)
-    logger.info(f'hpi_forecast.service: state build complete — '
-                f'{len(fitted)} fitted, {len(errors)} skipped of {fetch_attempts} attempts')
-    with _lock:
-        _state['states'] = fitted
-        _state['state_errors'] = errors
-        _state['state_baseline'] = {}
-        _state['state_fan'] = {}
-        _state['states_built_at'] = time.time()
-        _state['states_building'] = False
-    logger.info(f'hpi_forecast.service: fitted {len(fitted)}/{len(state_codes)} state models '
-                f'({len(errors)} skipped)')
+                errors[code] = str(e)
+                logger.warning(f'hpi_forecast.service: fit_state({code}) failed: {e}')
+            # Tiny sleep to stay under FRED's 120/min rate cap on the cold
+            # build (2 series per state on top of the 5 driver series).
+            time.sleep(0.05)
+    finally:
+        logger.info(f'hpi_forecast.service: state build complete — '
+                    f'{len(fitted)} fitted, {len(errors)} skipped of {fetch_attempts} attempts')
+        with _lock:
+            _state['states'] = fitted
+            _state['state_errors'] = errors
+            _state['state_baseline'] = {}
+            _state['state_fan'] = {}
+            _state['states_built_at'] = time.time()
+            _state['states_building'] = False
 
 
 def _build_in_background():

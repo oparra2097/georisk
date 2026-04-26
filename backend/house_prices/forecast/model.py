@@ -280,6 +280,16 @@ def _forecast_path(model: HpiForecastModel, driver_paths: pd.DataFrame,
         t_idx = panel.index.get_loc(ts)
         delta = 0.0
         for name, coef in coefs.items():
+            # Skip NaN/Inf coefficients. statsmodels produces NaN coefs when
+            # the design matrix has near-rank-deficiency — for state models
+            # this happens when fetch_state_unemp falls back to the national
+            # 'unemp' series (multiple states share an identical column),
+            # leaving some short-run coefs undefined. Without this guard the
+            # NaN propagates into delta, the `delta > CLIP_DELTA` comparison
+            # raises, and the per-state /baseline endpoint returns 500 →
+            # dashboard surfaces "Build failed".
+            if not np.isfinite(coef):
+                continue
             if name == 'const':
                 delta += coef
                 continue
@@ -289,7 +299,9 @@ def _forecast_path(model: HpiForecastModel, driver_paths: pd.DataFrame,
                 lr_pred = float(long_run_coefs.get('const', 0.0))
                 for r in fit.spec.long_run:
                     lr_pred += float(long_run_coefs[r]) * panel.iloc[t_idx - 1][r]
-                delta += coef * (hpi_lag - lr_pred)
+                term = coef * (hpi_lag - lr_pred)
+                if np.isfinite(term):
+                    delta += term
                 continue
             # Parse 'd_<reg>_l<k>' or '<reg>_l<k>' or 'd_hpi_l<k>'
             if name.startswith('d_') and '_l' in name:
@@ -299,14 +311,18 @@ def _forecast_path(model: HpiForecastModel, driver_paths: pd.DataFrame,
                 if t_idx - lag - 1 < 0:
                     continue
                 d_reg = panel.iloc[t_idx - lag][reg] - panel.iloc[t_idx - lag - 1][reg]
-                delta += coef * d_reg
+                term = coef * d_reg
+                if np.isfinite(term):
+                    delta += term
             elif '_l' in name:
                 tail = name.rfind('_l')
                 reg = name[:tail]
                 lag = int(name[tail + 2:])
                 if t_idx - lag < 0:
                     continue
-                delta += coef * panel.iloc[t_idx - lag][reg]
+                term = coef * panel.iloc[t_idx - lag][reg]
+                if np.isfinite(term):
+                    delta += term
         is_bootstrap = resid_draws is not None
         if is_bootstrap and i < len(resid_draws):
             delta += float(resid_draws[i])
