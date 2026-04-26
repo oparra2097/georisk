@@ -1,0 +1,680 @@
+{% extends "base.html" %}
+
+{% block title %}US Macro Model — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+  .mm-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+  .mm-header { margin-bottom: 18px; }
+  .mm-title { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .mm-subtitle { font-size: 13px; color: #6b7280; margin: 0; }
+  .mm-status { font-size: 12px; color: #6b7280; margin-top: 6px; }
+  .mm-status.ok { color: #065f46; }
+  .mm-status.err { color: #b91c1c; }
+
+  /* Hero / landing ------------------------------------------------- */
+  .mm-hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+             color: #f1f5f9; padding: 36px 28px; border-radius: 10px; margin-bottom: 24px; }
+  .mm-hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #93c5fd; margin-bottom: 8px; }
+  .mm-hero h2 { font-size: 26px; font-weight: 700; margin: 0 0 10px; line-height: 1.2; letter-spacing: -0.01em; }
+  .mm-hero p { font-size: 14px; color: #cbd5e1; margin: 0 0 18px; line-height: 1.6; max-width: 780px; }
+  .mm-hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 16px; }
+  .mm-hero-stat { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); }
+  .mm-hero-stat .num { font-size: 22px; font-weight: 600; color: #f1f5f9; }
+  .mm-hero-stat .lbl { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+  .mm-hero-cta { display: inline-block; background: #3b82f6; color: #fff; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500; margin-right: 8px; }
+  .mm-hero-cta:hover { background: #2563eb; }
+  .mm-hero-cta.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #f1f5f9; }
+  .mm-hero-cta.secondary:hover { background: rgba(255,255,255,0.08); }
+
+  .mm-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 20px; }
+  @media (max-width: 900px) { .mm-layout { grid-template-columns: 1fr; } }
+
+  .mm-card { border: 1px solid #e5e7eb; background: #fff; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
+  .mm-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; letter-spacing: 0.02em; text-transform: uppercase; color: #374151; }
+
+  table.mm-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  table.mm-table th, table.mm-table td { text-align: right; padding: 4px 8px; border-bottom: 1px solid #f3f4f6; }
+  table.mm-table th:first-child, table.mm-table td:first-child { text-align: left; font-family: monospace; color: #6b7280; }
+  table.mm-table thead th { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .mm-equation { border: 1px solid #f3f4f6; border-radius: 4px; padding: 8px; margin-bottom: 8px; font-size: 11px; }
+  .mm-equation strong { font-size: 12px; display: block; margin-bottom: 4px; }
+  .mm-equation .diag { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 10px; color: #4b5563; }
+  .mm-equation .diag-ok { color: #065f46; }
+  .mm-equation .diag-bad { color: #b91c1c; }
+
+  .shock-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .shock-chip { padding: 4px 10px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 12px; cursor: pointer; background: #fff; }
+  .shock-chip.active { background: #111827; color: #fff; border-color: #111827; }
+  .btn { padding: 6px 12px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; background: #fff; }
+  .btn.primary { background: #111827; color: #fff; border-color: #111827; }
+
+  .loading { color: #9ca3af; font-size: 12px; padding: 12px; text-align: center; }
+  .delta-pos { color: #b91c1c; }
+  .delta-neg { color: #065f46; }
+
+  /* Make the 20-quarter forecast table scroll horizontally on small screens
+     instead of squashing 9 columns into 360px. */
+  .mm-forecast-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* History + forecast chart */
+  .mm-chart-card h3 {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .mm-chart-card h3 > span {
+    font-weight: 400; font-size: 11px; color: #6b7280;
+    flex: 1 1 100%; text-transform: none; letter-spacing: 0;
+  }
+  .mm-chart-card h3 > select {
+    margin-left: auto;
+  }
+  @media (min-width: 720px) {
+    .mm-chart-card h3 > span { flex: 0 1 auto; }
+  }
+  .mm-chart-host {
+    width: 100%; aspect-ratio: 5 / 2; min-height: 200px; max-height: 320px;
+    background: #fafbfc; border: 1px solid #f3f4f6; border-radius: 4px;
+    position: relative;
+  }
+  .mm-chart-host svg { width: 100%; height: 100%; display: block; }
+  .mm-chart-host .axis text { fill: #6b7280; font-size: 10px; }
+  .mm-chart-host .axis line, .mm-chart-host .axis path { stroke: #e5e7eb; shape-rendering: crispEdges; }
+  .mm-chart-host .gridline { stroke: #f3f4f6; stroke-dasharray: 2,2; }
+  .mm-chart-host .fan-band { fill: #93c5fd; opacity: 0.35; }
+  .mm-chart-host .fan-median { fill: none; stroke: #1d4ed8; stroke-width: 2; }
+  .mm-chart-host .hist-line { fill: none; stroke: #1f2937; stroke-width: 1.5; }
+  .mm-chart-host .legend-row { font-size: 10px; fill: #4b5563; }
+  .mm-chart-host .empty { color: #9ca3af; font-size: 12px; padding: 24px; text-align: center; }
+
+  /* ── Mobile (≤640px) ───────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .mm-page { padding: 12px; }
+    .mm-hero { padding: 22px 16px; }
+    .mm-hero h2 { font-size: 21px; }
+    .mm-hero p { font-size: 13px; }
+    .mm-hero-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .mm-hero-stat .num { font-size: 18px; }
+    .mm-hero-cta { display: block; margin: 8px 0 0; text-align: center; }
+    .mm-hero-cta + .mm-hero-cta { margin-top: 8px; }
+    .mm-card { padding: 12px; margin-bottom: 12px; }
+    .mm-title { font-size: 18px; }
+    .mm-subtitle { font-size: 12px; }
+    table.mm-table { font-size: 11px; }
+    table.mm-table th, table.mm-table td { padding: 4px 6px; white-space: nowrap; }
+    .mm-equation { font-size: 10px; padding: 6px; }
+    .mm-equation strong { font-size: 11px; }
+    .mm-equation .diag { grid-template-columns: repeat(2, 1fr); gap: 2px 8px; }
+    .shock-chips { gap: 4px; }
+    .shock-chip { padding: 4px 8px; font-size: 10px; }
+    .btn { padding: 8px 14px; font-size: 12px; }
+    .btn.primary { width: 100%; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mm-page">
+  <!-- Hero / product landing -->
+  <section class="mm-hero">
+    <div class="mm-hero-eyebrow">Parra Macro · Research Product</div>
+    <h2>US Macro Model</h2>
+    <p>A reduced-form econometric model of the US economy in the FRB/US lineage. Eleven estimated behavioral equations spanning spending, prices, labor, and financial blocks, solved jointly every quarter. Produces baseline forecasts, bootstrap fan charts, shock-scenario impulse responses, and out-of-sample backtests against actual FRED data &mdash; not a scorecard, not a weighted index, a real macro model.</p>
+    <div>
+      <a href="#mm-dashboard" class="mm-hero-cta">Launch dashboard</a>
+      <a href="#mm-methodology" class="mm-hero-cta secondary">Methodology</a>
+    </div>
+    <div class="mm-hero-stats">
+      <div class="mm-hero-stat"><div class="num">11</div><div class="lbl">Equations</div></div>
+      <div class="mm-hero-stat"><div class="num">19</div><div class="lbl">FRED series</div></div>
+      <div class="mm-hero-stat"><div class="num">1980+</div><div class="lbl">Sample start</div></div>
+      <div class="mm-hero-stat"><div class="num">7</div><div class="lbl">Shock types</div></div>
+      <div class="mm-hero-stat"><div class="num">20 qtrs</div><div class="lbl">Forecast horizon</div></div>
+    </div>
+  </section>
+
+  <!-- Methodology anchor + dashboard -->
+  <section id="mm-methodology" style="background:#f9fafb;border:1px solid #e5e7eb;padding:16px 20px;border-radius:6px;margin-bottom:20px;font-size:13px;color:#4b5563;line-height:1.6;">
+    <strong style="color:#111827;">Methodology.</strong>
+    Engle-Granger two-step error correction per equation (long-run cointegrating relation on levels, short-run dynamics on differences with AIC lag selection).
+    System solved jointly each quarter via damped Gauss-Seidel. Confidence bands come from residual bootstrapping (resample fitted-sample residuals). Shock scenarios rewrite the exogenous path; IRFs are the baseline-minus-shocked difference for every endogenous variable.
+    Not Bayesian, no fiscal block, adaptive expectations only &mdash; this is a v1. See <code>backend/macro_model/README.md</code> for known limitations.
+  </section>
+
+  <!-- System check diagnostic -->
+  <section id="mm-diagnostics-card" class="mm-card" style="display:none;margin-bottom:20px;">
+    <h3 style="display:flex;align-items:center;gap:8px;">
+      System check
+      <span id="mm-diag-badge" style="font-size:10px;padding:2px 8px;border-radius:10px;"></span>
+      <button class="btn" id="mm-diag-toggle" style="margin-left:auto;font-size:11px;padding:3px 10px;">Details</button>
+    </h3>
+    <div id="mm-diag-summary" style="font-size:12px;color:#4b5563;"></div>
+    <div id="mm-diag-details" style="display:none;margin-top:10px;"></div>
+  </section>
+
+  <div class="mm-header" id="mm-dashboard">
+    <h1 class="mm-title">Model dashboard <span style="font-weight:400;color:#9ca3af;font-size:14px">/ FRB/US-lite v1</span></h1>
+    <p class="mm-subtitle">Live baseline forecast, per-equation diagnostics, shock scenarios, and OOS backtest.</p>
+    <div class="mm-status" id="mm-status">Checking model status…</div>
+  </div>
+
+  <div class="mm-layout">
+    <div>
+      <div class="mm-card mm-chart-card">
+        <h3>
+          History &amp; forecast
+          <span style="font-weight:400;font-size:11px;color:#6b7280;">last 5 years actual + 20-quarter baseline + p10/p90 fan</span>
+          <select id="mm-chart-var" style="margin-left:auto;font-size:11px;padding:3px 6px;border:1px solid #d1d5db;border-radius:3px;">
+            <option value="gdp">Real GDP</option>
+            <option value="cons">Real consumption</option>
+            <option value="inv">Real investment</option>
+            <option value="unemp">Unemployment rate</option>
+            <option value="pce_core">Core PCE inflation</option>
+            <option value="cpi">CPI</option>
+            <option value="wage">Avg hourly earnings</option>
+            <option value="emp">Nonfarm payrolls</option>
+            <option value="fedfunds">Fed funds rate</option>
+            <option value="tsy10">10Y Treasury yield</option>
+            <option value="dxy">USD trade-weighted index</option>
+          </select>
+        </h3>
+        <div id="mm-chart" class="mm-chart-host"></div>
+      </div>
+
+      <div class="mm-card">
+        <h3>20-quarter baseline forecast</h3>
+        <div class="mm-forecast-wrap"><div id="mm-forecast"><div class="loading">Loading forecast…</div></div></div>
+      </div>
+
+      <div class="mm-card">
+        <h3>Estimated equations</h3>
+        <div id="mm-equations"><div class="loading">Loading equations…</div></div>
+      </div>
+
+      <div class="mm-card">
+        <h3>Historical backtest
+          <span style="font-weight:400;font-size:11px;color:#6b7280;">fit on training sample, forecast out-of-sample, compare to actual</span>
+        </h3>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <label style="font-size:11px;color:#4b5563;">Train through
+            <select id="mm-bt-trainend" style="font-size:12px;padding:3px;">
+              <option value="2015-12-31">2015-12-31</option>
+              <option value="2019-12-31" selected>2019-12-31 (pre-COVID)</option>
+              <option value="2022-12-31">2022-12-31</option>
+            </select>
+          </label>
+          <label style="font-size:11px;color:#4b5563;">
+            <input type="checkbox" id="mm-bt-flatexog" style="vertical-align:middle;"> flat exogenous (stress test)
+          </label>
+          <button class="btn" id="mm-bt-run">Run backtest</button>
+        </div>
+        <div class="mm-forecast-wrap"><div id="mm-backtest"><div class="loading">Click "Run backtest" to evaluate against historical actuals.</div></div></div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="mm-card">
+        <h3>Scenario — shock a variable</h3>
+        <div class="shock-chips" id="mm-shock-chips"></div>
+        <button class="btn primary" id="mm-run-shock" style="width:100%;margin-top:6px;">Run shock</button>
+        <div class="mm-forecast-wrap"><div id="mm-shock-result" style="margin-top:10px;"></div></div>
+      </div>
+
+      <div class="mm-card">
+        <h3>Notes</h3>
+        <div style="font-size:11px;color:#4b5563;line-height:1.5;">
+          <p style="margin:0 0 6px">Endogenous (11): GDP identity, consumption, investment, exports, imports, core PCE, wage, employment, unemployment, Fed funds, 10Y, DXY.</p>
+          <p style="margin:0 0 6px">Exogenous: government spending, oil, OECD GDP, NAIRU, productivity, LFPR, CPI tracks core PCE via identity.</p>
+          <p style="margin:0;color:#9ca3af;font-size:10px;">Rebuild takes 20-60s on first request (fetches FRED, fits 11 equations). Subsequent requests are cached.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+(function() {
+  const API = '/api/macro-model/us';
+  const $ = (id) => document.getElementById(id);
+
+  let state = { shocks: [], selectedShock: null };
+
+  function fmtNum(v, d=2) {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    if (Math.abs(v) > 1000) return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return v.toFixed(d);
+  }
+
+  async function loadStatus() {
+    const r = await fetch(`${API}/status`);
+    const b = await r.json();
+    const el = $('mm-status');
+    if (b.built) {
+      el.textContent = `Model built — ${b.n_equations} equations.`;
+      el.className = 'mm-status ok';
+    } else if (b.fit_error) {
+      el.textContent = `Fit error: ${b.fit_error}`;
+      el.className = 'mm-status err';
+    } else if (b.building) {
+      el.textContent = 'Model building in background — this takes 30-60s on first load…';
+      el.className = 'mm-status';
+    } else {
+      el.textContent = 'Model build queued — refreshing diagnostics…';
+      el.className = 'mm-status';
+    }
+    await loadDiagnostics();
+    // If still building or failed, poll diagnostics every 5s up to 2 minutes
+    if (!b.built && (b.building || b.fit_error === null)) {
+      scheduleDiagPoll();
+    }
+  }
+
+  let _pollTimer = null;
+  let _pollCount = 0;
+  function scheduleDiagPoll() {
+    if (_pollTimer) return;
+    _pollCount = 0;
+    _pollTimer = setInterval(async () => {
+      _pollCount++;
+      await loadDiagnostics();
+      const r = await fetch(`${API}/status`);
+      const b = await r.json();
+      if (b.built || b.fit_error || _pollCount > 24) {
+        clearInterval(_pollTimer); _pollTimer = null;
+        if (b.built) { loadForecast(); loadEquations(); loadChartData(); }  // refresh when ready
+      }
+    }, 5000);
+  }
+
+  async function loadDiagnostics() {
+    const card = $('mm-diagnostics-card');
+    const r = await fetch(`${API}/diagnostics`);
+    if (!r.ok) {
+      card.style.display = 'block';
+      $('mm-diag-summary').innerHTML = `<span style="color:#b91c1c;">Diagnostics endpoint error: ${r.statusText}</span>`;
+      return;
+    }
+    const body = await r.json();
+    const s = body.status, d = body.diagnostics;
+    card.style.display = 'block';
+
+    const badge = $('mm-diag-badge');
+    if (s.built) {
+      badge.textContent = 'OK'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46';
+    } else if (s.fit_error) {
+      badge.textContent = 'ERROR'; badge.style.background = '#fee2e2'; badge.style.color = '#b91c1c';
+    } else if (s.building) {
+      badge.textContent = 'BUILDING'; badge.style.background = '#fef3c7'; badge.style.color = '#78350f';
+    } else {
+      badge.textContent = 'QUEUED'; badge.style.background = '#e5e7eb'; badge.style.color = '#4b5563';
+    }
+
+    const summary = `<strong>FRED series:</strong> ${d.n_series_ok} ok, ${d.n_series_fail} failed &nbsp;·&nbsp;
+                     <strong>Equations:</strong> ${d.n_equations_ok} fit, ${d.n_equations_fail} failed
+                     ${s.fit_error ? `<br><span style="color:#b91c1c;">Build error: ${s.fit_error}</span>` : ''}`;
+    $('mm-diag-summary').innerHTML = summary;
+
+    const renderFetches = () => {
+      const bad = d.fetches.filter(f => !f.ok);
+      const good = d.fetches.filter(f => f.ok);
+      const badRows = bad.map(f => `<tr style="background:#fef2f2;"><td><code>${f.code}</code></td><td><code>${f.fred_id}</code></td><td>—</td><td style="color:#b91c1c;font-size:11px;">${f.error || 'error'}</td></tr>`).join('');
+      const goodRows = good.map(f => `<tr><td><code>${f.code}</code></td><td><code>${f.fred_id}</code></td><td>${f.n_obs}</td><td style="color:#6b7280;font-size:11px;">${f.last_date||''}</td></tr>`).join('');
+      return `<div><strong style="font-size:12px;">FRED fetches</strong>
+        <table class="mm-table" style="font-size:11px;margin-top:4px;">
+        <thead><tr><th>Code</th><th>FRED ID</th><th>N</th><th>Last</th></tr></thead>
+        <tbody>${badRows}${goodRows || '<tr><td colspan="4" style="color:#9ca3af;">No fetches yet.</td></tr>'}</tbody></table></div>`;
+    };
+    const renderFits = () => {
+      if (!d.fits.length) return '<div style="color:#9ca3af;font-size:11px;margin-top:10px;">No equation fits yet.</div>';
+      const bad = d.fits.filter(f => !f.ok);
+      const good = d.fits.filter(f => f.ok);
+      const badRows = bad.map(f => `<tr style="background:#fef2f2;"><td>${f.name}</td><td colspan="4" style="color:#b91c1c;font-size:11px;">${f.error}</td></tr>`).join('');
+      const goodRows = good.map(f => `<tr><td>${f.name}</td><td>${f.rsq!=null?f.rsq.toFixed(3):'—'}</td><td>${f.chosen_lag ?? '—'}</td><td>${f.gamma!=null?f.gamma.toFixed(3):'—'}</td><td>${f.n_obs ?? '—'}</td></tr>`).join('');
+      return `<div style="margin-top:10px;"><strong style="font-size:12px;">Equation fits</strong>
+        <table class="mm-table" style="font-size:11px;margin-top:4px;">
+        <thead><tr><th>Name</th><th>R²</th><th>lag</th><th>γ</th><th>N</th></tr></thead>
+        <tbody>${badRows}${goodRows}</tbody></table></div>`;
+    };
+    $('mm-diag-details').innerHTML = renderFetches() + renderFits();
+  }
+
+  async function loadForecast() {
+    const r = await fetch(`${API}/forecast?horizon=20`);
+    if (!r.ok) { $('mm-forecast').innerHTML = `<div class="loading">Fit in progress — retry in a moment.</div>`; return; }
+    const b = await r.json();
+    const cols = ['gdp', 'cons', 'inv', 'unemp', 'pce_core', 'fedfunds', 'tsy10', 'dxy'];
+    const head = `<tr><th>Qtr</th>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+    const rows = b.path.map(p => {
+      const cells = cols.map(c => `<td>${fmtNum(p[c])}</td>`).join('');
+      return `<tr><td>${p.quarter}</td>${cells}</tr>`;
+    }).join('');
+    $('mm-forecast').innerHTML = `<table class="mm-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  }
+
+  async function loadEquations() {
+    const r = await fetch(`${API}/fit`);
+    if (!r.ok) { $('mm-equations').innerHTML = `<div class="loading">Fit in progress…</div>`; return; }
+    const b = await r.json();
+    const eqs = Object.values(b.equations || {});
+    $('mm-equations').innerHTML = eqs.map(e => {
+      const dw = e.diagnostics.durbin_watson;
+      const dwClass = (dw > 1.5 && dw < 2.5) ? 'diag-ok' : 'diag-bad';
+      const gamma = e.short_run.error_correction_coef;
+      const gammaClass = (gamma < 0 && gamma > -1) ? 'diag-ok' : 'diag-bad';
+      return `<div class="mm-equation">
+        <strong>${e.name}</strong>
+        <div class="diag">
+          <span>N=${e.sample.n}</span>
+          <span>R²=${e.short_run.rsq}</span>
+          <span class="${dwClass}">DW=${dw}</span>
+          <span class="${gammaClass}">γ=${gamma ?? '—'}</span>
+          <span>lag=${e.short_run.chosen_lag}</span>
+          <span>AIC=${e.short_run.aic}</span>
+          <span>coint p=${e.long_run.cointegration_p ?? '—'}</span>
+          <span>${e.sample.start} → ${e.sample.end}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadShocks() {
+    const r = await fetch(`${API}/shocks`);
+    const b = await r.json();
+    state.shocks = b.shocks;
+    $('mm-shock-chips').innerHTML = state.shocks.map(s =>
+      `<span class="shock-chip" data-id="${s.id}" title="${s.variable}: ${s.magnitude}">${s.label}</span>`
+    ).join('');
+    document.querySelectorAll('.shock-chip').forEach(el => {
+      el.onclick = () => {
+        document.querySelectorAll('.shock-chip').forEach(c => c.classList.remove('active'));
+        el.classList.add('active');
+        state.selectedShock = el.dataset.id;
+      };
+    });
+  }
+
+  async function runShock() {
+    const out = $('mm-shock-result');
+    if (!state.selectedShock) { out.innerHTML = '<div class="loading">Pick a shock first.</div>'; return; }
+    out.innerHTML = '<div class="loading">Running shock…</div>';
+    const r = await fetch(`${API}/shock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: state.selectedShock, horizon: 12 }),
+    });
+    if (!r.ok) { out.innerHTML = `<div class="loading">Error: ${r.statusText}</div>`; return; }
+    const b = await r.json();
+    const cols = ['pce_core', 'unemp', 'fedfunds', 'tsy10', 'gdp'];
+    const head = `<tr><th>Qtr</th>${cols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+    const rows = b.irf.slice(0, 12).map(p => {
+      const cells = cols.map(c => {
+        const v = p[c];
+        if (v === null || v === undefined) return '<td>—</td>';
+        const cls = v > 0 ? 'delta-pos' : (v < 0 ? 'delta-neg' : '');
+        return `<td class="${cls}">${fmtNum(v, 4)}</td>`;
+      }).join('');
+      return `<tr><td>${p.quarter}</td>${cells}</tr>`;
+    }).join('');
+    out.innerHTML = `<div style="font-size:11px;color:#6b7280;margin-bottom:6px;">IRF (shocked − baseline), ${b.shock.label}</div>
+      <table class="mm-table"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  }
+
+  async function runBacktest() {
+    const el = $('mm-backtest');
+    const trainEnd = $('mm-bt-trainend').value;
+    const flat = $('mm-bt-flatexog').checked ? '1' : '0';
+    el.innerHTML = '<div class="loading">Fitting on training sample, forecasting OOS…</div>';
+    const r = await fetch(`${API}/backtest?train_end=${trainEnd}&flat_exog=${flat}`);
+    if (!r.ok) { el.innerHTML = `<div class="loading">Backtest failed: ${r.statusText}</div>`; return; }
+    const b = await r.json();
+    if (b.error) { el.innerHTML = `<div class="loading">Backtest error: ${b.error}</div>`; return; }
+
+    const metaLine = `<div style="font-size:11px;color:#6b7280;margin-bottom:6px;">Train ${b.window.train_start} → ${b.window.train_end} &nbsp;·&nbsp; Test ${b.window.test_start} → ${b.window.test_end} &nbsp;·&nbsp; ${b.window.flat_exog ? 'flat' : 'actual'} exogenous</div>`;
+
+    const rows = Object.entries(b.metrics).map(([code, m]) => {
+      const rmse = m.rmse === null ? '—' : fmtNum(m.rmse, 3);
+      const rmsePct = m.rmse_pct === null ? '—' : fmtNum(m.rmse_pct * 100, 2) + '%';
+      const mae = m.mae === null ? '—' : fmtNum(m.mae, 3);
+      const dir = m.directional_acc === null ? '—' : fmtNum(m.directional_acc * 100, 1) + '%';
+      const dirCls = m.directional_acc > 0.6 ? 'delta-neg' : (m.directional_acc < 0.4 ? 'delta-pos' : '');
+      return `<tr><td>${code}</td><td>${m.n}</td><td>${rmse}</td><td>${mae}</td><td>${rmsePct}</td><td class="${dirCls}">${dir}</td></tr>`;
+    }).join('');
+    el.innerHTML = metaLine + `<table class="mm-table">
+      <thead><tr><th>Variable</th><th>N</th><th>RMSE</th><th>MAE</th><th>RMSE/μ</th><th>Dir. acc</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div style="font-size:10px;color:#9ca3af;margin-top:6px;">
+        Dir. acc > 50% = forecast quarterly changes share sign with actual. Red = worse than coin-flip.
+      </div>`;
+  }
+
+  $('mm-run-shock').addEventListener('click', runShock);
+  $('mm-bt-run').addEventListener('click', runBacktest);
+  $('mm-diag-toggle').addEventListener('click', () => {
+    const el = $('mm-diag-details');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    $('mm-diag-toggle').textContent = el.style.display === 'none' ? 'Details' : 'Hide';
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  //  History + forecast chart (d3 SVG)
+  // ────────────────────────────────────────────────────────────────────
+
+  const chart = { history: null, forecast: null, fan: null, varCode: 'gdp' };
+
+  // Variables that need YoY% transformation in the chart instead of level.
+  // Inflation series and quantity-log levels are easier to read as growth
+  // rates; rates and indexes already show as levels.
+  const CHART_AS_YOY = new Set(['pce_core', 'cpi', 'wage']);
+
+  async function loadChartData() {
+    const [hR, fR, fanR] = await Promise.all([
+      fetch(`${API}/history?n=20`),
+      fetch(`${API}/forecast?horizon=20`),
+      fetch(`${API}/fan?horizon=12&n_draws=30`),
+    ]);
+    chart.history  = hR.ok ? (await hR.json()).history : null;
+    chart.forecast = fR.ok ? (await fR.json()).path    : null;
+    chart.fan      = fanR.ok ? (await fanR.json()).bands : null;
+    renderChart();
+  }
+
+  function _yoy(series) {
+    // Transform a [{quarter, val}, …] series into YoY % growth.
+    return series.map((p, i) => {
+      const lag = series[i - 4];
+      const v = (lag && lag.v != null && p.v != null && lag.v !== 0)
+        ? (p.v / lag.v - 1.0) * 100.0
+        : null;
+      return { quarter: p.quarter, v };
+    });
+  }
+
+  function renderChart() {
+    const host = d3.select('#mm-chart');
+    host.selectAll('*').remove();
+    const c = chart.varCode;
+    const hist = (chart.history || []).map(r => ({ quarter: r.quarter, v: r[c] }));
+    const fcst = (chart.forecast || []).map(r => ({ quarter: r.quarter, v: r[c] }));
+    const fanBands = (chart.fan && chart.fan[c]) || null;
+    if (!hist.length && !fcst.length) {
+      host.append('div').attr('class', 'empty').text('Waiting on first build…');
+      return;
+    }
+
+    let histSeries, fcstSeries, fanSeries;
+    const asYoy = CHART_AS_YOY.has(c);
+    if (asYoy) {
+      const all = hist.concat(fcst);
+      const yoy = _yoy(all);
+      histSeries = yoy.slice(0, hist.length);
+      fcstSeries = yoy.slice(hist.length);
+      fanSeries  = fanBands ? _yoy(hist.concat(fanBands.map(b => ({ quarter: b.quarter, v: b.p50 })))).slice(hist.length) : null;
+      // Bands need full reconstruction: lag-4 anchor for p10/p50/p90.
+      // For the first ≤4 forecast quarters the natural lag falls inside
+      // history, so we walk the combined hist+fcst array to find the
+      // lag-4 reference. If that lookup misses (fan extends past hist
+      // or hist is shorter than 4), fall back to the last historical
+      // value rather than emitting null — so the fan ribbon doesn't
+      // gap out for the first year of forecasts.
+      if (fanBands) {
+        const combined = hist.concat(fcst);
+        const fallbackRef = (hist.length ? hist[hist.length - 1] : null);
+        const lagFor = (q) => {
+          const idx = combined.findIndex(p => p.quarter === q);
+          if (idx >= 4) return combined[idx - 4];
+          return fallbackRef;
+        };
+        fanSeries = fanBands.map(b => {
+          const ref = lagFor(b.quarter);
+          if (!ref || ref.v == null || ref.v === 0 ||
+              b.p10 == null || b.p50 == null || b.p90 == null) {
+            return { quarter: b.quarter, p10: null, p50: null, p90: null };
+          }
+          return {
+            quarter: b.quarter,
+            p10: (b.p10 / ref.v - 1.0) * 100.0,
+            p50: (b.p50 / ref.v - 1.0) * 100.0,
+            p90: (b.p90 / ref.v - 1.0) * 100.0,
+          };
+        });
+      }
+    } else {
+      histSeries = hist;
+      fcstSeries = fcst;
+      fanSeries  = fanBands ? fanBands.map(b => ({ quarter: b.quarter, p10: b.p10, p50: b.p50, p90: b.p90 })) : null;
+    }
+
+    const node = host.node();
+    // Floor W/H to safe minimums. clientHeight can be 0 on first paint
+    // (aspect-ratio doesn't always give a usable height before layout
+    // settles, especially when the dashboard column collapses to one
+    // column on mobile). A 0-height viewBox renders an invisible chart
+    // even when the data is fine. The ResizeObserver below re-runs
+    // renderChart() once the host gains real dimensions.
+    const W = Math.max(node.clientWidth, 320);
+    const H = Math.max(node.clientHeight, 200);
+    const M = { top: 14, right: 14, bottom: 22, left: 56 };
+    const w = W - M.left - M.right, h = H - M.top - M.bottom;
+
+    const parse = q => new Date(q);
+    const allPts = histSeries.concat(fcstSeries).filter(p => p.v != null);
+    if (!allPts.length) {
+      host.append('div').attr('class', 'empty').text('No data for this variable.');
+      return;
+    }
+    const x = d3.scaleTime()
+      .domain(d3.extent(allPts, d => parse(d.quarter)))
+      .range([0, w]);
+    const yMin = Math.min(
+      d3.min(allPts, d => d.v),
+      fanSeries ? d3.min(fanSeries.filter(b => b.p10 != null), b => b.p10) : Infinity,
+    );
+    const yMax = Math.max(
+      d3.max(allPts, d => d.v),
+      fanSeries ? d3.max(fanSeries.filter(b => b.p90 != null), b => b.p90) : -Infinity,
+    );
+    const pad = (yMax - yMin) * 0.06;
+    const y = d3.scaleLinear().domain([yMin - pad, yMax + pad]).range([h, 0]).nice();
+
+    const svg = host.append('svg').attr('viewBox', `0 0 ${W} ${H}`);
+    const g = svg.append('g').attr('transform', `translate(${M.left},${M.top})`);
+
+    g.append('g').attr('class', 'gridlines')
+      .selectAll('line').data(y.ticks(5)).join('line')
+      .attr('class', 'gridline')
+      .attr('x1', 0).attr('x2', w)
+      .attr('y1', d => y(d)).attr('y2', d => y(d));
+
+    if (fanSeries && fanSeries.length) {
+      const valid = fanSeries.filter(b => b.p10 != null && b.p90 != null);
+      const area = d3.area()
+        .x(d => x(parse(d.quarter)))
+        .y0(d => y(d.p10))
+        .y1(d => y(d.p90))
+        .curve(d3.curveMonotoneX);
+      g.append('path').datum(valid).attr('class', 'fan-band').attr('d', area);
+      const median = d3.line()
+        .x(d => x(parse(d.quarter)))
+        .y(d => y(d.p50))
+        .curve(d3.curveMonotoneX);
+      g.append('path').datum(valid).attr('class', 'fan-median').attr('d', median);
+    }
+
+    if (histSeries.length) {
+      const histLine = d3.line()
+        .x(d => x(parse(d.quarter)))
+        .y(d => y(d.v))
+        .curve(d3.curveMonotoneX);
+      const validHist = histSeries.filter(p => p.v != null);
+      const bridge = validHist.concat(fcstSeries.slice(0, 1).filter(p => p.v != null));
+      g.append('path').datum(bridge).attr('class', 'hist-line').attr('d', histLine);
+    }
+
+    const qFmt = d => `${d.getFullYear()}Q${Math.floor(d.getMonth() / 3) + 1}`;
+    g.append('g').attr('class', 'axis')
+      .attr('transform', `translate(0,${h})`)
+      .call(d3.axisBottom(x).ticks(W < 480 ? 4 : 7).tickFormat(qFmt));
+    const yFmt = asYoy ? (v => v.toFixed(1) + '%') : d3.format(',.1f');
+    g.append('g').attr('class', 'axis').call(d3.axisLeft(y).ticks(5).tickFormat(yFmt));
+
+    const legend = g.append('g').attr('class', 'legend-row').attr('transform', 'translate(8,8)');
+    legend.append('line').attr('x1', 0).attr('x2', 14).attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#1f2937').attr('stroke-width', 1.5);
+    legend.append('text').attr('x', 18).attr('y', 3).text('History');
+    legend.append('line').attr('x1', 70).attr('x2', 84).attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#1d4ed8').attr('stroke-width', 2);
+    legend.append('text').attr('x', 88).attr('y', 3).text('Median forecast');
+    if (fanSeries) {
+      legend.append('rect').attr('x', 170).attr('y', -4).attr('width', 14).attr('height', 8)
+        .attr('fill', '#93c5fd').attr('opacity', 0.35);
+      legend.append('text').attr('x', 188).attr('y', 3).text('p10–p90');
+    }
+    if (asYoy) {
+      legend.append('text').attr('x', w - 60).attr('y', 3).attr('text-anchor', 'end')
+        .text('shown as YoY %');
+    }
+  }
+
+  $('mm-chart-var').addEventListener('change', (e) => {
+    chart.varCode = e.target.value;
+    renderChart();
+  });
+
+  // Re-render the chart when the host gains real dimensions. Without this
+  // the SVG is committed to whatever clientHeight was at first paint
+  // (which can be 0 before layout settles or while the card is offscreen)
+  // and stays that size even after the layout completes.
+  if (typeof ResizeObserver !== 'undefined') {
+    let lastW = 0, lastH = 0;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (Math.abs(width - lastW) > 4 || Math.abs(height - lastH) > 4) {
+          lastW = width; lastH = height;
+          // Only re-render if we have data; otherwise the empty-state
+          // message handles itself.
+          if (chart.history || chart.forecast) renderChart();
+        }
+      }
+    });
+    ro.observe($('mm-chart'));
+  }
+
+  // Show System check immediately + run init with visible error feedback
+  $('mm-diagnostics-card').style.display = 'block';
+  $('mm-diag-summary').innerHTML = '<em style="color:#6b7280;">Checking model status…</em>';
+  Promise.all([
+    loadStatus().catch(e => console.error('loadStatus:', e)),
+    loadForecast().catch(e => console.error('loadForecast:', e)),
+    loadEquations().catch(e => console.error('loadEquations:', e)),
+    loadShocks().catch(e => console.error('loadShocks:', e)),
+    loadChartData().catch(e => console.error('loadChartData:', e)),
+  ]).catch(e => {
+    $('mm-diag-summary').innerHTML = `<span style="color:#b91c1c;">Init failed: ${e.message}. Open DevTools → Console for details.</span>`;
+  });
+})();
+</script>
+{% endblock %}

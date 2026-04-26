@@ -7,6 +7,7 @@ Requires API key (register at https://fred.stlouisfed.org/docs/api/api_key.html)
 Thread-safe cache with 6-hour TTL — most series update daily or less.
 """
 
+import os
 import requests
 import logging
 import threading
@@ -27,7 +28,44 @@ _cache = {}  # {series_id: {'data': [...], 'fetched_at': float}}
 
 
 def _get_api_key():
-    return Config.FRED_API_KEY
+    """Resolve the FRED key at *call time* (not import time).
+
+    Priority: live env vars BEFORE Config.FRED_API_KEY. Config is loaded
+    once at app boot and freezes whatever os.environ said at that moment;
+    if the user adds the key later in Render's UI, Config stays empty
+    until a redeploy. Reading os.environ first picks up live changes
+    without a restart.
+
+    Strips whitespace and quotes, and accepts alternate names in case
+    the var was named slightly differently in the dashboard.
+    """
+    for source in (
+        os.environ.get('FRED_API_KEY', ''),
+        os.environ.get('FRED_KEY', ''),
+        os.environ.get('FRED_TOKEN', ''),
+        getattr(Config, 'FRED_API_KEY', ''),
+    ):
+        key = (source or '').strip().strip('"').strip("'")
+        if key:
+            return key
+    return ''
+
+
+_LOGGED_KEY_STATE = {'logged': False}
+
+
+def _log_key_state_once(key: str):
+    if _LOGGED_KEY_STATE['logged']:
+        return
+    _LOGGED_KEY_STATE['logged'] = True
+    if key:
+        logger.info(f'FRED API key detected (length={len(key)}, first 4 chars={key[:4]}…)')
+    else:
+        logger.warning(
+            'FRED API key NOT detected. Checked: Config.FRED_API_KEY, '
+            'env FRED_API_KEY, FRED_KEY, FRED_TOKEN. '
+            'Set FRED_API_KEY in Render Environment to enable macro model + Case-Shiller.'
+        )
 
 
 def fetch_series(series_id, start_date=None, end_date=None):
@@ -38,8 +76,8 @@ def fetch_series(series_id, start_date=None, end_date=None):
     sorted by date ascending. Periods marked '.' (missing) are skipped.
     """
     key = _get_api_key()
+    _log_key_state_once(key)
     if not key:
-        logger.debug("No FRED_API_KEY configured")
         return []
 
     # Check cache

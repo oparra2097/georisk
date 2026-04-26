@@ -106,7 +106,10 @@ def init_scheduler(app):
     logger.info("Commodity model monthly refit scheduled (1st of month, 07:00 UTC).")
 
     # Job 5: GDP nowcast refresh every 6 hours
-    if Config.FRED_API_KEY:
+    # Use the dynamic resolver — Config.FRED_API_KEY is frozen at import
+    # time and may be empty even when env var is set.
+    from backend.data_sources.fred_client import _get_api_key as _fred_key
+    if _fred_key():
         def _refresh_gdp_nowcast():
             try:
                 from backend.data_sources.fred_client import clear_cache as clear_fred
@@ -167,7 +170,10 @@ def init_scheduler(app):
     threading.Thread(target=_warm_em_vuln, daemon=True).start()
 
     # Pre-warm GDP nowcast so first visit is instant
-    if Config.FRED_API_KEY:
+    # Use the dynamic resolver — Config.FRED_API_KEY is frozen at import
+    # time and may be empty even when env var is set.
+    from backend.data_sources.fred_client import _get_api_key as _fred_key
+    if _fred_key():
         def _warm_gdp_nowcast():
             try:
                 from backend.data_sources.gdp_nowcast import get_gdp_nowcast
@@ -177,3 +183,48 @@ def init_scheduler(app):
             except Exception as e:
                 logger.error(f"GDP nowcast warmup failed: {e}")
         threading.Thread(target=_warm_gdp_nowcast, daemon=True).start()
+
+    # Cross-deploy pickle invalidation: every fresh app boot wipes any
+    # leftover pickles from an earlier deploy so new code always builds
+    # fresh against current FRED data and current equation specs. Pickles
+    # are regenerated after the new build completes and are then useful
+    # for sibling-worker hot-loads within this deploy.
+    try:
+        from backend.macro_model.service import invalidate_pickle_on_boot as _mm_invalidate
+        _mm_invalidate()
+    except Exception as e:
+        logger.warning(f'macro_model pickle invalidation failed: {e}')
+    try:
+        from backend.house_prices.service import invalidate_pickle_on_boot as _hpi_invalidate
+        _hpi_invalidate()
+    except Exception as e:
+        logger.warning(f'house_prices pickle invalidation failed: {e}')
+
+    # Pre-warm macro-model: try the disk pickle first (instant if a sibling
+    # worker built recently), only kick off the expensive fit_all if no
+    # fresh pickle exists. Runs as a daemon thread so it doesn't block boot.
+    # Use the dynamic resolver — Config.FRED_API_KEY is frozen at import
+    # time and may be empty even when env var is set.
+    from backend.data_sources.fred_client import _get_api_key as _fred_key
+    if _fred_key():
+        def _warm_macro_model():
+            try:
+                from backend.macro_model import service as mm_svc
+                mm_svc.ensure_built()
+                # If the pickle wasn't loadable, ensure_built started a bg
+                # thread; we're done. If it was loadable, the simulator is
+                # ready and status() will show built=True.
+                logger.info(f"macro_model warmup: status={mm_svc.status()}")
+            except Exception as e:
+                logger.error(f"macro_model warmup failed: {e}")
+        threading.Thread(target=_warm_macro_model, daemon=True).start()
+
+    # Pre-warm HPI: same pattern.
+    def _warm_hpi():
+        try:
+            from backend.house_prices import service as hpi_svc
+            hpi_svc.ensure_built()
+            logger.info(f"house_prices warmup: status={hpi_svc.status()}")
+        except Exception as e:
+            logger.error(f"house_prices warmup failed: {e}")
+    threading.Thread(target=_warm_hpi, daemon=True).start()

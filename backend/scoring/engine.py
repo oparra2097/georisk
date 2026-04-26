@@ -339,9 +339,14 @@ def score_single_country(country_alpha2, use_news=False):
                 f"articles={len(all_articles)}, tone={avg_tone:.2f}"
             )
 
-    headlines = []
+    # Build headlines from FILTERED articles, sorted by freshness.
+    # Use the relevance-filtered GDELT list (not raw) so irrelevant
+    # articles don't crowd out real news.
+    filtered_gdelt = filter_articles_for_country(gdelt_articles, country_alpha2)
+
+    headline_candidates = []
     for art in news_articles[:10]:
-        headlines.append(NewsArticle(
+        headline_candidates.append(NewsArticle(
             title=art.get('title', ''),
             description=art.get('description', ''),
             url=art.get('url', ''),
@@ -350,8 +355,8 @@ def score_single_country(country_alpha2, use_news=False):
             country_code=country_alpha2
         ))
 
-    for art in gdelt_articles[:10]:
-        headlines.append(NewsArticle(
+    for art in filtered_gdelt[:10]:
+        headline_candidates.append(NewsArticle(
             title=art.get('title', ''),
             description='',
             url=art.get('url', ''),
@@ -360,7 +365,12 @@ def score_single_country(country_alpha2, use_news=False):
             country_code=country_alpha2
         ))
 
-    return risk, headlines[:15]
+    # Sort by published date descending so the freshest articles always
+    # appear first, regardless of which provider they came from.
+    headline_candidates.sort(
+        key=lambda h: h.published_at or '', reverse=True)
+
+    return risk, headline_candidates[:15]
 
 
 def _score_country_safe(code, use_news=False):

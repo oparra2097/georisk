@@ -76,6 +76,14 @@
             <div class="stat-lbl">Insurance Access</div>
         </div>
         <div class="stat-box">
+            <div class="stat-num">{{ stats.macro }}</div>
+            <div class="stat-lbl">Macro Model</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-num">{{ stats.hpi }}</div>
+            <div class="stat-lbl">House Prices</div>
+        </div>
+        <div class="stat-box">
             <div class="stat-num">{{ stats.aig }}</div>
             <div class="stat-lbl">@aig.com</div>
         </div>
@@ -87,7 +95,9 @@
                 <tr>
                     <th>Email</th>
                     <th>Verified</th>
-                    <th>Insurance Access</th>
+                    <th>Insurance</th>
+                    <th>Macro Model</th>
+                    <th>House Prices</th>
                     <th>Last Login</th>
                     <th>Registered</th>
                     <th>Actions</th>
@@ -109,6 +119,16 @@
                         {% elif user.insurance_access %}<span class="pill pill-ok">Granted</span>
                         {% else %}<span class="pill pill-no">No</span>{% endif %}
                     </td>
+                    <td>
+                        {% if user.email == admin_email %}<span class="pill pill-aig">Admin</span>
+                        {% elif user.macro_access %}<span class="pill pill-ok">Granted</span>
+                        {% else %}<span class="pill pill-no">No</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if user.email == admin_email %}<span class="pill pill-aig">Admin</span>
+                        {% elif user.hpi_access %}<span class="pill pill-ok">Granted</span>
+                        {% else %}<span class="pill pill-no">No</span>{% endif %}
+                    </td>
                     <td class="meta-text">{{ (user.last_login or '—')[:16] }}</td>
                     <td class="meta-text">{{ (user.created_at or '—')[:16] }}</td>
                     <td style="white-space:nowrap;">
@@ -116,8 +136,18 @@
                             <button type="submit" class="act-btn act-verify">{% if user.email_verified %}Unverify{% else %}Verify{% endif %}</button>
                         </form>
                         <form method="POST" action="/auth/admin/toggle-access/{{ user.id }}" style="display:inline;">
-                            <button type="submit" class="act-btn {% if user.insurance_access %}act-revoke{% else %}act-grant{% endif %}">
-                                {% if user.insurance_access %}Revoke{% else %}Grant{% endif %}
+                            <button type="submit" class="act-btn {% if user.insurance_access %}act-revoke{% else %}act-grant{% endif %}" title="Toggle insurance data access">
+                                {% if user.insurance_access %}Ins.Revoke{% else %}Ins.Grant{% endif %}
+                            </button>
+                        </form>
+                        <form method="POST" action="/auth/admin/toggle-macro/{{ user.id }}" style="display:inline;">
+                            <button type="submit" class="act-btn {% if user.macro_access %}act-revoke{% else %}act-grant{% endif %}" title="Toggle US Macro Model access">
+                                {% if user.macro_access %}Macro.Revoke{% else %}Macro.Grant{% endif %}
+                            </button>
+                        </form>
+                        <form method="POST" action="/auth/admin/toggle-hpi/{{ user.id }}" style="display:inline;">
+                            <button type="submit" class="act-btn {% if user.hpi_access %}act-revoke{% else %}act-grant{% endif %}" title="Toggle US House Prices access">
+                                {% if user.hpi_access %}HPI.Revoke{% else %}HPI.Grant{% endif %}
                             </button>
                         </form>
                         <form method="POST" action="/auth/admin/resend/{{ user.id }}" style="display:inline;">

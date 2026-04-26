@@ -1,0 +1,1345 @@
+{% extends "base.html" %}
+{% block title %}US House Prices — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+  .hp-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+
+  .hp-hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+             color: #f1f5f9; padding: 36px 28px; border-radius: 10px; margin-bottom: 24px; }
+  .hp-hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #86efac; margin-bottom: 8px; }
+  .hp-hero h2 { font-size: 26px; font-weight: 700; margin: 0 0 10px; line-height: 1.2; }
+  .hp-hero p { font-size: 14px; color: #cbd5e1; margin: 0 0 18px; line-height: 1.6; max-width: 780px; }
+  .hp-hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 16px; }
+  .hp-hero-stat { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); }
+  .hp-hero-stat .num { font-size: 22px; font-weight: 600; color: #f1f5f9; }
+  .hp-hero-stat .lbl {
+    font-size: 11px; color: #94a3b8; text-transform: uppercase;
+    letter-spacing: 0.06em; margin-top: 2px;
+    overflow-wrap: anywhere; line-height: 1.25;
+  }
+  .hp-hero-stat .chg { font-size: 13px; color: #86efac; margin-top: 4px; }
+  .hp-hero-stat .chg.neg { color: #fca5a5; }
+
+  .hp-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .hp-tab { padding: 6px 14px; font-size: 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 4px; cursor: pointer; color: #374151; }
+  .hp-tab:hover { background: #f3f4f6; }
+  .hp-tab.active { background: #111827; color: #fff; border-color: #111827; }
+  .hp-search { margin-left: auto; padding: 6px 10px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; min-width: 240px; }
+
+  .hp-card { border: 1px solid #e5e7eb; background: #fff; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
+  .hp-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.03em; color: #374151; }
+
+  table.hp-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  table.hp-table thead th { background: #f9fafb; color: #4b5563; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 10px; text-align: left; position: sticky; top: 0; cursor: pointer; user-select: none; }
+  table.hp-table thead th.sorted { color: #111827; }
+  table.hp-table thead th.num, table.hp-table td.num { text-align: right; }
+  table.hp-table tbody td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; color: #1f2937; }
+  table.hp-table tbody tr:hover { background: #f9fafb; cursor: pointer; }
+  table.hp-table tbody tr.selected { background: #dbeafe; }
+  table.hp-table tbody tr.hover-from-map { background: #eff6ff; box-shadow: inset 2px 0 0 #2563eb; }
+
+  .pos { color: #059669; } .neg { color: #dc2626; } .zero { color: #9ca3af; }
+  .tbl-wrap { max-height: 520px; overflow-y: auto; border: 1px solid #f3f4f6; border-radius: 4px; }
+
+  /* ── Mobile (≤640px) ───────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .hp-page { padding: 12px; }
+    .hp-hero { padding: 22px 16px; }
+    .hp-hero h2 { font-size: 21px; }
+    .hp-hero p { font-size: 13px; }
+    .hp-hero-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .hp-hero-stat { padding: 10px; }
+    .hp-hero-stat .num { font-size: 18px; }
+    .hp-hero-stat .lbl { font-size: 10px; letter-spacing: 0.04em; }
+    .hp-card { padding: 12px; margin-bottom: 12px; }
+    .hp-toolbar { gap: 6px; }
+    .hp-tab { padding: 5px 10px; font-size: 11px; }
+    .hp-search { min-width: 0; width: 100%; margin-left: 0; }
+    .hp-map-card { padding: 12px; }
+    .hp-map-host { min-height: 240px; aspect-ratio: 5 / 4; }
+    .hp-map-head { gap: 6px; }
+    .hp-map-head .sub { display: block; margin-left: 0; width: 100%; font-size: 10px; }
+    .hp-map-controls { width: 100%; flex-wrap: wrap; }
+    .hp-map-controls select, .hp-map-controls .btn-reset { font-size: 11px; }
+    .hp-map-host text.state-label { font-size: 8px; stroke-width: 1.6px; }
+    .hp-legend { gap: 8px; }
+    .hp-legend-bar, .hp-legend .ticks { width: 180px; }
+    .hp-legend .meta { margin-left: 0; text-align: left; width: 100%; }
+    table.hp-table { font-size: 11px; }
+    table.hp-table thead th { padding: 6px 6px; font-size: 10px; }
+    table.hp-table tbody td { padding: 5px 6px; }
+    .tbl-wrap { max-height: 360px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .hp-forecast-card { padding: 12px; }
+    .hp-forecast-head { gap: 6px; }
+    .hp-forecast-head h3 { font-size: 12px; }
+    .hp-forecast-head h3 .sub { display: block; margin-left: 0; }
+    .hp-forecast-controls { width: 100%; flex-wrap: wrap; }
+    .hp-forecast-controls select { flex: 1; min-width: 120px; }
+    .hp-forecast-controls button { width: 100%; padding: 8px 14px; }
+    .hp-forecast-chart-host { min-height: 160px; aspect-ratio: 5 / 3; }
+    .hp-forecast-status { width: 100%; text-align: center; }
+  }
+
+  .hp-layout { display: grid; grid-template-columns: minmax(0,2fr) minmax(320px,1fr); gap: 20px; }
+  @media (max-width: 900px) { .hp-layout { grid-template-columns: 1fr; } }
+
+  .detail-box { font-size: 13px; color: #4b5563; }
+  .detail-box dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+  .detail-box dt { color: #9ca3af; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .detail-box dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .sparkline-host { margin-top: 14px; }
+
+  .footer-note { font-size: 10px; color: #9ca3af; margin-top: 18px; padding-top: 10px; border-top: 1px solid #f3f4f6; }
+  .loading { color: #9ca3af; font-size: 12px; padding: 12px; text-align: center; }
+
+  /* ── Map ───────────────────────────────────────────────────────── */
+  .hp-map-card { padding: 18px 20px; }
+  .hp-map-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .hp-map-head h3 { margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #374151; }
+  .hp-map-head .sub { font-size: 11px; color: #9ca3af; margin-left: 6px; }
+  .hp-map-controls { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .hp-map-controls select { padding: 4px 8px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 3px; background: #fff; color: #1f2937; }
+  .hp-map-controls .btn-reset { padding: 4px 10px; font-size: 11px; border: 1px solid #d1d5db; background: #fff; border-radius: 3px; cursor: pointer; color: #374151; }
+  .hp-map-controls .btn-reset:hover { background: #f3f4f6; }
+  .hp-map-controls .btn-reset:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .hp-map-host { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 360px; background: #f9fafb;
+                 border-radius: 6px; overflow: hidden; border: 1px solid #f3f4f6; }
+  .hp-map-host svg { width: 100%; height: 100%; display: block; }
+
+  .hp-map-host path.geo {
+    fill: #e5e7eb; stroke: #fff; stroke-width: 0.6; cursor: pointer;
+    transition: fill 0.18s ease, stroke 0.18s ease;
+  }
+  .hp-map-host path.geo:hover { stroke: #111827; stroke-width: 1.2; }
+  .hp-map-host path.geo.no-data { fill: #f3f4f6; cursor: default; }
+  .hp-map-host path.geo.selected { stroke: #111827; stroke-width: 1.6; }
+  .hp-map-host path.county-border { fill: none; stroke: #fff; stroke-width: 0.4; pointer-events: none; }
+  .hp-map-host path.state-outline { fill: none; stroke: #1f2937; stroke-width: 1; pointer-events: none; }
+  .hp-map-host path.geo.dim { opacity: 0.25; }
+  .hp-map-host text.state-label {
+    font: 600 9px system-ui, sans-serif; fill: #1f2937; pointer-events: none;
+    paint-order: stroke; stroke: rgba(255,255,255,0.85); stroke-width: 2.2px;
+    text-anchor: middle; user-select: none;
+  }
+  .hp-map-host text.state-label.dim { opacity: 0.25; }
+
+  .hp-tooltip {
+    position: absolute; pointer-events: none; background: rgba(15,23,42,0.95); color: #f1f5f9;
+    padding: 8px 10px; border-radius: 5px; font-size: 11px; z-index: 5; min-width: 160px;
+    transform: translate(-50%, -110%); white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+    opacity: 0; transition: opacity 0.12s;
+  }
+  .hp-tooltip.show { opacity: 1; }
+  .hp-tooltip strong { display: block; font-size: 12px; margin-bottom: 4px; color: #fff; }
+  .hp-tooltip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 10px; }
+  .hp-tooltip dt { color: #cbd5e1; }
+  .hp-tooltip dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+  .hp-tooltip .delta-pos { color: #fca5a5; } .hp-tooltip .delta-neg { color: #86efac; }
+
+  .hp-legend {
+    display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 11px; color: #6b7280;
+    font-variant-numeric: tabular-nums; flex-wrap: wrap;
+  }
+  .hp-legend .scale-host { display: flex; flex-direction: column; gap: 3px; }
+  .hp-legend-bar {
+    width: 240px; height: 10px; border-radius: 2px; overflow: hidden;
+    /* Filled at runtime by renderLegendGradient() with the same nine
+       discrete RdBu tiles the map uses, so the legend reads as exactly
+       what's painted. */
+    display: flex;
+  }
+  .hp-legend .ticks {
+    width: 240px; display: flex; justify-content: space-between; font-size: 10px; color: #4b5563;
+  }
+  .hp-legend .lbl { font-size: 11px; color: #4b5563; }
+  .hp-legend .meta {
+    margin-left: auto; font-size: 10px; color: #9ca3af; line-height: 1.4; text-align: right;
+  }
+  .hp-legend .meta strong { color: #4b5563; font-weight: 600; }
+
+  .hp-map-overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(249,250,251,0.85); color: #6b7280; font-size: 13px; pointer-events: none;
+  }
+  .hp-map-overlay.hidden { display: none; }
+
+  /* ── Forecast card ─────────────────────────────────────────────── */
+  .hp-forecast-card { padding: 18px 20px; }
+  .hp-forecast-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .hp-forecast-head h3 {
+    margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.03em; color: #374151;
+  }
+  .hp-forecast-head h3 .sub { font-size: 11px; font-weight: 400; color: #9ca3af; text-transform: none; letter-spacing: 0; margin-left: 8px; }
+  .hp-forecast-status {
+    font-size: 11px; padding: 3px 8px; border-radius: 10px; background: #f3f4f6; color: #4b5563;
+  }
+  .hp-forecast-status.ok    { background: #d1fae5; color: #065f46; }
+  .hp-forecast-status.err   { background: #fee2e2; color: #991b1b; }
+  .hp-forecast-status.build { background: #fef3c7; color: #78350f; }
+  .hp-forecast-controls { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .hp-forecast-controls select { padding: 4px 8px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 3px; background: #fff; color: #1f2937; }
+  .hp-forecast-controls button { padding: 4px 12px; font-size: 11px; border: 1px solid #d1d5db; background: #fff; border-radius: 3px; cursor: pointer; color: #374151; }
+  .hp-forecast-controls button:hover { background: #f3f4f6; }
+  .hp-forecast-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hp-forecast-grid {
+    display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 16px;
+  }
+  @media (max-width: 800px) { .hp-forecast-grid { grid-template-columns: 1fr; } }
+  .hp-forecast-meta { font-size: 11px; }
+  .hp-forecast-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .hp-forecast-table-wrap table { min-width: 520px; }
+  .hp-forecast-chart-host {
+    width: 100%; aspect-ratio: 5 / 2; min-height: 180px; max-height: 260px;
+    background: #fafbfc; border: 1px solid #f3f4f6; border-radius: 4px;
+    margin-bottom: 10px; position: relative;
+  }
+  .hp-forecast-chart-host svg { width: 100%; height: 100%; display: block; }
+  .hp-forecast-chart-host .axis text { fill: #9ca3af; font-size: 10px; }
+  .hp-forecast-chart-host .axis line, .hp-forecast-chart-host .axis path {
+    stroke: #e5e7eb; shape-rendering: crispEdges;
+  }
+  .hp-forecast-chart-host .gridline { stroke: #f3f4f6; stroke-dasharray: 2,2; }
+  .hp-forecast-chart-host .fan-band { fill: #93c5fd; opacity: 0.35; }
+  .hp-forecast-chart-host .fan-median { fill: none; stroke: #1d4ed8; stroke-width: 2; }
+  .hp-forecast-chart-host .hist-line { fill: none; stroke: #1f2937; stroke-width: 1.5; }
+  .hp-forecast-chart-host .scenario-line {
+    fill: none; stroke: #b91c1c; stroke-width: 1.8; stroke-dasharray: 4,3;
+  }
+  .hp-forecast-chart-host .legend-row { font-size: 10px; fill: #4b5563; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hp-page">
+  <!-- Hero -->
+  <section class="hp-hero">
+    <div class="hp-hero-eyebrow">Parra Macro · Research Product</div>
+    <h2>US House Prices</h2>
+    <p>A unified view of residential property prices across every US geographic level. FHFA covers the official quarterly HPI at region, state, and MSA tiers plus an annual county series. S&amp;P/Case-Shiller adds the flagship monthly 20-city composite. Zillow's ZHVI fills in metro-, county-, and ZIP-level typical-home-value history at monthly cadence. Compare all three side by side, drill down into any geography, and see year-over-year, peak drawdown, and z-scored growth momentum at a glance.</p>
+    <div class="hp-hero-stats" id="hp-hero-stats">
+      <div class="hp-hero-stat"><div class="num">…</div><div class="lbl">US HPI (FHFA)</div></div>
+    </div>
+  </section>
+
+  <!-- System check (shows while building or on error) -->
+  <section id="hp-diagnostics-card" class="hp-card" style="display:none;">
+    <h3 style="display:flex;align-items:center;gap:8px;">
+      System check
+      <span id="hp-diag-badge" style="font-size:10px;padding:2px 8px;border-radius:10px;"></span>
+      <button class="hp-tab" id="hp-diag-toggle" style="margin-left:auto;font-size:11px;padding:3px 10px;">Details</button>
+    </h3>
+    <div id="hp-diag-summary" style="font-size:12px;color:#4b5563;"></div>
+    <div id="hp-diag-details" style="display:none;margin-top:10px;"></div>
+  </section>
+
+  <!-- Choropleth map -->
+  <section class="hp-card hp-map-card">
+    <div class="hp-map-head">
+      <h3>Map</h3>
+      <span class="sub" id="hp-map-sub">United States — click any state to drill into counties</span>
+      <div class="hp-map-controls">
+        <label style="font-size:11px;color:#4b5563;">Color by
+          <select id="hp-map-metric">
+            <option value="yoy_pct" selected>YoY %</option>
+            <option value="yoy_3y_avg">3y avg %</option>
+            <option value="from_peak_pct">From peak %</option>
+            <option value="zscore_yoy">YoY z-score</option>
+          </select>
+        </label>
+        <button class="btn-reset" id="hp-map-reset" disabled>&larr; Back to US</button>
+      </div>
+    </div>
+    <div class="hp-map-host" id="hp-map-host">
+      <div class="hp-map-overlay" id="hp-map-overlay">Loading map…</div>
+    </div>
+    <div class="hp-legend">
+      <div class="scale-host">
+        <div class="hp-legend-bar"></div>
+        <div class="ticks">
+          <span id="hp-legend-min">−</span>
+          <span id="hp-legend-mid">0</span>
+          <span id="hp-legend-max">+</span>
+        </div>
+      </div>
+      <div class="meta">
+        <div><strong id="hp-legend-metric">YoY %</strong> · diverging scale around 0</div>
+        <div id="hp-legend-stats">— states colored</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8-quarter forecast (ECM with mortgage / income / unemp drivers) -->
+  <section class="hp-card hp-forecast-card">
+    <div class="hp-forecast-head">
+      <h3>HPI forecast <span class="sub">8 quarters · AR(p) + macro drivers (mortgage rate, income, unemp)</span></h3>
+      <span id="hp-forecast-status" class="hp-forecast-status">Building model…</span>
+      <div class="hp-forecast-controls">
+        <select id="hp-forecast-state" title="Geography"><option value="">United States (national)</option></select>
+        <select id="hp-forecast-shock"><option value="">No shock — baseline only</option></select>
+        <button class="btn-reset" id="hp-forecast-run">Run scenario</button>
+      </div>
+    </div>
+    <div class="hp-forecast-grid">
+      <div>
+        <div id="hp-forecast-chart" class="hp-forecast-chart-host"></div>
+        <div class="hp-forecast-table-wrap">
+          <table class="hp-table" id="hp-forecast-table">
+            <thead><tr><th>Quarter</th><th class="num">Baseline HPI</th><th class="num">Baseline YoY</th><th class="num">Scenario HPI</th><th class="num">Δ vs baseline</th></tr></thead>
+            <tbody><tr><td colspan="5" class="loading">Awaiting first build…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="hp-forecast-meta">
+        <div id="hp-forecast-fit" style="font-size:11px;color:#6b7280;line-height:1.5;">
+          Fit diagnostics will appear here once the model is built.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Toolbar -->
+  <div class="hp-toolbar">
+    <button class="hp-tab active" data-level="state">States</button>
+    <button class="hp-tab" data-level="region">Regions</button>
+    <button class="hp-tab" data-level="msa">Metros (MSA)</button>
+    <button class="hp-tab" data-level="county">Counties</button>
+    <input type="search" id="hp-search" class="hp-search" placeholder="Filter by name or code…">
+  </div>
+
+  <div class="hp-layout">
+    <div class="hp-card">
+      <h3>Geographies <span id="hp-count" style="font-weight:400;color:#9ca3af;margin-left:6px;font-size:11px;"></span></h3>
+      <div class="tbl-wrap">
+        <table class="hp-table" id="hp-table">
+          <thead>
+            <tr>
+              <th data-sort="name">Name</th>
+              <th data-sort="code">Code</th>
+              <th class="num" data-sort="latest_index">Index</th>
+              <th class="num sorted" data-sort="yoy_pct">YoY %</th>
+              <th class="num" data-sort="yoy_3y_avg">3y avg %</th>
+              <th class="num" data-sort="from_peak_pct">From peak %</th>
+              <th class="num" data-sort="zscore_yoy">YoY z</th>
+              <th>Last</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="8" class="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <aside>
+      <div class="hp-card">
+        <h3>Selected geography</h3>
+        <div id="hp-detail" class="detail-box"><div class="loading">Click a row to view details.</div></div>
+      </div>
+      <div class="hp-card">
+        <h3>Sources</h3>
+        <div id="hp-sources" class="detail-box" style="font-size:11px;"><div class="loading">Loading sources…</div></div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="footer-note">
+    FHFA HPI: Federal Housing Finance Agency, public domain. Case-Shiller: S&amp;P Dow Jones Indices via FRED. Zillow Home Value Index (ZHVI): © Zillow Group, Inc., used under CC BY 4.0.
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<script>
+(function() {
+  const API = '/api/house-prices';
+  const $ = (id) => document.getElementById(id);
+
+  // ── State FIPS ↔ abbreviation mapping ─────────────────────────────
+  const STATE_FIPS_TO_ABBR = {
+    '01':'AL','02':'AK','04':'AZ','05':'AR','06':'CA','08':'CO','09':'CT','10':'DE','11':'DC',
+    '12':'FL','13':'GA','15':'HI','16':'ID','17':'IL','18':'IN','19':'IA','20':'KS','21':'KY',
+    '22':'LA','23':'ME','24':'MD','25':'MA','26':'MI','27':'MN','28':'MS','29':'MO','30':'MT',
+    '31':'NE','32':'NV','33':'NH','34':'NJ','35':'NM','36':'NY','37':'NC','38':'ND','39':'OH',
+    '40':'OK','41':'OR','42':'PA','44':'RI','45':'SC','46':'SD','47':'TN','48':'TX','49':'UT',
+    '50':'VT','51':'VA','53':'WA','54':'WV','55':'WI','56':'WY','72':'PR'
+  };
+  const ABBR_TO_FIPS = Object.fromEntries(Object.entries(STATE_FIPS_TO_ABBR).map(([k, v]) => [v, k]));
+
+  const state = {
+    level: 'state',
+    entities: [],
+    sortKey: 'yoy_pct',
+    sortDir: -1,
+    selected: null,
+    search: '',
+  };
+
+  function fmtPct(v, d=2) {
+    if (v === null || v === undefined) return '—';
+    const cls = v > 0.05 ? 'pos' : (v < -0.05 ? 'neg' : 'zero');
+    return `<span class="${cls}">${v > 0 ? '+' : ''}${v.toFixed(d)}%</span>`;
+  }
+  function fmtNum(v, d=1) { if (v===null||v===undefined) return '—'; return Number(v).toLocaleString(undefined, {maximumFractionDigits:d, minimumFractionDigits:d}); }
+  function fmtZ(v) {
+    if (v === null || v === undefined) return '—';
+    const cls = v > 1 ? 'pos' : (v < -1 ? 'neg' : 'zero');
+    return `<span class="${cls}">${v > 0 ? '+' : ''}${v.toFixed(2)}</span>`;
+  }
+
+  // ── Hero ───────────────────────────────────────────────────────
+  async function loadHero() {
+    const r = await fetch(`${API}/summary`);
+    if (!r.ok) { $('hp-hero-stats').innerHTML = `<div class="hp-hero-stat"><div class="num">—</div><div class="lbl">Fit in progress…</div></div>`; return; }
+    const b = await r.json();
+    const cells = [];
+    if (b.national) {
+      const n = b.national;
+      cells.push(`<div class="hp-hero-stat"><div class="num">${fmtNum(n.latest_index,1)}</div><div class="lbl">${n.name}</div><div class="chg ${n.yoy_pct<0?'neg':''}">${n.yoy_pct!==null?(n.yoy_pct>0?'+':'')+n.yoy_pct.toFixed(1)+'% YoY':'—'}</div></div>`);
+    }
+    (b.regions||[]).forEach(r => {
+      cells.push(`<div class="hp-hero-stat"><div class="num">${fmtNum(r.latest_index,1)}</div><div class="lbl">${r.name}</div><div class="chg ${r.yoy_pct<0?'neg':''}">${r.yoy_pct!==null?(r.yoy_pct>0?'+':'')+r.yoy_pct.toFixed(1)+'%':'—'}</div></div>`);
+    });
+    $('hp-hero-stats').innerHTML = cells.join('') || '<div class="hp-hero-stat"><div class="num">—</div><div class="lbl">Awaiting first fetch</div></div>';
+  }
+
+  // ── Table ──────────────────────────────────────────────────────
+  async function loadLevel(level) {
+    state.level = level;
+    $('hp-count').textContent = 'loading…';
+    const r = await fetch(`${API}/level/${level}`);
+    if (!r.ok) { renderTable(); return; }
+    const b = await r.json();
+    state.entities = b.entities || [];
+    $('hp-count').textContent = `${state.entities.length} entities`;
+    renderTable();
+    // Mirror state-level data into the map cache so the choropleth has fresh values.
+    if (level === 'state') {
+      map.stateData = {};
+      for (const e of state.entities) map.stateData[e.code] = e;
+      if (map.svg) paintStates();
+    }
+    // If the API said the build is still pending, kick off a poll
+    if (b.pending || state.entities.length === 0) {
+      schedulePoll();
+    }
+  }
+
+  let _pollTimer = null;
+  let _pollCount = 0;
+  function schedulePoll() {
+    if (_pollTimer) return;
+    _pollCount = 0;
+    _pollTimer = setInterval(async () => {
+      _pollCount++;
+      await loadDiagnostics();
+      const s = await fetch(`${API}/status`).then(r => r.json()).catch(() => ({}));
+      if (s.built || s.build_error || _pollCount > 36) {
+        clearInterval(_pollTimer); _pollTimer = null;
+        if (s.built) {
+          // Reload the current level + summary now that data is ready
+          loadHero(); loadLevel(state.level);
+        }
+      }
+    }, 5000);
+  }
+
+  async function loadDiagnostics() {
+    const r = await fetch(`${API}/diagnostics`);
+    if (!r.ok) return;
+    const body = await r.json();
+    const s = body.status, d = body.diagnostics;
+    const card = $('hp-diagnostics-card');
+
+    // Hide the card entirely once we're built and no errors
+    if (s.built && !s.build_error && d.n_sources_fail === 0) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+
+    const badge = $('hp-diag-badge');
+    if (s.build_error) {
+      badge.textContent = 'ERROR'; badge.style.background = '#fee2e2'; badge.style.color = '#991b1b';
+    } else if (s.building) {
+      badge.textContent = 'BUILDING'; badge.style.background = '#fef3c7'; badge.style.color = '#78350f';
+    } else if (s.built && d.n_sources_fail > 0) {
+      badge.textContent = 'PARTIAL'; badge.style.background = '#fed7aa'; badge.style.color = '#9a3412';
+    } else if (s.built) {
+      badge.textContent = 'OK'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46';
+    } else {
+      badge.textContent = 'QUEUED'; badge.style.background = '#e5e7eb'; badge.style.color = '#4b5563';
+    }
+
+    const summary = `<strong>Sources:</strong> ${d.n_sources_ok} ok, ${d.n_sources_fail} failed
+                     ${s.build_error ? `<br><span style="color:#b91c1c;">${s.build_error}</span>` : ''}
+                     ${s.building ? '<br><span style="color:#78350f;">Downloading FHFA + Case-Shiller + Zillow CSVs (typically 60-120s on first load)…</span>' : ''}`;
+    $('hp-diag-summary').innerHTML = summary;
+
+    const rows = d.fetches.map(f => {
+      const cls = f.ok ? '' : 'style="background:#fef2f2;"';
+      const status = f.ok ? `<span class="pos">${f.n_rows.toLocaleString()} rows</span>`
+                           : `<span class="neg" style="font-size:11px;">${f.error || 'failed'}</span>`;
+      return `<tr ${cls}><td>${f.label}</td><td><code>${f.source_id}</code></td><td>${status}</td></tr>`;
+    }).join('');
+    $('hp-diag-details').innerHTML = `<table class="hp-table" style="font-size:11px;">
+      <thead><tr><th>Source</th><th>ID</th><th>Status</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3" style="color:#9ca3af;">No fetches recorded yet.</td></tr>'}</tbody></table>`;
+  }
+
+  function renderTable() {
+    const rows = state.entities
+      .filter(e => !state.search || (e.name + ' ' + e.code).toLowerCase().includes(state.search.toLowerCase()))
+      .slice()
+      .sort((a,b) => {
+        const k = state.sortKey;
+        const av = a[k] === null ? -Infinity : a[k];
+        const bv = b[k] === null ? -Infinity : b[k];
+        if (typeof av === 'string') return state.sortDir * av.localeCompare(bv);
+        return state.sortDir * (av - bv);
+      });
+
+    const html = rows.map(e => `
+      <tr data-code="${e.code}" class="${state.selected===e.code?'selected':''}">
+        <td>${e.name}</td>
+        <td>${e.code}</td>
+        <td class="num">${fmtNum(e.latest_index,1)}</td>
+        <td class="num">${fmtPct(e.yoy_pct,1)}</td>
+        <td class="num">${fmtPct(e.yoy_3y_avg,1)}</td>
+        <td class="num">${fmtPct(e.from_peak_pct,1)}</td>
+        <td class="num">${fmtZ(e.zscore_yoy)}</td>
+        <td>${e.latest_date||''}</td>
+      </tr>`).join('');
+    $('hp-table').querySelector('tbody').innerHTML = html || `<tr><td colspan="8" class="loading">No matches.</td></tr>`;
+
+    $('hp-table').querySelectorAll('tbody tr').forEach(tr => {
+      tr.addEventListener('click', () => selectEntity(tr.dataset.code));
+      tr.addEventListener('mouseenter', () => {
+        // Only sync to the map when the level matches what the map is showing
+        const mapLevel = map.selectedFips ? 'county' : 'state';
+        if (state.level === mapLevel) setHoverCode(tr.dataset.code);
+      });
+      tr.addEventListener('mouseleave', () => {
+        const mapLevel = map.selectedFips ? 'county' : 'state';
+        if (state.level === mapLevel) setHoverCode(null);
+      });
+    });
+    // Header sort indicators
+    $('hp-table').querySelectorAll('thead th').forEach(th => {
+      th.classList.toggle('sorted', th.dataset.sort === state.sortKey);
+    });
+  }
+
+  // ── Detail drill-down ──────────────────────────────────────────
+  async function selectEntity(code) {
+    state.selected = code;
+    renderTable();
+    $('hp-detail').innerHTML = '<div class="loading">Loading…</div>';
+    const r = await fetch(`${API}/entity/${state.level}/${encodeURIComponent(code)}`);
+    if (!r.ok) { $('hp-detail').innerHTML = '<div class="loading">No data.</div>'; return; }
+    const e = await r.json();
+
+    const rows = [
+      ['Level', e.level],
+      ['Code', e.code],
+      ['Frequency', e.freq],
+      ['Latest', `${fmtNum(e.latest_index,2)} <span style="color:#9ca3af;">(${e.latest_date})</span>`],
+      ['YoY', fmtPct(e.yoy_pct,2)],
+      ['3y avg YoY', fmtPct(e.yoy_3y_avg,2)],
+      ['From peak', `${fmtPct(e.from_peak_pct,2)} <span style="color:#9ca3af;">(${e.peak_date})</span>`],
+      ['YoY z-score', fmtZ(e.zscore_yoy)],
+      ['Observations', e.n_obs],
+    ];
+    $('hp-detail').innerHTML = `
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px;">${e.name}</div>
+      <dl>${rows.map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      ${renderSparkline(e.history)}`;
+  }
+
+  function renderSparkline(history) {
+    if (!history || !history.length) return '';
+    const vals = history.map(h => h.index);
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const W = 280, H = 40;
+    const pts = history.map((h, i) => {
+      const x = (i / (history.length-1 || 1)) * W;
+      const y = H - ((h.index - min) / (max - min || 1)) * H;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const firstDate = history[0].date, lastDate = history[history.length-1].date;
+    return `<div class="sparkline-host">
+      <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#3b82f6" stroke-width="1.5" points="${pts}"/>
+      </svg>
+      <div style="font-size:10px;color:#9ca3af;display:flex;justify-content:space-between;margin-top:2px;">
+        <span>${firstDate}</span><span>${lastDate}</span>
+      </div>
+    </div>`;
+  }
+
+  // ── Sources ────────────────────────────────────────────────────
+  async function loadSources() {
+    const r = await fetch(`${API}/sources`);
+    if (!r.ok) return;
+    const b = await r.json();
+    $('hp-sources').innerHTML = (b.sources || []).map(s => `
+      <div style="padding:4px 0;border-bottom:1px solid #f3f4f6;">
+        <div style="color:#111827;font-weight:500;">${s.name}</div>
+        <div style="color:#6b7280;">${s.publisher} · ${s.freq} · lag ~${s.lag_days}d</div>
+        <div style="color:#9ca3af;font-size:10px;">${s.license} · levels: ${s.levels.join(', ')}</div>
+      </div>`).join('');
+  }
+
+  // ── Wiring ─────────────────────────────────────────────────────
+  document.querySelectorAll('.hp-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.hp-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      state.selected = null;
+      loadLevel(tab.dataset.level);
+    });
+  });
+  $('hp-table').querySelectorAll('thead th').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (!k) return;
+      if (state.sortKey === k) state.sortDir = -state.sortDir;
+      else { state.sortKey = k; state.sortDir = (k === 'name' || k === 'code') ? 1 : -1; }
+      renderTable();
+    });
+  });
+  $('hp-search').addEventListener('input', (e) => { state.search = e.target.value; renderTable(); });
+  $('hp-diag-toggle').addEventListener('click', () => {
+    const el = $('hp-diag-details');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    $('hp-diag-toggle').textContent = el.style.display === 'none' ? 'Details' : 'Hide';
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  //  Choropleth map
+  // ────────────────────────────────────────────────────────────────────
+
+  const map = {
+    statesTopo: null,         // cached states-10m topojson
+    countiesTopo: null,       // cached counties-10m topojson (lazy)
+    stateData: {},            // {abbr: summary}
+    countyData: {},           // {fips: summary} — filled lazily by state
+    selectedFips: null,       // 2-digit state FIPS when zoomed in
+    hoveredCode: null,        // currently-hovered code (for table sync)
+    metric: 'yoy_pct',
+    range: 10.0,              // current symmetric color-scale half-range
+    svg: null, gMap: null, gStates: null, gCounties: null, gOutline: null, gLabels: null,
+    projection: null, path: null,
+    width: 0, height: 0,
+    tooltipEl: null,
+  };
+
+  // Color scale is data-driven: each repaint computes the symmetric P5/P95
+  // 9-bucket quantile scale on the live data. Each visible state always
+  // falls in a clearly distinct bucket — even when the YoY range is
+  // narrow and continuous interpolation would smear everything into
+  // mid-grey. Reverse RdBu (blue = low, red = high) with a near-white
+  // tile in the middle for whatever the median state currently sits at.
+  // 9 buckets, RdYlBu reversed: deep blue → light blue → yellow middle →
+  // orange → deep red. Index 4 (yellow `#fee08b`) is the "neutral" tile
+  // mapped to value 0 — the diverging scale below always anchors index 4
+  // at 0 regardless of the data, so blue=negative / red=positive holds at
+  // every level. Earlier we used a quantile scale, which assigned colors
+  // by RANK within the visible set — that meant when drilled into a state
+  // where every county had positive YoY, the bottom-quartile counties got
+  // deep blue (the "negative" colour) and the user perceived a flip.
+  const COLOR_BUCKETS = ['#313695','#4575b4','#74add1','#abd9e9','#fee08b','#fdae61','#f46d43','#d73027','#a50026'];
+
+  function buildScale(values, metric) {
+    // Sign-anchored diverging scale. Cut points are placed at fractions
+    // of the symmetric data extent (max(|min|, |max|)) so:
+    //   value < 0  → blue shades (always)
+    //   value ≈ 0  → yellow tile (always)
+    //   value > 0  → red shades (always)
+    // Independent of whether the visible set is country-wide or
+    // a single state's counties, the colour of a polygon corresponds
+    // to the SIGN+MAGNITUDE of its value, not its rank.
+    const finite = values.filter(v => v !== null && v !== undefined && !isNaN(v));
+    if (!finite.length) {
+      return { colorOf: () => '#f5f5f4', edges: [], lo: 0, hi: 0 };
+    }
+    const sorted = finite.slice().sort((a, b) => a - b);
+    const lo = sorted[0], hi = sorted[sorted.length - 1];
+    const r = Math.max(Math.abs(lo), Math.abs(hi));
+    // Floor so a quiet quarter doesn't collapse the colour range.
+    const floor = (metric === 'zscore_yoy') ? 0.4 : 1.0;
+    const ext = Math.max(r, floor);
+    // 9 buckets, 8 cutpoints, symmetric around 0.
+    const edges = [
+      -0.85*ext, -0.55*ext, -0.30*ext, -0.10*ext,
+      +0.10*ext, +0.30*ext, +0.55*ext, +0.85*ext,
+    ];
+    const scale = d3.scaleThreshold().domain(edges).range(COLOR_BUCKETS);
+    return {
+      colorOf: (v) => (v === null || v === undefined || isNaN(v)) ? '#f5f5f4' : scale(v),
+      edges, lo, hi, ext,
+    };
+  }
+
+  function hpiColor(value) {
+    return (map.scale ? map.scale.colorOf(value) : '#f5f5f4');
+  }
+
+  function fmtMetric(v, metric) {
+    if (v === null || v === undefined) return '—';
+    if (metric === 'zscore_yoy') return v.toFixed(2);
+    return (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+  }
+
+  async function initMap() {
+    const host = $('hp-map-host');
+    map.width = host.clientWidth;
+    map.height = host.clientHeight;
+
+    // Tooltip
+    map.tooltipEl = document.createElement('div');
+    map.tooltipEl.className = 'hp-tooltip';
+    host.appendChild(map.tooltipEl);
+
+    // SVG + projection
+    map.svg = d3.select(host).append('svg')
+      .attr('viewBox', `0 0 ${map.width} ${map.height}`)
+      .attr('preserveAspectRatio', 'xMidYMid meet');
+    map.gMap = map.svg.append('g').attr('class', 'map-root');
+    map.gCounties = map.gMap.append('g').attr('class', 'counties');
+    map.gStates = map.gMap.append('g').attr('class', 'states');
+    map.gOutline = map.gMap.append('g').attr('class', 'outline');
+    map.gLabels = map.gMap.append('g').attr('class', 'labels');
+
+    map.projection = d3.geoAlbersUsa();
+    map.path = d3.geoPath(map.projection);
+
+    try {
+      map.statesTopo = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json');
+    } catch (e) {
+      $('hp-map-overlay').textContent = 'Map topology failed to load.';
+      console.error('topojson load:', e);
+      return;
+    }
+
+    const states = topojson.feature(map.statesTopo, map.statesTopo.objects.states);
+    map.projection.fitSize([map.width, map.height], states);
+
+    // Render the state polygons (no fill yet — populated when stateData arrives)
+    map.gStates.selectAll('path.geo')
+      .data(states.features, d => d.id)
+      .join('path')
+      .attr('class', 'geo')
+      .attr('data-fips', d => String(d.id).padStart(2, '0'))
+      .attr('d', map.path)
+      .on('mouseenter', (e, d) => { setHoverCode(STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]); showTooltipState(e, d); })
+      .on('mousemove', (e) => positionTooltip(e))
+      .on('mouseleave', () => { setHoverCode(null); hideTooltip(); })
+      .on('click', (e, d) => onStateClick(d));
+
+    // State abbrev labels — small geographies (RI, DE, DC, etc.) get
+    // skipped here; their tooltip-on-hover behavior makes labels
+    // unnecessary and they'd otherwise clutter the Northeast.
+    const SMALL_STATES = new Set(['09','10','11','24','25','33','34','44','50']);
+    map.gLabels.selectAll('text.state-label')
+      .data(states.features.filter(f => !SMALL_STATES.has(String(f.id).padStart(2, '0'))), d => d.id)
+      .join('text')
+      .attr('class', 'state-label')
+      .attr('data-fips', d => String(d.id).padStart(2, '0'))
+      .attr('transform', d => {
+        const c = map.path.centroid(d);
+        return `translate(${c[0]},${c[1] + 3})`;
+      })
+      .text(d => STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')] || '');
+
+    $('hp-map-overlay').classList.add('hidden');
+    paintStates();
+  }
+
+  function paintStates() {
+    const vals = Object.values(map.stateData).map(s => s[map.metric]);
+    map.scale = buildScale(vals, map.metric);
+    // Use .style() (inline CSS) NOT .attr('fill') — CSS rules on .geo
+    // override SVG presentation attributes, which is why the map looked
+    // entirely grey despite buildScale producing the right colors.
+    map.gStates.selectAll('path.geo')
+      .classed('no-data', d => !map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]])
+      .transition().duration(280)
+      .style('fill', d => {
+        const s = map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]];
+        if (!s) return '#f3f4f6';
+        return hpiColor(s[map.metric]);
+      });
+    updateLegendBounds(vals);
+    renderLegendGradient();
+  }
+
+  function fmtTick(v, metric) {
+    if (metric === 'zscore_yoy') return (v >= 0 ? '+' : '') + v.toFixed(1);
+    return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
+  }
+
+  function renderLegendGradient() {
+    // Replace the static linear-gradient bar with discrete bucket tiles
+    // matching the active 9-color quantile scale, so the legend reads as
+    // exactly what's painted on the map.
+    const bar = document.querySelector('.hp-legend-bar');
+    if (!bar) return;
+    bar.style.background = '';
+    bar.style.display = 'flex';
+    bar.innerHTML = '';
+    COLOR_BUCKETS.forEach(c => {
+      const tile = document.createElement('div');
+      tile.style.flex = '1';
+      tile.style.background = c;
+      tile.style.height = '100%';
+      bar.appendChild(tile);
+    });
+  }
+
+  function updateLegendBounds(values) {
+    const finite = (values || []).filter(v => v !== null && v !== undefined && !isNaN(v));
+    // Diverging-scale tick labels: anchored at -ext / 0 / +ext, NOT at the
+    // observed data min/mid/max. The middle tile is always exactly 0%.
+    const ext = map.scale ? (map.scale.ext || 0) : 0;
+    $('hp-legend-min').textContent = fmtTick(-ext, map.metric);
+    $('hp-legend-mid').textContent = fmtTick(0, map.metric);
+    $('hp-legend-max').textContent = fmtTick(+ext, map.metric);
+    $('hp-legend-metric').textContent = $('hp-map-metric').selectedOptions[0]?.text || 'YoY %';
+    const noun = map.selectedFips ? 'counties' : 'states';
+    $('hp-legend-stats').textContent = finite.length
+      ? `${finite.length} ${noun} · diverging scale anchored at 0 (blue = negative, red = positive)`
+      : `0 ${noun} colored`;
+  }
+
+  // ── Bidirectional row ↔ map highlight ────────────────────────────
+  // External callers (table row hover) call setHoverCode(<abbr> or <fips>).
+  // The map then thickens the matching polygon outline. Hover events on the
+  // map polygons also call this (with the polygon's code) so the table can
+  // highlight the matching row via the synced `data-hover` attribute.
+  function setHoverCode(code) {
+    map.hoveredCode = code;
+    const fipsTarget = code && map.selectedFips
+      ? String(code).padStart(5, '0')                  // county fips
+      : (code ? ABBR_TO_FIPS[code] : null);            // state abbr → fips
+    map.gStates.selectAll('path.geo')
+      .classed('selected', d => fipsTarget && String(d.id).padStart(2, '0') === fipsTarget);
+    map.gCounties.selectAll('path.geo')
+      .classed('selected', d => fipsTarget && String(d.id).padStart(5, '0') === fipsTarget);
+    map.gLabels.selectAll('text.state-label')
+      .classed('selected', d => fipsTarget && String(d.id).padStart(2, '0') === fipsTarget);
+    // Sync the table row highlight if the table is currently showing this level
+    document.querySelectorAll('#hp-table tbody tr').forEach(tr => {
+      tr.classList.toggle('hover-from-map', code !== null && tr.dataset.code === code);
+    });
+  }
+
+  function showTooltipState(e, d) {
+    const abbr = STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')];
+    const s = map.stateData[abbr];
+    if (!s) {
+      map.tooltipEl.innerHTML = `<strong>${d.properties.name}</strong><dl><dt>No data</dt><dd></dd></dl>`;
+    } else {
+      map.tooltipEl.innerHTML = `
+        <strong>${s.name}</strong>
+        <dl>
+          <dt>HPI</dt><dd>${(s.latest_index ?? 0).toLocaleString(undefined,{maximumFractionDigits:1})}</dd>
+          <dt>YoY</dt><dd class="${(s.yoy_pct ?? 0) >= 0 ? 'delta-pos' : 'delta-neg'}">${fmtMetric(s.yoy_pct, 'yoy_pct')}</dd>
+          <dt>3y avg</dt><dd>${fmtMetric(s.yoy_3y_avg, 'yoy_pct')}</dd>
+          <dt>From peak</dt><dd>${fmtMetric(s.from_peak_pct, 'yoy_pct')}</dd>
+          <dt>YoY z</dt><dd>${(s.zscore_yoy ?? 0).toFixed(2)}</dd>
+        </dl>`;
+    }
+    map.tooltipEl.classList.add('show');
+    positionTooltip(e);
+  }
+
+  function showTooltipCounty(e, d) {
+    const fips = String(d.id).padStart(5, '0');
+    const c = map.countyData[fips];
+    const name = (d.properties && d.properties.name) || fips;
+    if (!c) {
+      map.tooltipEl.innerHTML = `<strong>${name}</strong><dl><dt>No data</dt><dd></dd></dl>`;
+    } else {
+      map.tooltipEl.innerHTML = `
+        <strong>${c.name}</strong>
+        <dl>
+          <dt>HPI</dt><dd>${(c.latest_index ?? 0).toFixed(1)}</dd>
+          <dt>YoY</dt><dd class="${(c.yoy_pct ?? 0) >= 0 ? 'delta-pos' : 'delta-neg'}">${fmtMetric(c.yoy_pct, 'yoy_pct')}</dd>
+          <dt>From peak</dt><dd>${fmtMetric(c.from_peak_pct, 'yoy_pct')}</dd>
+          <dt>YoY z</dt><dd>${(c.zscore_yoy ?? 0).toFixed(2)}</dd>
+        </dl>`;
+    }
+    map.tooltipEl.classList.add('show');
+    positionTooltip(e);
+  }
+
+  function positionTooltip(e) {
+    const rect = $('hp-map-host').getBoundingClientRect();
+    map.tooltipEl.style.left = (e.clientX - rect.left) + 'px';
+    map.tooltipEl.style.top = (e.clientY - rect.top - 6) + 'px';
+  }
+
+  function hideTooltip() { map.tooltipEl.classList.remove('show'); }
+
+  async function onStateClick(d) {
+    map.selectedFips = String(d.id).padStart(2, '0');
+    const abbr = STATE_FIPS_TO_ABBR[map.selectedFips];
+    const s = map.stateData[abbr];
+    if (!s) return;
+
+    $('hp-map-sub').textContent = `${s.name} — counties (FHFA annual + Zillow monthly)`;
+    $('hp-map-reset').disabled = false;
+
+    // Lazy load counties topology + data
+    if (!map.countiesTopo) {
+      $('hp-map-overlay').classList.remove('hidden');
+      $('hp-map-overlay').textContent = 'Loading county geometries…';
+      try {
+        map.countiesTopo = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json');
+      } catch (e) {
+        $('hp-map-overlay').textContent = 'County topology failed to load.';
+        return;
+      }
+      $('hp-map-overlay').classList.add('hidden');
+    }
+    if (!Object.keys(map.countyData).length) {
+      try {
+        const r = await fetch(`${API}/level/county`);
+        const b = await r.json();
+        for (const e of (b.entities || [])) map.countyData[String(e.code).padStart(5, '0')] = e;
+      } catch (err) {
+        console.error('county fetch:', err);
+      }
+    }
+
+    // Filter counties to the selected state
+    const counties = topojson.feature(map.countiesTopo, map.countiesTopo.objects.counties);
+    const stateFips = map.selectedFips;
+    const stateCounties = {
+      type: 'FeatureCollection',
+      features: counties.features.filter(f => String(f.id).padStart(5, '0').slice(0, 2) === stateFips),
+    };
+
+    // Project to fit just this state
+    map.projection.fitSize([map.width, map.height], d);
+
+    // Hide every state polygon and every state label while drilled in. The
+    // previous .dim approach (opacity 0.25) left the selected state's fill
+    // sitting on TOP of its counties (gStates is rendered after gCounties,
+    // so last-rendered wins) — the user saw an empty Texas outline because
+    // its choropleth fill obscured every county beneath. Hiding the layer
+    // entirely also kills pointer-events to that layer (so hovers go to
+    // counties, not the state) and removes the AK/HI Albers-inset cruft.
+    map.gStates.selectAll('path.geo').style('display', 'none');
+    map.gLabels.selectAll('text.state-label').style('display', 'none');
+
+    paintCounties(stateCounties);
+
+    // Draw a no-fill outline for the selected state into gOutline (which
+    // sits above gCounties), so the boundary stays crisp without blocking
+    // the counties or capturing pointer events.
+    map.gOutline.selectAll('path.state-outline').remove();
+    map.gOutline.append('path')
+      .attr('class', 'state-outline')
+      .attr('d', map.path(d));
+
+    // Filter the table below to this state's counties
+    state.level = 'county';
+    document.querySelectorAll('.hp-tab[data-level]').forEach(t =>
+      t.classList.toggle('active', t.dataset.level === 'county'));
+    state.entities = Object.values(map.countyData).filter(c =>
+      String(c.code).padStart(5, '0').slice(0, 2) === stateFips);
+    $('hp-count').textContent = `${state.entities.length} counties in ${s.name}`;
+    renderTable();
+  }
+
+  function paintCounties(stateCounties) {
+    // Per-state county quantile scale (counties have a wider distribution
+    // than states so the buckets re-cluster cleanly when drilling in)
+    const stateFips = map.selectedFips;
+    const vals = stateCounties.features
+      .map(f => map.countyData[String(f.id).padStart(5, '0')])
+      .filter(c => c)
+      .map(c => c[map.metric]);
+    map.scale = buildScale(vals, map.metric);
+
+    map.gCounties.selectAll('path.geo')
+      .data(stateCounties.features, f => f.id)
+      .join('path')
+      .attr('class', 'geo')
+      .attr('data-fips', f => String(f.id).padStart(5, '0'))
+      .attr('d', map.path)
+      .on('mouseenter', (e, c) => { setHoverCode(String(c.id).padStart(5, '0')); showTooltipCounty(e, c); })
+      .on('mousemove', (e) => positionTooltip(e))
+      .on('mouseleave', () => { setHoverCode(null); hideTooltip(); })
+      .transition().duration(300)
+      .style('fill', f => {
+        const fips = String(f.id).padStart(5, '0');
+        const c = map.countyData[fips];
+        return c ? hpiColor(c[map.metric]) : '#f3f4f6';
+      });
+    updateLegendBounds(vals);
+    renderLegendGradient();
+  }
+
+  function resetMap() {
+    map.selectedFips = null;
+    $('hp-map-sub').textContent = 'United States — click any state to drill into counties';
+    $('hp-map-reset').disabled = true;
+
+    // Clear drill-in artefacts — counties + the outline path that sat on top.
+    map.gCounties.selectAll('path').remove();
+    map.gOutline.selectAll('path.state-outline').remove();
+
+    // Restore state polygons and labels (they were display:none during drill-in).
+    map.gStates.selectAll('path.geo').style('display', null).classed('selected', false);
+    map.gLabels.selectAll('text.state-label').style('display', null);
+
+    const states = topojson.feature(map.statesTopo, map.statesTopo.objects.states);
+    map.projection.fitSize([map.width, map.height], states);
+    map.gStates.selectAll('path.geo').transition().duration(300).attr('d', map.path);
+    map.gLabels.selectAll('text.state-label').transition().duration(300)
+      .attr('transform', d => {
+        const c = map.path.centroid(d);
+        return `translate(${c[0]},${c[1] + 3})`;
+      });
+    paintStates();
+
+    state.level = 'state';
+    document.querySelectorAll('.hp-tab[data-level]').forEach(t =>
+      t.classList.toggle('active', t.dataset.level === 'state'));
+    // The state entities are already cached in map.stateData — repopulate
+    // the table from there instead of re-fetching /level/state.
+    state.entities = Object.values(map.stateData);
+    $('hp-count').textContent = `${state.entities.length} entities`;
+    renderTable();
+  }
+
+  // Wire map controls
+  $('hp-map-metric').addEventListener('change', (e) => {
+    map.metric = e.target.value;
+    if (map.selectedFips && map.countiesTopo) {
+      const stateFips = map.selectedFips;
+      const counties = topojson.feature(map.countiesTopo, map.countiesTopo.objects.counties);
+      const stateCounties = {
+        type: 'FeatureCollection',
+        features: counties.features.filter(f => String(f.id).padStart(5, '0').slice(0, 2) === stateFips),
+      };
+      paintCounties(stateCounties);
+    } else {
+      paintStates();
+    }
+  });
+  $('hp-map-reset').addEventListener('click', resetMap);
+
+  // ────────────────────────────────────────────────────────────────────
+  //  HPI forecast (ECM with FRED macro drivers)
+  //  Supports national + per-state via the geography selector.
+  // ────────────────────────────────────────────────────────────────────
+  const FCAST = '/api/house-prices/forecast';
+  const fcast = {
+    baseline: null,        // forecast records (with hpi_index, yoy_pct)
+    scenario: null,        // shocked records, when a scenario is active
+    fan: null,             // bootstrap fan records {quarter, p10, p50, p90}
+    history: null,         // recent historical {date, index} records
+    shocks: [],
+    states: [],            // [{code, rsq, n_obs, …}]
+    geography: 'national', // 'national' or state code (e.g. 'CA')
+  };
+
+  function fcastBase() {
+    return fcast.geography === 'national'
+      ? FCAST
+      : `${FCAST}/state/${encodeURIComponent(fcast.geography)}`;
+  }
+
+  function geographyLabel() {
+    if (fcast.geography === 'national') return 'United States';
+    const s = (fcast.states || []).find(s => s.code === fcast.geography);
+    return s ? s.code : fcast.geography;
+  }
+
+  function setForecastStatus(text, cls) {
+    const el = $('hp-forecast-status');
+    el.textContent = text;
+    el.className = 'hp-forecast-status ' + (cls || '');
+  }
+
+  async function loadForecastShocks() {
+    try {
+      const r = await fetch(`${FCAST}/shocks`);
+      if (!r.ok) return;
+      const b = await r.json();
+      fcast.shocks = b.shocks || [];
+      const sel = $('hp-forecast-shock');
+      sel.innerHTML = '<option value="">No shock — baseline only</option>' +
+        fcast.shocks.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+    } catch (e) { console.error('loadForecastShocks:', e); }
+  }
+
+  async function loadForecastStates() {
+    try {
+      const r = await fetch(`${FCAST}/states`);
+      if (!r.ok) return;
+      const b = await r.json();
+      fcast.states = b.states || [];
+      const sel = $('hp-forecast-state');
+      sel.innerHTML = '<option value="national">United States (national)</option>' +
+        fcast.states.map(s => `<option value="${s.code}">${s.code} · R²=${s.rsq}</option>`).join('');
+    } catch (e) { console.error('loadForecastStates:', e); }
+  }
+
+  async function loadForecastForCurrentGeography(retry = 0) {
+    setForecastStatus('Loading forecast…', 'build');
+    const baseUrl = fcastBase();
+    const histLevel = fcast.geography === 'national' ? 'national/USA' : `state/${fcast.geography}`;
+    try {
+      const [baseR, fanR, histR] = await Promise.all([
+        fetch(`${baseUrl}/baseline?h=8`),
+        fetch(`${baseUrl}/fan?h=8&n=200`),
+        fetch(`/api/house-prices/history/${histLevel}?min_year=${new Date().getFullYear() - 5}`),
+      ]);
+      if (baseR.status === 503 && retry < 8) {
+        // Forecast model still building — back off and retry
+        setForecastStatus('Building model…', 'build');
+        setTimeout(() => loadForecastForCurrentGeography(retry + 1), 8000);
+        return;
+      }
+      if (!baseR.ok) {
+        setForecastStatus(baseR.status === 404 ? 'No model for this geography' : 'Build failed', 'err');
+        return;
+      }
+      const baseB = await baseR.json();
+      fcast.baseline = baseB.path;
+      fcast.scenario = null;
+      fcast.fan = fanR.ok ? (await fanR.json()).bands : null;
+      fcast.history = histR.ok ? (await histR.json()).history : null;
+      renderForecastTable();
+      renderForecastChart();
+      setForecastStatus(`Built · ${geographyLabel()}`, 'ok');
+      loadForecastFitMeta().catch(e => console.error('forecast fit meta:', e));
+    } catch (e) {
+      console.error('loadForecastForCurrentGeography:', e);
+      setForecastStatus('Build failed', 'err');
+    }
+  }
+
+  async function loadForecastFitMeta() {
+    const r = await fetch(`${fcastBase()}/fit`);
+    if (!r.ok) return;
+    const b = await r.json();
+    const f = b.fit || {};
+    const sr = f.short_run || {};
+    const lr = f.long_run || {};
+    const dx = f.diagnostics || {};
+    const lrCoefs = Object.entries(lr.coefs || {})
+      .filter(([k]) => k !== 'const')
+      .map(([k, v]) => `${k}: ${v.toFixed(3)}`).join(' · ');
+    $('hp-forecast-fit').innerHTML = `
+      <div><strong>Engle-Granger ECM</strong> · ${geographyLabel()}</div>
+      <div style="margin-top:4px;">panel ${b.panel_start} → ${b.panel_end} · N=${(f.sample||{}).n||'—'}</div>
+      <div style="margin-top:6px;">
+        <span>γ <code>${sr.error_correction_coef ?? '—'}</code></span> ·
+        <span>R² <code>${sr.rsq ?? '—'}</code></span> ·
+        <span>DW <code>${dx.durbin_watson ?? '—'}</code></span>
+      </div>
+      <div style="margin-top:6px;color:#9ca3af;">Long-run: ${lrCoefs || '—'}</div>
+    `;
+  }
+
+  async function runScenario() {
+    const id = $('hp-forecast-shock').value;
+    if (!id) {
+      fcast.scenario = null;
+      renderForecastTable();
+      renderForecastChart();
+      return;
+    }
+    $('hp-forecast-run').disabled = true;
+    setForecastStatus('Running scenario…', 'build');
+    try {
+      const r = await fetch(`${fcastBase()}/shock`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id, h: 8}),
+      });
+      if (!r.ok) { setForecastStatus('Scenario failed', 'err'); return; }
+      const b = await r.json();
+      fcast.baseline = b.baseline;
+      fcast.scenario = b.shocked;
+      renderForecastTable();
+      renderForecastChart();
+      setForecastStatus(`Scenario · ${b.shock.label}`, 'ok');
+    } finally {
+      $('hp-forecast-run').disabled = false;
+    }
+  }
+
+  function renderForecastTable() {
+    const baseline = fcast.baseline || [];
+    const scenario = fcast.scenario || [];
+    const tbody = $('hp-forecast-table').querySelector('tbody');
+    if (!baseline.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="loading">No data yet.</td></tr>';
+      return;
+    }
+    const rows = baseline.map((p, i) => {
+      const s = scenario[i] || {};
+      const diff = (scenario.length && p.hpi_index != null && s.hpi_index != null)
+        ? (s.hpi_index - p.hpi_index) : null;
+      const diffCls = diff === null ? 'zero' : (diff > 0 ? 'pos' : (diff < 0 ? 'neg' : 'zero'));
+      const diffStr = diff === null ? '—' : `<span class="${diffCls}">${diff > 0 ? '+' : ''}${diff.toFixed(2)}</span>`;
+      return `<tr>
+        <td>${p.quarter}</td>
+        <td class="num">${p.hpi_index != null ? p.hpi_index.toFixed(2) : '—'}</td>
+        <td class="num">${fmtPct(p.yoy_pct, 2)}</td>
+        <td class="num">${s.hpi_index != null ? s.hpi_index.toFixed(2) : '—'}</td>
+        <td class="num">${diffStr}</td>
+      </tr>`;
+    }).join('');
+    tbody.innerHTML = rows;
+  }
+
+  function renderForecastChart() {
+    const host = d3.select('#hp-forecast-chart');
+    host.selectAll('*').remove();
+    const baseline = fcast.baseline || [];
+    if (!baseline.length) return;
+
+    const histAll = (fcast.history || []).filter(h => h.index != null);
+    const hist = histAll.slice(-12);   // last 3 years of history, max
+    const fan = fcast.fan || [];
+    const scenario = fcast.scenario || [];
+
+    // Combine onto one timeline (Date objects keyed by quarter)
+    const parse = (q) => new Date(q);
+    const histPts = hist.map(h => ({ d: parse(h.date), v: h.index, kind: 'hist' }));
+    const basePts = baseline.map(p => ({ d: parse(p.quarter), v: p.hpi_index, kind: 'base' }));
+    const allPts = histPts.concat(basePts);
+
+    const W = host.node().clientWidth, H = host.node().clientHeight;
+    const M = { top: 12, right: 12, bottom: 24, left: 44 };
+    const w = W - M.left - M.right, h = H - M.top - M.bottom;
+
+    const x = d3.scaleTime()
+      .domain(d3.extent(allPts, d => d.d))
+      .range([0, w]);
+
+    const yLow = Math.min(
+      d3.min(allPts, d => d.v),
+      fan.length ? d3.min(fan, p => p.p10) : Infinity,
+    );
+    const yHigh = Math.max(
+      d3.max(allPts, d => d.v),
+      fan.length ? d3.max(fan, p => p.p90) : -Infinity,
+      scenario.length ? d3.max(scenario, p => p.hpi_index) : -Infinity,
+    );
+    const yPad = (yHigh - yLow) * 0.06;
+    const y = d3.scaleLinear()
+      .domain([yLow - yPad, yHigh + yPad])
+      .range([h, 0])
+      .nice();
+
+    const svg = host.append('svg').attr('viewBox', `0 0 ${W} ${H}`);
+    const g = svg.append('g').attr('transform', `translate(${M.left},${M.top})`);
+
+    // Gridlines
+    g.append('g').attr('class', 'gridlines')
+      .selectAll('line')
+      .data(y.ticks(5))
+      .join('line')
+        .attr('class', 'gridline')
+        .attr('x1', 0).attr('x2', w)
+        .attr('y1', d => y(d)).attr('y2', d => y(d));
+
+    // Fan band (p10-p90 area)
+    if (fan.length) {
+      const area = d3.area()
+        .x(d => x(parse(d.quarter)))
+        .y0(d => y(d.p10))
+        .y1(d => y(d.p90))
+        .curve(d3.curveMonotoneX);
+      g.append('path').datum(fan).attr('class', 'fan-band').attr('d', area);
+    }
+
+    // Median (p50) line
+    if (fan.length) {
+      const line = d3.line()
+        .x(d => x(parse(d.quarter)))
+        .y(d => y(d.p50))
+        .curve(d3.curveMonotoneX);
+      g.append('path').datum(fan).attr('class', 'fan-median').attr('d', line);
+    }
+
+    // Historical line (joining last hist point to first forecast point so the
+    // eye reads it as one continuous series).
+    const histLine = d3.line()
+      .x(d => x(d.d))
+      .y(d => y(d.v))
+      .curve(d3.curveMonotoneX);
+    if (histPts.length) {
+      const bridge = histPts.concat(basePts.slice(0, 1));
+      g.append('path').datum(bridge).attr('class', 'hist-line').attr('d', histLine);
+    }
+
+    // Scenario line (red dashed) — only when active
+    if (scenario.length) {
+      const sPts = scenario.map(p => ({ d: parse(p.quarter), v: p.hpi_index }));
+      g.append('path').datum(sPts).attr('class', 'scenario-line').attr('d', histLine);
+    }
+
+    // Axes — pick a quarter-aware tick format. With ~12 quarters of history
+    // + 8 quarters of forecast spanning 2-3 years, %Y produced lots of
+    // duplicate "2026 2026 2026" labels. Use year-quarter (e.g. 2025Q1)
+    // and limit to ~5 ticks so they don't crowd on mobile.
+    const qFmt = (d) => `${d.getFullYear()}Q${Math.floor(d.getMonth() / 3) + 1}`;
+    g.append('g').attr('class', 'axis')
+      .attr('transform', `translate(0,${h})`)
+      .call(d3.axisBottom(x).ticks(W < 480 ? 4 : 6).tickFormat(qFmt));
+    g.append('g').attr('class', 'axis')
+      .call(d3.axisLeft(y).ticks(5));
+
+    // Legend (top-left)
+    const legend = g.append('g').attr('class', 'legend-row').attr('transform', 'translate(8,8)');
+    legend.append('line').attr('x1', 0).attr('x2', 14).attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#1f2937').attr('stroke-width', 1.5);
+    legend.append('text').attr('x', 18).attr('y', 3).text('History');
+    legend.append('line').attr('x1', 70).attr('x2', 84).attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#1d4ed8').attr('stroke-width', 2);
+    legend.append('text').attr('x', 88).attr('y', 3).text('Median forecast');
+    legend.append('rect').attr('x', 170).attr('y', -4).attr('width', 14).attr('height', 8)
+      .attr('fill', '#93c5fd').attr('opacity', 0.35);
+    legend.append('text').attr('x', 188).attr('y', 3).text('p10–p90');
+    if (scenario.length) {
+      legend.append('line').attr('x1', 240).attr('x2', 254).attr('y1', 0).attr('y2', 0)
+        .attr('stroke', '#b91c1c').attr('stroke-width', 1.8).attr('stroke-dasharray', '4,3');
+      legend.append('text').attr('x', 258).attr('y', 3).text('Scenario');
+    }
+  }
+
+  $('hp-forecast-run').addEventListener('click', runScenario);
+  $('hp-forecast-state').addEventListener('change', (e) => {
+    fcast.geography = e.target.value || 'national';
+    fcast.scenario = null;
+    $('hp-forecast-shock').value = '';
+    loadForecastForCurrentGeography();
+  });
+
+  // Init: load diagnostics + hero + initial state data (also populates map cache via loadLevel)
+  // + map topology + sources + forecast, all with explicit error catches.
+  Promise.all([
+    loadDiagnostics().catch(e => console.error('loadDiagnostics:', e)),
+    loadHero().catch(e => console.error('loadHero:', e)),
+    loadLevel('state').catch(e => console.error('loadLevel:', e)),
+    loadSources().catch(e => console.error('loadSources:', e)),
+    initMap().catch(e => console.error('initMap:', e)),
+    loadForecastShocks().catch(e => console.error('loadForecastShocks:', e)),
+    loadForecastStates().catch(e => console.error('loadForecastStates:', e)),
+    loadForecastForCurrentGeography().catch(e => console.error('loadForecast:', e)),
+  ]);
+})();
+</script>
+{% endblock %}

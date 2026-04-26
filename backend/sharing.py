@@ -117,6 +117,33 @@ def meta_for_path(path: str) -> dict:
             "og_url": path,
         }
 
+    if path.startswith("/macro-model"):
+        return {
+            **base,
+            "og_title": "US Macro Model — Parra Macro",
+            "og_description": "Structural US macro model with scenario simulations: GDP, inflation, unemployment, and rates.",
+            "og_image": "/og/preview.png?chart=macro-model",
+            "og_url": path,
+        }
+
+    if path.startswith("/house-prices"):
+        return {
+            **base,
+            "og_title": "US House Prices — Parra Macro",
+            "og_description": "Interactive US house-price index with state and county drill-down and ECM-based forecasts.",
+            "og_image": "/og/preview.png?chart=house-prices",
+            "og_url": path,
+        }
+
+    if path.startswith("/models"):
+        return {
+            **base,
+            "og_title": "Models — Parra Macro",
+            "og_description": "GeoRisk Monitor, US Macro Model, and US House Prices — interactive forecasting tools.",
+            "og_image": "/og/preview.png?chart=models",
+            "og_url": path,
+        }
+
     if path.startswith("/research"):
         return {**base, "og_title": "Research — Parra Macro", "og_description": "Original research on markets, macro, and geopolitical risk.", "og_url": path}
 
@@ -328,12 +355,30 @@ def _render_card(title: str, subtitle: str, source: str) -> bytes:
 
 def _meta_for_params(chart: str, cat: str, ds: str, sv: str) -> tuple[str, str, str]:
     """Return (title, description, source) for OG image generation."""
-    if chart == "georisk":
-        return (
+    chart_meta = {
+        "georisk": (
             "GeoRisk Monitor",
             "Real-time geopolitical risk scores, hotspots, and news signals across 51 countries.",
             "Parra Macro",
-        )
+        ),
+        "macro-model": (
+            "US Macro Model",
+            "Structural US macro model with scenario simulations across GDP, inflation, unemployment, and rates.",
+            "Parra Macro",
+        ),
+        "house-prices": (
+            "US House Prices",
+            "House-price index with state and county drill-down and ECM-based forecasts.",
+            "FHFA / Case-Shiller / Zillow",
+        ),
+        "models": (
+            "Parra Macro Models",
+            "GeoRisk Monitor, US Macro Model, and US House Prices — interactive forecasting tools.",
+            "Parra Macro",
+        ),
+    }
+    if chart in chart_meta:
+        return chart_meta[chart]
     meta = DATASETS.get((cat, ds)) if cat and ds else None
     if meta:
         svlabel = _subview_label(sv)
