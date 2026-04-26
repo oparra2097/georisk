@@ -45,40 +45,44 @@ logger = logging.getLogger(__name__)
 
 # ── Spec ────────────────────────────────────────────────────────────────
 #
-# Long-run cointegrating relationship is **income only**. The original
-# spec also put `mortgage30` and `unemp` in the long-run regression, but
-# over 1980-2025 mortgage rates and HPI both have strong upward / cyclical
-# trends that confound each other; the OLS picks up a positive coefficient
-# on mortgage rates (i.e. higher rates RAISE long-run prices), which is
-# economically backwards and produced wild forecasts: the resulting EC
-# residual was 30%+ from "equilibrium", and with γ ≈ -0.66 the model snapped
-# the first forecast quarter ±50% to close the gap. Keeping only income in
-# the long run gives a clean, well-known cointegrating relationship (homes
-# are normal goods; HPI grows roughly proportionally with real disposable
-# income over decades). Mortgage rates and unemployment still enter as
-# short-run cyclical drivers, where their signs are correctly negative.
+# Long-run cointegrating relationship: HPI ~ real_income + cpi.
+#
+# Including BOTH real income and CPI in the long-run is the right
+# specification for nominal HPI: real_income captures the income-elasticity
+# channel ("homes are normal goods"), and cpi absorbs the price-level drift
+# that's otherwise dumped into the residual. An income-only spec
+# under-explained the post-1995 housing-price climb (HPI grew ~7x while
+# real income only ~3x), leaving a 15-20% positive residual at sample end;
+# with γ ≈ -0.4 that produced a -18% forecast YoY in Q1 (snap-back to the
+# implied "equilibrium"), which is unrealistic.
+#
+# The previous spec also tried mortgage30 + unemp in the long-run, but
+# OLS picked a POSITIVE coefficient on mortgage rates (economically
+# backwards) over the long upward-trending sample. Mortgage rate and
+# unemployment stay in the short-run-only block where their signs come
+# out correctly negative.
 
 NATIONAL_SPEC = EquationSpec(
     name='HPI national',
     dependent='hpi',
-    long_run=['real_income'],                                    # income elasticity only
-    short_run_diffs=['real_income', 'mortgage30', 'unemp'],      # rates + unemp as cyclicals
+    long_run=['real_income', 'cpi'],                             # income + price level
+    short_run_diffs=['real_income', 'mortgage30', 'unemp'],      # rates + unemp cyclicals
     short_run_levels=[],
     max_lags=4,
     include_lagged_dep=True,
-    notes='Long-run: HPI ~ real disposable income. Short-run adds mortgage rate and unemployment.',
+    notes='Long-run: HPI ~ real disposable income + CPI. Short-run: mortgage rate, unemployment.',
 )
 
 
 def _state_spec(state_code: str) -> EquationSpec:
     """Per-state ECM spec — same shape as national, just shorter max_lags
     because state-level series are noisier. Uses NATIONAL macro drivers
-    (income, mortgage rate, unemp) since state-level versions of these
-    aren't readily available from FRED at quarterly cadence."""
+    (income, cpi, mortgage rate, unemp) since state-level versions of
+    these aren't readily available from FRED at quarterly cadence."""
     return EquationSpec(
         name=f'HPI {state_code}',
         dependent='hpi',
-        long_run=['real_income'],
+        long_run=['real_income', 'cpi'],
         short_run_diffs=['real_income', 'mortgage30', 'unemp'],
         short_run_levels=[],
         max_lags=3,
