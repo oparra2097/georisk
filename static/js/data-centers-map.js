@@ -54,7 +54,9 @@ const DataCenterMap = {
   summary: null,
   tooltipEl: null,
   mode: 'markets',           // 'markets' | 'facilities'
-  scenario: 'moderate',      // 'mild' | 'moderate' | 'severe'
+  baseline: 'moderate',      // 'mild' | 'moderate' | 'severe'
+  stresses: new Set(),       // any subset of stress_* keys
+  scenario: 'moderate',      // legacy: derived label, kept for tooltip text
   colorBy: 'funding',        // 'funding' | 'tenant' | 'developer' | 'risk'
   activeTier: 'all',
   activeMetric: 'spec_ratio',
@@ -85,6 +87,7 @@ const DataCenterMap = {
     this.facilityLayer = this.svg.append('g').attr('class', 'facility-layer').style('display', 'none');
 
     this.bindToolbar();
+    this.parseScenarioFromURL();
 
     await Promise.all([this.loadStates(), this.loadData()]);
     this.render();
@@ -111,12 +114,54 @@ const DataCenterMap = {
     }
   },
 
+  scenarioQuery() {
+    const qs = new URLSearchParams();
+    if (this.baseline && this.baseline !== 'moderate') qs.set('baseline', this.baseline);
+    if (this.stresses.size) qs.set('stresses', Array.from(this.stresses).join(','));
+    return qs.toString();
+  },
+
+  parseScenarioFromURL() {
+    const qs = new URLSearchParams(window.location.search);
+    const b = (qs.get('baseline') || '').toLowerCase();
+    if (['mild', 'moderate', 'severe'].includes(b)) this.baseline = b;
+    const s = qs.get('stresses') || '';
+    this.stresses = new Set(
+      s.split(',').map(x => x.trim()).filter(Boolean).filter(k =>
+        ['stress_openai', 'stress_hyperscaler_pause', 'stress_ercot'].includes(k))
+    );
+    // Reflect in toolbar visual state
+    document.querySelectorAll('.dc-tab[data-baseline]').forEach(b =>
+      b.classList.toggle('active', b.dataset.baseline === this.baseline));
+    document.querySelectorAll('.dc-tab[data-stress]').forEach(b =>
+      b.classList.toggle('active', this.stresses.has(b.dataset.stress)));
+  },
+
+  pushURLState() {
+    const qs = this.scenarioQuery();
+    const url = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+    window.history.replaceState(null, '', url);
+  },
+
+  scenarioLabel() {
+    const baselineLbl = { mild: 'Mild', moderate: 'Moderate', severe: 'Severe' }[this.baseline] || 'Moderate';
+    const stressLbls = {
+      stress_openai: 'OpenAI -50%',
+      stress_hyperscaler_pause: 'capex pause',
+      stress_ercot: 'ERCOT crisis',
+    };
+    const parts = Array.from(this.stresses).map(k => stressLbls[k] || k);
+    return parts.length ? `${baselineLbl} + ${parts.join(' + ')}` : baselineLbl;
+  },
+
   async loadData() {
     try {
+      const qs = this.scenarioQuery();
+      const sfx = qs ? '?' + qs : '';
       const [m, s, f] = await Promise.all([
         fetch('/api/data-centers/markets').then(r => r.json()),
-        fetch('/api/data-centers/summary').then(r => r.json()),
-        fetch('/api/data-centers/facilities').then(r => r.json()),
+        fetch('/api/data-centers/summary' + sfx).then(r => r.json()),
+        fetch('/api/data-centers/facilities' + sfx).then(r => r.json()),
       ]);
       this.markets = m.markets || [];
       this.summary = s || {};
@@ -128,6 +173,25 @@ const DataCenterMap = {
     }
   },
 
+  async onScenarioChange() {
+    // Refetch summary + facilities under the new (baseline, stresses) and
+    // re-render dependent panels. Markets data is scenario-independent.
+    this.pushURLState();
+    try {
+      const qs = this.scenarioQuery();
+      const sfx = qs ? '?' + qs : '';
+      const [s, f] = await Promise.all([
+        fetch('/api/data-centers/summary' + sfx).then(r => r.json()),
+        fetch('/api/data-centers/facilities' + sfx).then(r => r.json()),
+      ]);
+      this.summary = s || {};
+      this.facilities = f.facilities || [];
+      this.applyScenario();
+    } catch (e) {
+      console.error('Failed to refetch under new scenario:', e);
+    }
+  },
+
   bindToolbar() {
     document.querySelectorAll('.dc-tab[data-mode]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -136,13 +200,36 @@ const DataCenterMap = {
         this.setMode(btn.dataset.mode);
       });
     });
-    const scenSel = document.getElementById('scenario-select');
-    if (scenSel) {
-      scenSel.addEventListener('change', () => {
-        this.scenario = scenSel.value;
-        this.applyScenario();
+    document.querySelectorAll('.dc-tab[data-baseline]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.dc-tab[data-baseline]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.baseline = btn.dataset.baseline;
+        this.onScenarioChange();
       });
-    }
+    });
+    document.querySelectorAll('.dc-tab[data-stress]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.stress;
+        if (this.stresses.has(key)) { this.stresses.delete(key); btn.classList.remove('active'); }
+        else                        { this.stresses.add(key);    btn.classList.add('active'); }
+        this.onScenarioChange();
+      });
+    });
+    const stressClear = document.getElementById('stress-clear');
+    if (stressClear) stressClear.addEventListener('click', () => {
+      this.stresses.clear();
+      document.querySelectorAll('.dc-tab[data-stress]').forEach(b => b.classList.remove('active'));
+      this.onScenarioChange();
+    });
+    const share = document.getElementById('share-scenario');
+    if (share) share.addEventListener('click', e => {
+      e.preventDefault();
+      navigator.clipboard.writeText(window.location.href).then(() => {
+        share.textContent = 'Link copied ✓';
+        setTimeout(() => share.textContent = 'Copy share link', 1500);
+      });
+    });
     document.querySelectorAll('.dc-tab[data-tier]').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.dc-tab[data-tier]').forEach(b => b.classList.remove('active'));
@@ -196,21 +283,19 @@ const DataCenterMap = {
   },
 
   // Read the right scenario value off any rollup row.
-  scenarioAtRiskMw(row) {
-    if (row?.at_risk_mw_by_scenario) return row.at_risk_mw_by_scenario[this.scenario] || 0;
-    return row?.at_risk_mw || 0;
-  },
-  scenarioAtRiskShare(row) {
-    if (row?.at_risk_share_by_scenario) return row.at_risk_share_by_scenario[this.scenario] || 0;
-    return row?.at_risk_share || 0;
-  },
+  // Active scenario values are injected server-side on each row.
+  scenarioAtRiskMw(row)    { return row?.at_risk_mw    || 0; },
+  scenarioAtRiskShare(row) { return row?.at_risk_share || 0; },
 
   applyScenario() {
     const help = document.getElementById('scenario-help');
-    if (help && this.summary?.scenarios) {
-      const lbl = this.summary.scenarios[this.scenario] || '';
-      const desc = this.summary.scenario_descriptions?.[this.scenario] || '';
-      help.textContent = desc || lbl;
+    if (help) {
+      const lbl = this.scenarioLabel();
+      const stressDescs = Array.from(this.stresses)
+        .map(k => this.summary?.scenario_descriptions?.[k]).filter(Boolean);
+      help.textContent = stressDescs.length
+        ? `${lbl} · ${stressDescs[0]}` + (stressDescs.length > 1 ? ` (+${stressDescs.length - 1} more)` : '')
+        : lbl;
     }
     this.renderKPIs();
     this.renderFundingTable();
@@ -355,8 +440,7 @@ const DataCenterMap = {
     tbody.innerHTML = rows.map(r => {
       const c = scale(r.stranded_risk || 0);
       const shortName = r.name.length > 36 ? r.name.slice(0, 34) + '…' : r.name;
-      const at_risk = (r.at_risk_mw_by_scenario && r.at_risk_mw_by_scenario[this.scenario])
-                       ?? r.at_risk_mw;
+      const at_risk = r.at_risk_mw || 0;
       return `
         <tr title="${r.name}\nTenant: ${r.tenant_norm} (${r.tenant_credit_label})\nFunding: ${r.funding_detail || r.funding_type}\nStatus: ${r.status}">
           <td>${shortName}</td>
@@ -466,15 +550,13 @@ const DataCenterMap = {
       document.getElementById('kpi-pipeline-sub').textContent =
         n.pipeline_ratio > 1 ? 'pipeline exceeds installed base' : 'pipeline below installed base';
     }
-    const ew  = this.summary?.expected_writedown_mw_by_scenario?.[this.scenario]
-              ?? this.summary?.expected_writedown_mw;
-    const ewS = this.summary?.expected_writedown_share_by_scenario?.[this.scenario]
-              ?? this.summary?.expected_writedown_share;
+    const ew  = this.summary?.expected_writedown_mw;
+    const ewS = this.summary?.expected_writedown_share;
     const wEl = document.getElementById('kpi-writedown');
     const sEl = document.getElementById('kpi-writedown-sub');
     if (wEl && ew != null) {
       wEl.textContent = Math.round(ew).toLocaleString();
-      sEl.textContent = `${(ewS * 100).toFixed(1)}% of named MW · ${this.scenario}`;
+      sEl.textContent = `${(ewS * 100).toFixed(1)}% of named MW · ${this.scenarioLabel()}`;
     }
   },
 
@@ -749,17 +831,16 @@ const DataCenterMap = {
             ${d.tenant} ~$${d.tenant_capex_b}B 2025 AI capex on ~$${d.tenant_fcf_b}B FCF
           </div>` : ''}
         ${(() => {
-          const sb = d.at_risk_mw_by_scenario || {};
-          const pb = d.writedown_prob_by_scenario || {};
-          const cur = this.scenario;
+          const sb = d.at_risk_mw_baselines || {};
           return `<div style="font-size:10px;color:#fca5a5;margin-top:5px;line-height:1.5;">
-            <div style="font-weight:600;">At-risk MW (${cur}): ${Math.round(sb[cur] ?? d.at_risk_mw ?? 0).toLocaleString()}
+            <div style="font-weight:600;">At-risk MW (${this.scenarioLabel()}):
+              ${Math.round(d.at_risk_mw || 0).toLocaleString()}
               <span style="color:#94a3b8;font-weight:400;">
-                · ${((pb[cur] ?? d.writedown_prob ?? 0) * 100).toFixed(0)}% prob × MW
+                · ${((d.writedown_prob || 0) * 100).toFixed(0)}% prob × MW
               </span>
             </div>
             <div style="color:#94a3b8;">
-              mild ${Math.round(sb.mild ?? 0)} · moderate ${Math.round(sb.moderate ?? 0)} · severe ${Math.round(sb.severe ?? 0)} MW
+              baselines: mild ${Math.round(sb.mild ?? 0)} · moderate ${Math.round(sb.moderate ?? 0)} · severe ${Math.round(sb.severe ?? 0)} MW
             </div>
           </div>`;
         })()}
@@ -793,17 +874,23 @@ const DataCenterMap = {
   },
 
   moveTip(event) {
-    const host = document.getElementById('dc-map-host');
-    const r = host.getBoundingClientRect();
-    const x = event.clientX - r.left;
-    const y = event.clientY - r.top;
+    // Tooltip is position:fixed, appended to <body>, so we use viewport
+    // coords (event.clientX/Y) and clamp against window dimensions —
+    // never against the map host (whose overflow:hidden would clip).
     const tt = this.tooltipEl;
-    const w = tt.offsetWidth || 220;
-    const h = tt.offsetHeight || 140;
-    const px = (x + 14 + w > r.width) ? x - 14 - w : x + 14;
-    const py = (y + 14 + h > r.height) ? y - 14 - h : y + 14;
+    const w = tt.offsetWidth  || 320;
+    const h = tt.offsetHeight || 220;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 12;
+    let px = event.clientX + 14;
+    let py = event.clientY + 14;
+    if (px + w + margin > vw) px = event.clientX - 14 - w;
+    if (py + h + margin > vh) py = event.clientY - 14 - h;
+    px = Math.max(margin, Math.min(px, vw - w - margin));
+    py = Math.max(margin, Math.min(py, vh - h - margin));
     tt.style.left = `${px}px`;
-    tt.style.top = `${py}px`;
+    tt.style.top  = `${py}px`;
   },
 
   hideTip() {

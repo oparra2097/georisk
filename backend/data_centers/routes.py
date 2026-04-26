@@ -22,9 +22,16 @@ def get_markets():
     return jsonify({'markets': service.get_markets(tier)})
 
 
+def _scenario_args():
+    baseline = (request.args.get('baseline') or service.DEFAULT_SCENARIO).lower()
+    stresses = request.args.get('stresses') or ''
+    return baseline, stresses
+
+
 @data_centers_bp.route('/summary')
 def get_summary():
-    return jsonify(service.get_summary())
+    baseline, stresses = _scenario_args()
+    return jsonify(service.get_summary(baseline=baseline, stresses=stresses))
 
 
 @data_centers_bp.route('/facilities')
@@ -34,6 +41,7 @@ def get_facilities():
     market_q = request.args.get('market')
     tenant_q = request.args.get('tenant')
     developer_q = request.args.get('developer')
+    baseline, stresses = _scenario_args()
     if status_q and status_q.lower() not in {'built', 'under_construction', 'planned'}:
         return jsonify({'error': 'status must be built|under_construction|planned'}), 400
     if funding_q and funding_q.lower() not in service.FUNDING_TYPES:
@@ -41,6 +49,7 @@ def get_facilities():
     return jsonify({
         'facilities': service.get_facilities(
             status_q, funding_q, market_q, tenant_q, developer_q,
+            baseline=baseline, stresses=stresses,
         ),
         'funding_types': service.FUNDING_TYPES,
     })

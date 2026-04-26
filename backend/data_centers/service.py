@@ -252,22 +252,35 @@ STRESS_KEYS = tuple(_STRESS_TESTS.keys())
 ALL_SCENARIO_KEYS = SCENARIO_KEYS + STRESS_KEYS
 
 
-def _writedown_prob(facility: dict, scenario_key: str) -> float:
-    """Probability of writedown for the given facility under the given scenario."""
+def _writedown_prob_composable(facility: dict, baseline: str, stresses: tuple = ()) -> float:
+    """Compose a baseline writedown probability with any number of stress overlays."""
+    if baseline not in _SCENARIOS:
+        baseline = DEFAULT_SCENARIO
     tier = facility['tenant_credit_tier']
     status = facility['status']
+    p = _SCENARIOS[baseline][tier][status]
+    for sk in stresses:
+        st = _STRESS_TESTS.get(sk)
+        if not st:
+            continue
+        if not st['predicate'](facility):
+            continue
+        if 'multiplier' in st:
+            p = min(0.95, p * st['multiplier'])
+        elif 'add' in st:
+            p = min(0.95, p + st['add'])
+    return p
+
+
+def _writedown_prob(facility: dict, scenario_key: str) -> float:
+    """Legacy named-scenario lookup. Mild/moderate/severe → bare baseline.
+    Stress test keys → moderate baseline + that single stress overlay."""
     if scenario_key in _SCENARIOS:
-        return _SCENARIOS[scenario_key][tier][status]
+        return _writedown_prob_composable(facility, scenario_key, ())
     if scenario_key in _STRESS_TESTS:
         st = _STRESS_TESTS[scenario_key]
-        base = _SCENARIOS[st['base']][tier][status]
-        if st['predicate'](facility):
-            if 'multiplier' in st:
-                base = min(0.95, base * st['multiplier'])
-            elif 'add' in st:
-                base = min(0.95, base + st['add'])
-        return base
-    return _SCENARIOS[DEFAULT_SCENARIO][tier][status]
+        return _writedown_prob_composable(facility, st['base'], (scenario_key,))
+    return _writedown_prob_composable(facility, DEFAULT_SCENARIO, ())
 
 
 def _credit_tier(tenant_norm: str) -> str:
@@ -314,10 +327,12 @@ def _facility_risk(f: dict, market_spec_ratio: float) -> dict:
     # Tenant credit profile (rating + PD + spread) — used in tooltip.
     credit = _credit_profile(tn)
 
-    # Per-scenario at-risk MW (covers demand environments AND named stress tests).
+    # Per-baseline at-risk MW (no stress overlay) for tooltip alternates.
     f_with_tier = {**f, 'tenant_credit_tier': tier}
-    prob_by_scen = {sk: _writedown_prob(f_with_tier, sk) for sk in ALL_SCENARIO_KEYS}
-    at_risk_by_scenario = {sk: round(f['mw'] * p, 1) for sk, p in prob_by_scen.items()}
+    at_risk_baselines = {
+        s: round(f['mw'] * _writedown_prob_composable(f_with_tier, s, ()), 1)
+        for s in SCENARIO_KEYS
+    }
 
     return {
         'tenant_credit_tier': tier,
@@ -336,11 +351,10 @@ def _facility_risk(f: dict, market_spec_ratio: float) -> dict:
         },
         'tenant_fcf_b':   headroom.get('fcf_b'),
         'tenant_capex_b': headroom.get('capex_b'),
-        'writedown_prob_by_scenario': prob_by_scen,
-        'at_risk_mw_by_scenario': at_risk_by_scenario,
-        # Legacy: keep moderate scenario fields for back-compat
+        'at_risk_mw_baselines': at_risk_baselines,
+        # Initial active values (overwritten by _apply_active_scenario per request)
         'writedown_prob': _SCENARIOS[DEFAULT_SCENARIO][tier][f['status']],
-        'at_risk_mw': at_risk_by_scenario[DEFAULT_SCENARIO],
+        'at_risk_mw': at_risk_baselines[DEFAULT_SCENARIO],
     }
 
 # Risk thresholds — used both for color scaling and for flagging "watch" markets.
@@ -495,12 +509,34 @@ def status() -> dict[str, Any]:
     }
 
 
+def _normalize_stresses(stresses) -> tuple:
+    if not stresses:
+        return ()
+    if isinstance(stresses, str):
+        items = [s.strip() for s in stresses.split(',') if s.strip()]
+    else:
+        items = list(stresses)
+    return tuple(s for s in items if s in _STRESS_TESTS)
+
+
+def _apply_active_scenario(fac: list[dict], baseline: str, stresses: tuple) -> list[dict]:
+    """Compute the active (baseline, stresses) writedown for each facility and
+    return shallow copies with `at_risk_mw` / `writedown_prob` overwritten."""
+    out = []
+    for f in fac:
+        p = _writedown_prob_composable(f, baseline, stresses)
+        out.append({**f, 'writedown_prob': p, 'at_risk_mw': round(f['mw'] * p, 1)})
+    return out
+
+
 def get_facilities(
     status: str | None = None,
     funding_type: str | None = None,
     market: str | None = None,
     tenant: str | None = None,
     developer: str | None = None,
+    baseline: str = DEFAULT_SCENARIO,
+    stresses=(),
 ) -> list[dict[str, Any]]:
     if not _CACHE.get('built'):
         build()
@@ -515,7 +551,7 @@ def get_facilities(
         fac = [f for f in fac if f['tenant_norm'] == tenant]
     if developer:
         fac = [f for f in fac if f['developer'] == developer]
-    return fac
+    return _apply_active_scenario(fac, baseline, _normalize_stresses(stresses))
 
 
 def get_markets(tier: str | None = None) -> list[dict[str, Any]]:
@@ -527,11 +563,14 @@ def get_markets(tier: str | None = None) -> list[dict[str, Any]]:
     return markets
 
 
-def get_summary() -> dict[str, Any]:
+def get_summary(baseline: str = DEFAULT_SCENARIO, stresses=()) -> dict[str, Any]:
     if not _CACHE.get('built'):
         build()
     markets = _CACHE.get('markets', [])
     nat = _CACHE.get('national', {})
+    stresses_norm = _normalize_stresses(stresses)
+    if baseline not in _SCENARIOS:
+        baseline = DEFAULT_SCENARIO
 
     by_tier: dict[str, dict[str, float]] = {}
     for m in markets:
@@ -560,21 +599,23 @@ def get_summary() -> dict[str, Any]:
     top_pipeline_share = sorted(markets, key=lambda x: x['pipeline_share'], reverse=True)[:5]
 
     # ─── Facility-level roll-ups ────────────────────────────────────────
-    facilities = _CACHE.get('facilities', [])
+    raw = _CACHE.get('facilities', [])
+    # Active values (under baseline + stresses) used for KPIs and rollups.
+    facilities = _apply_active_scenario(raw, baseline, stresses_norm)
+    fac_total_mw = sum(f['mw'] for f in facilities) or 1.0
+    total_at_risk_mw = sum(f.get('at_risk_mw', 0.0) for f in facilities)
+
+    # Plain baseline alternates (no stress) for tooltip "mild/mod/severe".
+    baseline_totals = {
+        s: round(sum(f['mw'] * _writedown_prob_composable(f, s, ()) for f in raw), 1)
+        for s in SCENARIO_KEYS
+    }
+
     by_funding: dict[str, dict[str, Any]] = {}
     by_developer: dict[str, dict[str, Any]] = {}
     by_tenant: dict[str, dict[str, Any]] = {}
-    fac_total_mw = sum(f['mw'] for f in facilities) or 1.0
-    total_at_risk_by_scenario = {
-        s: sum(f.get('at_risk_mw_by_scenario', {}).get(s, 0.0) for f in facilities)
-        for s in ALL_SCENARIO_KEYS
-    }
-    total_at_risk_mw = total_at_risk_by_scenario[DEFAULT_SCENARIO]
-
-    def _zero_scen(): return {s: 0.0 for s in ALL_SCENARIO_KEYS}
 
     for f in facilities:
-        f_at_risk = f.get('at_risk_mw_by_scenario', {})
         ft = f['funding_type']
         b = by_funding.setdefault(ft, {
             'funding_type': ft,
@@ -582,13 +623,10 @@ def get_summary() -> dict[str, Any]:
             'count': 0, 'mw': 0.0,
             'built_mw': 0.0, 'uc_mw': 0.0, 'planned_mw': 0.0,
             'at_risk_mw': 0.0,
-            'at_risk_mw_by_scenario': _zero_scen(),
         })
         b['count'] += 1
         b['mw'] += f['mw']
         b['at_risk_mw'] += f.get('at_risk_mw', 0.0)
-        for s in ALL_SCENARIO_KEYS:
-            b['at_risk_mw_by_scenario'][s] += f_at_risk.get(s, 0.0)
         if f['status'] == 'built':              b['built_mw']  += f['mw']
         elif f['status'] == 'under_construction': b['uc_mw']     += f['mw']
         else:                                   b['planned_mw'] += f['mw']
@@ -606,7 +644,6 @@ def get_summary() -> dict[str, Any]:
             'tenant': tn, 'count': 0, 'mw': 0.0,
             'built_mw': 0.0, 'uc_mw': 0.0, 'planned_mw': 0.0,
             'at_risk_mw': 0.0,
-            'at_risk_mw_by_scenario': _zero_scen(),
             'tenant_credit_tier': f.get('tenant_credit_tier', 'unknown'),
             'tenant_fcf_b': f.get('tenant_fcf_b'),
             'tenant_capex_b': f.get('tenant_capex_b'),
@@ -617,8 +654,6 @@ def get_summary() -> dict[str, Any]:
         t['count'] += 1
         t['mw'] += f['mw']
         t['at_risk_mw'] += f.get('at_risk_mw', 0.0)
-        for s in ALL_SCENARIO_KEYS:
-            t['at_risk_mw_by_scenario'][s] += f_at_risk.get(s, 0.0)
         if f['status'] == 'built':              t['built_mw']  += f['mw']
         elif f['status'] == 'under_construction': t['uc_mw']     += f['mw']
         else:                                   t['planned_mw'] += f['mw']
@@ -626,12 +661,6 @@ def get_summary() -> dict[str, Any]:
     for b in by_funding.values():
         b['share'] = round(b['mw'] / fac_total_mw, 4)
         b['at_risk_share'] = round(b['at_risk_mw'] / b['mw'], 3) if b['mw'] else 0.0
-        b['at_risk_share_by_scenario'] = {
-            s: round(b['at_risk_mw_by_scenario'][s] / b['mw'], 3) if b['mw'] else 0.0
-            for s in ALL_SCENARIO_KEYS
-        }
-        for s in ALL_SCENARIO_KEYS:
-            b['at_risk_mw_by_scenario'][s] = round(b['at_risk_mw_by_scenario'][s], 1)
         for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw', 'at_risk_mw'):
             b[k] = round(b[k], 1)
 
@@ -642,17 +671,10 @@ def get_summary() -> dict[str, Any]:
     for t in by_tenant.values():
         t['share'] = round(t['mw'] / fac_total_mw, 4)
         t['at_risk_share'] = round(t['at_risk_mw'] / t['mw'], 3) if t['mw'] else 0.0
-        t['at_risk_share_by_scenario'] = {
-            s: round(t['at_risk_mw_by_scenario'][s] / t['mw'], 3) if t['mw'] else 0.0
-            for s in ALL_SCENARIO_KEYS
-        }
-        for s in ALL_SCENARIO_KEYS:
-            t['at_risk_mw_by_scenario'][s] = round(t['at_risk_mw_by_scenario'][s], 1)
         for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw', 'at_risk_mw'):
             t[k] = round(t[k], 1)
 
-    # Top stranded-risk facilities (sorted by mw-weighted score, since a small
-    # very-risky building matters less than a large moderately-risky one).
+    # Top stranded-risk facilities (sorted by mw-weighted intrinsic score).
     top_risk = sorted(
         facilities,
         key=lambda x: x.get('stranded_risk', 0) * x.get('mw', 0),
@@ -668,13 +690,15 @@ def get_summary() -> dict[str, Any]:
         'facility_total_mw': round(fac_total_mw, 1),
         'expected_writedown_mw': round(total_at_risk_mw, 1),
         'expected_writedown_share': round(total_at_risk_mw / fac_total_mw, 3) if fac_total_mw else 0.0,
-        'expected_writedown_mw_by_scenario': {
-            s: round(total_at_risk_by_scenario[s], 1) for s in ALL_SCENARIO_KEYS
+        # Plain-baseline alternates for the KPI tile mild/moderate/severe ladder.
+        'expected_writedown_mw_baselines': baseline_totals,
+        'expected_writedown_share_baselines': {
+            s: round(baseline_totals[s] / fac_total_mw, 3) if fac_total_mw else 0.0
+            for s in SCENARIO_KEYS
         },
-        'expected_writedown_share_by_scenario': {
-            s: round(total_at_risk_by_scenario[s] / fac_total_mw, 3) if fac_total_mw else 0.0
-            for s in ALL_SCENARIO_KEYS
-        },
+        # Echo the active scenario back to the client so URL-state and
+        # rendering stay in sync.
+        'active_scenario': {'baseline': baseline, 'stresses': list(stresses_norm)},
         'by_funding': sorted(by_funding.values(), key=lambda x: -x['at_risk_mw']),
         'top_developers': sorted(by_developer.values(), key=lambda x: -x['mw'])[:12],
         'by_tenant': sorted(by_tenant.values(), key=lambda x: -x['mw']),
