@@ -158,14 +158,31 @@ def get_states():
     return jsonify(service.get_state_list())
 
 
+def _state_missing_response(code: str, label: str):
+    """Distinguish 'state still building' (503 → UI retries) from 'state
+    permanently unavailable' (404 → UI says No model). Without the 503
+    path, picking a state mid-build returned 404 immediately and the
+    chart's retry loop never engaged."""
+    s = service.status()
+    states_building = bool(service._state.get('states_building'))
+    skipped_codes = set(service._state.get('state_errors', {}).keys())
+    if states_building:
+        return jsonify({'error': f'state forecasts still building — retry shortly',
+                        'status': s}), 503
+    if code.upper() in skipped_codes:
+        reason = service._state.get('state_errors', {}).get(code.upper(), '')
+        return jsonify({'error': f'no {label} for state {code}',
+                        'reason': reason, 'status': s}), 404
+    return jsonify({'error': f'no {label} for state {code}', 'status': s}), 404
+
+
 @hpi_forecast_bp.route('/state/<code>/baseline')
 @_hpi_gate
 def get_state_baseline(code):
     h = max(1, min(24, int(request.args.get('h', 8))))
     records = service.get_state_baseline(code.upper(), horizon=h)
     if records is None:
-        return jsonify({'error': f'no forecast model for state {code}',
-                        'status': service.status()}), 404
+        return _state_missing_response(code, 'forecast model')
     return jsonify({'state_code': code.upper(), 'horizon': h, 'path': records})
 
 
@@ -175,7 +192,7 @@ def get_state_history(code):
     n = max(4, min(60, int(request.args.get('n', 20))))
     records = service.get_state_history(code.upper(), n_quarters=n)
     if records is None:
-        return jsonify({'error': f'no forecast model for state {code}'}), 404
+        return _state_missing_response(code, 'history')
     return jsonify({'state_code': code.upper(), 'n': n, 'history': records})
 
 
@@ -186,7 +203,7 @@ def get_state_fan(code):
     n = max(20, min(500, int(request.args.get('n', 200))))
     records = service.get_state_fan(code.upper(), horizon=h, n_draws=n)
     if records is None:
-        return jsonify({'error': f'no forecast model for state {code}'}), 404
+        return _state_missing_response(code, 'fan')
     return jsonify({'state_code': code.upper(), 'horizon': h, 'n_draws': n, 'bands': records})
 
 
@@ -195,7 +212,7 @@ def get_state_fan(code):
 def get_state_fit(code):
     report = service.get_state_fit(code.upper())
     if report is None:
-        return jsonify({'error': f'no forecast model for state {code}'}), 404
+        return _state_missing_response(code, 'fit')
     return jsonify(report)
 
 
