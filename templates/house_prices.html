@@ -143,6 +143,24 @@
   }
   @media (max-width: 800px) { .hp-forecast-grid { grid-template-columns: 1fr; } }
   .hp-forecast-meta { font-size: 11px; }
+  .hp-forecast-chart-host {
+    width: 100%; aspect-ratio: 5 / 2; min-height: 180px; max-height: 260px;
+    background: #fafbfc; border: 1px solid #f3f4f6; border-radius: 4px;
+    margin-bottom: 10px; position: relative;
+  }
+  .hp-forecast-chart-host svg { width: 100%; height: 100%; display: block; }
+  .hp-forecast-chart-host .axis text { fill: #9ca3af; font-size: 10px; }
+  .hp-forecast-chart-host .axis line, .hp-forecast-chart-host .axis path {
+    stroke: #e5e7eb; shape-rendering: crispEdges;
+  }
+  .hp-forecast-chart-host .gridline { stroke: #f3f4f6; stroke-dasharray: 2,2; }
+  .hp-forecast-chart-host .fan-band { fill: #93c5fd; opacity: 0.35; }
+  .hp-forecast-chart-host .fan-median { fill: none; stroke: #1d4ed8; stroke-width: 2; }
+  .hp-forecast-chart-host .hist-line { fill: none; stroke: #1f2937; stroke-width: 1.5; }
+  .hp-forecast-chart-host .scenario-line {
+    fill: none; stroke: #b91c1c; stroke-width: 1.8; stroke-dasharray: 4,3;
+  }
+  .hp-forecast-chart-host .legend-row { font-size: 10px; fill: #4b5563; }
 </style>
 {% endblock %}
 
@@ -205,18 +223,20 @@
     </div>
   </section>
 
-  <!-- 8-quarter national forecast (ECM with mortgage / income / unemp drivers) -->
+  <!-- 8-quarter forecast (ECM with mortgage / income / unemp drivers) -->
   <section class="hp-card hp-forecast-card">
     <div class="hp-forecast-head">
-      <h3>National HPI forecast <span class="sub">8 quarters · ECM with FRED macro drivers</span></h3>
+      <h3>HPI forecast <span class="sub">8 quarters · ECM with FRED macro drivers</span></h3>
       <span id="hp-forecast-status" class="hp-forecast-status">Building model…</span>
       <div class="hp-forecast-controls">
+        <select id="hp-forecast-state" title="Geography"><option value="">United States (national)</option></select>
         <select id="hp-forecast-shock"><option value="">No shock — baseline only</option></select>
         <button class="btn-reset" id="hp-forecast-run">Run scenario</button>
       </div>
     </div>
     <div class="hp-forecast-grid">
       <div>
+        <div id="hp-forecast-chart" class="hp-forecast-chart-host"></div>
         <table class="hp-table" id="hp-forecast-table">
           <thead><tr><th>Quarter</th><th class="num">Baseline HPI</th><th class="num">Baseline YoY</th><th class="num">Scenario HPI</th><th class="num">Δ vs baseline</th></tr></thead>
           <tbody><tr><td colspan="5" class="loading">Awaiting first build…</td></tr></tbody>
@@ -887,10 +907,31 @@
   $('hp-map-reset').addEventListener('click', resetMap);
 
   // ────────────────────────────────────────────────────────────────────
-  //  National HPI forecast (ECM with FRED macro drivers)
+  //  HPI forecast (ECM with FRED macro drivers)
+  //  Supports national + per-state via the geography selector.
   // ────────────────────────────────────────────────────────────────────
   const FCAST = '/api/house-prices/forecast';
-  const fcast = { baseline: null, scenario: null, shocks: [] };
+  const fcast = {
+    baseline: null,        // forecast records (with hpi_index, yoy_pct)
+    scenario: null,        // shocked records, when a scenario is active
+    fan: null,             // bootstrap fan records {quarter, p10, p50, p90}
+    history: null,         // recent historical {date, index} records
+    shocks: [],
+    states: [],            // [{code, rsq, n_obs, …}]
+    geography: 'national', // 'national' or state code (e.g. 'CA')
+  };
+
+  function fcastBase() {
+    return fcast.geography === 'national'
+      ? FCAST
+      : `${FCAST}/state/${encodeURIComponent(fcast.geography)}`;
+  }
+
+  function geographyLabel() {
+    if (fcast.geography === 'national') return 'United States';
+    const s = (fcast.states || []).find(s => s.code === fcast.geography);
+    return s ? s.code : fcast.geography;
+  }
 
   function setForecastStatus(text, cls) {
     const el = $('hp-forecast-status');
@@ -910,25 +951,55 @@
     } catch (e) { console.error('loadForecastShocks:', e); }
   }
 
-  async function loadForecastBaseline() {
-    setForecastStatus('Building model…', 'build');
-    const r = await fetch(`${FCAST}/baseline?h=8`);
-    if (r.status === 503) {
-      setForecastStatus('Building model…', 'build');
-      setTimeout(loadForecastBaseline, 8000);
-      return;
+  async function loadForecastStates() {
+    try {
+      const r = await fetch(`${FCAST}/states`);
+      if (!r.ok) return;
+      const b = await r.json();
+      fcast.states = b.states || [];
+      const sel = $('hp-forecast-state');
+      sel.innerHTML = '<option value="national">United States (national)</option>' +
+        fcast.states.map(s => `<option value="${s.code}">${s.code} · R²=${s.rsq}</option>`).join('');
+    } catch (e) { console.error('loadForecastStates:', e); }
+  }
+
+  async function loadForecastForCurrentGeography(retry = 0) {
+    setForecastStatus('Loading forecast…', 'build');
+    const baseUrl = fcastBase();
+    const histLevel = fcast.geography === 'national' ? 'national/USA' : `state/${fcast.geography}`;
+    try {
+      const [baseR, fanR, histR] = await Promise.all([
+        fetch(`${baseUrl}/baseline?h=8`),
+        fetch(`${baseUrl}/fan?h=8&n=200`),
+        fetch(`/api/house-prices/history/${histLevel}?min_year=${new Date().getFullYear() - 5}`),
+      ]);
+      if (baseR.status === 503 && retry < 8) {
+        // Forecast model still building — back off and retry
+        setForecastStatus('Building model…', 'build');
+        setTimeout(() => loadForecastForCurrentGeography(retry + 1), 8000);
+        return;
+      }
+      if (!baseR.ok) {
+        setForecastStatus(baseR.status === 404 ? 'No model for this geography' : 'Build failed', 'err');
+        return;
+      }
+      const baseB = await baseR.json();
+      fcast.baseline = baseB.path;
+      fcast.scenario = null;
+      fcast.fan = fanR.ok ? (await fanR.json()).bands : null;
+      fcast.history = histR.ok ? (await histR.json()).history : null;
+      renderForecastTable();
+      renderForecastChart();
+      setForecastStatus(`Built · ${geographyLabel()}`, 'ok');
+      loadForecastFitMeta().catch(e => console.error('forecast fit meta:', e));
+    } catch (e) {
+      console.error('loadForecastForCurrentGeography:', e);
+      setForecastStatus('Build failed', 'err');
     }
-    if (!r.ok) { setForecastStatus('Build failed', 'err'); return; }
-    const b = await r.json();
-    fcast.baseline = b.path;
-    fcast.scenario = null;
-    renderForecastTable();
-    setForecastStatus('Built', 'ok');
-    loadForecastFitMeta().catch(e => console.error('forecast fit meta:', e));
   }
 
   async function loadForecastFitMeta() {
-    const r = await fetch(`${FCAST}/fit`);
+    const r = await fetch(`${fcastBase()}/fit`);
     if (!r.ok) return;
     const b = await r.json();
     const f = b.fit || {};
@@ -939,7 +1010,8 @@
       .filter(([k]) => k !== 'const')
       .map(([k, v]) => `${k}: ${v.toFixed(3)}`).join(' · ');
     $('hp-forecast-fit').innerHTML = `
-      <div><strong>Engle-Granger ECM</strong> · panel ${b.panel_start} → ${b.panel_end} · N=${(f.sample||{}).n||'—'}</div>
+      <div><strong>Engle-Granger ECM</strong> · ${geographyLabel()}</div>
+      <div style="margin-top:4px;">panel ${b.panel_start} → ${b.panel_end} · N=${(f.sample||{}).n||'—'}</div>
       <div style="margin-top:6px;">
         <span>γ <code>${sr.error_correction_coef ?? '—'}</code></span> ·
         <span>R² <code>${sr.rsq ?? '—'}</code></span> ·
@@ -952,26 +1024,26 @@
   async function runScenario() {
     const id = $('hp-forecast-shock').value;
     if (!id) {
-      // No shock — just clear scenario column
       fcast.scenario = null;
       renderForecastTable();
+      renderForecastChart();
       return;
     }
     $('hp-forecast-run').disabled = true;
     setForecastStatus('Running scenario…', 'build');
     try {
-      const r = await fetch(`${FCAST}/shock`, {
+      const r = await fetch(`${fcastBase()}/shock`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({id, h: 8}),
       });
       if (!r.ok) { setForecastStatus('Scenario failed', 'err'); return; }
       const b = await r.json();
-      // Use the shock endpoint's baseline to keep the comparison apples-to-apples
       fcast.baseline = b.baseline;
       fcast.scenario = b.shocked;
       renderForecastTable();
-      setForecastStatus(`Scenario: ${b.shock.label}`, 'ok');
+      renderForecastChart();
+      setForecastStatus(`Scenario · ${b.shock.label}`, 'ok');
     } finally {
       $('hp-forecast-run').disabled = false;
     }
@@ -1002,7 +1074,126 @@
     tbody.innerHTML = rows;
   }
 
+  function renderForecastChart() {
+    const host = d3.select('#hp-forecast-chart');
+    host.selectAll('*').remove();
+    const baseline = fcast.baseline || [];
+    if (!baseline.length) return;
+
+    const histAll = (fcast.history || []).filter(h => h.index != null);
+    const hist = histAll.slice(-12);   // last 3 years of history, max
+    const fan = fcast.fan || [];
+    const scenario = fcast.scenario || [];
+
+    // Combine onto one timeline (Date objects keyed by quarter)
+    const parse = (q) => new Date(q);
+    const histPts = hist.map(h => ({ d: parse(h.date), v: h.index, kind: 'hist' }));
+    const basePts = baseline.map(p => ({ d: parse(p.quarter), v: p.hpi_index, kind: 'base' }));
+    const allPts = histPts.concat(basePts);
+
+    const W = host.node().clientWidth, H = host.node().clientHeight;
+    const M = { top: 12, right: 12, bottom: 24, left: 44 };
+    const w = W - M.left - M.right, h = H - M.top - M.bottom;
+
+    const x = d3.scaleTime()
+      .domain(d3.extent(allPts, d => d.d))
+      .range([0, w]);
+
+    const yLow = Math.min(
+      d3.min(allPts, d => d.v),
+      fan.length ? d3.min(fan, p => p.p10) : Infinity,
+    );
+    const yHigh = Math.max(
+      d3.max(allPts, d => d.v),
+      fan.length ? d3.max(fan, p => p.p90) : -Infinity,
+      scenario.length ? d3.max(scenario, p => p.hpi_index) : -Infinity,
+    );
+    const yPad = (yHigh - yLow) * 0.06;
+    const y = d3.scaleLinear()
+      .domain([yLow - yPad, yHigh + yPad])
+      .range([h, 0])
+      .nice();
+
+    const svg = host.append('svg').attr('viewBox', `0 0 ${W} ${H}`);
+    const g = svg.append('g').attr('transform', `translate(${M.left},${M.top})`);
+
+    // Gridlines
+    g.append('g').attr('class', 'gridlines')
+      .selectAll('line')
+      .data(y.ticks(5))
+      .join('line')
+        .attr('class', 'gridline')
+        .attr('x1', 0).attr('x2', w)
+        .attr('y1', d => y(d)).attr('y2', d => y(d));
+
+    // Fan band (p10-p90 area)
+    if (fan.length) {
+      const area = d3.area()
+        .x(d => x(parse(d.quarter)))
+        .y0(d => y(d.p10))
+        .y1(d => y(d.p90))
+        .curve(d3.curveMonotoneX);
+      g.append('path').datum(fan).attr('class', 'fan-band').attr('d', area);
+    }
+
+    // Median (p50) line
+    if (fan.length) {
+      const line = d3.line()
+        .x(d => x(parse(d.quarter)))
+        .y(d => y(d.p50))
+        .curve(d3.curveMonotoneX);
+      g.append('path').datum(fan).attr('class', 'fan-median').attr('d', line);
+    }
+
+    // Historical line (joining last hist point to first forecast point so the
+    // eye reads it as one continuous series).
+    const histLine = d3.line()
+      .x(d => x(d.d))
+      .y(d => y(d.v))
+      .curve(d3.curveMonotoneX);
+    if (histPts.length) {
+      const bridge = histPts.concat(basePts.slice(0, 1));
+      g.append('path').datum(bridge).attr('class', 'hist-line').attr('d', histLine);
+    }
+
+    // Scenario line (red dashed) — only when active
+    if (scenario.length) {
+      const sPts = scenario.map(p => ({ d: parse(p.quarter), v: p.hpi_index }));
+      g.append('path').datum(sPts).attr('class', 'scenario-line').attr('d', histLine);
+    }
+
+    // Axes
+    g.append('g').attr('class', 'axis')
+      .attr('transform', `translate(0,${h})`)
+      .call(d3.axisBottom(x).ticks(6).tickFormat(d3.timeFormat("%Y")));
+    g.append('g').attr('class', 'axis')
+      .call(d3.axisLeft(y).ticks(5));
+
+    // Legend (top-left)
+    const legend = g.append('g').attr('class', 'legend-row').attr('transform', 'translate(8,8)');
+    legend.append('line').attr('x1', 0).attr('x2', 14).attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#1f2937').attr('stroke-width', 1.5);
+    legend.append('text').attr('x', 18).attr('y', 3).text('History');
+    legend.append('line').attr('x1', 70).attr('x2', 84).attr('y1', 0).attr('y2', 0)
+      .attr('stroke', '#1d4ed8').attr('stroke-width', 2);
+    legend.append('text').attr('x', 88).attr('y', 3).text('Median forecast');
+    legend.append('rect').attr('x', 170).attr('y', -4).attr('width', 14).attr('height', 8)
+      .attr('fill', '#93c5fd').attr('opacity', 0.35);
+    legend.append('text').attr('x', 188).attr('y', 3).text('p10–p90');
+    if (scenario.length) {
+      legend.append('line').attr('x1', 240).attr('x2', 254).attr('y1', 0).attr('y2', 0)
+        .attr('stroke', '#b91c1c').attr('stroke-width', 1.8).attr('stroke-dasharray', '4,3');
+      legend.append('text').attr('x', 258).attr('y', 3).text('Scenario');
+    }
+  }
+
   $('hp-forecast-run').addEventListener('click', runScenario);
+  $('hp-forecast-state').addEventListener('change', (e) => {
+    fcast.geography = e.target.value || 'national';
+    fcast.scenario = null;
+    $('hp-forecast-shock').value = '';
+    loadForecastForCurrentGeography();
+  });
 
   // Init: load diagnostics + hero + initial state data (also populates map cache via loadLevel)
   // + map topology + sources + forecast, all with explicit error catches.
@@ -1013,7 +1204,8 @@
     loadSources().catch(e => console.error('loadSources:', e)),
     initMap().catch(e => console.error('initMap:', e)),
     loadForecastShocks().catch(e => console.error('loadForecastShocks:', e)),
-    loadForecastBaseline().catch(e => console.error('loadForecastBaseline:', e)),
+    loadForecastStates().catch(e => console.error('loadForecastStates:', e)),
+    loadForecastForCurrentGeography().catch(e => console.error('loadForecast:', e)),
   ]);
 })();
 </script>
