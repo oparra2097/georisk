@@ -1101,12 +1101,17 @@
   async function loadForecastForCurrentGeography(retry = 0) {
     setForecastStatus('Loading forecast…', 'build');
     const baseUrl = fcastBase();
-    const histLevel = fcast.geography === 'national' ? 'national/USA' : `state/${fcast.geography}`;
     try {
+      // Pull history from the forecast service (same series the forecast
+      // was fit on) instead of the dashboard's general /history endpoint.
+      // Guarantees the history line and the forecast line are on the same
+      // scale — the previous setup pulled them from different sources and
+      // could leave the chart's history blank if the dashboard /history
+      // was empty for this geography.
       const [baseR, fanR, histR] = await Promise.all([
         fetch(`${baseUrl}/baseline?h=8`),
         fetch(`${baseUrl}/fan?h=8&n=200`),
-        fetch(`/api/house-prices/history/${histLevel}?min_year=${new Date().getFullYear() - 5}`),
+        fetch(`${baseUrl}/history?n=20`),
       ]);
       if (baseR.status === 503 && retry < 8) {
         // Forecast model still building — back off and retry
@@ -1141,12 +1146,20 @@
     const sr = f.short_run || {};
     const lr = f.long_run || {};
     const dx = f.diagnostics || {};
+    const last = b.last_observation || {};
     const lrCoefs = Object.entries(lr.coefs || {})
       .filter(([k]) => k !== 'const')
       .map(([k, v]) => `${k}: ${v.toFixed(3)}`).join(' · ');
+    const sourceLine = b.source
+      ? `<div style="margin-top:4px;color:#4b5563;">Source: <code>${b.source}</code></div>`
+      : '';
+    const lastObs = (last.quarter && last.hpi_index)
+      ? `<div style="margin-top:4px;">Last observation ${last.quarter}: HPI <strong>${last.hpi_index.toFixed(2)}</strong></div>`
+      : '';
     $('hp-forecast-fit').innerHTML = `
-      <div><strong>Engle-Granger ECM</strong> · ${geographyLabel()}</div>
-      <div style="margin-top:4px;">panel ${b.panel_start} → ${b.panel_end} · N=${(f.sample||{}).n||'—'}</div>
+      <div><strong>${geographyLabel()}</strong> · panel ${b.panel_start} → ${b.panel_end} · N=${(f.sample||{}).n||'—'}</div>
+      ${sourceLine}
+      ${lastObs}
       <div style="margin-top:6px;">
         <span>γ <code>${sr.error_correction_coef ?? '—'}</code></span> ·
         <span>R² <code>${sr.rsq ?? '—'}</code></span> ·
