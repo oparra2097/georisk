@@ -22,12 +22,14 @@
   .model-card.card-geo::before    { background: #8b5cf6; }
   .model-card.card-macro::before  { background: #3b82f6; }
   .model-card.card-hpi::before    { background: #10b981; }
+  .model-card.card-dc::before     { background: #f97316; }
 
   .model-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .model-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0; }
   .card-geo .model-icon    { background: #8b5cf618; color: #8b5cf6; }
   .card-macro .model-icon  { background: #3b82f618; color: #3b82f6; }
   .card-hpi .model-icon    { background: #10b98118; color: #10b981; }
+  .card-dc .model-icon     { background: #f9731618; color: #f97316; }
 
   .model-name { font-size: 17px; font-weight: 600; margin: 0; color: #111827; }
   .model-tagline { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
@@ -131,6 +133,33 @@
         <div class="model-stat"><span class="num">1975+</span><span class="lbl">Sample</span></div>
       </div>
       <span class="model-cta">Open House Prices <span class="arrow">&rarr;</span></span>
+    </a>
+
+    <!-- Data Centers -->
+    <a href="/data-centers" class="model-card card-dc">
+      <div class="model-card-top">
+        <div class="model-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="4" width="18" height="5" rx="1"/>
+            <rect x="3" y="11" width="18" height="5" rx="1"/>
+            <rect x="3" y="18" width="18" height="3" rx="1"/>
+            <circle cx="7" cy="6.5" r="0.6" fill="currentColor"/>
+            <circle cx="7" cy="13.5" r="0.6" fill="currentColor"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="model-name">Data Center Risk Map</h3>
+          <p class="model-tagline">CBRE-tier markets &middot; built / UC / planned MW</p>
+        </div>
+        <span class="model-badge badge-public">Public</span>
+      </div>
+      <p class="model-desc">US wholesale data center markets classified by CBRE's primary / secondary / emerging tiers. Maps concentration of installed capacity and flags overbuild risk via the unleased share of under-construction MW relative to the installed base.</p>
+      <div class="model-stats">
+        <div class="model-stat"><span class="num">27</span><span class="lbl">Markets</span></div>
+        <div class="model-stat"><span class="num">3</span><span class="lbl">CBRE tiers</span></div>
+        <div class="model-stat"><span class="num">3</span><span class="lbl">Risk lenses</span></div>
+      </div>
+      <span class="model-cta">Open Data Centers <span class="arrow">&rarr;</span></span>
     </a>
   </div>
 </div>
