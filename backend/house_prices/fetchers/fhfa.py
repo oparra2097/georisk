@@ -114,15 +114,23 @@ def _parse_master_csv(text: str) -> list[HpiRow]:
     freq_counts: dict[str, int] = {}
     level_counts: dict[str, int] = {}
     kept = 0
+    # Require flavor='all-transactions' AND frequency='quarterly'.
+    # Previously empty-string flavor/frequency was treated as a wildcard and
+    # kept the row. FHFA's recent master CSV interleaves multiple index
+    # series under the same place_id (notably the all-transactions index
+    # alongside an experimental higher-value series), some of which have
+    # empty flavor/frequency cells. Mixing them produced a panel where
+    # 2025-Q1 read as 304 while 2025-Q4 read as 709 — a +130% jump that
+    # surfaced as a +143% YoY snap in the forecast.
     for r in reader:
         flavor = col(r, 'hpi_flavor').strip().lower() or col(r, 'flavor').strip().lower()
         freq = col(r, 'frequency').strip().lower()
         flavor_counts[flavor] = flavor_counts.get(flavor, 0) + 1
         freq_counts[freq] = freq_counts.get(freq, 0) + 1
 
-        if flavor and flavor != 'all-transactions':
+        if flavor != 'all-transactions':
             continue
-        if freq and freq != 'quarterly':
+        if freq != 'quarterly':
             continue
 
         raw_level = col(r, 'level').strip()

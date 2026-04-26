@@ -81,7 +81,16 @@ def _hpi_log_series(level: str, code: str) -> Optional[pd.Series]:
         records.append({'date': ts, 'index': float(r.index_nsa)})
     if not records:
         return None
-    df = pd.DataFrame(records).sort_values('date').drop_duplicates('date').set_index('date')
+    # Median-aggregate when multiple records share a date. drop_duplicates
+    # would arbitrarily keep whichever record happened to be first in the
+    # FHFA master CSV, and FHFA's master can interleave multiple index
+    # series under the same place_id — see the +143% Q1 YoY incident.
+    # Median is robust to outliers and gives the same answer when there's
+    # only one record per date.
+    df = (pd.DataFrame(records)
+            .groupby('date')['index'].median()
+            .sort_index()
+            .to_frame('index'))
     return np.log(df['index'])
 
 
@@ -293,6 +302,61 @@ def get_fan(horizon: int = 8, n_draws: int = 200) -> Optional[list[dict]]:
 
 def get_shock_list() -> list[dict]:
     return get_shock_catalogue()
+
+
+def debug_panel() -> dict:
+    """One-shot diagnostic: shows what's in the national model's panel.
+    Used to verify HPI levels are consistent with the source-of-truth
+    (e.g. Case-Shiller national ≈ 312 in Q4 2025 — if the panel reads
+    something wildly different, there's a data feed bug)."""
+    ensure_built()
+    with _lock:
+        m = _state['model']
+        if m is None:
+            return {'error': 'model not built', 'status': status()}
+        panel = m.panel
+        last8 = panel.tail(8)
+        rows = []
+        for ts, row in last8.iterrows():
+            rec = {'quarter': ts.date().isoformat()}
+            for col in panel.columns:
+                v = row[col]
+                if isinstance(v, float) and not (np.isnan(v) or np.isinf(v)):
+                    # `hpi` is log; expose both raw log and exp level for clarity
+                    if col == 'hpi':
+                        rec['hpi_log'] = round(float(v), 4)
+                        rec['hpi_level'] = round(float(np.exp(v)), 2)
+                    else:
+                        rec[col] = round(float(v), 4)
+            rows.append(rec)
+        return {
+            'n_obs': int(len(panel)),
+            'panel_start': panel.index.min().date().isoformat(),
+            'panel_end': panel.index.max().date().isoformat(),
+            'last_8_quarters': rows,
+            'raw_hpi_records': _hpi_records_debug('USA'),
+        }
+
+
+def _hpi_records_debug(code: str) -> list[dict]:
+    """Last 8 quarterly raw HpiRow records for the given code — bypasses the
+    log + median aggregation so we can see if FHFA is shipping multiple
+    index values under the same place_id."""
+    grouped = hpi_service._state.get('grouped') or {}
+    rows = grouped.get(('national', code)) or []
+    out = []
+    for r in rows:
+        if getattr(r, 'freq', '') != 'quarterly':
+            continue
+        if r.year is None or r.period is None or r.index_nsa is None:
+            continue
+        out.append({
+            'year': r.year, 'period': r.period,
+            'name': getattr(r, 'name', ''),
+            'index_nsa': float(r.index_nsa),
+        })
+    out.sort(key=lambda d: (d['year'], d['period']))
+    return out[-8:]
 
 
 # ── Per-state accessors ─────────────────────────────────────────────────
