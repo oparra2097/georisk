@@ -328,10 +328,17 @@ def get_fit_report() -> Optional[dict]:
         m = _state['model']
         if m is None:
             return None
+        last_hpi_log = float(m.panel['hpi'].dropna().iloc[-1])
         return {
             'panel_start': m.panel_start.date().isoformat(),
             'panel_end': m.panel_end.date().isoformat(),
             'fit': m.fit.to_dict(),
+            'source': _national_source_used(),
+            'last_observation': {
+                'quarter': m.panel.index[-1].date().isoformat(),
+                'hpi_log': round(last_hpi_log, 4),
+                'hpi_index': round(float(np.exp(last_hpi_log)), 2),
+            },
         }
 
 
@@ -362,6 +369,49 @@ def get_baseline(horizon: int = 8) -> Optional[list[dict]]:
     else:
         df = cached.head(horizon)
     return _df_to_records(df)
+
+
+def _panel_history_records(panel: 'pd.DataFrame', n_quarters: int) -> list[dict]:
+    """Convert the last `n_quarters` rows of a model panel into UI-friendly
+    records: {quarter, hpi_log, hpi_index}. The chart needs `index` (level)
+    to plot, and `hpi_log` is exposed for diagnostics."""
+    hpi_log = panel['hpi'].dropna().tail(n_quarters)
+    out = []
+    for ts, val in hpi_log.items():
+        if val is None or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
+            continue
+        level = float(np.exp(float(val)))
+        out.append({
+            'quarter': ts.date().isoformat(),
+            'hpi_log': float(val),
+            'hpi_index': level,
+            'index': level,         # alias the chart already reads as `h.index`
+        })
+    return out
+
+
+def get_history(n_quarters: int = 20) -> Optional[list[dict]]:
+    """Return recent historical HPI from the NATIONAL forecast model's
+    panel — the SAME series the forecast was fit on. The chart needs this
+    so the history line and the forecast line are guaranteed to be on the
+    same scale (the older path went through the separate house_prices
+    /history endpoint, which could return a different scale than the
+    forecast model used)."""
+    ensure_built()
+    with _lock:
+        m = _state['model']
+        if m is None:
+            return None
+        return _panel_history_records(m.panel, n_quarters)
+
+
+def get_state_history(state_code: str, n_quarters: int = 20) -> Optional[list[dict]]:
+    ensure_built()
+    with _lock:
+        m = _state['states'].get(state_code)
+        if m is None:
+            return None
+        return _panel_history_records(m.panel, n_quarters)
 
 
 def get_fan(horizon: int = 8, n_draws: int = 200) -> Optional[list[dict]]:

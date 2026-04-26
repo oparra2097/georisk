@@ -69,6 +69,20 @@ def get_baseline():
     return jsonify({'horizon': h, 'path': records})
 
 
+@hpi_forecast_bp.route('/history')
+@_hpi_gate
+def get_history():
+    """Recent historical HPI from the NATIONAL forecast model's panel.
+    Same series the forecast was fit on, so the chart's history line
+    and forecast line are guaranteed to be on the same scale."""
+    n = max(4, min(60, int(request.args.get('n', 20))))
+    records = service.get_history(n_quarters=n)
+    if records is None:
+        msg, s = _building_msg()
+        return jsonify({'error': msg, 'status': s}), 503
+    return jsonify({'n': n, 'history': records})
+
+
 @hpi_forecast_bp.route('/fan')
 @_hpi_gate
 def get_fan():
@@ -153,6 +167,16 @@ def get_state_baseline(code):
         return jsonify({'error': f'no forecast model for state {code}',
                         'status': service.status()}), 404
     return jsonify({'state_code': code.upper(), 'horizon': h, 'path': records})
+
+
+@hpi_forecast_bp.route('/state/<code>/history')
+@_hpi_gate
+def get_state_history(code):
+    n = max(4, min(60, int(request.args.get('n', 20))))
+    records = service.get_state_history(code.upper(), n_quarters=n)
+    if records is None:
+        return jsonify({'error': f'no forecast model for state {code}'}), 404
+    return jsonify({'state_code': code.upper(), 'n': n, 'history': records})
 
 
 @hpi_forecast_bp.route('/state/<code>/fan')
