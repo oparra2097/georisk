@@ -38,6 +38,43 @@
   .pos { color: #059669; } .neg { color: #dc2626; } .zero { color: #9ca3af; }
   .tbl-wrap { max-height: 520px; overflow-y: auto; border: 1px solid #f3f4f6; border-radius: 4px; }
 
+  /* ── Mobile (≤640px) ───────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .hp-page { padding: 12px; }
+    .hp-hero { padding: 22px 16px; }
+    .hp-hero h2 { font-size: 21px; }
+    .hp-hero p { font-size: 13px; }
+    .hp-hero-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .hp-hero-stat .num { font-size: 18px; }
+    .hp-card { padding: 12px; margin-bottom: 12px; }
+    .hp-toolbar { gap: 6px; }
+    .hp-tab { padding: 5px 10px; font-size: 11px; }
+    .hp-search { min-width: 0; width: 100%; margin-left: 0; }
+    .hp-map-card { padding: 12px; }
+    .hp-map-host { min-height: 240px; aspect-ratio: 5 / 4; }
+    .hp-map-head { gap: 6px; }
+    .hp-map-head .sub { display: block; margin-left: 0; width: 100%; font-size: 10px; }
+    .hp-map-controls { width: 100%; flex-wrap: wrap; }
+    .hp-map-controls select, .hp-map-controls .btn-reset { font-size: 11px; }
+    .hp-map-host text.state-label { font-size: 8px; stroke-width: 1.6px; }
+    .hp-legend { gap: 8px; }
+    .hp-legend-bar, .hp-legend .ticks { width: 180px; }
+    .hp-legend .meta { margin-left: 0; text-align: left; width: 100%; }
+    table.hp-table { font-size: 11px; }
+    table.hp-table thead th { padding: 6px 6px; font-size: 10px; }
+    table.hp-table tbody td { padding: 5px 6px; }
+    .tbl-wrap { max-height: 360px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .hp-forecast-card { padding: 12px; }
+    .hp-forecast-head { gap: 6px; }
+    .hp-forecast-head h3 { font-size: 12px; }
+    .hp-forecast-head h3 .sub { display: block; margin-left: 0; }
+    .hp-forecast-controls { width: 100%; flex-wrap: wrap; }
+    .hp-forecast-controls select { flex: 1; min-width: 120px; }
+    .hp-forecast-controls button { width: 100%; padding: 8px 14px; }
+    .hp-forecast-chart-host { min-height: 160px; aspect-ratio: 5 / 3; }
+    .hp-forecast-status { width: 100%; text-align: center; }
+  }
+
   .hp-layout { display: grid; grid-template-columns: minmax(0,2fr) minmax(320px,1fr); gap: 20px; }
   @media (max-width: 900px) { .hp-layout { grid-template-columns: 1fr; } }
 
@@ -101,11 +138,11 @@
   }
   .hp-legend .scale-host { display: flex; flex-direction: column; gap: 3px; }
   .hp-legend-bar {
-    width: 240px; height: 10px; border-radius: 2px;
-    /* Matches d3.interpolateRdBu reversed (blue=low, red=high) with the
-       sqrt warp on t — picked at -1, -0.5, 0, +0.5, +1 to show mid-range
-       saturation. */
-    background: linear-gradient(to right, #2166ac, #67a9cf, #f7f7f7, #ef8a62, #b2182b);
+    width: 240px; height: 10px; border-radius: 2px; overflow: hidden;
+    /* Filled at runtime by renderLegendGradient() with the same nine
+       discrete RdBu tiles the map uses, so the legend reads as exactly
+       what's painted. */
+    display: flex;
   }
   .hp-legend .ticks {
     width: 240px; display: flex; justify-content: space-between; font-size: 10px; color: #4b5563;
@@ -590,33 +627,30 @@
   };
 
   // Color scale is data-driven: each repaint computes the symmetric P5/P95
-  // of the active metric across the visible level (states or counties),
-  // so the gradient actually uses its full range instead of clipping
-  // everything to mid-grey under a fixed ±10% scale.
-  function computeRange(values, metric) {
-    // Use the symmetric P10/P90 of the live data so most of the visible
-    // states use the FULL color range — under P5/P95 the scale was wide
-    // enough that mid-range states clipped to near-white.
+  // 9-bucket quantile scale on the live data. Each visible state always
+  // falls in a clearly distinct bucket — even when the YoY range is
+  // narrow and continuous interpolation would smear everything into
+  // mid-grey. Reverse RdBu (blue = low, red = high) with a near-white
+  // tile in the middle for whatever the median state currently sits at.
+  const COLOR_BUCKETS = ['#2166ac','#4393c3','#92c5de','#d1e5f0','#f7f7f7','#fddbc7','#f4a582','#d6604d','#b2182b'];
+
+  function buildScale(values, metric) {
     const finite = values.filter(v => v !== null && v !== undefined && !isNaN(v));
-    if (!finite.length) return metric === 'zscore_yoy' ? 2.0 : 10.0;
-    finite.sort((a, b) => a - b);
-    const q = (p) => finite[Math.max(0, Math.min(finite.length - 1, Math.floor(p * (finite.length - 1))))];
-    const lo = q(0.10), hi = q(0.90);
-    const r = Math.max(Math.abs(lo), Math.abs(hi));
-    const floor = metric === 'zscore_yoy' ? 0.4 : 1.5;
-    return Math.max(r, floor);
+    if (!finite.length) {
+      return { colorOf: () => '#f5f5f4', edges: [], lo: 0, hi: 0 };
+    }
+    const scale = d3.scaleQuantile().domain(finite).range(COLOR_BUCKETS);
+    const sorted = finite.slice().sort((a, b) => a - b);
+    return {
+      colorOf: (v) => (v === null || v === undefined || isNaN(v)) ? '#f5f5f4' : scale(v),
+      edges: scale.quantiles(),
+      lo: sorted[0],
+      hi: sorted[sorted.length - 1],
+    };
   }
 
-  function hpiColor(value, range) {
-    if (value === null || value === undefined || isNaN(value)) return '#f5f5f4';
-    // Map t ∈ [-1, 1] but warp the magnitude with sqrt so values near 0 still
-    // pick up perceptible color (instead of clipping to near-white). Sign is
-    // preserved.
-    const raw = Math.max(-1, Math.min(1, value / range));
-    const t = Math.sign(raw) * Math.sqrt(Math.abs(raw));
-    // d3.interpolateRdBu is reversed (blue=high). We want blue=low, red=high,
-    // so invert the input.
-    return d3.interpolateRdBu((1 - t) / 2);
+  function hpiColor(value) {
+    return (map.scale ? map.scale.colorOf(value) : '#f5f5f4');
   }
 
   function fmtMetric(v, metric) {
@@ -692,16 +726,17 @@
 
   function paintStates() {
     const vals = Object.values(map.stateData).map(s => s[map.metric]);
-    map.range = computeRange(vals, map.metric);
+    map.scale = buildScale(vals, map.metric);
     map.gStates.selectAll('path.geo')
       .classed('no-data', d => !map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]])
       .transition().duration(280)
       .attr('fill', d => {
         const s = map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]];
         if (!s) return '#f3f4f6';
-        return hpiColor(s[map.metric], map.range);
+        return hpiColor(s[map.metric]);
       });
     updateLegendBounds(vals);
+    renderLegendGradient();
   }
 
   function fmtTick(v, metric) {
@@ -709,16 +744,35 @@
     return (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
   }
 
+  function renderLegendGradient() {
+    // Replace the static linear-gradient bar with discrete bucket tiles
+    // matching the active 9-color quantile scale, so the legend reads as
+    // exactly what's painted on the map.
+    const bar = document.querySelector('.hp-legend-bar');
+    if (!bar) return;
+    bar.style.background = '';
+    bar.style.display = 'flex';
+    bar.innerHTML = '';
+    COLOR_BUCKETS.forEach(c => {
+      const tile = document.createElement('div');
+      tile.style.flex = '1';
+      tile.style.background = c;
+      tile.style.height = '100%';
+      bar.appendChild(tile);
+    });
+  }
+
   function updateLegendBounds(values) {
     const finite = (values || []).filter(v => v !== null && v !== undefined && !isNaN(v));
-    const r = map.range;
-    $('hp-legend-min').textContent = fmtTick(-r, map.metric);
-    $('hp-legend-mid').textContent = fmtTick(0, map.metric);
-    $('hp-legend-max').textContent = fmtTick(+r, map.metric);
+    const lo = map.scale ? map.scale.lo : 0;
+    const hi = map.scale ? map.scale.hi : 0;
+    $('hp-legend-min').textContent = fmtTick(lo, map.metric);
+    $('hp-legend-mid').textContent = fmtTick((lo + hi) / 2, map.metric);
+    $('hp-legend-max').textContent = fmtTick(hi, map.metric);
     $('hp-legend-metric').textContent = $('hp-map-metric').selectedOptions[0]?.text || 'YoY %';
     const noun = map.selectedFips ? 'counties' : 'states';
     $('hp-legend-stats').textContent = finite.length
-      ? `${finite.length} ${noun} colored · scale set to data P5–P95 (±${r.toFixed(1)})`
+      ? `${finite.length} ${noun} · 9 quantile buckets (~${Math.round(finite.length / 9)} per bucket)`
       : `0 ${noun} colored`;
   }
 
@@ -853,13 +907,14 @@
   }
 
   function paintCounties(stateCounties) {
-    // Compute a county-specific data-driven scale
+    // Per-state county quantile scale (counties have a wider distribution
+    // than states so the buckets re-cluster cleanly when drilling in)
     const stateFips = map.selectedFips;
     const vals = stateCounties.features
       .map(f => map.countyData[String(f.id).padStart(5, '0')])
       .filter(c => c)
       .map(c => c[map.metric]);
-    map.range = computeRange(vals, map.metric);
+    map.scale = buildScale(vals, map.metric);
 
     map.gCounties.selectAll('path.geo')
       .data(stateCounties.features, f => f.id)
@@ -874,9 +929,10 @@
       .attr('fill', f => {
         const fips = String(f.id).padStart(5, '0');
         const c = map.countyData[fips];
-        return c ? hpiColor(c[map.metric], map.range) : '#f3f4f6';
+        return c ? hpiColor(c[map.metric]) : '#f3f4f6';
       });
     updateLegendBounds(vals);
+    renderLegendGradient();
   }
 
   function resetMap() {

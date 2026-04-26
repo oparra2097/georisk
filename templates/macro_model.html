@@ -53,6 +53,34 @@
   .loading { color: #9ca3af; font-size: 12px; padding: 12px; text-align: center; }
   .delta-pos { color: #b91c1c; }
   .delta-neg { color: #065f46; }
+
+  /* Make the 20-quarter forecast table scroll horizontally on small screens
+     instead of squashing 9 columns into 360px. */
+  .mm-forecast-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* ── Mobile (≤640px) ───────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .mm-page { padding: 12px; }
+    .mm-hero { padding: 22px 16px; }
+    .mm-hero h2 { font-size: 21px; }
+    .mm-hero p { font-size: 13px; }
+    .mm-hero-stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .mm-hero-stat .num { font-size: 18px; }
+    .mm-hero-cta { display: block; margin: 8px 0 0; text-align: center; }
+    .mm-hero-cta + .mm-hero-cta { margin-top: 8px; }
+    .mm-card { padding: 12px; margin-bottom: 12px; }
+    .mm-title { font-size: 18px; }
+    .mm-subtitle { font-size: 12px; }
+    table.mm-table { font-size: 11px; }
+    table.mm-table th, table.mm-table td { padding: 4px 6px; white-space: nowrap; }
+    .mm-equation { font-size: 10px; padding: 6px; }
+    .mm-equation strong { font-size: 11px; }
+    .mm-equation .diag { grid-template-columns: repeat(2, 1fr); gap: 2px 8px; }
+    .shock-chips { gap: 4px; }
+    .shock-chip { padding: 4px 8px; font-size: 10px; }
+    .btn { padding: 8px 14px; font-size: 12px; }
+    .btn.primary { width: 100%; }
+  }
 </style>
 {% endblock %}
 
@@ -105,7 +133,7 @@
     <div>
       <div class="mm-card">
         <h3>20-quarter baseline forecast</h3>
-        <div id="mm-forecast"><div class="loading">Loading forecast…</div></div>
+        <div class="mm-forecast-wrap"><div id="mm-forecast"><div class="loading">Loading forecast…</div></div></div>
       </div>
 
       <div class="mm-card">
@@ -130,7 +158,7 @@
           </label>
           <button class="btn" id="mm-bt-run">Run backtest</button>
         </div>
-        <div id="mm-backtest"><div class="loading">Click "Run backtest" to evaluate against historical actuals.</div></div>
+        <div class="mm-forecast-wrap"><div id="mm-backtest"><div class="loading">Click "Run backtest" to evaluate against historical actuals.</div></div></div>
       </div>
     </div>
 
@@ -139,7 +167,7 @@
         <h3>Scenario — shock a variable</h3>
         <div class="shock-chips" id="mm-shock-chips"></div>
         <button class="btn primary" id="mm-run-shock" style="width:100%;margin-top:6px;">Run shock</button>
-        <div id="mm-shock-result" style="margin-top:10px;"></div>
+        <div class="mm-forecast-wrap"><div id="mm-shock-result" style="margin-top:10px;"></div></div>
       </div>
 
       <div class="mm-card">
