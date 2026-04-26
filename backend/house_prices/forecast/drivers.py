@@ -93,6 +93,42 @@ def _fetch_one(d: Driver, start: str) -> pd.Series:
     return q
 
 
+# ── State-specific unemployment ────────────────────────────────────────
+#
+# FRED publishes an SA monthly unemployment-rate series for every state
+# under the consistent code `<STATE>UR` (e.g. CAUR, TXUR, FLUR), starting
+# in 1976. State labor markets diverge a lot from the national rate
+# (TX in the 1986 oil bust, CA in the 1991 recession, FL post-2008,
+# the Sun Belt in 2020); using each state's own unemp instead of the
+# national one lifts state-model R² noticeably.
+
+_US_STATE_CODES = (
+    'AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN',
+    'IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH',
+    'NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT',
+    'VT','VA','WA','WV','WI','WY',
+)
+STATE_UNEMP_FRED_IDS: dict[str, str] = {c: f'{c}UR' for c in _US_STATE_CODES}
+
+
+def fetch_state_unemp(state_code: str, start: str = '1980-01-01') -> pd.Series:
+    """Quarterly state unemployment rate as a percentage level. Returns
+    an empty Series on any FRED failure so the caller can fall back to
+    the national series."""
+    fred_id = STATE_UNEMP_FRED_IDS.get(state_code.upper())
+    if fred_id is None:
+        return pd.Series(dtype=float, name='state_unemp')
+    try:
+        raw = fred_client.fetch_series(fred_id, start_date=start)
+    except Exception as e:
+        logger.warning(f'hpi_forecast.drivers: state unemp {fred_id} fetch raised: {e}')
+        return pd.Series(dtype=float, name='state_unemp')
+    if not raw:
+        logger.warning(f'hpi_forecast.drivers: state unemp {fred_id} empty')
+        return pd.Series(dtype=float, name='state_unemp')
+    return _to_quarterly(raw, 'M').rename('state_unemp')
+
+
 def build_panel(start: str = '1980-01-01') -> pd.DataFrame:
     """Quarterly panel with all macro drivers (no HPI yet — caller joins).
 

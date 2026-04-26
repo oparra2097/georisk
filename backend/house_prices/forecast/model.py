@@ -75,19 +75,29 @@ NATIONAL_SPEC = EquationSpec(
 
 
 def _state_spec(state_code: str) -> EquationSpec:
-    """Per-state ECM spec — same shape as national, just shorter max_lags
-    because state-level series are noisier. Uses NATIONAL macro drivers
-    (income, cpi, mortgage rate, unemp) since state-level versions of
-    these aren't readily available from FRED at quarterly cadence."""
+    """Per-state ECM spec.
+
+    Long-run keeps national real_income + cpi (state-level real income is
+    only annual on FRED). Short-run swaps the national unemployment rate
+    for the **state's own** unemp series — labor markets diverge a lot
+    across states (TX 1986 oil bust, CA 1991 tech, FL post-2008) and using
+    each state's local unemp lifts R² well past the national-only spec.
+    The fallback (when FRED has no state series for a given code) is
+    handled at the panel-build level: if state_unemp is missing, the
+    service injects national 'unemp' under that name.
+
+    max_lags bumped from 3 to 4 — state series are noisier, AIC sometimes
+    finds value in deeper lags, and a wider search costs nothing.
+    """
     return EquationSpec(
         name=f'HPI {state_code}',
         dependent='hpi',
         long_run=['real_income', 'cpi'],
-        short_run_diffs=['real_income', 'mortgage30', 'unemp'],
+        short_run_diffs=['real_income', 'mortgage30', 'state_unemp'],
         short_run_levels=[],
-        max_lags=3,
+        max_lags=4,
         include_lagged_dep=True,
-        notes=f'State-level HPI ECM ({state_code}); national drivers.',
+        notes=f'State-level HPI ECM ({state_code}); national long-run + state-specific unemp.',
     )
 
 
