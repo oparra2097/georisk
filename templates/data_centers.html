@@ -120,6 +120,11 @@
       <div class="dc-hero-stat"><div class="num" id="kpi-uc">—</div><div class="lbl">Under construction (MW)</div></div>
       <div class="dc-hero-stat"><div class="num" id="kpi-planned">—</div><div class="lbl">Planned (MW)</div></div>
       <div class="dc-hero-stat"><div class="num" id="kpi-pipeline-ratio">—</div><div class="lbl">Pipeline / Built</div><div class="sub" id="kpi-pipeline-sub"></div></div>
+      <div class="dc-hero-stat" style="border-color: rgba(248,113,113,0.35);">
+        <div class="num" id="kpi-writedown" style="color:#fca5a5;">—</div>
+        <div class="lbl">Expected stranded MW</div>
+        <div class="sub" id="kpi-writedown-sub" style="color:#fca5a5;"></div>
+      </div>
     </div>
   </section>
 
@@ -151,6 +156,7 @@
     <button class="dc-tab active" data-colorby="funding">Funding</button>
     <button class="dc-tab" data-colorby="tenant">Tenant</button>
     <button class="dc-tab" data-colorby="developer">Developer</button>
+    <button class="dc-tab" data-colorby="risk">Stranded risk</button>
   </div>
   <div class="dc-toolbar" id="facilities-toolbar-filters" style="display:none;">
     <span class="legend-inline">Filter:</span>
@@ -241,14 +247,33 @@
         </table>
       </div>
 
-      <div class="dc-card">
-        <h3>Capital stack (by funding source)</h3>
-        <table class="dc-table" id="funding-table">
+      <div class="dc-card" style="border-color:#fecaca;background:#fef2f2;">
+        <h3 style="color:#991b1b;">Top stranded-asset risks</h3>
+        <table class="dc-table" id="stranded-table">
           <thead>
-            <tr><th>Source</th><th class="num">#</th><th class="num">MW</th><th class="num">% MW</th></tr>
+            <tr><th>Facility</th><th class="num">Risk</th><th class="num">MW</th><th class="num">At-risk</th></tr>
           </thead>
           <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
         </table>
+        <div style="font-size:10px;color:#991b1b;margin-top:6px;line-height:1.4;">
+          Stranded-asset risk is a 0–100 composite of tenant concentration, tenant credit quality,
+          speculative build, capital structure, and metro-level demand correlation.
+          At-risk MW = facility MW × default probability for the (tenant tier, status) cell.
+        </div>
+      </div>
+
+      <div class="dc-card">
+        <h3>Investor write-down exposure</h3>
+        <table class="dc-table" id="funding-table">
+          <thead>
+            <tr><th>Source</th><th class="num">MW</th><th class="num">At-risk</th><th class="num">% at-risk</th></tr>
+          </thead>
+          <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
+        </table>
+        <div style="font-size:10px;color:#6b7280;margin-top:6px;line-height:1.4;">
+          Where the writedown lands if AI demand neutralizes — i.e. who absorbs the loss.
+          Click a row to filter the map.
+        </div>
       </div>
 
       <div class="dc-card">
@@ -282,6 +307,16 @@
     <strong>pipeline ratio</strong> = (UC + planned) ÷ built; <strong>concentration</strong> = market share of national built MW.
     <strong>Funding-source</strong> taxonomy: hyperscaler self-fund, public REIT, infra fund / PE,
     sovereign/strategic JV (e.g. Stargate), specialty/venture, public specialty.
+    <br><br>
+    <strong>Stranded-asset risk</strong> = tenant concentration (single-tenant / unleased / colo, 0–40)
+    + tenant credit quality (investment grade ↔ venture-backed, 0–25)
+    + speculative build component (planned/UC unleased &gt; built locked-in, 0–15)
+    + funding-source resilience (PE-leveraged &gt; sovereign &gt; REIT &gt; hyperscaler, 0–10)
+    + geographic correlation (metro spec_ratio, 0–10).
+    <strong>At-risk MW</strong> applies a default-probability matrix on (tenant tier × status):
+    e.g. venture-backed tenant + UC ⇒ ~50%, IG tenant + built ⇒ 0%.
+    Calibration is illustrative — substitute house probabilities by editing
+    <code>_WRITEDOWN_PROB</code> in <code>backend/data_centers/service.py</code>.
   </div>
 </div>
 

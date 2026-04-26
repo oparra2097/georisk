@@ -225,6 +225,7 @@ const DataCenterMap = {
     this.renderTierTable();
     this.renderTopTables();
     this.renderFundingTable();
+    this.renderStrandedTable();
     this.renderTenantTable();
     this.renderDeveloperTable();
     this.populateFundingFilter();
@@ -278,16 +279,25 @@ const DataCenterMap = {
     const tbody = document.querySelector('#funding-table tbody');
     const rows = this.summary?.by_funding || [];
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="loading">no data</td></tr>'; return; }
-    tbody.innerHTML = rows.map(r => `
-      <tr data-funding="${r.funding_type}">
-        <td>
-          <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${FUNDING_COLOR[r.funding_type] || '#9ca3af'};margin-right:6px;vertical-align:middle;"></span>
-          ${r.label}
-        </td>
-        <td class="num">${r.count}</td>
-        <td class="num">${Math.round(r.mw).toLocaleString()}</td>
-        <td class="num">${(r.share * 100).toFixed(1)}%</td>
-      </tr>`).join('');
+    const riskColor = pct => {
+      if (pct < 5) return '#10b981';
+      if (pct < 15) return '#fde047';
+      if (pct < 30) return '#f97316';
+      return '#dc2626';
+    };
+    tbody.innerHTML = rows.map(r => {
+      const pct = (r.at_risk_share || 0) * 100;
+      return `
+        <tr data-funding="${r.funding_type}">
+          <td>
+            <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${FUNDING_COLOR[r.funding_type] || '#9ca3af'};margin-right:6px;vertical-align:middle;"></span>
+            ${r.label}
+          </td>
+          <td class="num">${Math.round(r.mw).toLocaleString()}</td>
+          <td class="num">${Math.round(r.at_risk_mw).toLocaleString()}</td>
+          <td class="num" style="color:${riskColor(pct)};font-weight:600;">${pct.toFixed(1)}%</td>
+        </tr>`;
+    }).join('');
     tbody.querySelectorAll('tr').forEach(tr => {
       tr.addEventListener('click', () => {
         this._switchToFacilitiesMode();
@@ -300,6 +310,29 @@ const DataCenterMap = {
         this.renderFacilities();
       });
     });
+  },
+
+  renderStrandedTable() {
+    const tbody = document.querySelector('#stranded-table tbody');
+    const rows = this.summary?.top_stranded_risk || [];
+    if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="loading">no data</td></tr>'; return; }
+    const scale = this.riskScale();
+    tbody.innerHTML = rows.map(r => {
+      const c = scale(r.stranded_risk || 0);
+      const shortName = r.name.length > 36 ? r.name.slice(0, 34) + '…' : r.name;
+      return `
+        <tr title="${r.name}\nTenant: ${r.tenant_norm} (${r.tenant_credit_label})\nFunding: ${r.funding_detail || r.funding_type}\nStatus: ${r.status}">
+          <td>${shortName}</td>
+          <td class="num">
+            <span style="display:inline-block;width:30px;height:5px;background:#f3f4f6;border-radius:3px;vertical-align:middle;margin-right:4px;">
+              <span style="display:block;height:100%;border-radius:3px;width:${(r.stranded_risk||0).toFixed(0)}%;background:${c};"></span>
+            </span>
+            ${(r.stranded_risk || 0).toFixed(0)}
+          </td>
+          <td class="num">${Math.round(r.mw).toLocaleString()}</td>
+          <td class="num" style="color:#991b1b;font-weight:600;">${Math.round(r.at_risk_mw).toLocaleString()}</td>
+        </tr>`;
+    }).join('');
   },
 
   renderTenantTable() {
@@ -383,6 +416,14 @@ const DataCenterMap = {
       document.getElementById('kpi-pipeline-ratio').textContent = (n.pipeline_ratio).toFixed(2) + '×';
       document.getElementById('kpi-pipeline-sub').textContent =
         n.pipeline_ratio > 1 ? 'pipeline exceeds installed base' : 'pipeline below installed base';
+    }
+    const ew = this.summary?.expected_writedown_mw;
+    const ewShare = this.summary?.expected_writedown_share;
+    const wEl = document.getElementById('kpi-writedown');
+    const sEl = document.getElementById('kpi-writedown-sub');
+    if (wEl && ew != null) {
+      wEl.textContent = Math.round(ew).toLocaleString();
+      sEl.textContent = `${(ewShare * 100).toFixed(1)}% of named MW`;
     }
   },
 
@@ -523,6 +564,13 @@ const DataCenterMap = {
     return d3.scaleSqrt().domain([0, max]).range([3, 22]);
   },
 
+  riskScale() {
+    return d3.scaleLinear()
+      .domain([0, 30, 55, 75, 100])
+      .range(['#10b981', '#fde047', '#f97316', '#dc2626', '#7f1d1d'])
+      .clamp(true);
+  },
+
   colorForFacility(d) {
     if (this.colorBy === 'tenant') {
       const key = d.tenant_norm || 'Unleased';
@@ -530,6 +578,9 @@ const DataCenterMap = {
     }
     if (this.colorBy === 'developer') {
       return (_developerColor && _developerColor(d.developer)) || '#9ca3af';
+    }
+    if (this.colorBy === 'risk') {
+      return this.riskScale()(d.stranded_risk || 0);
     }
     return FUNDING_COLOR[d.funding_type] || '#9ca3af';
   },
@@ -584,11 +635,26 @@ const DataCenterMap = {
     } else if (this.colorBy === 'tenant') {
       const present = (this.summary?.by_tenant || []).map(t => t.tenant);
       items = present.map(name => swatch(TENANT_COLOR[name] || TENANT_FALLBACK, name));
-    } else {
+    } else if (this.colorBy === 'developer') {
       // developer — show top 8 to keep it readable, plus an "other" swatch
       const top = (this.summary?.top_developers || []).slice(0, 8).map(d => d.developer);
       items = top.map(dev => swatch((_developerColor && _developerColor(dev)) || '#9ca3af', dev));
       items.push(`<span style="color:#6b7280;font-size:10px;">…hover any marker for full attribution</span>`);
+    } else {
+      // risk — gradient bar with low/mid/high anchors
+      items = [
+        `<span style="display:inline-flex;align-items:center;gap:8px;">
+          low
+          <span style="display:inline-block;width:160px;height:8px;border-radius:4px;
+            background:linear-gradient(90deg,#10b981,#fde047,#f97316,#dc2626,#7f1d1d);"></span>
+          high (0 → 100 stranded-risk score)
+        </span>`,
+        swatch('#10b981', 'Locked / IG'),
+        swatch('#fde047', 'Watch'),
+        swatch('#f97316', 'Elevated'),
+        swatch('#dc2626', 'High'),
+        swatch('#7f1d1d', 'Severe'),
+      ];
     }
     host.innerHTML = items.join('');
   },
@@ -598,6 +664,9 @@ const DataCenterMap = {
     const statusLabel = { built: 'Built', under_construction: 'Under construction', planned: 'Planned' }[d.status] || d.status;
     const target = d.target_online ? ` · target online ${d.target_online}` : '';
     const tt = this.tooltipEl;
+    const drv = d.risk_drivers || {};
+    const riskColor = this.riskScale()(d.stranded_risk || 0);
+    const credit = d.tenant_credit_label || d.tenant_credit_tier || '';
     tt.innerHTML = `
       <div><span class="ttl">${d.name}</span></div>
       <dl>
@@ -607,10 +676,28 @@ const DataCenterMap = {
         <dt>Developer</dt><dd>${d.developer || '—'}</dd>
         <dt>Funding</dt><dd><span style="color:${FUNDING_COLOR[d.funding_type] || '#fff'};font-weight:600;">${fundingLabel}</span></dd>
         <dt></dt><dd style="color:#cbd5e1;">${d.funding_detail || ''}</dd>
-        ${d.tenant ? `<dt>Tenant</dt><dd>${d.tenant}</dd>` : ''}
+        ${d.tenant ? `<dt>Tenant</dt><dd>${d.tenant} <span style="color:#94a3b8;">(${credit})</span></dd>` : ''}
         <dt>Market</dt><dd>${d.market}</dd>
       </dl>
-      ${d.notes ? `<div class="note">${d.notes}</div>` : ''}
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid #334155;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">Stranded risk</span>
+          <span style="display:inline-block;flex:1;height:5px;background:#1f2937;border-radius:3px;">
+            <span style="display:block;height:100%;width:${(d.stranded_risk||0).toFixed(0)}%;background:${riskColor};border-radius:3px;"></span>
+          </span>
+          <span style="color:${riskColor};font-weight:700;font-size:11px;">${(d.stranded_risk||0).toFixed(0)}/100</span>
+        </div>
+        <div style="font-size:10px;color:#94a3b8;margin-top:4px;line-height:1.5;">
+          tenant ${drv.tenant_concentration ?? 0} · credit ${drv.tenant_credit ?? 0} ·
+          spec ${drv.speculative_build ?? 0} · funding ${drv.funding_resilience ?? 0} ·
+          geo ${drv.geographic_correlation ?? 0}
+        </div>
+        <div style="font-size:10px;color:#fca5a5;margin-top:3px;">
+          At-risk: ${Math.round(d.at_risk_mw || 0).toLocaleString()} MW
+          (${((d.writedown_prob || 0) * 100).toFixed(0)}% prob × MW)
+        </div>
+      </div>
+      ${d.notes ? `<div class="note" style="margin-top:6px;">${d.notes}</div>` : ''}
     `;
     tt.classList.add('show');
     this.moveTip(event);

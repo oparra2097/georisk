@@ -82,6 +82,126 @@ def _normalize_tenant(raw: str) -> str:
         return 'Colo (multi-tenant)'
     return s
 
+
+# ── Stranded-asset risk model ─────────────────────────────────────────────
+#
+# Drivers, weighted into a 0–100 composite score per facility:
+#   1. Tenant concentration   single-named tenant > unleased > colo
+#   2. Tenant credit quality  capacity-burning tenants riskier than IG mega-caps
+#   3. Speculative build      unleased UC/planned riskier than locked & built
+#   4. Funding-source         high-leverage PE > sovereign > REIT > hyperscaler
+#                              (who absorbs the writedown)
+#   5. Geographic correlation facilities in metros with high spec_ratio share
+#                              correlated demand-bust risk
+#
+# `at_risk_mw` is an illustrative expected-writedown estimate: facility MW
+# times a default-probability matrix on (tenant credit tier, status). It is
+# the point estimate for a "demand normalizes" (not crash, not boom) scenario
+# and is rolled up by funding source so investors can size their exposure.
+
+TENANT_CREDIT_TIER = {
+    'Microsoft': 'investment_grade',
+    'Meta':      'investment_grade',
+    'Google':    'investment_grade',
+    'Amazon':    'investment_grade',
+    'Apple':     'investment_grade',
+    'Oracle':    'investment_grade',
+    'OpenAI':    'high_growth_unprofitable',
+    'xAI':       'venture_backed',
+    'Colo (multi-tenant)': 'diversified',
+    'Unleased':            'speculative',
+}
+TENANT_TIER_LABEL = {
+    'investment_grade':         'Investment grade',
+    'high_growth_unprofitable': 'High-growth, unprofitable',
+    'venture_backed':           'Venture-backed',
+    'diversified':              'Diversified colo',
+    'speculative':              'Speculative (unleased)',
+    'unknown':                  'Unknown',
+}
+
+_CREDIT_RISK = {  # 0–25
+    'investment_grade':         3,
+    'high_growth_unprofitable': 18,
+    'venture_backed':           25,
+    'diversified':              5,
+    'speculative':              22,
+    'unknown':                  12,
+}
+
+_FUNDING_RESILIENCE = {  # 0–10  (higher = investor more exposed)
+    'hyperscaler':       1,
+    'reit':              3,
+    'infra_fund':        8,
+    'sovereign_jv':      5,
+    'specialty_pe':     10,
+    'public_specialty':  4,
+}
+
+# Default probability of writedown by (tenant tier, status).
+_WRITEDOWN_PROB = {
+    'investment_grade':         {'built': 0.00, 'under_construction': 0.03, 'planned': 0.08},
+    'high_growth_unprofitable': {'built': 0.10, 'under_construction': 0.30, 'planned': 0.55},
+    'venture_backed':           {'built': 0.20, 'under_construction': 0.50, 'planned': 0.70},
+    'diversified':              {'built': 0.02, 'under_construction': 0.10, 'planned': 0.20},
+    'speculative':              {'built': 0.15, 'under_construction': 0.55, 'planned': 0.80},
+    'unknown':                  {'built': 0.05, 'under_construction': 0.20, 'planned': 0.40},
+}
+
+
+def _credit_tier(tenant_norm: str) -> str:
+    return TENANT_CREDIT_TIER.get(tenant_norm, 'unknown')
+
+
+def _facility_risk(f: dict, market_spec_ratio: float) -> dict:
+    tn = f['tenant_norm']
+    tier = _credit_tier(tn)
+
+    # 1. Tenant concentration (0-40)
+    if tn == 'Colo (multi-tenant)':
+        c_concentration = 5
+    elif tn == 'Unleased':
+        c_concentration = 30
+    else:
+        c_concentration = 40
+
+    # 2. Tenant credit quality (0-25)
+    c_credit = _CREDIT_RISK[tier]
+
+    # 3. Speculative build (0-15) — locked-in built capacity scores 0
+    is_locked = tier in ('investment_grade', 'diversified')
+    if f['status'] == 'planned':
+        c_spec = 8 if is_locked else 15
+    elif f['status'] == 'under_construction':
+        c_spec = 4 if is_locked else 12
+    else:
+        c_spec = 0
+
+    # 4. Funding-source / capital structure (0-10)
+    c_funding = _FUNDING_RESILIENCE.get(f['funding_type'], 5)
+
+    # 5. Geographic correlation (0-10) — facility's metro spec_ratio scaled
+    c_geo = max(0.0, min(10.0, (market_spec_ratio or 0.0) * 25.0))
+
+    score = round(min(100.0, c_concentration + c_credit + c_spec + c_funding + c_geo), 1)
+    prob = _WRITEDOWN_PROB[tier][f['status']]
+    at_risk = round(f['mw'] * prob, 1)
+
+    return {
+        'tenant_credit_tier': tier,
+        'tenant_credit_label': TENANT_TIER_LABEL[tier],
+        'stranded_risk': score,
+        'risk_drivers': {
+            'tenant_concentration': c_concentration,
+            'tenant_credit':         c_credit,
+            'speculative_build':     c_spec,
+            'funding_resilience':    c_funding,
+            'geographic_correlation': round(c_geo, 1),
+        },
+        'writedown_prob': prob,
+        'at_risk_mw': at_risk,
+    }
+
 # Risk thresholds — used both for color scaling and for flagging "watch" markets.
 # spec_ratio > 0.35  ≈ unleased near-term supply > 35% of installed base.
 # pipeline_ratio > 1.0 ≈ announced+UC capacity exceeds existing inventory.
@@ -201,7 +321,16 @@ def build(force: bool = False) -> dict[str, Any]:
             data = _enrich(rows)
             _CACHE['markets'] = data['markets']
             _CACHE['national'] = data['national']
-            _CACHE['facilities'] = _load_facilities_csv()
+
+            # Build a market->spec_ratio lookup so we can compute the
+            # geographic-correlation component of facility risk.
+            spec_by_market = {m['market']: m['spec_ratio'] for m in data['markets']}
+
+            facilities = _load_facilities_csv()
+            for f in facilities:
+                f.update(_facility_risk(f, spec_by_market.get(f['market'], 0.0)))
+
+            _CACHE['facilities'] = facilities
             _CACHE['built'] = True
             _CACHE['build_error'] = None
         except Exception as e:
@@ -295,6 +424,7 @@ def get_summary() -> dict[str, Any]:
     by_developer: dict[str, dict[str, Any]] = {}
     by_tenant: dict[str, dict[str, Any]] = {}
     fac_total_mw = sum(f['mw'] for f in facilities) or 1.0
+    total_at_risk_mw = sum(f.get('at_risk_mw', 0.0) for f in facilities)
 
     for f in facilities:
         ft = f['funding_type']
@@ -303,9 +433,11 @@ def get_summary() -> dict[str, Any]:
             'label': FUNDING_TYPES.get(ft, ft),
             'count': 0, 'mw': 0.0,
             'built_mw': 0.0, 'uc_mw': 0.0, 'planned_mw': 0.0,
+            'at_risk_mw': 0.0,
         })
         b['count'] += 1
         b['mw'] += f['mw']
+        b['at_risk_mw'] += f.get('at_risk_mw', 0.0)
         if f['status'] == 'built':              b['built_mw']  += f['mw']
         elif f['status'] == 'under_construction': b['uc_mw']     += f['mw']
         else:                                   b['planned_mw'] += f['mw']
@@ -322,16 +454,20 @@ def get_summary() -> dict[str, Any]:
         t = by_tenant.setdefault(tn, {
             'tenant': tn, 'count': 0, 'mw': 0.0,
             'built_mw': 0.0, 'uc_mw': 0.0, 'planned_mw': 0.0,
+            'at_risk_mw': 0.0,
+            'tenant_credit_tier': f.get('tenant_credit_tier', 'unknown'),
         })
         t['count'] += 1
         t['mw'] += f['mw']
+        t['at_risk_mw'] += f.get('at_risk_mw', 0.0)
         if f['status'] == 'built':              t['built_mw']  += f['mw']
         elif f['status'] == 'under_construction': t['uc_mw']     += f['mw']
         else:                                   t['planned_mw'] += f['mw']
 
     for b in by_funding.values():
         b['share'] = round(b['mw'] / fac_total_mw, 4)
-        for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw'):
+        b['at_risk_share'] = round(b['at_risk_mw'] / b['mw'], 3) if b['mw'] else 0.0
+        for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw', 'at_risk_mw'):
             b[k] = round(b[k], 1)
 
     for d in by_developer.values():
@@ -340,8 +476,17 @@ def get_summary() -> dict[str, Any]:
 
     for t in by_tenant.values():
         t['share'] = round(t['mw'] / fac_total_mw, 4)
-        for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw'):
+        t['at_risk_share'] = round(t['at_risk_mw'] / t['mw'], 3) if t['mw'] else 0.0
+        for k in ('mw', 'built_mw', 'uc_mw', 'planned_mw', 'at_risk_mw'):
             t[k] = round(t[k], 1)
+
+    # Top stranded-risk facilities (sorted by mw-weighted score, since a small
+    # very-risky building matters less than a large moderately-risky one).
+    top_risk = sorted(
+        facilities,
+        key=lambda x: x.get('stranded_risk', 0) * x.get('mw', 0),
+        reverse=True,
+    )[:8]
 
     return {
         'national': nat,
@@ -350,7 +495,11 @@ def get_summary() -> dict[str, Any]:
         'top_concentration': top_concentration,
         'top_pipeline_share': top_pipeline_share,
         'facility_total_mw': round(fac_total_mw, 1),
-        'by_funding': sorted(by_funding.values(), key=lambda x: -x['mw']),
+        'expected_writedown_mw': round(total_at_risk_mw, 1),
+        'expected_writedown_share': round(total_at_risk_mw / fac_total_mw, 3) if fac_total_mw else 0.0,
+        'by_funding': sorted(by_funding.values(), key=lambda x: -x['at_risk_mw']),
         'top_developers': sorted(by_developer.values(), key=lambda x: -x['mw'])[:12],
         'by_tenant': sorted(by_tenant.values(), key=lambda x: -x['mw']),
+        'top_stranded_risk': top_risk,
+        'tenant_tier_labels': TENANT_TIER_LABEL,
     }
