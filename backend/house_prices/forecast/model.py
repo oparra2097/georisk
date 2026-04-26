@@ -44,32 +44,41 @@ logger = logging.getLogger(__name__)
 
 
 # ── Spec ────────────────────────────────────────────────────────────────
+#
+# Long-run cointegrating relationship is **income only**. The original
+# spec also put `mortgage30` and `unemp` in the long-run regression, but
+# over 1980-2025 mortgage rates and HPI both have strong upward / cyclical
+# trends that confound each other; the OLS picks up a positive coefficient
+# on mortgage rates (i.e. higher rates RAISE long-run prices), which is
+# economically backwards and produced wild forecasts: the resulting EC
+# residual was 30%+ from "equilibrium", and with γ ≈ -0.66 the model snapped
+# the first forecast quarter ±50% to close the gap. Keeping only income in
+# the long run gives a clean, well-known cointegrating relationship (homes
+# are normal goods; HPI grows roughly proportionally with real disposable
+# income over decades). Mortgage rates and unemployment still enter as
+# short-run cyclical drivers, where their signs are correctly negative.
 
 NATIONAL_SPEC = EquationSpec(
     name='HPI national',
-    dependent='hpi',                         # log-level of FHFA national index
-    long_run=['real_income', 'mortgage30', 'unemp'],
-    short_run_diffs=['real_income', 'mortgage30', 'unemp'],
+    dependent='hpi',
+    long_run=['real_income'],                                    # income elasticity only
+    short_run_diffs=['real_income', 'mortgage30', 'unemp'],      # rates + unemp as cyclicals
     short_run_levels=[],
     max_lags=4,
     include_lagged_dep=True,
-    notes='National HPI ECM with mortgage rate, real income, unemployment.',
+    notes='Long-run: HPI ~ real disposable income. Short-run adds mortgage rate and unemployment.',
 )
 
 
 def _state_spec(state_code: str) -> EquationSpec:
-    """Per-state ECM spec. Uses the same NATIONAL macro drivers because
-    state-level mortgage rates and income aren't readily available from
-    FRED at quarterly cadence — the cross-state variation we capture is
-    the BETA of each state's HPI to the national macro environment.
-
-    max_lags is reduced from 4 to 3 since state-level series are slightly
-    noisier; lagged dep stays on.
-    """
+    """Per-state ECM spec — same shape as national, just shorter max_lags
+    because state-level series are noisier. Uses NATIONAL macro drivers
+    (income, mortgage rate, unemp) since state-level versions of these
+    aren't readily available from FRED at quarterly cadence."""
     return EquationSpec(
         name=f'HPI {state_code}',
         dependent='hpi',
-        long_run=['real_income', 'mortgage30', 'unemp'],
+        long_run=['real_income'],
         short_run_diffs=['real_income', 'mortgage30', 'unemp'],
         short_run_levels=[],
         max_lags=3,
@@ -129,9 +138,18 @@ def _fit_with_spec(hpi_log: pd.Series, drivers: pd.DataFrame,
     if len(panel) < min_obs:
         raise RuntimeError(f'panel too short for {label} fit (n={len(panel)} < {min_obs})')
     fit = fit_equation(panel, spec)
+    gamma = fit.error_correction_coef()
     logger.info(f'hpi_forecast.model: fitted {label} ECM, '
-                f'γ={fit.error_correction_coef():+.3f}, R²={fit.rsq:.3f}, '
+                f'γ={gamma:+.3f}, R²={fit.rsq:.3f}, '
                 f'N={fit.n_obs}, sample {panel.index.min().date()}→{panel.index.max().date()}')
+    # Sanity check: a well-specified housing ECM should have γ in (-0.4, 0).
+    # Anything outside that range usually means the cointegrating regression
+    # is picking up spurious correlation and the forecast will overshoot.
+    if not (-0.4 < gamma < 0):
+        logger.warning(
+            f'hpi_forecast.model: {label} γ={gamma:+.3f} outside (-0.4, 0) — '
+            f'forecasts may overshoot. Check long_run spec for confounded regressors.'
+        )
     return HpiForecastModel(fit=fit, panel=panel)
 
 

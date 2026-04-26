@@ -638,7 +638,12 @@
   // narrow and continuous interpolation would smear everything into
   // mid-grey. Reverse RdBu (blue = low, red = high) with a near-white
   // tile in the middle for whatever the median state currently sits at.
-  const COLOR_BUCKETS = ['#2166ac','#4393c3','#92c5de','#d1e5f0','#f7f7f7','#fddbc7','#f4a582','#d6604d','#b2182b'];
+  // RdYlBu reversed: deep blue → light blue → YELLOW middle → orange → deep red.
+  // Yellow middle is far more visible than the near-white middle of RdBu —
+  // critical because quantile bucketing puts ~5/9 of all states in the middle
+  // three buckets. Also pulls in #fee08b for the centre tile (saturated yellow)
+  // so the median bucket is obvious instead of ghosting into the page bg.
+  const COLOR_BUCKETS = ['#313695','#4575b4','#74add1','#abd9e9','#fee08b','#fdae61','#f46d43','#d73027','#a50026'];
 
   function buildScale(values, metric) {
     const finite = values.filter(v => v !== null && v !== undefined && !isNaN(v));
