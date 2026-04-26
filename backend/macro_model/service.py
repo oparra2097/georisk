@@ -378,6 +378,12 @@ def get_bootstrap(horizon: int = 12, n_draws: int = 30) -> Optional[dict]:
         for ts, row in df.iterrows():
             rec = {'quarter': ts.date().isoformat()}
             for col, val in row.items():
+                # Guard NaN/Inf — Flask's default JSON encoder raises on
+                # non-compliant floats, which would 500 the entire /fan
+                # response and silently blank the chart.
+                if val is None or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
+                    rec[col] = None
+                    continue
                 if v is not None and v.transform == 'log':
                     rec[col] = float(np.exp(val))
                 else:
