@@ -63,6 +63,7 @@ from backend.auth import auth_bp, user_loader, init_auth_db, ADMIN_EMAIL
 from backend.scheduler import init_scheduler
 from backend.macro_model.routes import macro_model_bp
 from backend.house_prices.routes import house_prices_bp
+from backend.house_prices.forecast.routes import hpi_forecast_bp
 
 
 def create_app():
@@ -94,6 +95,7 @@ def create_app():
     app.register_blueprint(economist_bp, url_prefix='/api')
     app.register_blueprint(macro_model_bp, url_prefix='/api/macro-model/us')
     app.register_blueprint(house_prices_bp, url_prefix='/api/house-prices')
+    app.register_blueprint(hpi_forecast_bp, url_prefix='/api/house-prices/forecast')
     app.register_blueprint(auth_bp, url_prefix='/auth')
 
     # ── Routes ───────────────────────────────────────────────────────────
