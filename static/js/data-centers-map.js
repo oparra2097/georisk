@@ -441,9 +441,13 @@ const DataCenterMap = {
       const c = scale(r.stranded_risk || 0);
       const shortName = r.name.length > 36 ? r.name.slice(0, 34) + '…' : r.name;
       const at_risk = r.at_risk_mw || 0;
+      const conf = (r.confidence || 'medium').toLowerCase();
+      const srcLink = r.source_url
+        ? `<a href="${r.source_url}" target="_blank" rel="noopener" title="Source" style="color:#2563eb;text-decoration:none;margin-left:4px;font-size:10px;">↗</a>`
+        : '';
       return `
         <tr title="${r.name}\nTenant: ${r.tenant_norm} (${r.tenant_credit_label})\nFunding: ${r.funding_detail || r.funding_type}\nStatus: ${r.status}">
-          <td>${shortName}</td>
+          <td><span class="conf-dot conf-${conf}" title="${conf} confidence"></span>${shortName}${srcLink}</td>
           <td class="num">
             <span style="display:inline-block;width:30px;height:5px;background:#f3f4f6;border-radius:3px;vertical-align:middle;margin-right:4px;">
               <span style="display:block;height:100%;border-radius:3px;width:${(r.stranded_risk||0).toFixed(0)}%;background:${c};"></span>
@@ -800,11 +804,19 @@ const DataCenterMap = {
     const drv = d.risk_drivers || {};
     const riskColor = this.riskScale()(d.stranded_risk || 0);
     const credit = d.tenant_credit_label || d.tenant_credit_tier || '';
+    const conf = (d.confidence || 'medium').toLowerCase();
+    const confLabel = { high: 'verified', medium: 'partial', low: 'estimate', estimate: 'estimate' }[conf] || conf;
+    let srcHost = '';
+    if (d.source_url) {
+      try { srcHost = new URL(d.source_url).hostname.replace(/^www\./, ''); } catch (_) {}
+    }
     tt.innerHTML = `
       <div><span class="ttl">${d.name}</span></div>
       <dl>
         <dt>Status</dt><dd>${statusLabel}${target}</dd>
-        <dt>Capacity</dt><dd>${Math.round(d.mw).toLocaleString()} MW</dd>
+        <dt>Capacity</dt><dd>${Math.round(d.mw).toLocaleString()} MW
+          <span class="conf-dot conf-${conf}"></span><span style="color:#94a3b8;font-size:10px;">${confLabel}</span>
+        </dd>
         <dt>Operator</dt><dd>${d.operator || '—'}</dd>
         <dt>Developer</dt><dd>${d.developer || '—'}</dd>
         <dt>Funding</dt><dd><span style="color:${FUNDING_COLOR[d.funding_type] || '#fff'};font-weight:600;">${fundingLabel}</span></dd>
@@ -846,6 +858,7 @@ const DataCenterMap = {
         })()}
       </div>
       ${d.notes ? `<div class="note" style="margin-top:6px;">${d.notes}</div>` : ''}
+      ${srcHost ? `<div class="src">Source: ${srcHost}</div>` : ''}
     `;
     tt.classList.add('show');
     this.moveTip(event);

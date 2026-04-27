@@ -386,6 +386,8 @@ def _load_csv() -> list[dict[str, Any]]:
                 'preleased_pct': _to_float(r['preleased_pct']),
                 'vacancy_pct': _to_float(r['vacancy_pct']),
                 'power_note': r.get('power_note', ''),
+                'source_url': (r.get('source_url') or '').strip(),
+                'confidence': (r.get('confidence') or '').strip().lower() or 'medium',
             })
     return rows
 
@@ -414,6 +416,8 @@ def _load_facilities_csv() -> list[dict[str, Any]]:
                 'announced_year': r.get('announced_year', ''),
                 'target_online': r.get('target_online', ''),
                 'notes': r.get('notes', ''),
+                'source_url': (r.get('source_url') or '').strip(),
+                'confidence': (r.get('confidence') or '').strip().lower() or 'medium',
             })
     return rows
 

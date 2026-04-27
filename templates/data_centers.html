@@ -67,6 +67,12 @@
   .dc-tooltip dt { color: #94a3b8; }
   .dc-tooltip dd { margin: 0; font-variant-numeric: tabular-nums; color: #f1f5f9; }
   .dc-tooltip .note { color: #cbd5e1; font-size: 10px; margin-top: 6px; font-style: italic; }
+  .dc-tooltip .src  { color: #94a3b8; font-size: 10px; margin-top: 6px; font-style: italic; }
+  .conf-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; vertical-align: middle; margin-right: 3px; }
+  .conf-high     { background: #10b981; }
+  .conf-medium   { background: #f59e0b; }
+  .conf-low      { background: #ef4444; }
+  .conf-estimate { background: #6b7280; }
 
   .dc-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 10px; font-size: 11px; color: #4b5563; }
   .dc-legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; margin-right: 6px; border: 1px solid rgba(0,0,0,0.1); }
@@ -118,6 +124,12 @@
       (primary, secondary, emerging). Risk metrics flag concentration and
       speculative supply — the unleased portion of near-term builds relative to the
       installed base.
+    </p>
+    <p style="font-size:11px;color:#94a3b8;margin:12px 0 0;line-height:1.5;">
+      <span class="conf-dot conf-high"></span> verified · public filings, CBRE H1 2025, company press releases
+      &nbsp;&nbsp;<span class="conf-dot conf-medium"></span> partial · cross-referenced but not all numbers public
+      &nbsp;&nbsp;<span class="conf-dot conf-low"></span> estimate · inferred from typical facility size or utility queues
+      &nbsp;&nbsp;<a href="#methodology" style="color:#93c5fd;text-decoration:underline;">methodology &rarr;</a>
     </p>
     <div class="dc-hero-stats">
       <div class="dc-hero-stat"><div class="num" id="kpi-inventory">—</div><div class="lbl">Built (MW)</div><div class="sub" id="kpi-markets"></div></div>
@@ -339,6 +351,54 @@
     Mild (capex normalizes), Moderate (demand neutralizes), Severe (AI demand crash).
     Calibration is illustrative — substitute house probabilities by editing
     <code>_SCENARIOS</code> and <code>TENANT_FCF_HEADROOM</code> in <code>backend/data_centers/service.py</code>.
+  </div>
+
+  <div id="methodology" class="dc-card" style="margin-top:24px;">
+    <h3>Methodology &amp; sources</h3>
+    <div style="font-size:12px;color:#374151;line-height:1.6;">
+      <p style="margin:0 0 12px;">
+        <strong>Market-level MW</strong> (operational, under-construction, pre-leased %, vacancy) for the seven CBRE
+        primary markets (NoVA, DFW, Phoenix, Atlanta, Chicago, Silicon Valley, NY-NJ) plus selected secondaries
+        (Houston, Austin, Hillsboro) come from the
+        <a href="https://www.cbre.com/insights/briefs/north-america-data-center-trends-h1-2025-ai-and-hyperscaler-demand-lead-to-record-low-vacancy" target="_blank" rel="noopener" style="color:#2563eb;">CBRE
+        North America Data Center Trends H1 2025</a> report and CBRE press releases. Headline figures: primary-market
+        inventory hit a record <strong>8,155 MW</strong> (+43% YoY), <strong>74.3%</strong> of all under-construction
+        capacity is pre-leased, primary-market vacancy is at a record-low <strong>1.6%</strong> (NoVA colo as low as
+        <strong>0.72%</strong>). Secondary and emerging markets outside CBRE's primary set are estimates derived from
+        utility-queue filings and state economic-development announcements.
+      </p>
+      <p style="margin:0 0 12px;">
+        <strong>Facility-level MW, tenant, developer, and funding source</strong> for the 33 named buildings come
+        from primary sources: company press releases (Microsoft, Meta, Google, AWS, Apple, Oracle), Crusoe newsroom,
+        SEC filings (EQIX, DLR, IRM 10-Ks), DigitalBridge / Macquarie / Blackstone / KKR / Brookfield holding
+        disclosures, and trade press (Data Center Dynamics, Data Center Frontier, Tom's Hardware, Bloomberg, Reuters).
+        Each row in the Top stranded-asset risks table carries a <span style="color:#2563eb;">↗</span> link to the
+        primary source. Confidence dots
+        (<span class="conf-dot conf-high"></span> high / <span class="conf-dot conf-medium"></span> medium /
+        <span class="conf-dot conf-low"></span> low) reflect whether the MW figure is directly disclosed
+        (high), inferred from utility filings or building permits (medium), or a campus-design / typical-Meta-hall
+        estimate (low). Hyperscalers (Meta, Google, Apple) rarely disclose facility MW directly; figures are
+        inferred from state filings and trackers like
+        <a href="https://interconnection.fyi/" target="_blank" rel="noopener" style="color:#2563eb;">interconnection.fyi</a>
+        and <a href="https://baxtel.com/" target="_blank" rel="noopener" style="color:#2563eb;">Baxtel</a>.
+      </p>
+      <p style="margin:0 0 12px;">
+        <strong>Tenant credit profile</strong> uses public S&amp;P / Moody's ratings for IG mega-caps
+        (Microsoft / Apple AAA · Google AA+ · Amazon AA · Meta A+ · Oracle BBB+) and implied private-market ratings
+        for OpenAI (B-) and xAI (CCC) reflecting their cash-burn / capital-raise dependence. Spread (bps) =
+        annual PD × LGD with LGD ≈ 60% on lease obligations.
+      </p>
+      <p style="margin:0 0 12px;">
+        <strong>The stranded-asset risk score, writedown probability matrices, and stress-test predicates</strong>
+        are house assumptions, not pulled from a third-party feed. They live in
+        <code>backend/data_centers/service.py</code> as <code>_SCENARIOS</code>, <code>_STRESS_TESTS</code>,
+        <code>_WRITEDOWN_PROB</code>, and <code>TENANT_FCF_HEADROOM</code> and are easy to swap for a house view.
+      </p>
+      <p style="margin:0;color:#6b7280;font-size:11px;">
+        Last verified: April 2026. Refresh via <code>POST /api/data-centers/refresh</code> after editing
+        <code>data/datacenter_markets.csv</code> or <code>data/datacenter_facilities.csv</code>.
+      </p>
+    </div>
   </div>
 </div>
 
