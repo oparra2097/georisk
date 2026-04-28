@@ -59,7 +59,8 @@ def hpi_access_required(f):
 
 from backend.routes import api_bp
 from backend.economist import economist_bp
-from backend.auth import auth_bp, user_loader, init_auth_db, ADMIN_EMAIL
+from backend.auth import auth_bp, user_loader, request_loader, init_auth_db, ADMIN_EMAIL
+from backend.api_v1 import api_v1_bp
 from backend.scheduler import init_scheduler
 from backend.sharing import sharing_bp, meta_for_path, is_social_crawler
 from backend.macro_model.routes import macro_model_bp
@@ -94,6 +95,9 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     login_manager.user_loader(user_loader)
+    # Bearer-token auth for /api/v1/* (and any other API-key consumer).
+    # Returning None here falls through to cookie-session auth.
+    login_manager.request_loader(request_loader)
 
     @login_manager.unauthorized_handler
     def unauthorized():
@@ -114,6 +118,7 @@ def create_app():
 
     # ── Blueprints ───────────────────────────────────────────────────────
     app.register_blueprint(api_bp, url_prefix='/api')
+    app.register_blueprint(api_v1_bp, url_prefix='/api/v1')
     app.register_blueprint(economist_bp, url_prefix='/api')
     app.register_blueprint(macro_model_bp, url_prefix='/api/macro-model/us')
     app.register_blueprint(house_prices_bp, url_prefix='/api/house-prices')

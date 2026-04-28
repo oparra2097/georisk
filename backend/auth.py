@@ -10,6 +10,8 @@ Admin dashboard at /auth/admin for user management.
 """
 
 import os
+import hashlib
+import hmac
 import secrets
 import smtplib
 import sqlite3
@@ -76,9 +78,165 @@ def init_auth_db():
             conn.execute(f'ALTER TABLE users ADD COLUMN {col} {definition}')
         except sqlite3.OperationalError:
             pass
+
+    # API keys table — bearer-token auth for programmatic clients (algotrader bots).
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS api_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            key_hash TEXT NOT NULL,
+            key_prefix TEXT NOT NULL,
+            scopes TEXT NOT NULL DEFAULT 'read',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_used_at TIMESTAMP,
+            revoked_at TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    ''')
+    conn.execute(
+        'CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys (key_hash)'
+    )
+    conn.execute(
+        'CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys (user_id)'
+    )
     conn.commit()
     conn.close()
     logger.info("Auth DB initialized")
+
+
+# ── API key helpers ──────────────────────────────────────────────────────
+#
+# Keys are minted as `pk_live_<32 url-safe bytes>` (raw secret shown ONCE on
+# creation). DB stores SHA-256(secret) so a DB read does not leak the key.
+# A short prefix (`pk_live_xxxxxxxx`) is stored in plaintext for display.
+
+API_KEY_PREFIX = 'pk_live_'
+_API_KEY_PEPPER = (os.environ.get('API_KEY_PEPPER') or '').encode('utf-8')
+
+
+def _hash_api_key(raw: str) -> str:
+    """Hash a raw key. SHA-256 (fast, called per-request); pepper from env if set."""
+    return hashlib.sha256(_API_KEY_PEPPER + raw.encode('utf-8')).hexdigest()
+
+
+def _key_display_prefix(raw: str) -> str:
+    """First 16 chars of the raw key — shown in the dashboard so users
+    can identify which key is which without exposing the full secret."""
+    return raw[:16]
+
+
+class ApiKey:
+    """API key model + CRUD. Keys are bearer tokens scoped to a user."""
+
+    def __init__(self, id, user_id, name, key_prefix, scopes,
+                 created_at, last_used_at, revoked_at):
+        self.id = id
+        self.user_id = user_id
+        self.name = name
+        self.key_prefix = key_prefix
+        self.scopes = scopes
+        self.created_at = created_at
+        self.last_used_at = last_used_at
+        self.revoked_at = revoked_at
+
+    @property
+    def revoked(self):
+        return bool(self.revoked_at)
+
+    @staticmethod
+    def _from_row(row):
+        if not row:
+            return None
+        return ApiKey(
+            row['id'], row['user_id'], row['name'],
+            row['key_prefix'], row['scopes'],
+            row['created_at'], row['last_used_at'], row['revoked_at'],
+        )
+
+    @staticmethod
+    def create(user_id, name, scopes='read'):
+        """Mint a new key. Returns (raw_key, ApiKey). The raw key is shown ONCE."""
+        raw = API_KEY_PREFIX + secrets.token_urlsafe(32)
+        key_hash = _hash_api_key(raw)
+        prefix = _key_display_prefix(raw)
+        conn = _get_db()
+        cur = conn.execute(
+            'INSERT INTO api_keys (user_id, name, key_hash, key_prefix, scopes) '
+            'VALUES (?, ?, ?, ?, ?)',
+            (user_id, name.strip()[:80] or 'unnamed', key_hash, prefix, scopes),
+        )
+        new_id = cur.lastrowid
+        conn.commit()
+        row = conn.execute(
+            'SELECT * FROM api_keys WHERE id = ?', (new_id,)
+        ).fetchone()
+        conn.close()
+        return raw, ApiKey._from_row(row)
+
+    @staticmethod
+    def list_for_user(user_id):
+        conn = _get_db()
+        rows = conn.execute(
+            'SELECT * FROM api_keys WHERE user_id = ? ORDER BY created_at DESC',
+            (user_id,),
+        ).fetchall()
+        conn.close()
+        return [ApiKey._from_row(r) for r in rows]
+
+    @staticmethod
+    def revoke(key_id, user_id):
+        """Revoke a key. user_id check ensures users can only revoke their own."""
+        conn = _get_db()
+        cur = conn.execute(
+            'UPDATE api_keys SET revoked_at = ? '
+            'WHERE id = ? AND user_id = ? AND revoked_at IS NULL',
+            (datetime.utcnow().isoformat(), key_id, user_id),
+        )
+        affected = cur.rowcount
+        conn.commit()
+        conn.close()
+        return affected > 0
+
+    @staticmethod
+    def lookup_user(raw_key):
+        """Resolve a raw bearer token to a User. Returns None if invalid/revoked.
+        Side effect: stamps last_used_at on hit (best-effort, swallows errors)."""
+        if not raw_key or not raw_key.startswith(API_KEY_PREFIX):
+            return None
+        key_hash = _hash_api_key(raw_key)
+        conn = _get_db()
+        try:
+            row = conn.execute(
+                'SELECT api_keys.id AS api_key_id, api_keys.user_id AS uid, '
+                'api_keys.revoked_at AS revoked_at, users.* '
+                'FROM api_keys JOIN users ON users.id = api_keys.user_id '
+                'WHERE api_keys.key_hash = ?',
+                (key_hash,),
+            ).fetchone()
+            if not row or row['revoked_at']:
+                return None
+            try:
+                conn.execute(
+                    'UPDATE api_keys SET last_used_at = ? WHERE id = ?',
+                    (datetime.utcnow().isoformat(), row['api_key_id']),
+                )
+                conn.commit()
+            except Exception:
+                pass
+            # Build a User from the joined row (column order matches users.*)
+            user = User(
+                row['id'], row['email'], row['password_hash'],
+                row['email_verified'],
+                row['insurance_access'] if 'insurance_access' in row.keys() else 0,
+                row['macro_access'] if 'macro_access' in row.keys() else 0,
+                row['hpi_access'] if 'hpi_access' in row.keys() else 0,
+                row['last_login'] if 'last_login' in row.keys() else None,
+                row['created_at'] if 'created_at' in row.keys() else None,
+            )
+            return user
+        finally:
+            conn.close()
 
 
 # ── User model ───────────────────────────────────────────────────────────
@@ -293,6 +451,28 @@ class User(UserMixin):
 
 def user_loader(user_id):
     return User.get_by_id(int(user_id))
+
+
+def request_loader(req):
+    """Authenticate a request via `Authorization: Bearer <api_key>`.
+
+    Wired into Flask-Login (LoginManager.request_loader) so that
+    `current_user` and the existing `@login_required` / role-gate decorators
+    work transparently for API-key clients without setting any session
+    cookie. Returning None falls through to cookie-session auth.
+    """
+    auth = req.headers.get('Authorization', '')
+    if not auth:
+        # Allow `?api_key=` for bot integrations that can't easily set headers.
+        # Header is always preferred — query strings can leak via logs/referrers.
+        token = req.args.get('api_key', '').strip()
+    elif auth.startswith('Bearer '):
+        token = auth[7:].strip()
+    else:
+        return None
+    if not token:
+        return None
+    return ApiKey.lookup_user(token)
 
 
 # ── Email verification ───────────────────────────────────────────────────
@@ -659,6 +839,70 @@ def admin_revoke_access(email):
     email = email.strip().lower()
     User.revoke_access(email)
     return f'Insurance access revoked for {email}'
+
+
+# ── API key management (cookie-auth only — never via API key) ────────────
+#
+# Deliberate: an API key cannot mint another API key. If a bot host is
+# compromised, the attacker has data-read access only — they cannot pivot
+# to issuing new long-lived keys.
+
+def _require_session_login():
+    """Ensure the current request authenticated via cookie session, not
+    via API key — so a stolen key cannot mint more keys."""
+    if not current_user.is_authenticated:
+        return False
+    auth = request.headers.get('Authorization', '')
+    if auth.startswith('Bearer ') or request.args.get('api_key'):
+        return False
+    return True
+
+
+@auth_bp.route('/api-keys', methods=['GET'])
+@login_required
+def api_keys_page():
+    if not _require_session_login():
+        return 'API keys must be managed from a logged-in browser session.', 403
+    keys = ApiKey.list_for_user(current_user.id)
+    # `new_key` is set only on the immediate next request after creation
+    # via the flash channel; pull it out of session-flash if present.
+    new_key = request.args.get('_new_key')
+    return render_template(
+        'api_keys.html',
+        keys=keys,
+        new_key=new_key,
+        active_page='data',
+    )
+
+
+@auth_bp.route('/api-keys', methods=['POST'])
+@login_required
+def api_keys_create():
+    if not _require_session_login():
+        return jsonify({'error': 'session_required'}), 403
+    name = (request.form.get('name') or '').strip() or 'unnamed'
+    scopes = (request.form.get('scopes') or 'read').strip()
+    raw, _ = ApiKey.create(current_user.id, name=name, scopes=scopes)
+    flash(
+        'API key created. Copy it now — you will not see the full key again.',
+        'success',
+    )
+    # Pass the raw key back via query string ONCE so the template can
+    # render it. After this redirect the secret is gone from the server.
+    return redirect(url_for('auth.api_keys_page', _new_key=raw))
+
+
+@auth_bp.route('/api-keys/<int:key_id>/revoke', methods=['POST'])
+@login_required
+def api_keys_revoke(key_id):
+    if not _require_session_login():
+        return jsonify({'error': 'session_required'}), 403
+    ok = ApiKey.revoke(key_id, current_user.id)
+    if ok:
+        flash('API key revoked.', 'success')
+    else:
+        flash('API key not found or already revoked.', 'error')
+    return redirect(url_for('auth.api_keys_page'))
 
 
 @auth_bp.route('/logout')
