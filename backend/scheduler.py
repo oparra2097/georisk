@@ -228,3 +228,31 @@ def init_scheduler(app):
         except Exception as e:
             logger.error(f"house_prices warmup failed: {e}")
     threading.Thread(target=_warm_hpi, daemon=True).start()
+
+    # Pre-warm commodities: the monthly cron at job 4 only runs on the
+    # 1st of the month, so a deploy on any other day starts with no fits
+    # and /api/v1/health reports commodities=null. Use get_or_fit per
+    # commodity so already-fresh disk fits are reused (~instant) and only
+    # missing/stale ones do the slow ~30-90s fit. Daemon thread so boot
+    # doesn't block.
+    def _warm_commodities():
+        try:
+            from backend.data_sources import commodity_models, commodities_forecast
+            ok, fail = 0, 0
+            for name in commodity_models.TICKERS:
+                try:
+                    m = commodity_models.get_or_fit(name)
+                    if m is not None and m.fit_error is None:
+                        ok += 1
+                    else:
+                        fail += 1
+                except Exception as e:
+                    logger.warning(f"commodities warmup: {name} failed: {e}")
+                    fail += 1
+            logger.info(f"commodities warmup: {ok}/{ok+fail} fits ready")
+            # Drop the forecast cache so /api/v1/commodities/forecasts picks
+            # up the freshly-loaded models on the next request.
+            commodities_forecast._cache.clear()
+        except Exception as e:
+            logger.error(f"commodities warmup failed: {e}")
+    threading.Thread(target=_warm_commodities, daemon=True).start()
