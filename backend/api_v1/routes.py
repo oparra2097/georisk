@@ -109,12 +109,38 @@ _FRESHNESS_LIMITS = {
 }
 
 
+def _to_iso(value):
+    """Coerce any of the timestamp shapes the underlying services use
+    into an ISO-8601 string with `Z`. Returns None if value is missing
+    or unparseable.
+
+    Different services persist their freshness clocks differently:
+      - georisk uses a `datetime` object
+      - commodities stores ISO strings (`now.isoformat()`)
+      - macro_model stores Unix-timestamp floats (`time.time()`)
+    The /health probe must accept all three, or it'll silently report
+    fully-built products as null/stale."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(microsecond=0).isoformat() + 'Z'
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.utcfromtimestamp(float(value)).replace(
+                microsecond=0).isoformat() + 'Z'
+        except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(value, str):
+        # Already ISO-ish; normalize to a single 'Z' suffix.
+        return value if value.endswith('Z') else value + 'Z'
+    return None
+
+
 def _freshness_for_georisk():
     try:
         from backend.cache.store import RiskDataStore
         store = RiskDataStore()
-        last = store.get_last_refresh()
-        return last.isoformat() + 'Z' if last else None
+        return _to_iso(store.get_last_refresh())
     except Exception as e:
         logger.debug(f'georisk freshness probe failed: {e}')
         return None
@@ -130,7 +156,7 @@ def _freshness_for_commodities():
             data = _cache._data
         if not data:
             return None
-        return data.get('last_updated')
+        return _to_iso(data.get('last_updated'))
     except Exception as e:
         logger.debug(f'commodities freshness probe failed: {e}')
         return None
@@ -139,7 +165,7 @@ def _freshness_for_commodities():
 def _freshness_for_macro():
     try:
         from backend.macro_model import service as macro_service
-        return macro_service.status().get('built_at')
+        return _to_iso(macro_service.status().get('built_at'))
     except Exception as e:
         logger.debug(f'macro freshness probe failed: {e}')
         return None
