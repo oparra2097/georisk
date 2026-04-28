@@ -499,7 +499,7 @@ def _fetch_eurostat_lci():
     """Fetch EU27 Labour Cost Index (quarterly)."""
     unique_naces = sorted(set(info['nace'] for info in EU_LCI.values()))
     naces = '&'.join(f'nace_r2={n}' for n in unique_naces)
-    url = f'{EUROSTAT_BASE}/lc_lci_r2_q?geo=EU27_2020&s_adj=SCA&lcstruct=D1_D4_MD5&unit=PCH_Q4&freq=Q&sinceTimePeriod=2000-Q1&{naces}'
+    url = f'{EUROSTAT_BASE}/lc_lci_r2_q?geo=EU27_2020&s_adj=SCA&lcstruct=D1_D4_MD5&unit=PCH_SM&freq=Q&sinceTimePeriod=2000-Q1&{naces}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
         if resp.status_code == 200:
