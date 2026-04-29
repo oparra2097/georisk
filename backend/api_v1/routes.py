@@ -171,24 +171,40 @@ def _freshness_for_commodities():
     must stay cheap — calling get_forecast_data() would fall through to
     _fetch_forecasts() on a cold cache and refit every model (~20s).
 
-    Probe order:
-      1. In-memory daily forecast cache (`commodities_forecast._cache`).
+    Probe order, most authoritative first:
+      1. Sidecar JSONs at `<CACHE_DIR>/<name>.json` — contain
+         `summary.fit_at`. Written by `fit_and_cache` on every fit, so
+         present whenever a fit ever succeeded. The canonical "newest
+         fit" mechanism (per the ticket's acceptance criteria).
+      2. In-memory daily forecast cache (`commodities_forecast._cache`).
          Populated by the boot warmup, request handlers, and the cron.
-      2. On-disk model pickles (`commodity_models.CACHE_DIR/*.pkl`).
-         Falls back here so we don't report null during the brief window
-         between the warmup finishing per-model fits and finishing the
-         daily-cache rebuild — and after a worker restart that hasn't
-         yet hit the forecast endpoint.
+         Lower priority than #1 because it's worker-local — worker A
+         can have a populated cache while worker B (handling /health)
+         doesn't.
+      3. Pickle mtime fallback (`<CACHE_DIR>/*.pkl`). Catches edge
+         cases where sidecars failed to write but pickles exist.
     """
+    # 1. Sidecar fit_at (definitive)
+    try:
+        from backend.data_sources.commodity_models import list_cached
+        summaries = list_cached()
+        fit_ats = [s.get('fit_at') for s in summaries if s.get('fit_at')]
+        if fit_ats:
+            return _to_iso(max(fit_ats))
+    except Exception as e:
+        logger.debug(f'commodities sidecar probe failed: {e}')
+
+    # 2. In-memory daily cache (worker-local)
     try:
         from backend.data_sources.commodities_forecast import _cache
         with _cache._lock:
             data = _cache._data
-        if data:
+        if data and data.get('last_updated'):
             return _to_iso(data.get('last_updated'))
     except Exception as e:
         logger.debug(f'commodities daily-cache probe failed: {e}')
-    # Disk fallback
+
+    # 3. Pickle mtime fallback
     try:
         import os
         from backend.data_sources.commodity_models import CACHE_DIR
@@ -204,8 +220,6 @@ def _freshness_for_commodities():
                 continue
         if not mtimes:
             return None
-        # Most recent fit wins — algotrader's "is data fresh?" gate
-        # only needs to know the youngest fit hasn't gone stale.
         return _to_iso(max(mtimes))
     except Exception as e:
         logger.debug(f'commodities disk-probe failed: {e}')
@@ -588,6 +602,69 @@ def v1_admin_refresh_commodities_status():
     with _admin_jobs_lock:
         job = dict(_admin_jobs['refresh_commodities'])
     return jsonify({'as_of': _now_iso(), 'job': job})
+
+
+@api_v1_bp.route('/admin/commodity-cache-info')
+@admin_required
+def v1_admin_commodity_cache_info():
+    """Diagnostic dump of what the /health probe sees for commodities.
+
+    Lets us pin down exactly why /health is null when fits clearly exist
+    (mismatch between CACHE_DIR resolution, pickle save path, or worker-
+    local in-memory cache)."""
+    import os
+    info = {'as_of': _now_iso()}
+    try:
+        from backend.data_sources.commodity_models import CACHE_DIR, list_cached, TICKERS
+        info['cache_dir'] = CACHE_DIR
+        info['cache_dir_isdir'] = os.path.isdir(CACHE_DIR)
+        info['known_commodities'] = sorted(TICKERS.keys())
+        if info['cache_dir_isdir']:
+            entries = []
+            for fname in sorted(os.listdir(CACHE_DIR)):
+                full = os.path.join(CACHE_DIR, fname)
+                try:
+                    st = os.stat(full)
+                    entries.append({
+                        'name': fname,
+                        'size': st.st_size,
+                        'mtime': _to_iso(st.st_mtime),
+                    })
+                except OSError as e:
+                    entries.append({'name': fname, 'error': str(e)})
+            info['cache_dir_entries'] = entries
+        else:
+            info['cache_dir_entries'] = []
+        # Sidecar summaries (the authoritative fit_at list)
+        try:
+            summaries = list_cached()
+            info['sidecar_summaries'] = [
+                {'name': s.get('name'), 'fit_at': s.get('fit_at'),
+                 'fit_error': s.get('fit_error'), 'rmse': s.get('rmse')}
+                for s in summaries
+            ]
+            info['sidecar_max_fit_at'] = _to_iso(
+                max((s.get('fit_at') for s in summaries if s.get('fit_at')),
+                    default=None)
+            )
+        except Exception as e:
+            info['sidecar_error'] = str(e)
+    except Exception as e:
+        info['cache_dir_error'] = str(e)
+    # In-memory daily cache state
+    try:
+        from backend.data_sources.commodities_forecast import _cache as fc_cache
+        with fc_cache._lock:
+            data = fc_cache._data
+        info['daily_cache_present'] = bool(data)
+        info['daily_cache_last_updated'] = (
+            _to_iso(data.get('last_updated')) if data else None
+        )
+    except Exception as e:
+        info['daily_cache_error'] = str(e)
+    # What /health would actually return right now
+    info['health_probe_would_return'] = _freshness_for_commodities()
+    return jsonify(info)
 
 
 # ── /api/v1/hpi (continued) ──────────────────────────────────────────────
