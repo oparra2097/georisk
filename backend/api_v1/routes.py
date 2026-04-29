@@ -67,6 +67,26 @@ def api_key_required(f):
     return wrapped
 
 
+def admin_required(f):
+    """Chains api_key_required + admin-email check. Used for mutating
+    ops endpoints (refit, cache invalidation, etc.) — never for read."""
+    from functools import wraps
+    from backend.auth import ADMIN_EMAIL
+
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if not ADMIN_EMAIL:
+            return jsonify({
+                'error': 'admin_disabled',
+                'detail': 'No ADMIN_EMAIL configured on the server.',
+            }), 503
+        if (current_user.email or '').strip().lower() != ADMIN_EMAIL.strip().lower():
+            return jsonify({'error': 'admin_required'}), 403
+        return f(*args, **kwargs)
+
+    return api_key_required(wrapped)
+
+
 def macro_access_required(f):
     from functools import wraps
 
@@ -474,6 +494,103 @@ def v1_hpi_state_baseline(code):
         logger.exception('v1 hpi state baseline failed')
         return jsonify({'error': 'internal_error', 'detail': str(e)}), 500
 
+
+# ── /api/v1/admin (admin-only mutations) ─────────────────────────────────
+#
+# Force-refresh hooks. Always async (runs in daemon thread) because a
+# full commodities refit is 5-15min and gunicorn would 504 long before.
+# Caller polls /api/v1/health to confirm the timestamp updates.
+
+import threading
+
+# Simple in-process job-state for "is a refit currently running?" Each
+# entry: {'running': bool, 'started_at': iso, 'finished_at': iso, 'ok': int, 'fail': int, 'last_error': str}
+_admin_jobs: dict = {
+    'refresh_commodities': {'running': False},
+}
+_admin_jobs_lock = threading.Lock()
+
+
+def _run_commodities_refit():
+    """Worker for POST /api/v1/admin/refresh-commodities."""
+    from backend.data_sources import commodity_models, commodities_forecast
+    started = _now_iso()
+    with _admin_jobs_lock:
+        _admin_jobs['refresh_commodities'] = {
+            'running': True, 'started_at': started,
+            'finished_at': None, 'ok': 0, 'fail': 0, 'last_error': None,
+        }
+    ok = fail = 0
+    err: str = ''
+    try:
+        summaries = commodity_models.refit_all()
+        for s in summaries.values():
+            if s.get('fit_error'):
+                fail += 1
+            else:
+                ok += 1
+        commodities_forecast._cache.clear()
+        # Re-seed the daily cache so /health flips immediately.
+        commodities_forecast.get_forecast_data()
+    except Exception as e:
+        logger.exception('admin refit_all failed')
+        err = str(e)
+    finally:
+        with _admin_jobs_lock:
+            _admin_jobs['refresh_commodities'] = {
+                'running': False,
+                'started_at': started,
+                'finished_at': _now_iso(),
+                'ok': ok, 'fail': fail,
+                'last_error': err or None,
+            }
+    logger.info(f'admin refit done: ok={ok} fail={fail} err={err!r}')
+
+
+@api_v1_bp.route('/admin/refresh-commodities', methods=['POST'])
+@admin_required
+def v1_admin_refresh_commodities():
+    """Force a full commodities refit. Async — returns 202 immediately;
+    poll /api/v1/health (or this endpoint via GET) to track completion.
+
+    Use cases:
+      - Models look wrong (driver bug, data spike) and you want a fresh
+        refit without waiting for the monthly cron or a redeploy.
+      - You changed driver weights / tickers and want to bake them in now.
+    """
+    with _admin_jobs_lock:
+        if _admin_jobs['refresh_commodities'].get('running'):
+            return jsonify({
+                'as_of': _now_iso(),
+                'status': 'already_running',
+                'job': _admin_jobs['refresh_commodities'],
+            }), 409
+        # Reset state and mark running BEFORE starting the thread to avoid
+        # a race where two concurrent POSTs both pass the check.
+        _admin_jobs['refresh_commodities'] = {
+            'running': True,
+            'started_at': _now_iso(),
+            'finished_at': None,
+            'ok': 0, 'fail': 0, 'last_error': None,
+        }
+    threading.Thread(target=_run_commodities_refit, daemon=True).start()
+    return jsonify({
+        'as_of': _now_iso(),
+        'status': 'queued',
+        'detail': 'Refit running in background (5-15 min). Poll /api/v1/health '
+                  'or GET this URL to track progress.',
+    }), 202
+
+
+@api_v1_bp.route('/admin/refresh-commodities', methods=['GET'])
+@admin_required
+def v1_admin_refresh_commodities_status():
+    with _admin_jobs_lock:
+        job = dict(_admin_jobs['refresh_commodities'])
+    return jsonify({'as_of': _now_iso(), 'job': job})
+
+
+# ── /api/v1/hpi (continued) ──────────────────────────────────────────────
 
 @api_v1_bp.route('/hpi/forecast/state/<code>/fan')
 @hpi_access_required
