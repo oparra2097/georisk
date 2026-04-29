@@ -149,16 +149,46 @@ def _freshness_for_georisk():
 def _freshness_for_commodities():
     """Peek the commodities cache without triggering a refit. /health
     must stay cheap — calling get_forecast_data() would fall through to
-    _fetch_forecasts() on a cold cache and refit every model (~20s)."""
+    _fetch_forecasts() on a cold cache and refit every model (~20s).
+
+    Probe order:
+      1. In-memory daily forecast cache (`commodities_forecast._cache`).
+         Populated by the boot warmup, request handlers, and the cron.
+      2. On-disk model pickles (`commodity_models.CACHE_DIR/*.pkl`).
+         Falls back here so we don't report null during the brief window
+         between the warmup finishing per-model fits and finishing the
+         daily-cache rebuild — and after a worker restart that hasn't
+         yet hit the forecast endpoint.
+    """
     try:
         from backend.data_sources.commodities_forecast import _cache
         with _cache._lock:
             data = _cache._data
-        if not data:
-            return None
-        return _to_iso(data.get('last_updated'))
+        if data:
+            return _to_iso(data.get('last_updated'))
     except Exception as e:
-        logger.debug(f'commodities freshness probe failed: {e}')
+        logger.debug(f'commodities daily-cache probe failed: {e}')
+    # Disk fallback
+    try:
+        import os
+        from backend.data_sources.commodity_models import CACHE_DIR
+        if not os.path.isdir(CACHE_DIR):
+            return None
+        mtimes = []
+        for fname in os.listdir(CACHE_DIR):
+            if not fname.endswith('.pkl'):
+                continue
+            try:
+                mtimes.append(os.path.getmtime(os.path.join(CACHE_DIR, fname)))
+            except OSError:
+                continue
+        if not mtimes:
+            return None
+        # Most recent fit wins — algotrader's "is data fresh?" gate
+        # only needs to know the youngest fit hasn't gone stale.
+        return _to_iso(max(mtimes))
+    except Exception as e:
+        logger.debug(f'commodities disk-probe failed: {e}')
         return None
 
 
@@ -297,11 +327,32 @@ def _parse_as_of(raw):
         return None, f'invalid as_of: expected YYYY-MM-DD, got {raw!r}'
 
 
+def _resolve_commodity(raw):
+    """Map any case variant of a commodity name to the canonical TICKERS
+    key. Returns (canonical_name, error_response_tuple_or_None)."""
+    raw = (raw or '').strip()
+    if not raw:
+        return None, (jsonify({'error': 'missing_commodity'}), 400)
+    from backend.data_sources.commodity_models import TICKERS
+    name = next((k for k in TICKERS if k.lower() == raw.lower()), None)
+    if name is None:
+        return None, (jsonify({
+            'error': 'unknown_commodity',
+            'detail': f'Unknown commodity: {raw!r}',
+            'known': sorted(TICKERS.keys()),
+        }), 404)
+    return name, None
+
+
 @api_v1_bp.route('/commodities/forecasts')
 @api_key_required
 def v1_commodities_forecast():
     """Per-commodity SARIMAX+GARCH fan. Optional `?as_of=YYYY-MM-DD`
     refits the model with data truncated at that date — for backtesting.
+
+    Commodity name resolution is case-insensitive: `?commodity=Gold`,
+    `gold`, and `GOLD` all map to the canonical TICKERS key 'Gold'. The
+    response always echoes the canonical mixed-case form.
 
     Without as_of:
       * Uses the cached daily forecast from the scheduled refit (fast).
@@ -313,13 +364,13 @@ def v1_commodities_forecast():
       {
         "as_of": <server-now>,
         "as_of_param": <as_of-or-null>,
-        "commodity": "gold",
+        "commodity": "Gold",
         "forecast": { ... model output ... }
       }
     """
-    name = (request.args.get('commodity') or '').strip().lower()
-    if not name:
-        return jsonify({'error': 'missing_commodity'}), 400
+    name, err_resp = _resolve_commodity(request.args.get('commodity'))
+    if err_resp is not None:
+        return err_resp
 
     as_of_dt, err = _parse_as_of(request.args.get('as_of'))
     if err:
@@ -342,10 +393,8 @@ def v1_commodities_forecast():
             })
         # Backtest path: fresh fit at the historical pivot.
         from backend.data_sources.commodity_models import (
-            CommodityModel, TICKERS, DriverFetcher,
+            CommodityModel, DriverFetcher,
         )
-        if name not in TICKERS:
-            return jsonify({'error': 'unknown_commodity', 'commodity': name}), 404
         model = CommodityModel(name)
         ok = model.fit(fetcher=DriverFetcher(), as_of=as_of_dt)
         if not ok:

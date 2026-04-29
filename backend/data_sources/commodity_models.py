@@ -82,11 +82,36 @@ HISTORY_YEARS_OVERRIDE: dict[str, int] = {
     'Copper':   20,
 }
 
-CACHE_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'cache',
-    'commodity_models',
-)
+def _resolve_cache_dir() -> str:
+    """Resolve where commodity-model pickles live.
+
+    On Render the source tree is ephemeral — every deploy wipes it — so
+    the previous default of `<repo>/backend/cache/commodity_models/` lost
+    every fit on redeploy. Use Config.DATA_DIR (which Render mounts to a
+    persistent disk at /data) when available; fall back to the source-
+    tree path for local dev.
+
+    Allow `COMMODITY_CACHE_DIR` env override for tests / one-off runs.
+    """
+    override = os.environ.get('COMMODITY_CACHE_DIR')
+    if override:
+        return override
+    try:
+        from config import Config as _Cfg
+        data_dir = getattr(_Cfg, 'DATA_DIR', None)
+        if data_dir:
+            return os.path.join(data_dir, 'commodity_models')
+    except Exception:
+        pass
+    # Local-dev fallback
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        'cache',
+        'commodity_models',
+    )
+
+
+CACHE_DIR = _resolve_cache_dir()
 
 # yfinance tickers matching backend/data_sources/commodities_forecast.py
 TICKERS = {

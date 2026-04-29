@@ -249,10 +249,18 @@ def init_scheduler(app):
                 except Exception as e:
                     logger.warning(f"commodities warmup: {name} failed: {e}")
                     fail += 1
-            logger.info(f"commodities warmup: {ok}/{ok+fail} fits ready")
-            # Drop the forecast cache so /api/v1/commodities/forecasts picks
-            # up the freshly-loaded models on the next request.
+            logger.info(f"commodities warmup: {ok}/{ok+fail} fits ready "
+                        f"(cache_dir={commodity_models.CACHE_DIR})")
+            # Drop the daily forecast cache, then proactively rebuild it
+            # so /api/v1/health can report a real `commodities` timestamp
+            # without the algotrader having to first hit the forecast
+            # endpoint to trigger lazy population.
             commodities_forecast._cache.clear()
+            data = commodities_forecast.get_forecast_data()
+            logger.info(
+                f"commodities warmup: daily cache primed "
+                f"(last_updated={data.get('last_updated') if data else 'none'})"
+            )
         except Exception as e:
             logger.error(f"commodities warmup failed: {e}")
     threading.Thread(target=_warm_commodities, daemon=True).start()
