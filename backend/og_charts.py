@@ -308,69 +308,119 @@ def _fetch_eu_cpi(cat, ds, sv, qs) -> Optional[ChartData]:
 # ─── Commodity forecasts ──────────────────────────────────────────────────
 
 def _fetch_forecast(cat, ds, sv, qs) -> Optional[ChartData]:
+    """Commodity price forecast preview.
+
+    Builds a continuous quarterly series: historical avg_price points
+    (~10 years) + scenario forecast points keyed by quarter labels. The
+    scenario can be picked via ?scenario=Base+Case etc.; defaults to the
+    group's first scenario in scenario_order.
+    """
     try:
         from backend.data_sources.commodities_forecast import get_forecast_data
-        d = get_forecast_data()
-    except Exception:
+        d = get_forecast_data() or {}
+    except Exception as e:
+        logger.warning("forecast fetch failed: %s", e)
         return None
 
     group_map = {
-        "forecast-oil":    "Oil & Gas",
-        "forecast-ag":     "Agriculture",
-        "forecast-metals": "Metals",
+        "forecast-oil":    ("Oil & Gas",   "WTI Crude"),
+        "forecast-ag":     ("Agriculture", "Wheat"),
+        "forecast-metals": ("Metals",      "Gold"),
     }
-    group_name = group_map.get(ds)
-    if not group_name:
+    if ds not in group_map:
         return None
+    group_name, default_commodity = group_map[ds]
     group = (d.get("groups") or {}).get(group_name) or {}
-    commodities = group.get("commodities") or []
+    commodities = group.get("commodities") or {}
     if not commodities:
         return None
 
-    # Pick the requested subview commodity, or the first one.
-    chosen = None
-    for c in commodities:
-        if c.get("name") == sv:
-            chosen = c
-            break
-    if not chosen:
-        chosen = commodities[0]
-
-    history = chosen.get("history") or []
-    forecast = chosen.get("forecast") or []
-    if len(history) < 2 and len(forecast) < 2:
+    # Pick the requested commodity (subview) or the group's marquee one.
+    name = sv if sv and sv in commodities else (
+        default_commodity if default_commodity in commodities else next(iter(commodities))
+    )
+    c = commodities.get(name) or {}
+    if not c:
         return None
 
-    series_x, series_y = [], []
-    for p in history[-60:]:  # last 5y monthly
-        v = p.get("price")
+    # Pick scenario: ?scenario=Base+Case → "Base Case". Fall back to the
+    # group's preferred scenario order, then the first available scenario.
+    scenarios = c.get("scenarios") or {}
+    scenario_order = group.get("scenario_order") or []
+    requested = (qs.get("scenario") or "").strip()
+    scenario = None
+    if requested and requested in scenarios:
+        scenario = requested
+    else:
+        for s in scenario_order:
+            if s in scenarios and s != "Actual":
+                scenario = s
+                break
+        if scenario is None:
+            for s in scenarios:
+                if s != "Actual":
+                    scenario = s
+                    break
+
+    # Build the historical leg (last ~10 years of quarterly avg prices)
+    hist = c.get("historical") or []
+    series_x: list[str] = []
+    series_y: list[float] = []
+    for h in hist:
+        v = h.get("avg_price")
         if v is None:
             continue
-        series_x.append(p.get("date"))
-        series_y.append(float(v))
-    for p in forecast:
-        v = p.get("price") or p.get("baseline") or p.get("mean")
-        if v is None:
-            continue
-        series_x.append(p.get("date"))
+        series_x.append(h.get("label") or f"{h.get('year')} Q{h.get('quarter')}")
         series_y.append(float(v))
 
-    if len(series_y) < 2:
+    # Append scenario forecast points (and the Actual current-quarter so
+    # the line is continuous through "today"). Labels live on the row
+    # alongside FY/FY2 — skip those.
+    actual_row = scenarios.get("Actual") or {}
+    for label, val in actual_row.items():
+        if label in ("FY", "FY2") or val is None:
+            continue
+        # Avoid duplicating quarters already in historical
+        if label in series_x:
+            continue
+        series_x.append(label)
+        series_y.append(float(val))
+
+    if scenario:
+        scen_row = scenarios.get(scenario) or {}
+        for label, val in scen_row.items():
+            if label in ("FY", "FY2") or val is None:
+                continue
+            if label in series_x:
+                continue
+            series_x.append(label)
+            series_y.append(float(val))
+
+    if len(series_y) < 4:
         return None
+
     points = [(float(i), v) for i, v in enumerate(series_y)]
-    name = chosen.get("name") or group_name
-    unit = chosen.get("unit") or ""
+    unit = c.get("unit") or ""
     latest = series_y[-1]
-    fmt = f"${latest:,.2f}" + (f" / {unit}" if unit else "")
+    # Units come in like "$/bbl", "$/MMBtu", "$/oz" — strip the leading
+    # "$" and slash so we can compose the headline as "$95.00/bbl"
+    # rather than the doubled "$95.00 / $/bbl".
+    unit_short = unit.lstrip("$").lstrip("/").strip() if unit else ""
+    headline = f"${latest:,.2f}" + (f"/{unit_short}" if unit_short else "")
+    label = (
+        f"{scenario or 'Forecast'} · {series_x[-1]}"
+        if scenario else f"Latest · {series_x[-1]}"
+    )
+
     return ChartData(
         title=f"{name} Forecast",
-        subtitle=f"{group_name} — scenario-based price forecast.",
+        subtitle=f"{group_name} · {scenario or 'Scenario'} — quarterly price path.",
         source="Parra Macro",
-        headline_value=fmt,
-        headline_label=f"{_short_date(series_x[-1])} forecast",
+        headline_value=headline,
+        headline_label=label,
         points=points,
-        x_label_first=_short_date(series_x[0]),
-        x_label_last=_short_date(series_x[-1]),
+        x_label_first=series_x[0],
+        x_label_last=series_x[-1],
         y_unit=unit,
         accent=(255, 127, 14),
     )
@@ -484,13 +534,22 @@ def render_chart_card(data: ChartData) -> bytes:
         draw.text((PAD + 8, y), line, font=title_font, fill=TEXT_PRIMARY)
         y += 56
 
-    # Headline value — the marquee number
-    headline_font = _load_font(96, bold=True)
+    # Headline value — the marquee number. Shrink the font until it
+    # fits the left column so long strings like "$1,234.56/MMBtu" don't
+    # overflow into the chart area.
+    max_w = LEFT_W - 20
+    headline_size = 96
+    while headline_size > 44:
+        f = _load_font(headline_size, bold=True)
+        if draw.textlength(data.headline_value, font=f) <= max_w:
+            break
+        headline_size -= 6
+    headline_font = _load_font(headline_size, bold=True)
     draw.text((PAD + 8, y + 18), data.headline_value, font=headline_font, fill=accent)
 
     # Headline label
     label_font = _load_font(20)
-    draw.text((PAD + 8, y + 18 + 110), data.headline_label, font=label_font, fill=TEXT_MUTED)
+    draw.text((PAD + 8, y + 18 + headline_size + 14), data.headline_label, font=label_font, fill=TEXT_MUTED)
 
     # ── Chart panel ─────────────────────────────────────────────────────
     chart_x = PAD + LEFT_W + 24
@@ -522,14 +581,26 @@ def render_chart_card(data: ChartData) -> bytes:
             gy = chart_y + chart_h * i / 4
             draw.line([(chart_x, gy), (chart_x + chart_w, gy)], fill=GRID + (130,), width=1)
 
-        # Y axis labels (left of chart)
+        # Y axis labels (left of chart). Keep them numeric — show the
+        # unit once at the top so labels stay narrow and don't crowd the
+        # headline column.
         ax_font = _load_font(16)
+        # "%" stays inline since it's a single character and reads
+        # naturally on each tick. Multi-char units ($/bbl, $B, …) move
+        # to a single header above the axis.
+        inline_unit = data.y_unit if data.y_unit in ("", "%") else ""
         for i in range(5):
             v = y_max - (y_max - y_min) * i / 4
-            label = f"{v:.1f}{data.y_unit}"
+            decimals = 1 if abs(v) < 100 else 0
+            label = f"{v:,.{decimals}f}{inline_unit}"
             tw = draw.textlength(label, font=ax_font)
             draw.text((chart_x - tw - 8, chart_y + chart_h * i / 4 - 8),
                       label, font=ax_font, fill=TEXT_MUTED)
+        if data.y_unit and not inline_unit:
+            unit_font = _load_font(15, bold=True)
+            draw.text((chart_x - draw.textlength(data.y_unit, font=unit_font) - 8,
+                       chart_y - 22),
+                      data.y_unit, font=unit_font, fill=TEXT_MUTED)
 
         # Filled area
         line_pts = [to_px(p) for p in data.points]
