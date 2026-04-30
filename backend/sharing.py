@@ -413,9 +413,10 @@ def og_preview():
     # variants (?type=gold, ?freq=yoy, …) produce distinct images.
     extra = {k: v for k, v in request.args.items() if k not in ("chart", "cat", "ds", "sv")}
     extra_key = "|".join(f"{k}={v}" for k, v in sorted(extra.items()))
-    # Bump the version prefix any time the renderer changes so old cached
-    # PNGs don't show up after a deploy.
-    cache_key = f"v3|{chart}|{cat}|{ds}|{sv}|{extra_key}"
+    # Bump the version prefix any time the renderer or fetchers change so
+    # old cached PNGs don't show up after a deploy. v4: real-data fetcher
+    # for commodity forecasts now wired correctly.
+    cache_key = f"v4|{chart}|{cat}|{ds}|{sv}|{extra_key}"
     cache_file = _cache_path(cache_key)
 
     if not os.path.exists(cache_file):
