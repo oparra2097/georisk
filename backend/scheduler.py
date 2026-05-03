@@ -140,6 +140,28 @@ def init_scheduler(app):
         )
         logger.info("GDP nowcast scheduled (every 6 hours).")
 
+    # Job 6: Data center drift scan once daily at 07:30 UTC.
+    def _scan_dc_drift():
+        try:
+            from backend.data_centers import drift
+            out = drift.scan()
+            n = len(out.get('drift_flags', []))
+            logger.info(f"Data center drift scan complete: {n} drift flag(s) across "
+                         f"{out.get('urls_scanned', 0)} URL(s).")
+        except Exception as e:
+            logger.error(f"Data center drift scan failed: {e}")
+
+    scheduler.add_job(
+        func=_scan_dc_drift,
+        trigger='cron',
+        hour=7, minute=30,
+        id='dc_drift_scan',
+        replace_existing=True,
+        misfire_grace_time=3600,
+        max_instances=1,
+    )
+    logger.info("Data center drift scan scheduled (daily 07:30 UTC).")
+
     scheduler.start()
     logger.info(
         f"Scheduler started. GDELT every {gdelt_interval}min (ALL countries), "

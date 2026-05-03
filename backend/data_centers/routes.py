@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+from functools import wraps
+
 from flask import Blueprint, jsonify, request
+from flask_login import current_user
 
 from backend.data_centers import service
+from backend.auth import ADMIN_EMAIL
 
 data_centers_bp = Blueprint('data_centers', __name__)
+
+
+def _require_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'authentication required'}), 401
+        if (current_user.email or '').lower() != ADMIN_EMAIL:
+            return jsonify({'error': 'admin only'}), 403
+        return f(*args, **kwargs)
+    return decorated
 
 
 @data_centers_bp.route('/status')
@@ -64,3 +79,45 @@ def refresh():
         'market_count': len(data.get('markets', [])),
         'facility_count': len(data.get('facilities', [])),
     })
+
+
+# ── Admin endpoints ──────────────────────────────────────────────────────
+
+@data_centers_bp.route('/admin/upload-markets', methods=['POST'])
+@_require_admin
+def upload_markets():
+    from backend.data_centers import admin
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'ok': False, 'error': 'no file uploaded (form field "file")'}), 400
+    raw = f.read()
+    if len(raw) > 5 * 1024 * 1024:
+        return jsonify({'ok': False, 'error': 'file too large (max 5MB)'}), 413
+    return jsonify(admin.upload_csv('markets', raw))
+
+
+@data_centers_bp.route('/admin/upload-facilities', methods=['POST'])
+@_require_admin
+def upload_facilities():
+    from backend.data_centers import admin
+    f = request.files.get('file')
+    if not f:
+        return jsonify({'ok': False, 'error': 'no file uploaded (form field "file")'}), 400
+    raw = f.read()
+    if len(raw) > 5 * 1024 * 1024:
+        return jsonify({'ok': False, 'error': 'file too large (max 5MB)'}), 413
+    return jsonify(admin.upload_csv('facilities', raw))
+
+
+@data_centers_bp.route('/admin/drift', methods=['GET'])
+@_require_admin
+def drift_signals():
+    from backend.data_centers import drift
+    return jsonify(drift.load_signals())
+
+
+@data_centers_bp.route('/admin/drift/scan', methods=['POST'])
+@_require_admin
+def drift_scan():
+    from backend.data_centers import drift
+    return jsonify(drift.scan())

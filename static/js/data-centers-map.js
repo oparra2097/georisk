@@ -87,10 +87,109 @@ const DataCenterMap = {
     this.facilityLayer = this.svg.append('g').attr('class', 'facility-layer').style('display', 'none');
 
     this.bindToolbar();
+    this.bindAdminControls();
     this.parseScenarioFromURL();
 
     await Promise.all([this.loadStates(), this.loadData()]);
     this.render();
+    if (document.getElementById('admin-block')) this.refreshDriftSignals();
+  },
+
+  // ─── Admin (visible only when admin_email) ─────────────────────────────
+  bindAdminControls() {
+    const fwire = (formId, endpoint, resultId) => {
+      const form = document.getElementById(formId);
+      const out  = document.getElementById(resultId);
+      if (!form || !out) return;
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        out.textContent = 'uploading…';
+        out.style.color = '#374151';
+        try {
+          const r = await fetch(endpoint, { method: 'POST', body: fd });
+          const j = await r.json();
+          if (!j.ok) {
+            out.textContent = '✗ ' + (j.error || `HTTP ${r.status}`);
+            out.style.color = '#b91c1c';
+            return;
+          }
+          const d = j.diff || {};
+          const parts = [`✓ ${j.rows_loaded} rows loaded`];
+          if (d.added?.length)        parts.push(`+${d.added.length} added`);
+          if (d.removed?.length)      parts.push(`−${d.removed.length} removed`);
+          if (d.top_changes?.length)  parts.push(`${d.top_changes.length} field changes`);
+          out.innerHTML = parts.join(' · ') +
+            (d.top_changes?.length
+              ? '<details style="margin-top:4px;"><summary style="cursor:pointer;color:#6b7280;">show top changes</summary>'
+                + '<ul style="margin:4px 0 0 16px;padding:0;">'
+                + d.top_changes.slice(0, 10).map(c =>
+                    `<li>${c.market || c.name} — ${c.field} ${c.old} → ${c.new}${c.delta != null ? ` (${c.delta > 0 ? '+' : ''}${c.delta})` : ''}</li>`).join('')
+                + '</ul></details>'
+              : '');
+          out.style.color = '#065f46';
+          // Refresh main view to reflect the new file.
+          await this.loadData();
+          this.render();
+          this.applyScenario();
+        } catch (err) {
+          out.textContent = '✗ ' + err.message;
+          out.style.color = '#b91c1c';
+        }
+      });
+    };
+    fwire('upload-markets-form',    '/api/data-centers/admin/upload-markets',    'upload-markets-result');
+    fwire('upload-facilities-form', '/api/data-centers/admin/upload-facilities', 'upload-facilities-result');
+
+    const scanBtn = document.getElementById('drift-scan-btn');
+    if (scanBtn) scanBtn.addEventListener('click', async () => {
+      scanBtn.disabled = true;
+      scanBtn.textContent = 'scanning…';
+      try {
+        const r = await fetch('/api/data-centers/admin/drift/scan', { method: 'POST' });
+        await r.json();
+        await this.refreshDriftSignals();
+      } finally {
+        scanBtn.disabled = false;
+        scanBtn.textContent = 'Scan now';
+      }
+    });
+  },
+
+  async refreshDriftSignals() {
+    const out  = document.getElementById('drift-flags');
+    const meta = document.getElementById('drift-last-scanned');
+    if (!out) return;
+    try {
+      const r = await fetch('/api/data-centers/admin/drift');
+      const j = await r.json();
+      if (meta) meta.textContent = j.scanned_at
+        ? `· last scan ${new Date(j.scanned_at).toLocaleString()} · ${j.urls_scanned} URLs · ${j.signals?.length || 0} signals`
+        : '· not yet scanned';
+      const flags = j.drift_flags || [];
+      const failed = j.urls_failed || [];
+      const failNote = failed.length
+        ? `<div style="color:#9ca3af;font-size:10px;margin-top:6px;">${failed.length} source URL(s) unreachable — `
+          + failed.map(u => { try { return new URL(u.url).hostname.replace(/^www\./, ''); } catch (_) { return u.url; } }).join(', ')
+          + `</div>`
+        : '';
+      if (!flags.length) {
+        out.innerHTML = `<span style="color:#6b7280;">No MW drift detected vs. cached values${j.signals?.length ? ` · ${j.signals.length} matched mention(s) on file` : ''}.</span>${failNote}`;
+        return;
+      }
+      out.innerHTML = flags.map(f => `
+        <div style="border-left:3px solid #dc2626;padding:6px 10px;margin-bottom:6px;background:#fff;border-radius:3px;">
+          <div><strong>${f.name}</strong> — cached ${f.cached_mw} MW vs. observed ${f.observed_mw} MW
+            (<span style="color:${f.delta_pct > 0 ? '#15803d' : '#b91c1c'};">${f.delta_pct > 0 ? '+' : ''}${f.delta_pct}%</span>)
+          </div>
+          <div style="color:#6b7280;font-size:10px;margin-top:2px;">${(f.context || '').slice(0, 200)}…
+            <a href="${f.url}" target="_blank" rel="noopener" style="color:#2563eb;margin-left:4px;">open ↗</a>
+          </div>
+        </div>
+      `).join('') + failNote;
+    } catch (e) {
+      out.textContent = `error: ${e.message}`;
+    }
   },
 
   async loadStates() {

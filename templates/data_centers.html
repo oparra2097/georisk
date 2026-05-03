@@ -144,6 +144,41 @@
     </div>
   </section>
 
+  {% if current_user and current_user.is_authenticated and admin_email and current_user.email|lower == admin_email|lower %}
+  <details class="dc-card" id="admin-block" style="margin-bottom:16px;border-color:#fde68a;background:#fffbeb;">
+    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#78350f;text-transform:uppercase;letter-spacing:0.04em;">
+      Admin · upload data &amp; drift signals
+    </summary>
+    <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:#78350f;margin-bottom:6px;">Upload markets CSV</div>
+        <form id="upload-markets-form" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <input type="file" name="file" accept=".csv" required style="font-size:11px;flex:1;min-width:160px;">
+          <button type="submit" class="dc-tab" style="background:#b45309;color:#fff;border-color:#b45309;">Upload</button>
+        </form>
+        <div id="upload-markets-result" style="font-size:11px;margin-top:6px;color:#374151;"></div>
+      </div>
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:#78350f;margin-bottom:6px;">Upload facilities CSV</div>
+        <form id="upload-facilities-form" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <input type="file" name="file" accept=".csv" required style="font-size:11px;flex:1;min-width:160px;">
+          <button type="submit" class="dc-tab" style="background:#b45309;color:#fff;border-color:#b45309;">Upload</button>
+        </form>
+        <div id="upload-facilities-result" style="font-size:11px;margin-top:6px;color:#374151;"></div>
+      </div>
+    </div>
+    <div style="margin-top:18px;border-top:1px solid #fde68a;padding-top:14px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:#78350f;">
+          Drift signals <span id="drift-last-scanned" style="color:#9ca3af;text-transform:none;letter-spacing:0;font-weight:400;"></span>
+        </div>
+        <button id="drift-scan-btn" class="dc-tab" style="margin-left:auto;font-size:11px;">Scan now</button>
+      </div>
+      <div id="drift-flags" style="font-size:11px;color:#374151;line-height:1.5;">loading…</div>
+    </div>
+  </details>
+  {% endif %}
+
   <div class="dc-toolbar">
     <button class="dc-tab active" data-mode="markets">Markets</button>
     <button class="dc-tab" data-mode="facilities">Facilities</button>
