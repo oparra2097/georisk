@@ -67,6 +67,7 @@ from backend.macro_model.routes import macro_model_bp
 from backend.house_prices.routes import house_prices_bp
 from backend.house_prices.forecast.routes import hpi_forecast_bp
 from backend.data_centers.routes import data_centers_bp
+from backend.credit_default.routes import credit_default_bp
 
 
 def social_or_login_required(view):
@@ -124,6 +125,7 @@ def create_app():
     app.register_blueprint(house_prices_bp, url_prefix='/api/house-prices')
     app.register_blueprint(hpi_forecast_bp, url_prefix='/api/house-prices/forecast')
     app.register_blueprint(data_centers_bp, url_prefix='/api/data-centers')
+    app.register_blueprint(credit_default_bp, url_prefix='/api/credit-default')
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(sharing_bp)  # /og/* routes (public, no auth)
 
@@ -177,6 +179,11 @@ def create_app():
     @social_or_login_required
     def data_centers():
         return render_template('data_centers.html', active_page='data-centers')
+
+    @app.route('/credit-default')
+    @social_or_login_required
+    def credit_default():
+        return render_template('credit_default.html', active_page='credit-default')
 
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()

@@ -1,0 +1,130 @@
+iso3,start_year,end_year,event_type,instrument,source,notes
+# Sovereign default / restructuring event panel — dependent variable for
+# the rating model. Schema follows the Bank of Canada CRAG database
+# convention (https://www.bankofcanada.ca/?p=120817):
+#
+#   iso3        ISO-3 country code
+#   start_year  Year the default / restructuring began
+#   end_year    Year it ended (= start_year if a single-year event;
+#               left blank if still ongoing)
+#   event_type  One of:
+#                 default            Missed external bond/loan payment
+#                 restructuring      NPV-reducing exchange (distressed)
+#                 paris_club         Official creditor restructuring
+#                 london_club        Bank-loan restructuring
+#                 arrears            Sustained arrears, no formal default
+#                 imf_program        IMF Stand-by/EFF (broader distress proxy,
+#                                    used only if you opt into target #3)
+#   instrument  external_bond | bank_loan | paris_club | domestic | mixed
+#   source      Citation tag (CRAG, S&P, Moodys, RR2009, IMF_MONA, ...)
+#
+# The seed below is a non-exhaustive snapshot of major external defaults /
+# restructurings 1990–2024. Replace with the full CRAG download once the
+# Bank of Canada panel is ingested — they refresh annually and the file
+# is free.
+
+ARG,2001,2005,default,external_bond,CRAG,2001 default; ~75% NPV haircut
+ARG,2014,2016,default,external_bond,CRAG,Holdout litigation default
+ARG,2020,2020,restructuring,external_bond,CRAG,COVID-era exchange
+BLZ,2006,2007,restructuring,external_bond,CRAG,Superbond exchange
+BLZ,2012,2013,restructuring,external_bond,CRAG,Second exchange
+BLZ,2016,2017,restructuring,external_bond,CRAG,Third exchange
+BLZ,2020,2021,restructuring,external_bond,CRAG,Blue bond debt swap
+DOM,2005,2005,restructuring,external_bond,CRAG,
+ECU,1999,2000,default,external_bond,CRAG,Brady bond default
+ECU,2008,2009,default,external_bond,CRAG,Selective default by gov't choice
+ECU,2020,2020,restructuring,external_bond,CRAG,COVID exchange
+GRD,2004,2005,restructuring,external_bond,CRAG,
+GRD,2013,2015,restructuring,external_bond,CRAG,
+JAM,2010,2010,restructuring,domestic,CRAG,JDX domestic exchange
+JAM,2013,2013,restructuring,domestic,CRAG,NDX exchange
+URY,2003,2003,restructuring,external_bond,CRAG,Uruguay 2003 voluntary exchange
+VEN,2017,,default,external_bond,CRAG,Ongoing default
+NIC,1995,1995,paris_club,paris_club,CRAG,
+SLV,2017,2017,arrears,domestic,CRAG,Pension fund arrears
+SUR,2021,2023,restructuring,external_bond,CRAG,
+LBN,2020,,default,external_bond,CRAG,Eurobond default March 2020
+SYR,2011,,arrears,external_bond,CRAG,Sustained arrears
+YEM,2015,,arrears,external_bond,CRAG,Conflict-driven
+RUS,1998,2000,default,domestic,CRAG,GKO default
+RUS,2022,,default,external_bond,CRAG,Sanctions-related technical default
+UKR,1998,2000,restructuring,external_bond,CRAG,
+UKR,2015,2015,restructuring,external_bond,CRAG,
+UKR,2022,2024,restructuring,external_bond,CRAG,War-related restructuring
+UKR,2024,2024,restructuring,external_bond,CRAG,Aug 2024 deal
+BLR,2022,,default,external_bond,CRAG,Sanctions-related
+SRB,2000,2004,restructuring,external_bond,CRAG,FRY successor restructuring
+TUR,2001,2001,restructuring,domestic,CRAG,Domestic banking crisis swap
+PAK,1999,1999,restructuring,external_bond,CRAG,
+IRN,1992,1995,paris_club,paris_club,CRAG,
+IRQ,2003,2008,paris_club,paris_club,CRAG,Post-war 80% NPV reduction
+LKA,2022,2024,default,external_bond,CRAG,April 2022 default
+LAO,2022,,arrears,external_bond,CRAG,Distressed debt to China
+MNG,2017,2017,restructuring,external_bond,CRAG,
+PRK,1980,,default,external_bond,RR2009,Long-running default
+KHM,1997,,arrears,paris_club,RR2009,
+NGA,2002,2005,paris_club,paris_club,CRAG,Paris Club 60% NPV cut
+NGA,2018,2018,arrears,domestic,CRAG,Brief domestic arrears
+GHA,2022,2024,default,external_bond,CRAG,December 2022 default; 2024 deal
+GHA,2024,2024,restructuring,external_bond,CRAG,Eurobond exchange
+ZMB,2020,2024,default,external_bond,CRAG,November 2020 default; 2024 deal
+ETH,2023,,default,external_bond,CRAG,December 2023 missed coupon
+TUN,2023,,arrears,external_bond,CRAG,Distressed but not yet defaulted
+EGY,1990,1991,paris_club,paris_club,CRAG,
+KEN,2000,2004,paris_club,paris_club,CRAG,
+TZA,2002,2002,paris_club,paris_club,CRAG,HIPC completion
+UGA,2000,2000,paris_club,paris_club,CRAG,HIPC
+MOZ,2016,2019,restructuring,external_bond,CRAG,Tuna bond scandal restructuring
+COG,2017,2019,restructuring,external_bond,CRAG,
+COD,2002,2010,paris_club,paris_club,CRAG,HIPC sequence
+CAF,2001,2009,paris_club,paris_club,CRAG,
+TCD,2001,2015,paris_club,paris_club,CRAG,
+CIV,2000,2012,paris_club,paris_club,CRAG,Multiple Paris Club agreements
+CIV,2011,2011,default,external_bond,CRAG,Brief eurobond default
+SEN,2004,2004,paris_club,paris_club,CRAG,
+GIN,2012,2013,paris_club,paris_club,CRAG,
+LBR,2008,2010,paris_club,paris_club,CRAG,HIPC
+SLE,2007,2007,paris_club,paris_club,CRAG,HIPC
+BFA,2002,2002,paris_club,paris_club,CRAG,HIPC
+NER,2004,2004,paris_club,paris_club,CRAG,HIPC
+MLI,2000,2003,paris_club,paris_club,CRAG,HIPC
+GMB,2007,2008,paris_club,paris_club,CRAG,HIPC
+GNB,2010,2010,paris_club,paris_club,CRAG,HIPC
+HND,2005,2007,paris_club,paris_club,CRAG,HIPC
+NIC,2004,2007,paris_club,paris_club,CRAG,HIPC sequence
+HTI,2009,2010,paris_club,paris_club,CRAG,HIPC + earthquake
+GRC,2012,2012,restructuring,external_bond,CRAG,PSI ~53% haircut
+CYP,2013,2013,restructuring,domestic,CRAG,Bail-in-style debt management
+PRT,2011,2011,imf_program,external_bond,IMF_MONA,Bailout but no default
+IRL,2010,2010,imf_program,external_bond,IMF_MONA,Bailout but no default
+ESP,2012,2012,imf_program,external_bond,IMF_MONA,Banking sector
+HRV,1996,2003,paris_club,paris_club,CRAG,
+BGR,1990,1994,restructuring,external_bond,CRAG,
+ROU,1981,1983,paris_club,paris_club,RR2009,
+HUN,2008,2008,imf_program,external_bond,IMF_MONA,Bailout but no default
+LVA,2008,2008,imf_program,external_bond,IMF_MONA,
+ROU,2009,2009,imf_program,external_bond,IMF_MONA,
+ISL,2008,2008,imf_program,external_bond,IMF_MONA,Banking crisis
+JPN,,,,,,Reference: never defaulted on external debt
+USA,,,,,,Reference: never defaulted on external debt
+DEU,,,,,,Reference: never defaulted post-WW2
+GBR,,,,,,Reference: never defaulted in modern era
+CAN,,,,,,Reference: never defaulted
+AUS,,,,,,Reference: never defaulted
+CHN,,,,,,Reference: no external default in modern era
+IND,,,,,,Reference: no external default in modern era
+KOR,1997,1998,imf_program,external_bond,IMF_MONA,Bailout but no default
+THA,1997,1998,imf_program,external_bond,IMF_MONA,Bailout but no default
+IDN,1997,2000,restructuring,bank_loan,CRAG,Asian crisis bank-loan restructuring
+MYS,,,,,,Reference: no IMF program in 1997
+PHL,,,,,,Reference: did 1989 Brady but no recent default
+MEX,1982,1990,restructuring,bank_loan,CRAG,LDC crisis Brady
+MEX,1995,1995,imf_program,external_bond,IMF_MONA,Tequila bailout
+BRA,1983,1994,restructuring,bank_loan,CRAG,LDC crisis Brady
+BRA,1999,1999,imf_program,external_bond,IMF_MONA,
+CHL,1983,1990,restructuring,bank_loan,CRAG,LDC crisis
+PER,1983,1997,restructuring,bank_loan,CRAG,LDC crisis Brady
+COL,,,,,,Reference: no default in modern era
+PRY,2003,2003,arrears,external_bond,CRAG,Brief arrears
+BOL,1980,1992,restructuring,bank_loan,CRAG,
+BOL,2024,,arrears,external_bond,CRAG,Distressed; not yet defaulted

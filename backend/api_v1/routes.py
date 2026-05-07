@@ -681,3 +681,61 @@ def v1_hpi_state_fan(code):
     except Exception as e:
         logger.exception('v1 hpi state fan failed')
         return jsonify({'error': 'internal_error', 'detail': str(e)}), 500
+
+
+# ── /api/v1/credit-default ───────────────────────────────────────────────
+#
+# Programmatic surface for the sovereign credit default model. Mirror of
+# the cookie-auth /api/credit-default/* endpoints but key-gated. Useful for
+# AIG analysts pulling PDs into their own spreadsheets / risk engines.
+
+@api_v1_bp.route('/credit-default/table')
+@api_key_required
+def v1_credit_default_table():
+    try:
+        from backend.credit_default import service as cd_service
+        rows = cd_service.get_table_rows()
+        dash = cd_service.get_dashboard()
+        return jsonify({
+            'as_of': dash.get('as_of') or _now_iso(),
+            'count': len(rows),
+            'rows': rows,
+        })
+    except Exception as e:
+        logger.exception('v1 credit-default table failed')
+        return jsonify({'error': 'internal_error', 'detail': str(e)}), 500
+
+
+@api_v1_bp.route('/credit-default/country/<iso3>')
+@api_key_required
+def v1_credit_default_country(iso3):
+    try:
+        from backend.credit_default import service as cd_service
+        c = cd_service.get_country(iso3.upper())
+        if c is None:
+            return jsonify({'error': 'country_not_found', 'iso3': iso3.upper()}), 404
+        return jsonify({'as_of': _now_iso(), 'country': c})
+    except Exception as e:
+        logger.exception('v1 credit-default country failed')
+        return jsonify({'error': 'internal_error', 'detail': str(e)}), 500
+
+
+@api_v1_bp.route('/credit-default/methodology')
+@api_key_required
+def v1_credit_default_methodology():
+    try:
+        from backend.credit_default import rating_model
+        return jsonify({
+            'as_of': _now_iso(),
+            'weights': rating_model.WEIGHTS,
+            'higher_is_worse': rating_model.HIGHER_IS_WORSE,
+            'rating_buckets': [
+                {'max_score': r[0], 'pm_notch': r[1], 'pm_numeric': r[2],
+                 'sp_equiv': r[3], 'moodys_equiv': r[4],
+                 'pd_1y': r[5], 'pd_3y': r[6], 'pd_5y': r[7]}
+                for r in rating_model.RATING_BUCKETS
+            ],
+        })
+    except Exception as e:
+        logger.exception('v1 credit-default methodology failed')
+        return jsonify({'error': 'internal_error', 'detail': str(e)}), 500

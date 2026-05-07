@@ -135,6 +135,15 @@ def meta_for_path(path: str) -> dict:
             "og_url": path,
         }
 
+    if path.startswith("/credit-default"):
+        return {
+            **base,
+            "og_title": "Sovereign Credit Default — Parra Macro",
+            "og_description": "Probability of default and 1-10 internal credit rating for ~190 sovereigns. Macro-only model trained on historical default events with shadow-debt overlay and side-by-side comparison to S&P, Moody's and Fitch.",
+            "og_image": "/og/preview.png?chart=credit-default",
+            "og_url": path,
+        }
+
     if path.startswith("/models"):
         return {
             **base,

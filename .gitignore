@@ -8,6 +8,8 @@ data/*
 !data/consensus.yaml
 !data/datacenter_markets.csv
 !data/datacenter_facilities.csv
+!data/agency_ratings.csv
+!data/sovereign_defaults.csv
 
 # Commodity model cache artifacts (regenerated on monthly refit)
 backend/cache/commodity_models/*.pkl
