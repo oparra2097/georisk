@@ -115,6 +115,44 @@ INDICATORS: Dict[str, Dict] = {
         'label': 'Unemployment Rate',
         'tier': 2,
     },
+
+    # ── Governance / institutions (World Bank WGI, -2.5 worst → +2.5 best) ─
+    'rule_of_law': {
+        'source': 'WB', 'code': 'RL.EST',
+        'kind': 'higher_is_better', 'units': 'z',
+        'label': 'Rule of Law',
+        'tier': 2,
+    },
+    'control_of_corruption': {
+        'source': 'WB', 'code': 'CC.EST',
+        'kind': 'higher_is_better', 'units': 'z',
+        'label': 'Control of Corruption',
+        'tier': 2,
+    },
+    'govt_effectiveness': {
+        'source': 'WB', 'code': 'GE.EST',
+        'kind': 'higher_is_better', 'units': 'z',
+        'label': 'Government Effectiveness',
+        'tier': 2,
+    },
+    'regulatory_quality': {
+        'source': 'WB', 'code': 'RQ.EST',
+        'kind': 'higher_is_better', 'units': 'z',
+        'label': 'Regulatory Quality',
+        'tier': 2,
+    },
+    'political_stability': {
+        'source': 'WB', 'code': 'PV.EST',
+        'kind': 'higher_is_better', 'units': 'z',
+        'label': 'Political Stability',
+        'tier': 2,
+    },
+    'voice_accountability': {
+        'source': 'WB', 'code': 'VA.EST',
+        'kind': 'higher_is_better', 'units': 'z',
+        'label': 'Voice & Accountability',
+        'tier': 2,
+    },
 }
 
 

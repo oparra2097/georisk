@@ -50,26 +50,32 @@ def _load_fit_state(horizon_years: int = 1):
 # silently zero-out the score).
 
 #
-# Macro-only: WGI / governance series are deliberately excluded — every
-# weight below is a quantitative macro/external/fiscal indicator. The
-# 10% that would have gone to governance is redistributed across the
-# debt and external blocks (the highest signal-to-noise blocks in
-# sovereign default work).
+# Mixed-block weighting: macro fundamentals dominate (~85%) but the
+# Worldwide Governance Indicators (rule of law + 5 siblings) carry a
+# 15% governance block. Rule of law and institutional quality have
+# robust empirical signal in academic sovereign-default work.
 WEIGHTS: Dict[str, float] = {
-    # Public debt sustainability (50%)
-    'gross_debt_pct_gdp':            0.20,
-    'fiscal_balance_pct_gdp':        0.10,
-    'interest_pct_revenue':          0.13,
-    'shadow_debt_gap_pp':            0.07,   # estimated − official debt/GDP
-    # External vulnerability (35%)
-    'current_account_pct_gdp':       0.09,
-    'reserves_to_imports_months':    0.09,
-    'short_term_debt_pct_reserves':  0.09,
-    'external_debt_pct_gni':         0.08,
-    # Real economy (15%)
-    'real_gdp_growth':               0.07,
-    'inflation':                     0.05,
+    # Public debt sustainability (43%)
+    'gross_debt_pct_gdp':            0.17,
+    'fiscal_balance_pct_gdp':        0.09,
+    'interest_pct_revenue':          0.11,
+    'shadow_debt_gap_pp':            0.06,   # estimated − official debt/GDP
+    # External vulnerability (29%)
+    'current_account_pct_gdp':       0.08,
+    'reserves_to_imports_months':    0.08,
+    'short_term_debt_pct_reserves':  0.07,
+    'external_debt_pct_gni':         0.06,
+    # Real economy (13%)
+    'real_gdp_growth':               0.06,
+    'inflation':                     0.04,
     'gdp_per_capita_ppp':            0.03,
+    # Governance / institutions (15%) — WGI components, -2.5 .. +2.5 scale
+    'rule_of_law':                   0.04,
+    'control_of_corruption':         0.03,
+    'govt_effectiveness':            0.03,
+    'regulatory_quality':            0.02,
+    'political_stability':           0.02,
+    'voice_accountability':          0.01,
 }
 
 # How each weight maps onto the directionality of the risk contribution.
@@ -87,6 +93,12 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'real_gdp_growth':               False,
     'inflation':                     True,
     'gdp_per_capita_ppp':            False,
+    'rule_of_law':                   False,
+    'control_of_corruption':         False,
+    'govt_effectiveness':            False,
+    'regulatory_quality':            False,
+    'political_stability':           False,
+    'voice_accountability':          False,
 }
 
 # Hard caps on individual indicator z-scores so a single outlier (e.g. Lebanon

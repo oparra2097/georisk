@@ -14,33 +14,41 @@ served at `/credit-default` and the `/api/credit-default/*` blueprint.
   ratings are loaded from `data/agency_ratings.csv` for **display only** and are
   never used as a fitting target.
 
-## Independent variables (macro-only)
+## Independent variables
 
-The user requirement was *no proprietary or governance/survey inputs* — every
-indicator below is a quantitative macro/external/fiscal series pulled from
-public APIs (IMF WEO datamapper, World Bank WDI/IDS):
+Indicators are pulled from public APIs (IMF WEO datamapper, World Bank
+WDI/IDS, World Bank WGI), plus the local sovereign-debt overlay:
 
-| Block | Indicator | Source code |
-| --- | --- | --- |
-| Public debt | Gross govt debt / GDP | WEO `GGXWDG_NGDP` |
-| Public debt | Fiscal balance / GDP | WEO `GGXCNL_NGDP` |
-| Public debt | Interest / revenue | WB `GC.XPN.INTP.RV.ZS` |
-| Public debt | Shadow debt gap (estimated − official, pp) | local `sovereign_debt.json` |
-| External | Current account / GDP | WEO `BCA_NGDPD` |
-| External | Reserves / imports (months) — *import cover* | WB `FI.RES.TOTL.MO` |
-| External | Short-term external debt / reserves | WB `DT.DOD.DSTC.IR.ZS` |
-| External | Total external debt / GNI | WB `DT.DOD.DECT.GN.ZS` |
-| Real | Real GDP growth | WEO `NGDP_RPCH` |
-| Real | CPI inflation | WEO `PCPIPCH` |
-| Real | GDP per capita (PPP) | WEO `PPPPC` |
+| Block | Indicator | Source code | Weight |
+| --- | --- | --- | --- |
+| Public debt (43%) | Gross govt debt / GDP | WEO `GGXWDG_NGDP` | 0.17 |
+| Public debt | Interest / revenue | WB `GC.XPN.INTP.RV.ZS` | 0.11 |
+| Public debt | Fiscal balance / GDP | WEO `GGXCNL_NGDP` | 0.09 |
+| Public debt | Shadow debt gap (estimated − official, pp) | local `sovereign_debt.json` | 0.06 |
+| External (29%) | Current account / GDP | WEO `BCA_NGDPD` | 0.08 |
+| External | Reserves / imports (months) — *import cover* | WB `FI.RES.TOTL.MO` | 0.08 |
+| External | Short-term external debt / reserves | WB `DT.DOD.DSTC.IR.ZS` | 0.07 |
+| External | Total external debt / GNI | WB `DT.DOD.DECT.GN.ZS` | 0.06 |
+| Real (13%) | Real GDP growth | WEO `NGDP_RPCH` | 0.06 |
+| Real | CPI inflation | WEO `PCPIPCH` | 0.04 |
+| Real | GDP per capita (PPP) | WEO `PPPPC` | 0.03 |
+| Governance (15%) | Rule of Law (WGI) | WB `RL.EST` | 0.04 |
+| Governance | Control of Corruption (WGI) | WB `CC.EST` | 0.03 |
+| Governance | Government Effectiveness (WGI) | WB `GE.EST` | 0.03 |
+| Governance | Regulatory Quality (WGI) | WB `RQ.EST` | 0.02 |
+| Governance | Political Stability (WGI) | WB `PV.EST` | 0.02 |
+| Governance | Voice & Accountability (WGI) | WB `VA.EST` | 0.01 |
 
 The shadow-debt gap is the only non-API input — it comes from the
 `sovereign_debt.json` overlay (your existing pipeline) which already harmonizes
 BIS claims, Chinese lending, and IMF official debt to produce an estimated
 debt-to-GDP figure.
 
-WGI (governance) is **deliberately excluded** since it's a survey-based
-composite, not macro.
+The scaffold weights above govern the transparent composite score. When a
+fitted state file is present, those weights are replaced by the fitted
+coefficients (in σ units of the standardized features); the scaffold still
+runs in parallel so the dashboard can show both the fitted PM rating and the
+transparent composite side by side.
 
 ## Dependent variable
 
@@ -99,6 +107,22 @@ every country.
 
 ## How to fit
 
+Step 1 — refresh the default-events panel from the Bank of Canada CRAG
+database (~1,300 events 1960–present, free, annual update):
+
+```bash
+# Pulls the latest CRAG xlsx and writes data/sovereign_defaults.csv
+python scripts/fetch_crag_defaults.py
+
+# If the network can't reach bankofcanada.ca, download the spreadsheet
+# manually and pass --input.
+python scripts/fetch_crag_defaults.py --input ~/Downloads/db-sovereign-defaults-data.xlsx
+```
+
+Step 2 — fit the model. Runs against the IMF WEO + World Bank panel
+joined to the default events; needs outbound HTTP to imf.org and
+api.worldbank.org:
+
 ```bash
 # Logit, 1-year horizon (default):
 python scripts/fit_credit_default.py --estimator logit --horizon 1
@@ -113,6 +137,8 @@ python scripts/fit_credit_default.py --estimator both --horizon all
 State files land in `data/credit_default_fit/fit_state_h{H}.json`. The live
 service picks them up automatically on the next dashboard request (the panel
 is cached for 6h — hit `POST /api/credit-default/refresh` to force a reload).
+A discrete-time hazard view comes for free: train H ∈ {1, 3, 5} and the
+dashboard exposes PD at each horizon per country.
 
 ## API surface
 

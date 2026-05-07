@@ -76,7 +76,16 @@ def build_training_panel(years_back: int = 25, horizon_years: int = 1):
 
     panel = cd_data.get_history_panel(years_back=years_back)
     if panel is None or panel.empty:
-        raise RuntimeError('history panel empty — IMF/WB fetch failed?')
+        raise RuntimeError(
+            'history panel is empty — IMF WEO and World Bank APIs returned '
+            'no data. Confirm outbound network access to '
+            'imf.org and api.worldbank.org, then re-run.'
+        )
+    if 'iso3' not in panel.columns or 'year' not in panel.columns:
+        raise RuntimeError(
+            'history panel is malformed — missing iso3/year columns. '
+            'Likely every indicator fetch failed; check upstream API status.'
+        )
 
     label_df = cd_defaults.build_label_frame(
         panel[['iso3', 'year']].itertuples(index=False, name=None),
