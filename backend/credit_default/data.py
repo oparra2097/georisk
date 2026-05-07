@@ -290,6 +290,36 @@ def _country_iso3_universe(per_indicator: Dict[str, Dict[str, float]]) -> Iterab
     return sorted(universe)
 
 
+# Aggregates the upstream APIs surface alongside real sovereigns. The
+# dashboard only shows sovereigns, sub-sovereigns (HKG/MAC/PRI/GRL/WBG/
+# XKX), and island nations/territories — everything below is filtered out.
+# WB aggregate codes come from world_bank._AGGREGATE_CODES; the rest are
+# IMF WEO regional groupings observed in the panel.
+_AGGREGATE_BLOCKLIST = {
+    # WB regional / income groupings
+    'ARB','CEB','CSS','EAP','EAR','EAS','ECA','ECS','EMU','EUU','FCS','HIC','HPC',
+    'IBD','IBT','IDA','IDB','IDX','INX','LAC','LCN','LDC','LIC','LMC','LMY','LTE',
+    'MEA','MIC','MNA','NAC','OED','OSS','PRE','PSS','PST','SAS','SSA','SSF','SST',
+    'TEA','TEC','TLA','TMN','TSA','TSS','UMC','WLD',
+    # IMF WEO regional sub-aggregates seen on the panel
+    'AFE','AFW','AS5','EDE','MAE','OAE',
+}
+
+
+def _is_sovereign_iso(iso3: str) -> bool:
+    """Drop continent/income/region aggregates. Real sovereigns and sub-
+    sovereigns (HKG, MAC, PRI, GRL, WBG, XKX, …) all pass — only known
+    aggregate codes and the IMF 'Q'-suffix WEO groupings are blocked."""
+    if not iso3 or len(iso3) != 3:
+        return False
+    if iso3 in _AGGREGATE_BLOCKLIST:
+        return False
+    # IMF WEO regional groupings end in 'Q' (e.g. AFQ, APQ, EUQ, WHQ).
+    if iso3.endswith('Q'):
+        return False
+    return True
+
+
 def get_panel(force_refresh: bool = False) -> Dict:
     """Build the harmonized cross-section panel.
 
@@ -345,6 +375,8 @@ def get_panel(force_refresh: bool = False) -> Dict:
     # 4. Assemble
     countries_out: Dict[str, Dict] = {}
     for iso3 in _country_iso3_universe(per_indicator):
+        if not _is_sovereign_iso(iso3):
+            continue
         ind_values = {name: per_indicator[name].get(iso3) for name in INDICATORS}
 
         debt_block = debt_countries.get(iso3)
