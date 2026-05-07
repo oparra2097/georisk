@@ -68,7 +68,7 @@
           <th data-sort="name" class="sortable">Country</th>
           <th data-sort="region" class="sortable">Region</th>
           <th data-sort="pm_notch" class="sortable" title="Fitted-model rating (logit / GBM)">PM Rating</th>
-          <th data-sort="composite_score" class="sortable num" title="Transparent z-score reference score (0=best, 100=worst)">Composite (0–100)</th>
+          <th data-sort="composite_score" class="sortable num" title="Log-odds reference score: 0 = best credit, 100 = worst (higher = more default risk)">Composite (log)</th>
           <th data-sort="agency_sp" class="sortable">S&amp;P</th>
           <th data-sort="agency_moodys" class="sortable">Moody's</th>
           <th data-sort="agency_fitch" class="sortable">Fitch</th>
@@ -115,7 +115,7 @@
             <span class="cd-rating-meta" id="cd-panel-pm-grade">—</span>
           </div>
           <div class="cd-rating-card cd-rating-card--composite">
-            <span class="cd-rating-label">Composite (0–100)</span>
+            <span class="cd-rating-label">Composite (log-odds)</span>
             <span class="cd-rating-value" id="cd-panel-composite">—</span>
             <span class="cd-rating-meta" id="cd-panel-composite-meta">0 best, 100 worst</span>
           </div>

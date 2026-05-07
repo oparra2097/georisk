@@ -367,9 +367,9 @@
       (rating.is_investment_grade ? 'IG' :
         (rating.defaulted ? 'In default' : 'HY')) + sourceTag;
 
-    // Composite reference score on a 0-100 numeric scale (0 = best
-    // credit, 100 = worst). User asked to drop the letter mapping here
-    // so the score reads as a continuous number, not a notch.
+    // Composite reference score on a 0–100 log-odds scale, with HIGHER
+    // = higher default risk (0 best, 100 worst). Independent of the
+    // fitted PD model: built from the transparent weighted z-sum.
     const composite = rating.composite || {};
     const compEl = document.getElementById('cd-panel-composite');
     if (compEl) {

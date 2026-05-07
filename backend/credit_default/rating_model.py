@@ -334,14 +334,32 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
                 'weight': round(displayed_weight, 4),
             })
 
-        # ── Composite (transparent z-score) score ──────────────────────
+        # ── Composite (log-odds score on 0–100, 100 = highest risk) ──
+        # The composite is a transparent reference score independent of
+        # the fitted PD. We map the weighted z-sum into an implied PD
+        # via sigmoid, then to a 0–100 score where HIGHER = HIGHER
+        # default risk: score = 50 + K·log10(PD/(1-PD)). PD=0.5 → 50,
+        # PD≈0.05 → ~0, PD≈0.95 → ~100, with K=38.4 anchoring the
+        # ±50-point boundaries near the Z_CLIP=±3 limits on z.
         composite_normalized = (composite_weighted_sum / composite_weight_total
                                 if composite_weight_total > 0 else 0.0)
-        composite_score = 100.0 / (1.0 + math.exp(-0.9 * composite_normalized))
-        # The composite is the always-on transparent reference; keep it
-        # on the hand-set buckets so the two scores remain comparable
-        # without one tracking the model's empirical drift.
-        composite_rating = _letter_and_pd(composite_score, defaulted=defaulted)
+        if defaulted:
+            composite_score = 100.0
+        else:
+            composite_pd_implied = 1.0 / (1.0 + math.exp(-composite_normalized))
+            composite_pd_implied = min(max(composite_pd_implied, 1e-6), 1.0 - 1e-6)
+            composite_score = 50.0 + 38.4 * math.log10(
+                composite_pd_implied / (1.0 - composite_pd_implied)
+            )
+            composite_score = max(0.0, min(100.0, composite_score))
+        # The composite is now a continuous score, not a rating bucket;
+        # leave the letter fields empty so no stale notch leaks through.
+        composite_rating = {
+            'pm_notch': None, 'pm_numeric': None,
+            'sp_equiv': None, 'moodys_equiv': None,
+            'pd_1y': None, 'pd_3y': None, 'pd_5y': None,
+            'is_investment_grade': None,
+        }
 
         # ── Fitted-model score (the user's primary rating) ─────────────
         model_pd = None
