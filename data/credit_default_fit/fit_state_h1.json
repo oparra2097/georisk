@@ -1,0 +1,303 @@
+{
+  "estimator": "gbm",
+  "horizon_years": 1,
+  "feature_importance": {
+    "gross_debt_pct_gdp": 0.00531560782192364,
+    "fiscal_balance_pct_gdp": 0.005235147516242688,
+    "interest_pct_revenue": 0.0031368154765625935,
+    "shadow_debt_gap_pp": 0.0,
+    "current_account_pct_gdp": 0.028754899498486884,
+    "reserves_to_imports_months": 0.025173506739687112,
+    "short_term_debt_pct_reserves": 0.017466705002744533,
+    "external_debt_pct_gni": 0.010171978221168155,
+    "real_gdp_growth": 0.013450849322167401,
+    "inflation": 0.012885127003410546,
+    "gdp_per_capita_ppp": 0.05791573714936412,
+    "rule_of_law": 0.005121616661192796,
+    "control_of_corruption": 0.004045744183958633,
+    "govt_effectiveness": 0.013031501118830136,
+    "regulatory_quality": 0.0029069126539741363,
+    "political_stability": 0.011051132069682312,
+    "voice_accountability": 0.00580427916998606
+  },
+  "coefficients": {
+    "gross_debt_pct_gdp": 0.00531560782192364,
+    "fiscal_balance_pct_gdp": 0.005235147516242688,
+    "interest_pct_revenue": 0.0031368154765625935,
+    "shadow_debt_gap_pp": 0.0,
+    "current_account_pct_gdp": 0.028754899498486884,
+    "reserves_to_imports_months": 0.025173506739687112,
+    "short_term_debt_pct_reserves": 0.017466705002744533,
+    "external_debt_pct_gni": 0.010171978221168155,
+    "real_gdp_growth": 0.013450849322167401,
+    "inflation": 0.012885127003410546,
+    "gdp_per_capita_ppp": 0.05791573714936412,
+    "rule_of_law": 0.005121616661192796,
+    "control_of_corruption": 0.004045744183958633,
+    "govt_effectiveness": 0.013031501118830136,
+    "regulatory_quality": 0.0029069126539741363,
+    "political_stability": 0.011051132069682312,
+    "voice_accountability": 0.00580427916998606
+  },
+  "intercept": 0.0,
+  "scaler": {
+    "gross_debt_pct_gdp": {
+      "mean": 52.61256773655689,
+      "std": 35.89572247276649
+    },
+    "fiscal_balance_pct_gdp": {
+      "mean": -2.190662776156732,
+      "std": 6.203426963021938
+    },
+    "interest_pct_revenue": {
+      "mean": 6.505439168117986,
+      "std": 5.903089184026484
+    },
+    "shadow_debt_gap_pp": {
+      "mean": 9.275823259691537,
+      "std": 3.3686260311803586
+    },
+    "current_account_pct_gdp": {
+      "mean": -0.8453939141308878,
+      "std": 13.133013119824513
+    },
+    "reserves_to_imports_months": {
+      "mean": 4.767094534030395,
+      "std": 3.883367638496363
+    },
+    "short_term_debt_pct_reserves": {
+      "mean": 30.81182372214291,
+      "std": 61.30964930110184
+    },
+    "external_debt_pct_gni": {
+      "mean": 45.27555862416953,
+      "std": 26.20684784877172
+    },
+    "real_gdp_growth": {
+      "mean": 3.3881408920383493,
+      "std": 4.67138810600562
+    },
+    "inflation": {
+      "mean": 24.78074197582326,
+      "std": 987.4431452236138
+    },
+    "gdp_per_capita_ppp": {
+      "mean": 23519.539540641934,
+      "std": 24728.29367350258
+    },
+    "rule_of_law": {
+      "mean": 0.04986183937057141,
+      "std": 0.8423662349319756
+    },
+    "control_of_corruption": {
+      "mean": 0.028411964506044562,
+      "std": 0.850159515938689
+    },
+    "govt_effectiveness": {
+      "mean": 0.09030198545227207,
+      "std": 0.8197554953079985
+    },
+    "regulatory_quality": {
+      "mean": 0.07370263534806198,
+      "std": 0.8261726402575514
+    },
+    "political_stability": {
+      "mean": 0.11015270031263058,
+      "std": 0.8002599940114401
+    },
+    "voice_accountability": {
+      "mean": 0.07403223697373942,
+      "std": 0.8341191043691978
+    }
+  },
+  "medians": {
+    "gross_debt_pct_gdp": 46.3,
+    "fiscal_balance_pct_gdp": -2.5,
+    "interest_pct_revenue": 5.41407297462898,
+    "shadow_debt_gap_pp": 9.1,
+    "current_account_pct_gdp": -1.5,
+    "reserves_to_imports_months": 4.1676367510060555,
+    "short_term_debt_pct_reserves": 25.071969614961098,
+    "external_debt_pct_gni": 41.305984636710704,
+    "real_gdp_growth": 3.5,
+    "inflation": 3.5,
+    "gdp_per_capita_ppp": 15052.708,
+    "rule_of_law": -0.0201063,
+    "control_of_corruption": -0.0798663999999999,
+    "govt_effectiveness": 0.0250833,
+    "regulatory_quality": 0.0071335,
+    "political_stability": 0.1588848,
+    "voice_accountability": 0.09736294999999995
+  },
+  "pd_calibration": [
+    {
+      "bucket": 1,
+      "score_lo": 0.005271084535747117,
+      "score_hi": 0.011155888420885666,
+      "pd_empirical": 0.0,
+      "n_obs": 239,
+      "n_events": 0
+    },
+    {
+      "bucket": 2,
+      "score_lo": 0.011157586635701093,
+      "score_hi": 0.01389588928443829,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 3,
+      "score_lo": 0.01390575327155298,
+      "score_hi": 0.018613876619630126,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 4,
+      "score_lo": 0.01862296428089094,
+      "score_hi": 0.028668039747688008,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 5,
+      "score_lo": 0.02885172190805118,
+      "score_hi": 0.043883676902580604,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 6,
+      "score_lo": 0.04388742905109324,
+      "score_hi": 0.0579612294077555,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 7,
+      "score_lo": 0.05799655796540843,
+      "score_hi": 0.0692254451907483,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 8,
+      "score_lo": 0.06927025637266848,
+      "score_hi": 0.0821479132461238,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 9,
+      "score_lo": 0.08217551312043299,
+      "score_hi": 0.09904587699755803,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 10,
+      "score_lo": 0.09933670642967223,
+      "score_hi": 0.11823037947032025,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 11,
+      "score_lo": 0.11834431699680535,
+      "score_hi": 0.14317247206943043,
+      "pd_empirical": 0.0,
+      "n_obs": 239,
+      "n_events": 0
+    },
+    {
+      "bucket": 12,
+      "score_lo": 0.14317776452608044,
+      "score_hi": 0.17531145775925477,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 13,
+      "score_lo": 0.17541521064059515,
+      "score_hi": 0.22016933559182392,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 14,
+      "score_lo": 0.22040309487263163,
+      "score_hi": 0.26522519708009673,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 15,
+      "score_lo": 0.2653017996626395,
+      "score_hi": 0.3182546777081372,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 16,
+      "score_lo": 0.31849122339337516,
+      "score_hi": 0.382683816834754,
+      "pd_empirical": 0.004166666666666667,
+      "n_obs": 240,
+      "n_events": 1
+    },
+    {
+      "bucket": 17,
+      "score_lo": 0.383060293555936,
+      "score_hi": 0.4615757232341185,
+      "pd_empirical": 0.0,
+      "n_obs": 240,
+      "n_events": 0
+    },
+    {
+      "bucket": 18,
+      "score_lo": 0.4617411339791501,
+      "score_hi": 0.5580106075921121,
+      "pd_empirical": 0.03333333333333333,
+      "n_obs": 240,
+      "n_events": 8
+    },
+    {
+      "bucket": 19,
+      "score_lo": 0.5586971260615444,
+      "score_hi": 0.7132277079914592,
+      "pd_empirical": 0.07083333333333333,
+      "n_obs": 240,
+      "n_events": 17
+    },
+    {
+      "bucket": 20,
+      "score_lo": 0.7164288304398121,
+      "score_hi": 0.9672851419576362,
+      "pd_empirical": 0.6875,
+      "n_obs": 240,
+      "n_events": 165
+    }
+  ],
+  "auc_in_sample": 0.9887378300946545,
+  "n_obs": 4798,
+  "n_events": 191,
+  "trained_at": "2026-05-07T16:14:44Z",
+  "hyperparams": {
+    "n_estimators": 300,
+    "max_depth": 3,
+    "learning_rate": 0.05
+  }
+}

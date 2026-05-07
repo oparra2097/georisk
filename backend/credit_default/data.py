@@ -117,38 +117,42 @@ INDICATORS: Dict[str, Dict] = {
     },
 
     # ── Governance / institutions (World Bank WGI, -2.5 worst → +2.5 best) ─
+    # WGI moved out of WDI into its own database (source=3) and the
+    # indicator codes were prefixed with GOV_WGI_. The legacy short codes
+    # 404 against the modern API; ``wb_source`` is forwarded to
+    # world_bank.get_wb_data below.
     'rule_of_law': {
-        'source': 'WB', 'code': 'RL.EST',
+        'source': 'WB', 'code': 'GOV_WGI_RL.EST', 'wb_source': 3,
         'kind': 'higher_is_better', 'units': 'z',
         'label': 'Rule of Law',
         'tier': 2,
     },
     'control_of_corruption': {
-        'source': 'WB', 'code': 'CC.EST',
+        'source': 'WB', 'code': 'GOV_WGI_CC.EST', 'wb_source': 3,
         'kind': 'higher_is_better', 'units': 'z',
         'label': 'Control of Corruption',
         'tier': 2,
     },
     'govt_effectiveness': {
-        'source': 'WB', 'code': 'GE.EST',
+        'source': 'WB', 'code': 'GOV_WGI_GE.EST', 'wb_source': 3,
         'kind': 'higher_is_better', 'units': 'z',
         'label': 'Government Effectiveness',
         'tier': 2,
     },
     'regulatory_quality': {
-        'source': 'WB', 'code': 'RQ.EST',
+        'source': 'WB', 'code': 'GOV_WGI_RQ.EST', 'wb_source': 3,
         'kind': 'higher_is_better', 'units': 'z',
         'label': 'Regulatory Quality',
         'tier': 2,
     },
     'political_stability': {
-        'source': 'WB', 'code': 'PV.EST',
+        'source': 'WB', 'code': 'GOV_WGI_PV.EST', 'wb_source': 3,
         'kind': 'higher_is_better', 'units': 'z',
         'label': 'Political Stability',
         'tier': 2,
     },
     'voice_accountability': {
-        'source': 'WB', 'code': 'VA.EST',
+        'source': 'WB', 'code': 'GOV_WGI_VA.EST', 'wb_source': 3,
         'kind': 'higher_is_better', 'units': 'z',
         'label': 'Voice & Accountability',
         'tier': 2,
@@ -197,7 +201,7 @@ def _fetch_indicator(name: str, meta: Dict) -> Dict[str, Optional[float]]:
     if meta['source'] == 'WEO':
         payload = imf_weo.get_weo_data(meta['code'])
     else:  # WB
-        payload = world_bank.get_wb_data(meta['code'])
+        payload = world_bank.get_wb_data(meta['code'], source=meta.get('wb_source'))
     countries = (payload or {}).get('countries') or {}
     for iso3, block in countries.items():
         if not iso3 or len(iso3) != 3:
@@ -212,7 +216,7 @@ def _fetch_indicator_history(name: str, meta: Dict) -> Dict[str, Dict[int, float
     if meta['source'] == 'WEO':
         payload = imf_weo.get_weo_data(meta['code'])
     else:
-        payload = world_bank.get_wb_data(meta['code'])
+        payload = world_bank.get_wb_data(meta['code'], source=meta.get('wb_source'))
     countries = (payload or {}).get('countries') or {}
     for iso3, block in countries.items():
         if not iso3 or len(iso3) != 3:
