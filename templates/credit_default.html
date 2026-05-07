@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="cd-page">
+<div class="cd-page" data-view="browse" id="cd-page">
 
   <header class="cd-header">
     <div class="cd-header-text">
@@ -61,32 +61,43 @@
     <button id="cd-methodology-btn" class="cd-link-btn">Methodology</button>
   </div>
 
-  <div class="cd-grid">
-    <section class="cd-table-wrap" aria-label="Sovereign credit table">
-      <table class="cd-table" id="cd-table">
-        <thead>
-          <tr>
-            <th data-sort="name" class="sortable">Country</th>
-            <th data-sort="region" class="sortable">Region</th>
-            <th data-sort="pm_notch" class="sortable" title="Fitted-model rating (logit / GBM)">PM Rating</th>
-            <th data-sort="composite_pm_notch" class="sortable" title="Transparent z-score reference score">Composite</th>
-            <th data-sort="agency_sp" class="sortable">S&amp;P</th>
-            <th data-sort="agency_moodys" class="sortable">Moody's</th>
-            <th data-sort="agency_fitch" class="sortable">Fitch</th>
-            <th data-sort="notch_delta_sp" class="sortable num" title="PM minus S&amp;P; positive = PM is harsher">Δ vs S&amp;P</th>
-            <th data-sort="pd_1y" class="sortable num">PD 1y</th>
-            <th data-sort="pd_3y" class="sortable num">PD 3y</th>
-            <th data-sort="pd_5y" class="sortable num">PD 5y</th>
-            <th data-sort="shadow_debt_gap_pp" class="sortable num" title="Shadow debt gap (estimated − official, % GDP)">Shadow gap</th>
-          </tr>
-        </thead>
-        <tbody id="cd-tbody">
-          <tr><td colspan="12" class="cd-loading">Loading sovereigns…</td></tr>
-        </tbody>
-      </table>
-    </section>
+  <section class="cd-table-wrap cd-browse-table" aria-label="Sovereign credit table">
+    <table class="cd-table" id="cd-table">
+      <thead>
+        <tr>
+          <th data-sort="name" class="sortable">Country</th>
+          <th data-sort="region" class="sortable">Region</th>
+          <th data-sort="pm_notch" class="sortable" title="Fitted-model rating (logit / GBM)">PM Rating</th>
+          <th data-sort="composite_score" class="sortable num" title="Transparent z-score reference score (0=best, 100=worst)">Composite (0–100)</th>
+          <th data-sort="agency_sp" class="sortable">S&amp;P</th>
+          <th data-sort="agency_moodys" class="sortable">Moody's</th>
+          <th data-sort="agency_fitch" class="sortable">Fitch</th>
+          <th data-sort="notch_delta_sp" class="sortable num" title="PM minus S&amp;P; positive = PM is harsher">Δ vs S&amp;P</th>
+          <th data-sort="pd_1y" class="sortable num">PD 1y</th>
+          <th data-sort="pd_3y" class="sortable num">PD 3y</th>
+          <th data-sort="pd_5y" class="sortable num">PD 5y</th>
+          <th data-sort="shadow_debt_gap_pp" class="sortable num" title="Shadow debt gap (estimated − official, % GDP)">Shadow gap</th>
+        </tr>
+      </thead>
+      <tbody id="cd-tbody">
+        <tr><td colspan="12" class="cd-loading">Loading sovereigns…</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-    <aside class="cd-panel" id="cd-panel">
+  <div class="cd-detail-view" id="cd-detail-view" hidden>
+    <aside class="cd-detail-sidebar" aria-label="Sovereign navigation list">
+      <div class="cd-detail-back-row">
+        <button type="button" class="cd-back-btn" id="cd-back-btn" title="Return to table view">
+          ← Back to table
+        </button>
+      </div>
+      <input type="search" id="cd-detail-search" class="cd-detail-search"
+             placeholder="Filter sovereigns…" autocomplete="off">
+      <ul class="cd-detail-list" id="cd-detail-list" role="listbox"></ul>
+    </aside>
+
+    <main class="cd-panel cd-panel--full" id="cd-panel">
       <div class="cd-panel-empty">
         <p>Select a country to see contributing indicators, model rating, agency comparison, and shadow-debt overlay.</p>
       </div>
@@ -104,9 +115,9 @@
             <span class="cd-rating-meta" id="cd-panel-pm-grade">—</span>
           </div>
           <div class="cd-rating-card cd-rating-card--composite">
-            <span class="cd-rating-label">Composite</span>
+            <span class="cd-rating-label">Composite (0–100)</span>
             <span class="cd-rating-value" id="cd-panel-composite">—</span>
-            <span class="cd-rating-meta" id="cd-panel-composite-meta">—</span>
+            <span class="cd-rating-meta" id="cd-panel-composite-meta">0 best, 100 worst</span>
           </div>
           <div class="cd-rating-card">
             <span class="cd-rating-label">S&amp;P</span>
@@ -139,7 +150,7 @@
             <span class="cd-pd-value" id="cd-panel-pd5">—</span>
           </div>
           <div class="cd-pd-cell">
-            <span class="cd-pd-label">Composite score</span>
+            <span class="cd-pd-label">PM Score</span>
             <span class="cd-pd-value" id="cd-panel-score">—</span>
           </div>
         </div>
@@ -176,7 +187,7 @@
           </p>
         </section>
       </div>
-    </aside>
+    </main>
   </div>
 
   <dialog id="cd-methodology-dialog" class="cd-dialog">

@@ -100,6 +100,13 @@
         applyFilters();
       });
     });
+    const back = document.getElementById('cd-back-btn');
+    if (back) back.addEventListener('click', exitDetailView);
+    const detailSearch = document.getElementById('cd-detail-search');
+    if (detailSearch) {
+      detailSearch.addEventListener('input', (e) =>
+        renderDetailSidebar(e.target.value));
+    }
   }
 
   function populateRegionFilter(rows) {
@@ -216,7 +223,7 @@
         <td><span class="cd-flag">${flagEmoji(r.iso3)}</span>${escapeHtml(r.name || r.iso3)}<span class="cd-iso">${r.iso3}</span></td>
         <td>${escapeHtml(r.region || '')}</td>
         <td>${ratingChipHtml(r)}</td>
-        <td>${compositeChipHtml(r)}</td>
+        <td class="num">${compositeScoreHtml(r)}</td>
         <td>${escapeHtml(r.agency_sp || '—')}</td>
         <td>${escapeHtml(r.agency_moodys || '—')}</td>
         <td>${escapeHtml(r.agency_fitch || '—')}</td>
@@ -227,6 +234,11 @@
         <td class="num">${formatNumber(r.shadow_debt_gap_pp, 1, 'pp')}</td>
       </tr>
     `;
+  }
+
+  function compositeScoreHtml(r) {
+    if (r.composite_score == null) return '—';
+    return r.composite_score.toFixed(1);
   }
 
   function ratingChipHtml(r) {
@@ -268,10 +280,37 @@
     return `<span class="cd-pd-bar" style="width:${widthPct.toFixed(1)}px"></span>${formatPct(p)}`;
   }
 
-  // ── Country drilldown ───────────────────────────────────────────────
+  // ── Country drilldown / detail-view navigation ─────────────────────
   function selectCountry(iso3) {
     state.selectedIso3 = iso3;
-    document.querySelectorAll('.cd-table tbody tr').forEach((tr) => tr.classList.toggle('selected', tr.dataset.iso3 === iso3));
+    document.querySelectorAll('.cd-table tbody tr')
+      .forEach((tr) => tr.classList.toggle('selected', tr.dataset.iso3 === iso3));
+    enterDetailView(iso3);
+  }
+
+  function enterDetailView(iso3) {
+    const page = document.getElementById('cd-page');
+    const detailView = document.getElementById('cd-detail-view');
+    if (!page || !detailView) return;
+    page.dataset.view = 'detail';
+    detailView.hidden = false;
+    renderDetailSidebar();
+    loadDetail(iso3);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function exitDetailView() {
+    const page = document.getElementById('cd-page');
+    const detailView = document.getElementById('cd-detail-view');
+    if (!page || !detailView) return;
+    page.dataset.view = 'browse';
+    detailView.hidden = true;
+  }
+
+  function loadDetail(iso3) {
+    state.selectedIso3 = iso3;
+    document.querySelectorAll('#cd-detail-list li')
+      .forEach((li) => li.classList.toggle('selected', li.dataset.iso3 === iso3));
     fetch(API.country(iso3))
       .then((r) => r.json())
       .then((c) => renderPanel(c))
@@ -280,6 +319,37 @@
       .then((r) => (r.ok ? r.json() : null))
       .then((h) => renderHistoryChart(h))
       .catch(() => renderHistoryChart(null));
+    // Scroll the detail panel back to the top so a navigated-to country
+    // doesn't inherit the previous scroll position.
+    const panel = document.getElementById('cd-panel');
+    if (panel) panel.scrollTop = 0;
+  }
+
+  function renderDetailSidebar(filterText) {
+    const list = document.getElementById('cd-detail-list');
+    if (!list) return;
+    const q = (filterText || '').trim().toLowerCase();
+    const rows = state.rows.slice().sort((a, b) => {
+      const an = (a.name || a.iso3 || '').toLowerCase();
+      const bn = (b.name || b.iso3 || '').toLowerCase();
+      return an.localeCompare(bn);
+    });
+    const matched = q
+      ? rows.filter((r) =>
+          (r.name || '').toLowerCase().includes(q) ||
+          (r.iso3 || '').toLowerCase().includes(q))
+      : rows;
+    list.innerHTML = matched.map((r) => `
+      <li data-iso3="${r.iso3}" role="option">
+        <span class="cd-detail-name">${flagEmoji(r.iso3)} ${escapeHtml(r.name || r.iso3)}</span>
+        <span class="cd-detail-rating">${escapeHtml(r.pm_notch || '—')}</span>
+        <span class="cd-detail-pd">${formatPct(r.pd_1y)}</span>
+      </li>
+    `).join('');
+    list.querySelectorAll('li[data-iso3]').forEach((li) => {
+      li.addEventListener('click', () => loadDetail(li.dataset.iso3));
+      if (li.dataset.iso3 === state.selectedIso3) li.classList.add('selected');
+    });
   }
 
   function renderPanel(c) {
@@ -297,15 +367,17 @@
       (rating.is_investment_grade ? 'IG' :
         (rating.defaulted ? 'In default' : 'HY')) + sourceTag;
 
-    // Composite reference score (the "separate score").
+    // Composite reference score on a 0-100 numeric scale (0 = best
+    // credit, 100 = worst). User asked to drop the letter mapping here
+    // so the score reads as a continuous number, not a notch.
     const composite = rating.composite || {};
     const compEl = document.getElementById('cd-panel-composite');
     if (compEl) {
-      compEl.textContent = composite.pm_notch || '—';
+      compEl.textContent = composite.score != null ? composite.score.toFixed(1) : '—';
     }
     const compMetaEl = document.getElementById('cd-panel-composite-meta');
     if (compMetaEl) {
-      compMetaEl.textContent = composite.score != null ? composite.score.toFixed(1) : '';
+      compMetaEl.textContent = '0 best, 100 worst';
     }
 
     const agency = c.agency || {};
