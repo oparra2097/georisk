@@ -42,9 +42,13 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from backend.credit_default import agency_ratings as cd_agencies
 from backend.credit_default import data as cd_data
 from backend.credit_default import defaults as cd_defaults
-from backend.credit_default.rating_model import WEIGHTS as SCAFFOLD_WEIGHTS
+from backend.credit_default.rating_model import (
+    HIGHER_IS_WORSE as SCAFFOLD_HIGHER_IS_WORSE,
+    WEIGHTS as SCAFFOLD_WEIGHTS,
+)
 
 
 # State persisted to disk so the live service can read it without re-fitting.
@@ -140,43 +144,43 @@ def build_training_panel(years_back: int = 25, horizon_years: int = 1):
 def fit_logit(horizon_years: int = 1, years_back: int = 25) -> Dict:
     X, y, features, meta = build_training_panel(years_back, horizon_years)
 
-    coefs: Dict[str, float] = {}
-    intercept: float = 0.0
-    auc: Optional[float] = None
-    method = 'sklearn'
-
     try:
-        from sklearn.linear_model import LogisticRegression
+        import numpy as np
         from sklearn.metrics import roc_auc_score
-
-        model = LogisticRegression(
-            penalty='l2', C=1.0, solver='lbfgs', max_iter=2000,
-            class_weight='balanced',  # rare events
-        )
-        model.fit(X.values, y.values)
-        for f, w in zip(features, model.coef_[0]):
-            coefs[f] = float(w)
-        intercept = float(model.intercept_[0])
-        proba = model.predict_proba(X.values)[:, 1]
-        if y.sum() > 0 and y.sum() < len(y):
-            auc = float(roc_auc_score(y.values, proba))
     except ImportError as e:
-        raise RuntimeError(f'sklearn required for fit_logit: {e}')
+        raise RuntimeError(f'numpy/sklearn required for fit_logit: {e}')
 
-    # Calibrate PD by score decile on the in-sample distribution. This is
-    # an empirical hazard table — replaces the hand-set RATING_BUCKETS PDs.
+    sign_vec = np.array([
+        +1.0 if SCAFFOLD_HIGHER_IS_WORSE.get(f, True) else -1.0
+        for f in features
+    ])
+
+    coefs_signed, intercept, proba = _fit_logit_sign_constrained(
+        X.values, y.values, sign_vec,
+    )
+    coefs: Dict[str, float] = {f: float(coefs_signed[i]) for i, f in enumerate(features)}
+
+    auc: Optional[float] = None
+    if y.sum() > 0 and y.sum() < len(y):
+        auc = float(roc_auc_score(y.values, proba))
+
     pd_calibration = _calibrate_pd_buckets(proba, y.values)
+    rating_buckets = _calibrate_rating_buckets(
+        meta['iso_years'], proba, horizon_years=horizon_years,
+        pd_calibration=pd_calibration,
+    )
 
     state = {
         'estimator': 'logit',
-        'method': method,
+        'method': 'scipy-l-bfgs-b (sign-constrained)',
         'horizon_years': horizon_years,
         'coefficients': coefs,
-        'intercept': intercept,
+        'intercept': float(intercept),
         'feature_importance': {f: abs(coefs[f]) for f in features},
         'scaler': meta['scaler'],
         'medians': meta['medians'],
         'pd_calibration': pd_calibration,
+        'rating_buckets': rating_buckets,
         'auc_in_sample': auc,
         'n_obs': meta['n_obs'],
         'n_events': meta['n_events'],
@@ -184,6 +188,77 @@ def fit_logit(horizon_years: int = 1, years_back: int = 25) -> Dict:
     }
     _save_state(state, horizon_years)
     return state
+
+
+def _fit_logit_sign_constrained(X, y, sign_vec):
+    """L2-penalized class-weighted logistic regression with the sign of
+    each coefficient pinned by ``sign_vec``.
+
+    We rewrite β_k = s_k · α_k where s_k = ±1 and α_k ≥ 0, then optimize
+    α by L-BFGS-B with non-negativity bounds. The intercept is
+    unconstrained. Returns (β, intercept, predicted_probabilities).
+
+    This replaces sklearn's unconstrained LogisticRegression — without
+    sign constraints, multicollinearity in the macro panel was flipping
+    inflation/external-debt/governance coefs to the wrong sign and
+    pulling deep-junk sovereigns toward AAA.
+    """
+    import numpy as np
+    from scipy.optimize import minimize
+
+    X = np.asarray(X, dtype=float)
+    y = np.asarray(y, dtype=float)
+    sign_vec = np.asarray(sign_vec, dtype=float)
+    n, k = X.shape
+
+    # Class-balanced weights (matches sklearn class_weight='balanced'):
+    # rare events get up-weighted so the loss isn't dominated by negatives.
+    n_pos = max(1.0, float(y.sum()))
+    n_neg = max(1.0, float(n - y.sum()))
+    w_pos = n / (2.0 * n_pos)
+    w_neg = n / (2.0 * n_neg)
+    sample_w = np.where(y > 0.5, w_pos, w_neg)
+
+    # Pre-flip features: X_signed = X * sign_vec along the feature axis.
+    # Then β_k = s_k · α_k means β·x = α · X_signed.
+    X_signed = X * sign_vec[None, :]
+
+    # L2 strength matched to sklearn's C=1.0 default (penalty 1 / (2C·n)).
+    lam = 1.0 / (2.0 * 1.0 * n)
+
+    def neg_log_likelihood(theta):
+        alpha, b = theta[:-1], theta[-1]
+        z = X_signed @ alpha + b
+        # log(1+exp(z)) computed safely.
+        log1pez = np.where(z > 0, z + np.log1p(np.exp(-z)), np.log1p(np.exp(z)))
+        nll = np.sum(sample_w * (log1pez - y * z)) / n
+        nll += lam * np.sum(alpha * alpha)
+        return nll
+
+    def grad(theta):
+        alpha, b = theta[:-1], theta[-1]
+        z = X_signed @ alpha + b
+        p = 1.0 / (1.0 + np.exp(-z))
+        resid = sample_w * (p - y)
+        g_alpha = X_signed.T @ resid / n + 2.0 * lam * alpha
+        g_b = float(np.sum(resid) / n)
+        return np.concatenate([g_alpha, [g_b]])
+
+    bounds = [(0.0, None)] * k + [(None, None)]
+    theta0 = np.zeros(k + 1)
+    theta0[-1] = math.log(n_pos / n_neg)  # warm-start intercept at base-rate logit
+
+    result = minimize(
+        neg_log_likelihood, theta0, jac=grad, method='L-BFGS-B',
+        bounds=bounds, options={'maxiter': 500, 'ftol': 1e-9},
+    )
+    alpha = np.maximum(result.x[:-1], 0.0)
+    intercept = float(result.x[-1])
+    beta = sign_vec * alpha
+
+    z = X @ beta + intercept
+    proba = 1.0 / (1.0 + np.exp(-z))
+    return beta, intercept, proba
 
 
 # ── Gradient boost ──────────────────────────────────────────────────────
@@ -221,6 +296,19 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
     importance = {f: float(perm.importances_mean[i]) for i, f in enumerate(features)}
 
     pd_calibration = _calibrate_pd_buckets(proba, y.values)
+    rating_buckets = _calibrate_rating_buckets(
+        meta['iso_years'], proba, horizon_years=horizon_years,
+        pd_calibration=pd_calibration,
+    )
+
+    # Sign-correct GBM importances using HIGHER_IS_WORSE so the linear
+    # scorer in rating_model gets directionally correct contributions.
+    # (GBM importances themselves carry no sign — without this, "higher
+    # GDP-per-capita is good" gets scored as if it were bad.)
+    importance_signed: Dict[str, float] = {}
+    for f, imp in importance.items():
+        s = +1.0 if SCAFFOLD_HIGHER_IS_WORSE.get(f, True) else -1.0
+        importance_signed[f] = float(s * imp)
 
     # We persist the model's leaf-value structure as JSON-incompatible —
     # callers that want to *score* with the GBM must call ``fit_gbm`` at
@@ -230,11 +318,12 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
         'estimator': 'gbm',
         'horizon_years': horizon_years,
         'feature_importance': importance,
-        'coefficients': importance,  # interpreted as relative weights
+        'coefficients': importance_signed,
         'intercept': 0.0,
         'scaler': meta['scaler'],
         'medians': meta['medians'],
         'pd_calibration': pd_calibration,
+        'rating_buckets': rating_buckets,
         'auc_in_sample': auc,
         'n_obs': meta['n_obs'],
         'n_events': meta['n_events'],
@@ -249,6 +338,146 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
 
 
 # ── PD calibration ──────────────────────────────────────────────────────
+
+
+# ── Rating-bucket recalibration (against agency consensus) ──────────────
+
+
+# PM ORR scale → maximum agency consensus_num (1..22, AAA..D) covered by
+# that ORR. Mirrors the rating_model.RATING_BUCKETS letter mapping but
+# expressed against the 22-notch agency ladder so we can match CDFs
+# against the consensus_num column.
+_PM_ORR_TO_MAX_CONSENSUS_NUM = {
+    1: 1,   2: 2,   3: 3,   4: 4,   5: 5,   6: 6,   7: 7,
+    8: 8,   9: 9,   10: 10, 11: 11, 12: 12, 13: 13, 14: 14,
+    15: 15, 16: 16,
+    17: 19,  # CCC bucket spans CCC+/CCC/CCC- (17/18/19)
+    18: 21,  # CC bucket spans CC/C (20/21)
+    19: 22,  # SD/RD
+    20: 22,  # D — same numeric notch as SD; defaulted flag governs
+}
+
+
+def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,
+                              pd_calibration: Optional[List[Dict]] = None):
+    """Compute ``max_score`` per ORR bucket so the model-score CDF lines
+    up with the agency-consensus CDF across panel countries.
+
+    For each country in the training panel, take its most recent year's
+    predicted PD (in-sample), score = 100·PD. Pair with that country's
+    agency consensus_num (median S&P/Moody's/Fitch numeric notch). For
+    each ORR k, set ``max_score`` to the empirical model-score quantile
+    matching the cumulative share of countries with consensus_num ≤ the
+    ORR's max-consensus mapping above. Without this, the headline
+    ``score = 100·PD`` lands almost every non-defaulter in the AAA
+    bucket because non-defaulter PDs cluster near zero while the
+    hand-set ``max_score`` boundaries assume a sigmoid-spread score.
+    """
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+
+    proba = np.asarray(proba, dtype=float)
+    iso = list(iso_years_df['iso3'].values)
+    yrs = list(iso_years_df['year'].values)
+
+    # Map each balanced proba to its empirical natural-rate PD via the
+    # pd_calibration table (if present). Bucket calibration must use the
+    # same scoring scale that ``_score_panel`` will display, otherwise
+    # the bucket boundaries don't line up with the displayed model_score.
+    def _to_score(p: float) -> float:
+        if pd_calibration:
+            for bucket in pd_calibration:
+                if p <= bucket['score_hi']:
+                    return float(100.0 * bucket['pd_empirical'])
+            return float(100.0 * pd_calibration[-1]['pd_empirical'])
+        return float(100.0 * p)
+
+    latest_score: Dict[str, float] = {}
+    latest_year: Dict[str, int] = {}
+    for i, (s, yr) in enumerate(zip(iso, yrs)):
+        if not s:
+            continue
+        if s not in latest_year or yr > latest_year[s]:
+            latest_year[s] = int(yr)
+            latest_score[s] = _to_score(float(proba[i]))
+
+    agencies = cd_agencies.get_agency_ratings()
+    pairs: List[Tuple[int, float]] = []
+    for s, score in latest_score.items():
+        ag = agencies.get(s) or {}
+        c = ag.get('consensus_num')
+        if c is not None:
+            pairs.append((int(c), float(score)))
+
+    if len(pairs) < 30:
+        # Too few overlap points to recalibrate — let rating_model fall
+        # back to its hand-set RATING_BUCKETS.
+        return None
+
+    consensus_arr = np.array([p[0] for p in pairs], dtype=float)
+    score_arr = np.array([p[1] for p in pairs], dtype=float)
+    n = len(pairs)
+
+    try:
+        from sklearn.isotonic import IsotonicRegression
+    except ImportError:
+        return None
+
+    # Isotonic regression of agency consensus_num on model score. This
+    # is a monotone non-decreasing fit: as the model PD goes up, the
+    # predicted agency notch goes up (worse). It gracefully handles the
+    # quantization in pd_calibration (many countries sharing the same
+    # empirical PD) by averaging consensus_num within ties, and avoids
+    # the percentile-CDF approach's degeneracy where 30%+ of anchors
+    # land at score=0 and crush the AAA→A bucket spread.
+    ir = IsotonicRegression(out_of_bounds='clip', increasing=True)
+    ir.fit(score_arr, consensus_arr)
+
+    grid = np.linspace(0.0, 100.0, 10001)
+    preds = np.asarray(ir.predict(grid))
+
+    out: List[Dict] = []
+    for orr in range(1, 21):
+        max_c = _PM_ORR_TO_MAX_CONSENSUS_NUM[orr]
+        # Pick the largest model_score whose predicted consensus_num is
+        # still ≤ max_c + 0.5 (half-notch tolerance to avoid placing a
+        # country whose isotonic prediction equals max_c on the wrong
+        # side of the boundary).
+        mask = preds <= (max_c + 0.5)
+        if not mask.any():
+            ms = 0.0
+        elif mask.all():
+            ms = 100.0
+        else:
+            idx = int(np.argmax(np.where(mask, grid, -1.0)))
+            ms = float(grid[idx])
+        out.append({
+            'pm_numeric': orr,
+            'max_consensus_num': max_c,
+            'max_score': round(ms, 4),
+        })
+
+    # ORR 20 (D) is reserved for actual defaulters (rating_model
+    # short-circuits via the ``defaulted`` flag); leave its threshold at
+    # the panel ceiling to avoid mass-tagging high-PD non-defaulters.
+    out[-1]['max_score'] = 100.0
+    out[-2]['max_score'] = 100.0  # ORR 19 (SD) — same reason
+
+    # Enforce strict monotonic non-decreasing max_score.
+    prev = -1e9
+    for row in out:
+        if row['max_score'] < prev:
+            row['max_score'] = prev
+        prev = row['max_score']
+
+    return {
+        'method': 'isotonic-regression',
+        'horizon_years': horizon_years,
+        'n_anchor_countries': n,
+        'buckets': out,
+    }
 
 
 def _calibrate_pd_buckets(proba, y_true, n_buckets: int = 20) -> List[Dict]:

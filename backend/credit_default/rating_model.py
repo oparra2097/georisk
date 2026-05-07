@@ -145,7 +145,7 @@ RATING_BUCKETS: List[Tuple[float, str, int, str, str, float, float, float]] = [
     (90,  '6-',  16, 'B-',   'B3',   0.200, 0.380, 0.520),
     (95,  '7',   17, 'CCC',  'Caa',  0.350, 0.560, 0.700),
     (98,  '8',   18, 'CC',   'Ca',   0.580, 0.750, 0.830),
-    (99,  '9',   19, 'C',    'C',    0.700, 0.830, 0.880),
+    (99,  '9',   19, 'SD',   'C',    0.700, 0.830, 0.880),
     (100, '10',  20, 'D',    'D',    1.000, 1.000, 1.000),  # in default
 ]
 
@@ -154,7 +154,8 @@ RATING_BUCKETS: List[Tuple[float, str, int, str, str, float, float, float]] = [
 IG_BOUNDARY_NUMERIC = 10
 
 
-def _letter_and_pd(score: float, defaulted: bool = False) -> Dict:
+def _letter_and_pd(score: float, defaulted: bool = False,
+                   calibrated_buckets: Optional[List[Dict]] = None) -> Dict:
     if defaulted:
         return {
             'pm_notch': '10', 'pm_numeric': 20,
@@ -162,8 +163,22 @@ def _letter_and_pd(score: float, defaulted: bool = False) -> Dict:
             'pd_1y': 1.0, 'pd_3y': 1.0, 'pd_5y': 1.0,
             'is_investment_grade': False,
         }
+
+    # If the fit produced empirical max_score boundaries, override the
+    # hand-set ones in RATING_BUCKETS. The letter / PD columns and
+    # IG/HY split stay as-is — only the score thresholds change so the
+    # model-score CDF lines up with the agency-consensus CDF.
+    cal_max_score: Dict[int, float] = {}
+    if calibrated_buckets:
+        for row in calibrated_buckets:
+            try:
+                cal_max_score[int(row.get('pm_numeric'))] = float(row.get('max_score'))
+            except (TypeError, ValueError):
+                continue
+
     for max_s, notch, num, sp, moo, p1, p3, p5 in RATING_BUCKETS:
-        if score <= max_s:
+        threshold = cal_max_score.get(num, max_s)
+        if score <= threshold:
             return {
                 'pm_notch': notch, 'pm_numeric': num,
                 'sp_equiv': sp, 'moodys_equiv': moo,
@@ -225,6 +240,10 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
 
     fit_state = _load_fit_state(horizon_years)
     use_fit = fit_state is not None and bool(fit_state.get('coefficients'))
+    cal_buckets = None
+    if use_fit:
+        rb = fit_state.get('rating_buckets') or {}
+        cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
 
     # 1. Build cross-section vectors so we can compute z-scores per indicator.
     # We *always* compute the transparent composite (it's the secondary
@@ -319,6 +338,9 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
         composite_normalized = (composite_weighted_sum / composite_weight_total
                                 if composite_weight_total > 0 else 0.0)
         composite_score = 100.0 / (1.0 + math.exp(-0.9 * composite_normalized))
+        # The composite is the always-on transparent reference; keep it
+        # on the hand-set buckets so the two scores remain comparable
+        # without one tracking the model's empirical drift.
         composite_rating = _letter_and_pd(composite_score, defaulted=defaulted)
 
         # ── Fitted-model score (the user's primary rating) ─────────────
@@ -327,21 +349,30 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
             intercept = float(fit_state.get('intercept') or 0.0)
             estimator = fit_state.get('estimator', 'logit')
             z_total = fit_latent + intercept
-            if estimator == 'logit':
-                try:
-                    model_pd = 1.0 / (1.0 + math.exp(-z_total))
-                except OverflowError:
-                    model_pd = 0.0 if z_total < 0 else 1.0
+            try:
+                proba = 1.0 / (1.0 + math.exp(-z_total))
+            except OverflowError:
+                proba = 0.0 if z_total < 0 else 1.0
+            # Always look up the empirical natural-rate PD via the
+            # pd_calibration table. The class-balanced fit produces
+            # ranking-correct probabilities but with inflated magnitude;
+            # the calibration table maps each proba bucket to its
+            # observed default rate over the panel, which is the rate we
+            # actually want to display.
+            cal = fit_state.get('pd_calibration') or []
+            if cal:
+                model_pd = _pd_from_calibration(proba, cal)
             else:
-                model_pd = _pd_from_calibration(
-                    z_total, fit_state.get('pd_calibration'))
+                model_pd = proba
             model_score = 100.0 * model_pd
             model_normalized = z_total
         else:
             model_score = composite_score
             model_normalized = composite_normalized
 
-        model_rating = _letter_and_pd(model_score, defaulted=defaulted)
+        model_rating = _letter_and_pd(
+            model_score, defaulted=defaulted, calibrated_buckets=cal_buckets,
+        )
         if model_pd is not None and not defaulted:
             horizon_key = f'pd_{horizon_years}y'
             if horizon_key in model_rating:
