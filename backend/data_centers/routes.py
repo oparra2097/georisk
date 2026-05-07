@@ -142,3 +142,24 @@ def sec_csv():
         mimetype='text/csv',
         headers={'Content-Disposition': 'attachment; filename=sec_reit_properties.csv'},
     )
+
+
+@data_centers_bp.route('/admin/iso/preview', methods=['POST'])
+@_require_admin
+def iso_preview():
+    from backend.data_centers import iso_queue
+    return jsonify(iso_queue.pull_all())
+
+
+@data_centers_bp.route('/admin/iso/csv', methods=['POST'])
+@_require_admin
+def iso_csv():
+    from flask import Response
+    from backend.data_centers import iso_queue
+    parsed = iso_queue.pull_all()
+    text = iso_queue.to_csv(parsed.get('by_metro', []))
+    return Response(
+        text,
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=iso_queue_by_metro.csv'},
+    )

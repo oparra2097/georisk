@@ -218,6 +218,80 @@ const DataCenterMap = {
         secCsvBtn.textContent = 'Download CSV';
       }
     });
+
+    const isoBtn = document.getElementById('iso-pull-btn');
+    if (isoBtn) isoBtn.addEventListener('click', async () => {
+      const out = document.getElementById('iso-result');
+      isoBtn.disabled = true;
+      isoBtn.textContent = 'fetching…';
+      out.textContent = 'pulling PJM JSON + ERCOT XLSX (10–60 sec)…';
+      try {
+        const r = await fetch('/api/data-centers/admin/iso/preview', { method: 'POST' });
+        const j = await r.json();
+        const lines = [];
+        const status = (iso) => {
+          const o = j[iso] || {};
+          if (!o.ok) return `<span style="color:#b91c1c;">${iso.toUpperCase()} failed: ${o.error || 'error'}</span>`;
+          return `<span style="color:#15803d;">${iso.toUpperCase()} ✓ ${o.count} requests</span>`;
+        };
+        lines.push(`<div style="margin-bottom:6px;">${status('pjm')} · ${status('ercot')}</div>`);
+
+        const metros = (j.by_metro || []).filter(m => m.metro !== 'Other').slice(0, 12);
+        if (metros.length) {
+          lines.push(`<table style="width:100%;font-size:11px;border-collapse:collapse;">
+            <thead><tr style="text-align:left;color:#6b7280;border-bottom:1px solid #e5e7eb;">
+              <th style="padding:4px 6px;">Metro</th>
+              <th style="padding:4px 6px;text-align:right;">Total queue MW</th>
+              <th style="padding:4px 6px;text-align:right;">DC-named MW</th>
+              <th style="padding:4px 6px;text-align:right;">Projects</th>
+              <th style="padding:4px 6px;">Top DC project</th>
+            </tr></thead><tbody>`);
+          for (const m of metros) {
+            const top = m.top_projects[0];
+            lines.push(`<tr style="border-bottom:1px solid #f3f4f6;">
+              <td style="padding:4px 6px;">${m.metro}</td>
+              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;">${Math.round(m.queue_mw_total).toLocaleString()}</td>
+              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:#b45309;">${Math.round(m.dc_named_mw).toLocaleString()}</td>
+              <td style="padding:4px 6px;text-align:right;color:#9ca3af;">${m.project_count}</td>
+              <td style="padding:4px 6px;color:#374151;">${top ? `${top.name.slice(0, 40)}${top.name.length > 40 ? '…' : ''} · ${Math.round(top.mw)} MW` : ''}</td>
+            </tr>`);
+          }
+          lines.push('</tbody></table>');
+          if (j.by_metro.find(m => m.metro === 'Other')) {
+            const other = j.by_metro.find(m => m.metro === 'Other');
+            lines.push(`<div style="color:#9ca3af;margin-top:6px;font-size:10px;">+${Math.round(other.queue_mw_total).toLocaleString()} MW in unmapped counties</div>`);
+          }
+        }
+        out.innerHTML = lines.join('');
+      } catch (e) {
+        out.innerHTML = `<span style="color:#b91c1c;">fetch error: ${e.message}</span>`;
+      } finally {
+        isoBtn.disabled = false;
+        isoBtn.textContent = 'Pull latest queues';
+      }
+    });
+
+    const isoCsvBtn = document.getElementById('iso-csv-btn');
+    if (isoCsvBtn) isoCsvBtn.addEventListener('click', async () => {
+      isoCsvBtn.disabled = true;
+      isoCsvBtn.textContent = 'building…';
+      try {
+        const r = await fetch('/api/data-centers/admin/iso/csv', { method: 'POST' });
+        if (!r.ok) { alert(`ISO CSV failed: HTTP ${r.status}`); return; }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `iso_queue_by_metro_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } finally {
+        isoCsvBtn.disabled = false;
+        isoCsvBtn.textContent = 'Download CSV';
+      }
+    });
   },
 
   async refreshDriftSignals() {
