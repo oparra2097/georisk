@@ -204,6 +204,15 @@ def pull_all() -> dict:
         'total_tables': sum(v.get('tables_found', 0) for v in results.values()),
         'total_rows': sum(v.get('total_rows', 0) for v in results.values()),
     }
+    if summary['ok']:
+        try:
+            from backend.data_centers import freshness
+            freshness.record_pull('sec_edgar', {
+                'reits_ok': [t for t, v in results.items() if v.get('ok')],
+                'total_rows': summary['total_rows'],
+            })
+        except Exception:
+            pass
     return summary
 
 

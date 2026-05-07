@@ -151,6 +151,13 @@ def iso_preview():
     return jsonify(iso_queue.pull_all())
 
 
+@data_centers_bp.route('/admin/freshness', methods=['GET'])
+@_require_admin
+def freshness_status():
+    from backend.data_centers import freshness
+    return jsonify(freshness.get_freshness())
+
+
 @data_centers_bp.route('/admin/iso/csv', methods=['POST'])
 @_require_admin
 def iso_csv():

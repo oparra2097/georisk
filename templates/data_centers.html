@@ -147,7 +147,8 @@
   {% if current_user and current_user.is_authenticated and admin_email and current_user.email|lower == admin_email|lower %}
   <details class="dc-card" id="admin-block" style="margin-bottom:16px;border-color:#fde68a;background:#fffbeb;">
     <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#78350f;text-transform:uppercase;letter-spacing:0.04em;">
-      Admin · upload data &amp; drift signals
+      Admin · upload data, drift signals &amp; public-source ingestors
+      <span id="freshness-strip" style="margin-left:12px;display:inline-flex;gap:8px;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:#6b7280;"></span>
     </summary>
     <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
       <div>

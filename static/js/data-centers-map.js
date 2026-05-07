@@ -92,7 +92,45 @@ const DataCenterMap = {
 
     await Promise.all([this.loadStates(), this.loadData()]);
     this.render();
-    if (document.getElementById('admin-block')) this.refreshDriftSignals();
+    if (document.getElementById('admin-block')) {
+      this.refreshDriftSignals();
+      this.refreshFreshness();
+    }
+  },
+
+  async refreshFreshness() {
+    const strip = document.getElementById('freshness-strip');
+    if (!strip) return;
+    try {
+      const r = await fetch('/api/data-centers/admin/freshness');
+      if (!r.ok) { strip.textContent = ''; return; }
+      const j = await r.json();
+      const fmtAge = (d) => {
+        if (d == null) return '—';
+        if (d < 1) return Math.round(d * 24) + 'h';
+        if (d < 30) return Math.round(d) + 'd';
+        return Math.round(d / 30) + 'mo';
+      };
+      const dot = (status) => {
+        const color = status === 'fresh' ? '#10b981'
+                     : status === 'stale' ? '#dc2626'
+                     : '#9ca3af';
+        return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:4px;vertical-align:middle;"></span>`;
+      };
+      strip.innerHTML = j.sources.map(s => {
+        const title = s.last_seen
+          ? `${s.last_seen} · ${fmtAge(s.age_days)} ago · stale > ${s.threshold_days}d`
+          : 'never pulled';
+        const labelShort = s.label.replace('Markets CSV', 'Markets')
+                                  .replace('Facilities CSV', 'Facilities')
+                                  .replace('Drift watcher', 'Drift')
+                                  .replace('SEC EDGAR REITs', 'SEC')
+                                  .replace('ISO queues', 'ISO');
+        return `<span title="${title}">${dot(s.status)}${labelShort} ${fmtAge(s.age_days)}</span>`;
+      }).join(' · ');
+    } catch (_) {
+      strip.textContent = '';
+    }
   },
 
   // ─── Admin (visible only when admin_email) ─────────────────────────────
@@ -149,6 +187,7 @@ const DataCenterMap = {
         const r = await fetch('/api/data-centers/admin/drift/scan', { method: 'POST' });
         await r.json();
         await this.refreshDriftSignals();
+        await this.refreshFreshness();
       } finally {
         scanBtn.disabled = false;
         scanBtn.textContent = 'Scan now';
@@ -186,6 +225,7 @@ const DataCenterMap = {
         }
         const note = `<div style="color:#6b7280;font-size:10px;margin-top:4px;">Heuristic table detection — review the CSV before merging into facilities. Total rows: ${j.total_rows}</div>`;
         out.innerHTML = lines.join('') + note;
+        this.refreshFreshness();
       } catch (e) {
         out.innerHTML = `<span style="color:#b91c1c;">fetch error: ${e.message}</span>`;
       } finally {
@@ -263,6 +303,7 @@ const DataCenterMap = {
           }
         }
         out.innerHTML = lines.join('');
+        this.refreshFreshness();
       } catch (e) {
         out.innerHTML = `<span style="color:#b91c1c;">fetch error: ${e.message}</span>`;
       } finally {

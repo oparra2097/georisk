@@ -53,6 +53,20 @@ ERCOT_XLSX_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# ── MISO ────────────────────────────────────────────────────────────────
+# MISO publishes the active Generator Interconnection Queue as a CSV
+# export. Endpoint is documented in their public planning portal.
+MISO_QUEUE_URL = 'https://www.misoenergy.org/api/giqueue/getexportgenerationqueue?queueType=current'
+
+# ── CAISO ───────────────────────────────────────────────────────────────
+# CAISO publishes a "Public Queue Report" XLSX; the URL drifts so we
+# scrape the landing page to find it.
+CAISO_RESOURCE_PAGE = 'https://www.caiso.com/planning/Pages/InterconnectionQueue'
+CAISO_XLSX_PATTERN = re.compile(
+    r'https?://[^\s"\']*PublicQueueReport[^\s"\']*\.xlsx',
+    re.IGNORECASE,
+)
+
 # ── County → metro mapping ──────────────────────────────────────────────
 # Hand-curated list of US counties to the 27 CBRE metros we track. A queue
 # request in a listed county counts toward that metro; unlisted counties
@@ -307,6 +321,122 @@ def fetch_ercot() -> dict:
     return {'ok': True, 'iso': 'ERCOT', 'count': len(rows), 'rows': rows, 'url': url}
 
 
+# ── MISO ─────────────────────────────────────────────────────────────────
+
+def fetch_miso() -> dict:
+    """Fetch MISO's generator interconnection queue (CSV download endpoint)."""
+    import csv as _csv
+    try:
+        r = requests.get(MISO_QUEUE_URL, timeout=60,
+                         headers={'User-Agent': USER_AGENT, 'Accept': 'text/csv'})
+        if r.status_code != 200:
+            return {'ok': False, 'error': f'HTTP {r.status_code}', 'iso': 'MISO'}
+        text = r.content.decode('utf-8-sig', errors='ignore')
+    except Exception as e:
+        return {'ok': False, 'error': str(e), 'iso': 'MISO'}
+
+    rows = []
+    reader = _csv.DictReader(io.StringIO(text))
+    for d in reader:
+        # MISO column names vary (queue export vs UI scrape). Accept common variants.
+        name   = (d.get('Project Name') or d.get('Project') or d.get('Project Number') or '').strip()
+        cnty   = (d.get('County 1') or d.get('County') or d.get('County (Site)') or '').strip()
+        st     = (d.get('State 1') or d.get('State') or d.get('State (Site)') or '').strip()
+        mw_raw = (d.get('Capacity (MW)') or d.get('Capacity') or d.get('Net MW')
+                   or d.get('MW') or 0)
+        try: mw = float(str(mw_raw).replace(',', '').strip() or 0)
+        except ValueError: mw = 0.0
+        status = (d.get('Status') or d.get('Queue Status') or '').strip()
+        ised   = (d.get('Projected In-Service Date') or d.get('In Service Date')
+                   or d.get('Projected COD') or '').strip()
+        if not name and not cnty:
+            continue
+        rows.append({
+            'iso': 'MISO',
+            'project_name': name,
+            'mw': round(mw, 1),
+            'state': _norm_state(st),
+            'county': cnty,
+            'metro': map_to_metro(st, cnty),
+            'status': status,
+            'in_service': ised,
+            'is_dc_named': is_dc_named(name),
+        })
+    return {'ok': True, 'iso': 'MISO', 'count': len(rows), 'rows': rows}
+
+
+# ── CAISO ────────────────────────────────────────────────────────────────
+
+def _discover_caiso_xlsx() -> str | None:
+    try:
+        r = requests.get(CAISO_RESOURCE_PAGE, timeout=20,
+                         headers={'User-Agent': USER_AGENT})
+        if r.status_code != 200:
+            return None
+        m = CAISO_XLSX_PATTERN.search(r.text)
+        return m.group(0) if m else None
+    except Exception:
+        return None
+
+
+def fetch_caiso() -> dict:
+    """Discover and parse the latest CAISO Public Queue Report XLSX."""
+    try:
+        from openpyxl import load_workbook
+    except ImportError:
+        return {'ok': False, 'error': 'openpyxl not installed', 'iso': 'CAISO'}
+
+    url = _discover_caiso_xlsx()
+    if not url:
+        return {'ok': False, 'error': 'could not locate latest CAISO XLSX', 'iso': 'CAISO'}
+    try:
+        r = requests.get(url, timeout=60, headers={'User-Agent': USER_AGENT})
+        if r.status_code != 200:
+            return {'ok': False, 'error': f'HTTP {r.status_code}', 'iso': 'CAISO', 'url': url}
+        wb = load_workbook(io.BytesIO(r.content), read_only=True, data_only=True)
+    except Exception as e:
+        return {'ok': False, 'error': str(e), 'iso': 'CAISO', 'url': url}
+
+    rows = []
+    for sheet in wb.sheetnames:
+        ws = wb[sheet]
+        header = None
+        for row in ws.iter_rows(values_only=True):
+            cells = [str(c) if c is not None else '' for c in row]
+            low = ' '.join(c.lower() for c in cells)
+            if 'project name' in low and ('county' in low or 'mw' in low or 'capacity' in low):
+                header = cells
+                continue
+            if header is None:
+                continue
+            d = dict(zip(header, cells))
+            name   = (d.get('Project Name') or d.get('Project') or '').strip()
+            cnty   = (d.get('County') or d.get('Site County') or '').strip()
+            st     = 'CA'  # CAISO is California
+            mw_raw = (d.get('MW') or d.get('Capacity (MW)') or d.get('Net MW') or 0)
+            try: mw = float(str(mw_raw).replace(',', '').strip() or 0)
+            except ValueError: mw = 0.0
+            status = (d.get('Status') or d.get('Queue Status') or '').strip()
+            ised   = (d.get('In-Service Date') or d.get('Commercial Operation Date')
+                       or d.get('Projected COD') or '').strip()
+            if not name and not cnty:
+                continue
+            rows.append({
+                'iso': 'CAISO',
+                'project_name': name,
+                'mw': round(mw, 1),
+                'state': st,
+                'county': cnty,
+                'metro': map_to_metro(st, cnty),
+                'status': status,
+                'in_service': ised,
+                'is_dc_named': is_dc_named(name),
+            })
+        if rows:
+            break
+    return {'ok': True, 'iso': 'CAISO', 'count': len(rows), 'rows': rows, 'url': url}
+
+
 # ── Aggregation ──────────────────────────────────────────────────────────
 
 def summarize_by_metro(rows: list[dict]) -> list[dict]:
@@ -343,20 +473,35 @@ def summarize_by_metro(rows: list[dict]) -> list[dict]:
 
 
 def pull_all() -> dict:
-    """Fetch PJM + ERCOT, combine, summarize."""
-    pjm = fetch_pjm()
+    """Fetch PJM + ERCOT + MISO + CAISO, combine, summarize."""
+    pjm   = fetch_pjm()
     ercot = fetch_ercot()
+    miso  = fetch_miso()
+    caiso = fetch_caiso()
     rows = []
-    if pjm.get('ok'):   rows.extend(pjm['rows'])
-    if ercot.get('ok'): rows.extend(ercot['rows'])
+    for r in (pjm, ercot, miso, caiso):
+        if r.get('ok'):
+            rows.extend(r['rows'])
     summary = summarize_by_metro(rows)
-    return {
-        'ok': pjm.get('ok') or ercot.get('ok'),
+    out = {
+        'ok': any(r.get('ok') for r in (pjm, ercot, miso, caiso)),
         'pjm':   {k: v for k, v in pjm.items()   if k != 'rows'},
         'ercot': {k: v for k, v in ercot.items() if k != 'rows'},
+        'miso':  {k: v for k, v in miso.items()  if k != 'rows'},
+        'caiso': {k: v for k, v in caiso.items() if k != 'rows'},
         'total_rows': len(rows),
         'by_metro': summary,
     }
+    # Record freshness on success.
+    try:
+        from backend.data_centers import freshness
+        freshness.record_pull('iso_queues', {
+            'isos_ok': [k for k, v in {'pjm': pjm, 'ercot': ercot, 'miso': miso, 'caiso': caiso}.items() if v.get('ok')],
+            'rows': len(rows),
+        })
+    except Exception:
+        pass
+    return out
 
 
 def to_csv(rows_or_summary) -> str:
