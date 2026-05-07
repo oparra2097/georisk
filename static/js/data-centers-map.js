@@ -154,6 +154,70 @@ const DataCenterMap = {
         scanBtn.textContent = 'Scan now';
       }
     });
+
+    const secBtn = document.getElementById('sec-pull-btn');
+    if (secBtn) secBtn.addEventListener('click', async () => {
+      const out = document.getElementById('sec-result');
+      secBtn.disabled = true;
+      secBtn.textContent = 'fetching…';
+      out.textContent = 'pulling 10-Ks from SEC EDGAR (10–30 sec)…';
+      try {
+        const r = await fetch('/api/data-centers/admin/sec/preview', { method: 'POST' });
+        const j = await r.json();
+        if (!j.ok && !j.reits) {
+          out.innerHTML = `<span style="color:#b91c1c;">SEC fetch failed: ${j.error || r.status}</span>`;
+          return;
+        }
+        const lines = [];
+        for (const [tk, rep] of Object.entries(j.reits || {})) {
+          if (!rep.ok) {
+            lines.push(`<div><strong>${tk}</strong> — <span style="color:#b91c1c;">${rep.error || 'error'}</span></div>`);
+            continue;
+          }
+          const sample = (rep.tables[0]?.rows?.slice(0, 3) || [])
+            .map(row => row.slice(0, 4).join(' · ')).join('<br>');
+          lines.push(`
+            <div style="border-left:3px solid #059669;padding:6px 10px;margin-bottom:6px;background:#fff;border-radius:3px;">
+              <div><strong>${rep.company} (${tk})</strong> — 10-K filed ${rep.filed_date} · ${rep.tables_found} table(s) · ${rep.total_rows} rows
+                <a href="${rep.doc_url}" target="_blank" rel="noopener" style="color:#2563eb;margin-left:6px;">open filing ↗</a>
+              </div>
+              ${sample ? `<div style="color:#6b7280;font-size:10px;margin-top:3px;font-family:ui-monospace,monospace;">${sample}</div>` : ''}
+            </div>`);
+        }
+        const note = `<div style="color:#6b7280;font-size:10px;margin-top:4px;">Heuristic table detection — review the CSV before merging into facilities. Total rows: ${j.total_rows}</div>`;
+        out.innerHTML = lines.join('') + note;
+      } catch (e) {
+        out.innerHTML = `<span style="color:#b91c1c;">fetch error: ${e.message}</span>`;
+      } finally {
+        secBtn.disabled = false;
+        secBtn.textContent = 'Pull latest 10-Ks';
+      }
+    });
+
+    const secCsvBtn = document.getElementById('sec-csv-btn');
+    if (secCsvBtn) secCsvBtn.addEventListener('click', async () => {
+      secCsvBtn.disabled = true;
+      secCsvBtn.textContent = 'building…';
+      try {
+        const r = await fetch('/api/data-centers/admin/sec/csv', { method: 'POST' });
+        if (!r.ok) {
+          alert(`SEC CSV failed: HTTP ${r.status}`);
+          return;
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sec_reit_properties_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } finally {
+        secCsvBtn.disabled = false;
+        secCsvBtn.textContent = 'Download CSV';
+      }
+    });
   },
 
   async refreshDriftSignals() {

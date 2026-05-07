@@ -121,3 +121,24 @@ def drift_signals():
 def drift_scan():
     from backend.data_centers import drift
     return jsonify(drift.scan())
+
+
+@data_centers_bp.route('/admin/sec/preview', methods=['POST'])
+@_require_admin
+def sec_preview():
+    from backend.data_centers import sec_edgar
+    return jsonify(sec_edgar.pull_all())
+
+
+@data_centers_bp.route('/admin/sec/csv', methods=['POST'])
+@_require_admin
+def sec_csv():
+    from flask import Response
+    from backend.data_centers import sec_edgar
+    parsed = sec_edgar.pull_all()
+    text = sec_edgar.to_csv(parsed)
+    return Response(
+        text,
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=sec_reit_properties.csv'},
+    )
