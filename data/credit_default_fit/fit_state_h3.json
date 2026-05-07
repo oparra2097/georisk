@@ -22,6 +22,7 @@
     "voice_accountability": -0.0
   },
   "intercept": -0.5898377397460723,
+  "class_balance_log_odds": -2.295498539163221,
   "feature_importance": {
     "gross_debt_pct_gdp": 0.0,
     "fiscal_balance_pct_gdp": 0.0,
@@ -305,72 +306,72 @@
       {
         "pm_numeric": 2,
         "max_consensus_num": 2,
-        "max_score": 0.0
+        "max_score": 0.23
       },
       {
         "pm_numeric": 3,
         "max_consensus_num": 3,
-        "max_score": 0.0
+        "max_score": 0.59
       },
       {
         "pm_numeric": 4,
         "max_consensus_num": 4,
-        "max_score": 0.05
+        "max_score": 0.6
       },
       {
         "pm_numeric": 5,
         "max_consensus_num": 5,
-        "max_score": 0.12
+        "max_score": 0.62
       },
       {
         "pm_numeric": 6,
         "max_consensus_num": 6,
-        "max_score": 0.2
+        "max_score": 1.25
       },
       {
         "pm_numeric": 7,
         "max_consensus_num": 7,
-        "max_score": 0.27
+        "max_score": 1.28
       },
       {
         "pm_numeric": 8,
         "max_consensus_num": 8,
-        "max_score": 0.35
+        "max_score": 1.32
       },
       {
         "pm_numeric": 9,
         "max_consensus_num": 9,
-        "max_score": 0.97
+        "max_score": 1.35
       },
       {
         "pm_numeric": 10,
         "max_consensus_num": 10,
-        "max_score": 3.37
+        "max_score": 3.13
       },
       {
         "pm_numeric": 11,
         "max_consensus_num": 11,
-        "max_score": 4.05
+        "max_score": 3.19
       },
       {
         "pm_numeric": 12,
         "max_consensus_num": 12,
-        "max_score": 6.86
+        "max_score": 5.4
       },
       {
         "pm_numeric": 13,
         "max_consensus_num": 13,
-        "max_score": 7.19
+        "max_score": 6.23
       },
       {
         "pm_numeric": 14,
         "max_consensus_num": 14,
-        "max_score": 7.32
+        "max_score": 6.52
       },
       {
         "pm_numeric": 15,
         "max_consensus_num": 15,
-        "max_score": 7.45
+        "max_score": 7.32
       },
       {
         "pm_numeric": 16,
@@ -402,5 +403,5 @@
   "auc_in_sample": 0.7472430250611282,
   "n_obs": 4798,
   "n_events": 439,
-  "trained_at": "2026-05-07T18:44:52Z"
+  "trained_at": "2026-05-07T19:34:44Z"
 }

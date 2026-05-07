@@ -99,7 +99,7 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
     intercept = float(fit_state.get('intercept') or 0.0)
     scaler = fit_state.get('scaler') or {}
     medians = fit_state.get('medians') or {}
-    pd_cal = fit_state.get('pd_calibration') or []
+    class_shift = float(fit_state.get('class_balance_log_odds') or 0.0)
     rb = fit_state.get('rating_buckets') or {}
     cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
 
@@ -137,20 +137,14 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
             elif zf < -rating_model.Z_CLIP:
                 zf = -rating_model.Z_CLIP
             z += float(coef) * zf
+        # Platt-rescale the balanced log-odds back to natural-rate PD
+        # (matches the dashboard's `_score_panel` headline scoring).
+        import math
+        adj = z + class_shift
         try:
-            import math
-            proba = 1.0 / (1.0 + math.exp(-z))
+            model_pd = 1.0 / (1.0 + math.exp(-adj))
         except OverflowError:
-            proba = 0.0 if z < 0 else 1.0
-        if pd_cal:
-            for bkt in pd_cal:
-                if proba <= bkt['score_hi']:
-                    model_pd = float(bkt['pd_empirical'])
-                    break
-            else:
-                model_pd = float(pd_cal[-1]['pd_empirical'])
-        else:
-            model_pd = proba
+            model_pd = 0.0 if adj < 0 else 1.0
         score = 100.0 * model_pd
         rating = rating_model._letter_and_pd(
             score, defaulted=False, calibrated_buckets=cal_buckets,

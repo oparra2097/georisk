@@ -349,21 +349,19 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
             intercept = float(fit_state.get('intercept') or 0.0)
             estimator = fit_state.get('estimator', 'logit')
             z_total = fit_latent + intercept
+            # Platt-rescale balanced log-odds to the natural base rate.
+            # The class-balanced fit assumes a 50/50 prior; adding
+            # log(n_pos/n_neg) recovers the natural-rate logit, giving a
+            # smooth PD with no AAA pile-up. The empirical pd_calibration
+            # table is kept on fit_state for diagnostics but is no longer
+            # the headline score (it quantized 0% across the bottom four
+            # deciles and collapsed USA/DEU/ITA into a single bucket).
+            shift = float(fit_state.get('class_balance_log_odds') or 0.0)
+            adj = z_total + shift
             try:
-                proba = 1.0 / (1.0 + math.exp(-z_total))
+                model_pd = 1.0 / (1.0 + math.exp(-adj))
             except OverflowError:
-                proba = 0.0 if z_total < 0 else 1.0
-            # Always look up the empirical natural-rate PD via the
-            # pd_calibration table. The class-balanced fit produces
-            # ranking-correct probabilities but with inflated magnitude;
-            # the calibration table maps each proba bucket to its
-            # observed default rate over the panel, which is the rate we
-            # actually want to display.
-            cal = fit_state.get('pd_calibration') or []
-            if cal:
-                model_pd = _pd_from_calibration(proba, cal)
-            else:
-                model_pd = proba
+                model_pd = 0.0 if adj < 0 else 1.0
             model_score = 100.0 * model_pd
             model_normalized = z_total
         else:

@@ -160,6 +160,16 @@ def fit_logit(horizon_years: int = 1, years_back: int = 25) -> Dict:
     )
     coefs: Dict[str, float] = {f: float(coefs_signed[i]) for i, f in enumerate(features)}
 
+    # Class-balanced sigmoid PD overstates absolute risk because the loss
+    # treats positives and negatives as equally prevalent. Persist the
+    # log-prior shift that converts balanced log-odds back to the natural
+    # base rate: natural_logit = balanced_logit + log(n_pos / n_neg).
+    n_pos = int(y.sum())
+    n_neg = int(len(y) - n_pos)
+    class_balance_log_odds = (
+        math.log(max(1, n_pos) / max(1, n_neg)) if n_pos and n_neg else 0.0
+    )
+
     auc: Optional[float] = None
     if y.sum() > 0 and y.sum() < len(y):
         auc = float(roc_auc_score(y.values, proba))
@@ -167,7 +177,7 @@ def fit_logit(horizon_years: int = 1, years_back: int = 25) -> Dict:
     pd_calibration = _calibrate_pd_buckets(proba, y.values)
     rating_buckets = _calibrate_rating_buckets(
         meta['iso_years'], proba, horizon_years=horizon_years,
-        pd_calibration=pd_calibration,
+        class_balance_log_odds=class_balance_log_odds,
     )
 
     state = {
@@ -176,6 +186,7 @@ def fit_logit(horizon_years: int = 1, years_back: int = 25) -> Dict:
         'horizon_years': horizon_years,
         'coefficients': coefs,
         'intercept': float(intercept),
+        'class_balance_log_odds': float(class_balance_log_odds),
         'feature_importance': {f: abs(coefs[f]) for f in features},
         'scaler': meta['scaler'],
         'medians': meta['medians'],
@@ -295,10 +306,19 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
     )
     importance = {f: float(perm.importances_mean[i]) for i, f in enumerate(features)}
 
+    # GBM trained with class-balanced sample_weight overstates absolute
+    # PD just like the logit; persist the same Platt shift so the score
+    # path can rescale to natural-rate PD.
+    n_pos = int(y.sum())
+    n_neg = int(len(y) - n_pos)
+    class_balance_log_odds = (
+        math.log(max(1, n_pos) / max(1, n_neg)) if n_pos and n_neg else 0.0
+    )
+
     pd_calibration = _calibrate_pd_buckets(proba, y.values)
     rating_buckets = _calibrate_rating_buckets(
         meta['iso_years'], proba, horizon_years=horizon_years,
-        pd_calibration=pd_calibration,
+        class_balance_log_odds=class_balance_log_odds,
     )
 
     # Sign-correct GBM importances using HIGHER_IS_WORSE so the linear
@@ -320,6 +340,7 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
         'feature_importance': importance,
         'coefficients': importance_signed,
         'intercept': 0.0,
+        'class_balance_log_odds': float(class_balance_log_odds),
         'scaler': meta['scaler'],
         'medians': meta['medians'],
         'pd_calibration': pd_calibration,
@@ -359,7 +380,7 @@ _PM_ORR_TO_MAX_CONSENSUS_NUM = {
 
 
 def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,
-                              pd_calibration: Optional[List[Dict]] = None):
+                              class_balance_log_odds: float = 0.0):
     """Compute ``max_score`` per ORR bucket so the model-score CDF lines
     up with the agency-consensus CDF across panel countries.
 
@@ -382,17 +403,22 @@ def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,
     iso = list(iso_years_df['iso3'].values)
     yrs = list(iso_years_df['year'].values)
 
-    # Map each balanced proba to its empirical natural-rate PD via the
-    # pd_calibration table (if present). Bucket calibration must use the
-    # same scoring scale that ``_score_panel`` will display, otherwise
-    # the bucket boundaries don't line up with the displayed model_score.
+    # Platt-rescale the class-balanced sigmoid PD back to the natural
+    # base rate so the score scale matches what the dashboard will show.
+    # natural_logit = balanced_logit + log(n_pos / n_neg). The empirical
+    # pd_calibration table used to be the source here, but it quantizes
+    # the bottom of the distribution to 0 (no events in those buckets)
+    # and collapses USA / DEU / ITA / etc. into a single AAA score.
     def _to_score(p: float) -> float:
-        if pd_calibration:
-            for bucket in pd_calibration:
-                if p <= bucket['score_hi']:
-                    return float(100.0 * bucket['pd_empirical'])
-            return float(100.0 * pd_calibration[-1]['pd_empirical'])
-        return float(100.0 * p)
+        p_clipped = min(max(p, 1e-9), 1.0 - 1e-9)
+        balanced_logit = math.log(p_clipped / (1.0 - p_clipped))
+        natural_logit = balanced_logit + class_balance_log_odds
+        if natural_logit > 0:
+            natural_pd = 1.0 / (1.0 + math.exp(-natural_logit))
+        else:
+            ez = math.exp(natural_logit)
+            natural_pd = ez / (1.0 + ez)
+        return float(100.0 * natural_pd)
 
     latest_score: Dict[str, float] = {}
     latest_year: Dict[str, int] = {}
