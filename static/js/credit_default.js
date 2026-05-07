@@ -7,8 +7,11 @@
   const API = {
     table: '/api/credit-default/table',
     country: (iso3) => `/api/credit-default/country/${iso3}`,
+    history: (iso3) => `/api/credit-default/country/${iso3}/history`,
     dashboard: '/api/credit-default/dashboard',
   };
+
+  let historyChart = null;
 
   // Indicator labels mirror backend INDICATORS — kept in JS for the
   // contribution panel so we don't make an extra round-trip.
@@ -273,6 +276,10 @@
       .then((r) => r.json())
       .then((c) => renderPanel(c))
       .catch(() => clearPanel());
+    fetch(API.history(iso3))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((h) => renderHistoryChart(h))
+      .catch(() => renderHistoryChart(null));
   }
 
   function renderPanel(c) {
@@ -447,5 +454,106 @@
     UKR:'UA',ARE:'AE',GBR:'GB',USA:'US',URY:'UY',UZB:'UZ',VUT:'VU',VAT:'VA',
     VEN:'VE',VNM:'VN',YEM:'YE',ZMB:'ZM',ZWE:'ZW',
   };
+
+  // ── Historical PD trend chart ───────────────────────────────────────
+  function renderHistoryChart(h) {
+    const canvas = document.getElementById('cd-panel-history');
+    const empty = document.getElementById('cd-panel-history-empty');
+    if (!canvas) return;
+
+    if (!h || !h.history || !h.history.length || typeof Chart === 'undefined') {
+      if (historyChart) {
+        historyChart.destroy();
+        historyChart = null;
+      }
+      canvas.style.display = 'none';
+      if (empty) empty.hidden = false;
+      return;
+    }
+    canvas.style.display = '';
+    if (empty) empty.hidden = true;
+
+    const years = h.history.map((r) => r.year);
+    const pd = h.history.map((r) => (r.model_pd != null ? r.model_pd * 100 : null));
+    const yMin = Math.min(...years);
+    const yMax = Math.max(...years);
+
+    // Default-event spans → vertical red bands. We restrict to events
+    // that count as a hard credit event in the model's binary target so
+    // the chart isn't cluttered with Paris-Club rescheduling history.
+    const HARD_EVENT_TYPES = new Set(['default', 'restructuring', 'arrears']);
+    const eventBands = (h.default_events || [])
+      .filter((e) => HARD_EVENT_TYPES.has(e.event_type))
+      .map((e) => {
+        const start = Math.max(yMin, e.start_year || yMin);
+        const end = Math.min(yMax, e.end_year || yMax);
+        if (end < yMin || start > yMax) return null;
+        return { start, end, label: `${e.event_type}/${e.instrument}` };
+      })
+      .filter(Boolean);
+
+    const annotationPlugin = {
+      id: 'cd-event-bands',
+      beforeDatasetsDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales.x) return;
+        ctx.save();
+        ctx.fillStyle = 'rgba(229, 57, 53, 0.18)';
+        eventBands.forEach((b) => {
+          const x0 = scales.x.getPixelForValue(String(b.start));
+          const x1 = scales.x.getPixelForValue(String(b.end));
+          const left = Math.min(x0, x1);
+          const width = Math.max(2, Math.abs(x1 - x0));
+          ctx.fillRect(left, chartArea.top, width, chartArea.bottom - chartArea.top);
+        });
+        ctx.restore();
+      },
+    };
+
+    if (historyChart) historyChart.destroy();
+
+    historyChart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: years.map(String),
+        datasets: [{
+          label: 'Model PD 1y (%)',
+          data: pd,
+          borderColor: '#1976d2',
+          backgroundColor: 'rgba(25, 118, 210, 0.12)',
+          tension: 0.2,
+          spanGaps: true,
+          pointRadius: 2,
+          fill: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: { callback: (v) => `${v}%` },
+            title: { display: true, text: 'PD 1y' },
+          },
+          x: { title: { display: true, text: 'Year' } },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              afterBody(ctxs) {
+                if (!ctxs || !ctxs.length) return '';
+                const yr = parseInt(ctxs[0].label, 10);
+                const ev = eventBands.filter((b) => yr >= b.start && yr <= b.end);
+                return ev.length ? ev.map((e) => `In default: ${e.label}`) : '';
+              },
+            },
+          },
+        },
+      },
+      plugins: [annotationPlugin],
+    });
+  }
 
 })();

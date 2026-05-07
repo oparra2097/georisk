@@ -14,7 +14,7 @@ from __future__ import annotations
 import io
 import time
 
-from flask import Blueprint, jsonify, send_file
+from flask import Blueprint, jsonify, request, send_file
 
 from backend.credit_default import rating_model, service
 
@@ -41,6 +41,20 @@ def country(iso3: str):
     if not c:
         return jsonify({'error': f'country {iso3} not found'}), 404
     return jsonify(c)
+
+
+@credit_default_bp.route('/country/<iso3>/history')
+def country_history(iso3: str):
+    try:
+        horizon = int(request.args.get('horizon', 1))
+    except (TypeError, ValueError):
+        horizon = 1
+    if horizon not in (1, 3, 5):
+        horizon = 1
+    h = service.get_country_history(iso3, horizon_years=horizon)
+    if h is None:
+        return jsonify({'error': f'history unavailable for {iso3}'}), 404
+    return jsonify(h)
 
 
 @credit_default_bp.route('/methodology')

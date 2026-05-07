@@ -159,6 +159,22 @@
           <div id="cd-panel-contributions" class="cd-contrib"></div>
           <p class="cd-section-note">Bar = weight × signed z-score (red = adds risk, green = reduces risk).</p>
         </section>
+
+        <section class="cd-section">
+          <h3>Historical PD vs default events</h3>
+          <div class="cd-history-chart">
+            <canvas id="cd-panel-history"></canvas>
+            <p class="cd-history-empty" id="cd-panel-history-empty" hidden>
+              No fitted history available for this country.
+            </p>
+          </div>
+          <p class="cd-section-note">
+            Blue line = model PD 1y applied to each year's macro panel.
+            Red bands = years inside a CRAG default / restructuring event.
+            Use this to back-test whether the model would have flagged the
+            country before its actual default.
+          </p>
+        </section>
       </div>
     </aside>
   </div>
@@ -207,5 +223,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="/static/js/credit_default.js"></script>
 {% endblock %}

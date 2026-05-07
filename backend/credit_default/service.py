@@ -12,9 +12,11 @@ import threading
 import time
 from typing import Dict, List, Optional
 
-from backend.credit_default import data as cd_data
-from backend.credit_default import rating_model
 from backend.credit_default import agency_ratings
+from backend.credit_default import data as cd_data
+from backend.credit_default import defaults as cd_defaults
+from backend.credit_default import fit as cd_fit
+from backend.credit_default import rating_model
 
 
 _cache: Dict[str, object] = {}
@@ -71,6 +73,132 @@ def get_country(iso3: str) -> Optional[Dict]:
         return None
     dash = get_dashboard()
     return (dash.get('countries') or {}).get(iso3)
+
+
+def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
+    """Re-score one country's macro panel year-by-year using the current
+    fit_state, alongside CRAG default events. Used by the dashboard's
+    drilldown chart to back-test whether the model would have flagged
+    the country before each historical default (e.g. Ghana 2022).
+    """
+    iso3 = (iso3 or '').upper()
+    if len(iso3) != 3 or not cd_data._is_sovereign_iso(iso3):
+        return None
+
+    cache_key = f'history_{iso3}_h{horizon_years}'
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        cached_ts = _cache.get(f'{cache_key}_ts', 0)
+    if cached and (time.time() - cached_ts) < _CACHE_TTL:
+        return cached
+
+    fit_state = cd_fit.load_state(horizon_years)
+    if not fit_state or not fit_state.get('coefficients'):
+        return None
+    coefs = fit_state.get('coefficients') or {}
+    intercept = float(fit_state.get('intercept') or 0.0)
+    scaler = fit_state.get('scaler') or {}
+    medians = fit_state.get('medians') or {}
+    pd_cal = fit_state.get('pd_calibration') or []
+    rb = fit_state.get('rating_buckets') or {}
+    cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
+
+    panel_df = cd_data.get_history_panel()
+    if panel_df is None or panel_df.empty:
+        return None
+    sub = panel_df[panel_df['iso3'] == iso3].copy()
+    if sub.empty:
+        return None
+    sub = sub.sort_values('year')
+
+    history = []
+    for _, row in sub.iterrows():
+        z = intercept
+        for feat, coef in coefs.items():
+            if not coef:
+                continue
+            raw = row.get(feat)
+            try:
+                raw_f = float(raw)
+                if raw_f != raw_f:  # NaN
+                    raw_f = None
+            except (TypeError, ValueError):
+                raw_f = None
+            if raw_f is None:
+                raw_f = medians.get(feat)
+            if raw_f is None:
+                continue
+            sc = scaler.get(feat) or {}
+            mean = float(sc.get('mean', 0.0))
+            std = float(sc.get('std', 1.0)) or 1.0
+            zf = (raw_f - mean) / std
+            if zf > rating_model.Z_CLIP:
+                zf = rating_model.Z_CLIP
+            elif zf < -rating_model.Z_CLIP:
+                zf = -rating_model.Z_CLIP
+            z += float(coef) * zf
+        try:
+            import math
+            proba = 1.0 / (1.0 + math.exp(-z))
+        except OverflowError:
+            proba = 0.0 if z < 0 else 1.0
+        if pd_cal:
+            for bkt in pd_cal:
+                if proba <= bkt['score_hi']:
+                    model_pd = float(bkt['pd_empirical'])
+                    break
+            else:
+                model_pd = float(pd_cal[-1]['pd_empirical'])
+        else:
+            model_pd = proba
+        score = 100.0 * model_pd
+        rating = rating_model._letter_and_pd(
+            score, defaulted=False, calibrated_buckets=cal_buckets,
+        )
+        history.append({
+            'year': int(row['year']),
+            'model_pd': round(model_pd, 5),
+            'model_score': round(score, 3),
+            'pm_notch': rating['pm_notch'],
+            'pm_numeric': rating['pm_numeric'],
+            'sp_equiv': rating['sp_equiv'],
+        })
+
+    events = [
+        {'start_year': ev['start_year'],
+         'end_year': ev.get('end_year'),
+         'event_type': ev['event_type'],
+         'instrument': ev.get('instrument', '')}
+        for ev in cd_defaults.load_events(include_distress=True)
+        if ev['iso3'] == iso3
+    ]
+    events.sort(key=lambda e: e['start_year'])
+
+    agencies = agency_ratings.get_agency_ratings()
+    agency = agencies.get(iso3) or {}
+
+    dash_country = (get_dashboard().get('countries') or {}).get(iso3) or {}
+    out = {
+        'iso3': iso3,
+        'name': dash_country.get('name', iso3),
+        'region': dash_country.get('region', ''),
+        'horizon_years': horizon_years,
+        'history': history,
+        'default_events': events,
+        'agency': {
+            'sp': agency.get('sp'),
+            'moodys': agency.get('moodys'),
+            'fitch': agency.get('fitch'),
+            'sp_num': agency.get('sp_num'),
+            'consensus_num': agency.get('consensus_num'),
+            'as_of': agency.get('as_of'),
+        },
+    }
+
+    with _cache_lock:
+        _cache[cache_key] = out
+        _cache[f'{cache_key}_ts'] = time.time()
+    return out
 
 
 def get_table_rows() -> List[Dict]:
