@@ -67,10 +67,11 @@ def get_currency_debt():
             return entry['data']
 
     # Pull each currency-share indicator. Each call hits the world_bank.py
-    # 24h cache, so subsequent calls are free.
+    # 24h cache, so subsequent calls are free. IDS indicators only resolve
+    # against source=6 — the default WDI source returns empty for these.
     per_currency = {}  # {key: WB-data dict}
     for indicator, key, _label, _color in _CURRENCY_SPEC:
-        per_currency[key] = get_wb_data(indicator)
+        per_currency[key] = get_wb_data(indicator, source=6)
 
     # Merge into per-country, per-year structure
     countries = {}

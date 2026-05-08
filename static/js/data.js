@@ -5011,12 +5011,32 @@
 
     function renderCurrencyDebt(ds) {
         const data = PD.getCached(ds.api);
-        if (!data || !data.countries) return;
+        if (!data) return;
 
         const panel = document.getElementById('active-panel');
         if (!panel) return;
 
         const countries = data.countries || {};
+        const meta = data.meta || {};
+
+        // Empty state — surface the underlying issue rather than rendering blank.
+        if (!Object.keys(countries).length) {
+            const errMsg = meta.error ? '<br><span style="color:#ef4444">' + meta.error + '</span>' : '';
+            panel.innerHTML = `
+                <div class="data-section-header">
+                    <div>
+                        <h1 class="data-title">${ds.label}</h1>
+                        <p class="data-source">${ds.source} &mdash; ${ds.sourceDetail || ''}</p>
+                    </div>
+                </div>
+                <div style="padding:60px 24px;text-align:center;color:#94a3b8;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:12px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
+                    <p style="font-size:14px;margin:0 0 6px 0;">No currency composition data available right now.</p>
+                    <p style="font-size:12px;color:#64748b;margin:0;">World Bank IDS source returned an empty result.${errMsg}</p>
+                </div>
+            `;
+            return;
+        }
 
         const sortedCountries = Object.entries(countries)
             .map(([iso, c]) => ({ iso, name: c.name || iso }))
