@@ -5009,6 +5009,13 @@
 
     let _currencyDebtSelectedIso = null;
 
+    // Map subview id -> debt-stock series key (when applicable)
+    const _CURRENCY_SUBVIEW_STOCK_KEY = {
+        'total': 'total_ext',
+        'lt': 'lt_ext',
+        'st': 'st_ext',
+    };
+
     function renderCurrencyDebt(ds) {
         const data = PD.getCached(ds.api);
         if (!data) return;
@@ -5016,35 +5023,28 @@
         const panel = document.getElementById('active-panel');
         if (!panel) return;
 
-        const countries = data.countries || {};
         const meta = data.meta || {};
+        const subview = state.subview || 'currency';
+        const isCurrencyView = subview === 'currency';
+        const isDomesticView = subview === 'domestic';
+        const stockKey = _CURRENCY_SUBVIEW_STOCK_KEY[subview];  // 'total_ext', etc.
 
-        // Empty state — surface the underlying issue rather than rendering blank.
-        if (!Object.keys(countries).length) {
-            const errMsg = meta.error ? '<br><span style="color:#ef4444">' + meta.error + '</span>' : '';
-            panel.innerHTML = `
-                <div class="data-section-header">
-                    <div>
-                        <h1 class="data-title">${ds.label}</h1>
-                        <p class="data-source">${ds.source} &mdash; ${ds.sourceDetail || ''}</p>
-                    </div>
-                </div>
-                <div style="padding:60px 24px;text-align:center;color:#94a3b8;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:12px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
-                    <p style="font-size:14px;margin:0 0 6px 0;">No currency composition data available right now.</p>
-                    <p style="font-size:12px;color:#64748b;margin:0;">World Bank IDS source returned an empty result.${errMsg}</p>
-                </div>
-            `;
-            return;
-        }
+        // Country universe depends on subview: currency view uses the currency
+        // composition countries; stock views use the stocks countries; both
+        // sources cover roughly the same ~120 DRS-reporting LMICs but the
+        // intersections aren't identical year-to-year.
+        let countriesIndex;
+        if (isCurrencyView) countriesIndex = data.countries || {};
+        else if (stockKey) countriesIndex = data.stocks || {};
+        else countriesIndex = data.country_names || {};  // domestic view: just the name list
 
-        const sortedCountries = Object.entries(countries)
-            .map(([iso, c]) => ({ iso, name: c.name || iso }))
+        const sortedCountries = Object.entries(countriesIndex)
+            .map(([iso, c]) => ({ iso, name: (typeof c === 'string') ? c : (c.name || iso) }))
             .sort((a, b) => a.name.localeCompare(b.name));
 
-        if (!_currencyDebtSelectedIso || !countries[_currencyDebtSelectedIso]) {
+        if (!_currencyDebtSelectedIso || !countriesIndex[_currencyDebtSelectedIso]) {
             const preferred = ['BRA', 'IND', 'IDN', 'TUR', 'MEX', 'NGA', 'ZAF', 'ARG', 'PAK', 'EGY'];
-            _currencyDebtSelectedIso = preferred.find(iso => countries[iso]) || (sortedCountries[0] && sortedCountries[0].iso);
+            _currencyDebtSelectedIso = preferred.find(iso => countriesIndex[iso]) || (sortedCountries[0] && sortedCountries[0].iso);
         }
 
         const optsHtml = sortedCountries.map(c =>
@@ -5084,18 +5084,63 @@
         if (sel) {
             sel.addEventListener('change', (e) => {
                 _currencyDebtSelectedIso = e.target.value;
-                _drawCurrencyDebt(data, _currencyDebtSelectedIso);
+                _drawCurrencyDebtSubview(data, _currencyDebtSelectedIso, subview);
             });
         }
 
-        _drawCurrencyDebt(data, _currencyDebtSelectedIso);
+        _drawCurrencyDebtSubview(data, _currencyDebtSelectedIso, subview);
     }
 
-    function _drawCurrencyDebt(data, iso) {
+    function _drawCurrencyDebtSubview(data, iso, subview) {
+        if (subview === 'domestic') {
+            _drawDomesticPlaceholder(data);
+            return;
+        }
+        if (subview === 'currency' || !subview) {
+            _drawCurrencyMix(data, iso);
+            return;
+        }
+        const stockKey = _CURRENCY_SUBVIEW_STOCK_KEY[subview];
+        if (stockKey) {
+            _drawDebtStock(data, iso, subview, stockKey);
+        }
+    }
+
+    // ── Domestic placeholder ──────────────────────────────────────────────
+    function _drawDomesticPlaceholder(data) {
+        const panel = document.getElementById('active-panel');
+        // Replace the chart/table area with a clear "not available" message.
+        const summary = document.getElementById('panel-summary');
+        if (summary) summary.innerHTML = '';
+        PD.destroyChart('main');
+        const chartEl = document.getElementById('panel-chart-container');
+        if (chartEl) {
+            chartEl.innerHTML = `
+                <div style="padding:60px 24px;text-align:center;color:#94a3b8;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:12px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
+                    <p style="font-size:14px;margin:0 0 6px 0;">Domestic public debt is not published in WB IDS.</p>
+                    <p style="font-size:12px;color:#64748b;margin:0;max-width:540px;margin-left:auto;margin-right:auto;">
+                        WB IDS only covers external debt. Domestic public debt (held by residents)
+                        and its currency composition come from national authorities or IMF SDDS+.
+                        This view will pick up that data once we add an integration.
+                    </p>
+                </div>
+            `;
+        }
+        const tableC = document.getElementById('panel-table-container');
+        if (tableC) tableC.style.display = 'none';
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) metaEl.textContent = (data.meta || {}).source || '';
+    }
+
+    // ── Currency Mix (LT PPG, % stacked bar) ─────────────────────────────
+    function _drawCurrencyMix(data, iso) {
         const currencies = data.currencies || [];
         const country = (data.countries || {})[iso];
-        if (!country) return;
-
+        if (!country) {
+            _drawNoCountryData('currency mix');
+            return;
+        }
         const history = country.history || {};
         const years = Object.keys(history).sort();
         const latestYear = country.latest_year;
@@ -5156,51 +5201,22 @@
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'rect' }
-                    },
+                    legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'rect' } },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        borderWidth: 1,
-                        callbacks: {
-                            label: (tt) => {
-                                const v = tt.parsed.y;
-                                if (v == null) return tt.dataset.label + ': N/A';
-                                return tt.dataset.label + ': ' + v.toFixed(1) + '%';
-                            }
-                        }
+                        backgroundColor: 'rgba(0,0,0,0.9)', titleColor: '#fff', bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                        callbacks: { label: (tt) => tt.parsed.y == null ? tt.dataset.label + ': N/A' : tt.dataset.label + ': ' + tt.parsed.y.toFixed(1) + '%' }
                     },
-                    title: {
-                        display: true,
-                        text: country.name + ' — Long-term External Debt by Currency',
-                        color: '#e5e7eb',
-                        font: { size: 13, weight: '600' },
-                        padding: { bottom: 10 },
-                    }
+                    title: { display: true, text: country.name + ' — Long-Term PPG External Debt by Currency', color: '#e5e7eb', font: { size: 13, weight: '600' }, padding: { bottom: 10 } }
                 },
                 scales: {
-                    x: {
-                        stacked: true,
-                        ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 },
-                        grid: { display: false },
-                        title: { display: true, text: 'Year', color: '#6b7280', font: { size: 11 } },
-                    },
-                    y: {
-                        stacked: true,
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: { color: '#6b7280', font: { size: 10 }, callback: (v) => v + '%' },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
-                        title: { display: true, text: '% of Long-Term Debt', color: '#6b7280', font: { size: 11 } },
-                    }
+                    x: { stacked: true, ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 }, grid: { display: false }, title: { display: true, text: 'Year', color: '#6b7280', font: { size: 11 } } },
+                    y: { stacked: true, beginAtZero: true, max: 100, ticks: { color: '#6b7280', font: { size: 10 }, callback: (v) => v + '%' }, grid: { color: 'rgba(55,65,81,0.3)' }, title: { display: true, text: '% of LT PPG Debt', color: '#6b7280', font: { size: 11 } } }
                 }
             }
         }));
 
+        // Table
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
@@ -5209,27 +5225,22 @@
             currencies.forEach(c => { hdr += '<th>' + c.label + '</th>'; });
             hdr += '<th>Total</th></tr>';
             thead.innerHTML = hdr;
-
             let rows = '';
             tableYears.forEach(y => {
                 const yvals = history[y] || {};
                 rows += '<tr><td>' + y + '</td>';
-                let total = 0;
-                let hasAny = false;
+                let total = 0, hasAny = false;
                 currencies.forEach(c => {
                     const v = yvals[c.key];
-                    if (v != null) {
-                        rows += '<td>' + v.toFixed(1) + '%</td>';
-                        total += v;
-                        hasAny = true;
-                    } else {
-                        rows += '<td>—</td>';
-                    }
+                    if (v != null) { rows += '<td>' + v.toFixed(1) + '%</td>'; total += v; hasAny = true; }
+                    else { rows += '<td>—</td>'; }
                 });
                 rows += '<td>' + (hasAny ? total.toFixed(1) + '%' : '—') + '</td></tr>';
             });
             tbody.innerHTML = rows;
         }
+        const tc = document.getElementById('panel-table-container');
+        if (tc) tc.style.display = '';
 
         const metaEl = document.getElementById('panel-meta');
         if (metaEl) {
@@ -5237,11 +5248,157 @@
             const parts = [];
             if (m.source) parts.push(m.source);
             if (m.year_range) parts.push('Year range: ' + m.year_range);
-            if (m.country_count != null) parts.push(m.country_count + ' countries');
+            parts.push('Long-term PPG external debt only (publicly guaranteed)');
             if (m.last_updated) parts.push('Updated: ' + m.last_updated);
-            parts.push('Long-term external debt only (PPG, public and publicly guaranteed)');
             metaEl.textContent = parts.join(' · ');
         }
+    }
+
+    // ── Debt Stock ($B over time) — total / lt / st ──────────────────────
+    function _drawDebtStock(data, iso, subview, stockKey) {
+        const stocks = data.stocks || {};
+        const country = stocks[iso];
+        const stockSeries = data.stock_series || [];
+        const seriesMeta = stockSeries.find(s => s.key === stockKey) || { label: subview, color: '#3b82f6' };
+
+        if (!country) {
+            _drawNoCountryData(seriesMeta.label);
+            return;
+        }
+
+        const history = country.history || {};
+        const years = Object.keys(history).sort();
+        const values = years.map(y => {
+            const v = (history[y] || {})[stockKey];
+            return v != null ? v : null;
+        });
+
+        // Latest + 5y change for summary
+        const lastIdx = (() => {
+            for (let i = values.length - 1; i >= 0; i--) if (values[i] != null) return i;
+            return -1;
+        })();
+        const latest = lastIdx >= 0 ? values[lastIdx] : null;
+        const latestYear = lastIdx >= 0 ? years[lastIdx] : '';
+        const fiveBackIdx = lastIdx >= 5 && values[lastIdx - 5] != null ? lastIdx - 5 : -1;
+        const fiveYrChange = (latest != null && fiveBackIdx >= 0)
+            ? ((latest - values[fiveBackIdx]) / values[fiveBackIdx]) * 100
+            : null;
+
+        const fmt$B = (v) => v == null ? '—' : (v >= 1000 ? '$' + (v/1000).toFixed(1) + 'T' : '$' + v.toFixed(1) + 'B');
+
+        const summary = document.getElementById('panel-summary');
+        if (summary) {
+            summary.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;width:100%;">
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">${seriesMeta.label}</div>
+                        <div style="color:${seriesMeta.color};font-size:24px;font-weight:700;margin-top:4px;">${fmt$B(latest)}</div>
+                        <div style="color:#64748b;font-size:11px;">${latestYear}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">5-Year Change</div>
+                        <div style="color:${fiveYrChange != null && fiveYrChange < 0 ? '#10b981' : '#f59e0b'};font-size:24px;font-weight:700;margin-top:4px;">${fiveYrChange == null ? '—' : (fiveYrChange >= 0 ? '+' : '') + fiveYrChange.toFixed(1) + '%'}</div>
+                        <div style="color:#64748b;font-size:11px;">vs ${lastIdx >= 5 ? years[lastIdx-5] : ''}</div>
+                    </div>
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Reporting Years</div>
+                        <div style="color:#f1f5f9;font-size:24px;font-weight:700;margin-top:4px;">${years.length}</div>
+                        <div style="color:#64748b;font-size:11px;">${years.length ? years[0] + '–' + years[years.length - 1] : ''}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        PD.destroyChart('main');
+        const canvasEl = document.getElementById('panel-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        PD.setChart('main', new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: years,
+                datasets: [{
+                    label: seriesMeta.label + ' ($B)',
+                    data: values,
+                    borderColor: seriesMeta.color,
+                    backgroundColor: seriesMeta.color + '22',
+                    borderWidth: 2,
+                    fill: true,
+                    pointRadius: 0,
+                    pointHitRadius: 6,
+                    tension: 0.2,
+                    spanGaps: true,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)', titleColor: '#fff', bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                        callbacks: { label: (tt) => tt.parsed.y == null ? 'N/A' : seriesMeta.label + ': ' + fmt$B(tt.parsed.y) }
+                    },
+                    title: { display: true, text: country.name + ' — ' + seriesMeta.label, color: '#e5e7eb', font: { size: 13, weight: '600' }, padding: { bottom: 10 } }
+                },
+                scales: {
+                    x: { ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 }, grid: { color: 'rgba(55,65,81,0.3)' }, title: { display: true, text: 'Year', color: '#6b7280', font: { size: 11 } } },
+                    y: { beginAtZero: true, ticks: { color: '#6b7280', font: { size: 10 }, callback: (v) => fmt$B(v) }, grid: { color: 'rgba(55,65,81,0.3)' }, title: { display: true, text: 'USD Billions', color: '#6b7280', font: { size: 11 } } }
+                }
+            }
+        }));
+
+        // Table — last 10 years
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            thead.innerHTML = '<tr><th>Year</th><th>' + seriesMeta.label + ' ($B)</th><th>YoY Change</th></tr>';
+            const tableYears = years.slice(-10).reverse();
+            let rows = '';
+            tableYears.forEach(y => {
+                const yi = years.indexOf(y);
+                const v = values[yi];
+                const prev = yi > 0 ? values[yi-1] : null;
+                const yoy = (v != null && prev != null && prev !== 0) ? ((v - prev)/prev)*100 : null;
+                rows += '<tr><td>' + y + '</td><td>' + fmt$B(v) + '</td><td>'
+                     + (yoy == null ? '—' : (yoy >= 0 ? '+' : '') + yoy.toFixed(1) + '%')
+                     + '</td></tr>';
+            });
+            tbody.innerHTML = rows;
+        }
+        const tc = document.getElementById('panel-table-container');
+        if (tc) tc.style.display = '';
+
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            const m = data.meta || {};
+            const parts = [];
+            if (m.source) parts.push(m.source);
+            if (m.year_range) parts.push('Year range: ' + m.year_range);
+            parts.push('External debt stocks (USD billions, current prices)');
+            parts.push('Currency composition is published by WB IDS only for Long-Term PPG');
+            if (m.last_updated) parts.push('Updated: ' + m.last_updated);
+            metaEl.textContent = parts.join(' · ');
+        }
+    }
+
+    function _drawNoCountryData(label) {
+        const summary = document.getElementById('panel-summary');
+        if (summary) summary.innerHTML = '';
+        PD.destroyChart('main');
+        const chartEl = document.getElementById('panel-chart-container');
+        if (chartEl) {
+            chartEl.innerHTML = `
+                <div style="padding:60px 24px;text-align:center;color:#94a3b8;">
+                    <p style="font-size:14px;margin:0;">No ${label} data for this country in WB IDS.</p>
+                </div>
+            `;
+        }
+        const tc = document.getElementById('panel-table-container');
+        if (tc) tc.style.display = 'none';
     }
 
 })();
