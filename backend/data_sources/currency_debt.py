@@ -62,14 +62,19 @@ _AGGREGATE_CODES = {
 }
 
 
-def _fetch_ids_series_raw(indicator):
+def _fetch_ids_series_raw(indicator, counterpart='907'):
     """Fetch raw response from the WB IDS source-prefixed endpoint.
+
+    IDS data is dimensioned by Series × Country (debtor) × Counterpart-Area
+    (creditor) × Time. For "currency composition of total PPG debt" we want
+    the All-Counterparts aggregate, coded ``907`` ("World") in WB IDS.
 
     Returns ``(url, status_code, payload_or_error_str)`` for diagnostics.
     """
     url = (
         f'{_WB_API}/sources/{_IDS_SOURCE}/series/{indicator}'
-        f'/country/all/time/all?format=json&per_page=20000'
+        f'/country/all/counterpart-area/{counterpart}'
+        f'/time/all?format=json&per_page=20000'
     )
     try:
         resp = requests.get(url, timeout=30)
@@ -86,24 +91,30 @@ def _fetch_ids_series_raw(indicator):
 def _extract_data_rows(payload):
     """Pull the list of data rows out of a WB SDMX-JSON response.
 
-    The source-prefixed endpoint can return any of these shapes:
-      - {'data': [...]}                                        (single dict)
-      - [{...meta...}, {'data': [...]}]                        (list wrapper)
-      - [{...meta...}, [...rows...]]                           (legacy WDI-ish)
-      - {'source': [{'data': [...]}], ...}                     (deeply nested)
+    The source-prefixed endpoint returns:
+        {'page', 'pages', 'per_page', 'total', 'lastupdated',
+         'source': {'id', 'name', 'data': [...]}}
+
+    We also tolerate older/newer variants:
+      - {'data': [...]}                              (flat dict)
+      - [{...meta...}, {'data': [...]}]              (list wrapper)
+      - [{...meta...}, [...rows...]]                 (legacy WDI-ish)
+      - {'source': [{'data': [...]}], ...}           (list-of-source variant)
     """
     if payload is None:
         return []
     if isinstance(payload, dict):
         if isinstance(payload.get('data'), list):
             return payload['data']
-        # Some responses nest data under source[0].data
         src = payload.get('source')
+        # Newer source-prefixed shape: source is a dict with a 'data' list.
+        if isinstance(src, dict) and isinstance(src.get('data'), list):
+            return src['data']
+        # Older variant: source is a list of dicts, each carrying data.
         if isinstance(src, list) and src and isinstance(src[0], dict):
             inner = src[0].get('data')
             if isinstance(inner, list):
                 return inner
-        # Or under page wrappers
         return []
     if isinstance(payload, list):
         if len(payload) >= 2:

@@ -1826,27 +1826,48 @@ def get_currency_debt_route():
 
 @api_bp.route('/currency-debt/diag')
 def diag_currency_debt():
-    """Show raw WB IDS API response for one indicator. Debug-only."""
+    """Show raw WB IDS API response for one indicator. Debug-only.
+
+    Query params: indicator=DT.CUR.USDL.ZS, counterpart=907
+    """
     from backend.data_sources.currency_debt import _fetch_ids_series_raw, _extract_data_rows
     indicator = request.args.get('indicator', 'DT.CUR.USDL.ZS')
-    url, status, payload = _fetch_ids_series_raw(indicator)
+    counterpart = request.args.get('counterpart', '907')
+    url, status, payload = _fetch_ids_series_raw(indicator, counterpart=counterpart)
     rows = _extract_data_rows(payload)
     sample = rows[:3] if isinstance(rows, list) else []
     if isinstance(payload, dict):
         shape = {'type': 'dict', 'keys': list(payload.keys())}
+        src = payload.get('source')
+        if isinstance(src, dict):
+            shape['source_keys'] = list(src.keys())
+            shape['source_data_len'] = len(src.get('data') or []) if isinstance(src.get('data'), list) else None
+        elif isinstance(src, list):
+            shape['source_list_len'] = len(src)
     elif isinstance(payload, list):
         shape = {'type': 'list', 'len': len(payload),
                  'item_types': [type(x).__name__ for x in payload[:3]]}
     else:
         shape = {'type': type(payload).__name__}
+
+    # Count rows that have a non-null value (the ones we actually use)
+    nonnull = 0
+    if isinstance(rows, list):
+        for r in rows:
+            v = r.get('value') if isinstance(r, dict) else None
+            if v is not None and v != '':
+                nonnull += 1
+
     return jsonify({
         'indicator': indicator,
+        'counterpart': counterpart,
         'url': url,
         'status': status,
         'payload_shape': shape,
         'row_count': len(rows) if isinstance(rows, list) else 0,
+        'nonnull_value_count': nonnull,
         'sample_rows': sample,
-        'payload_preview': str(payload)[:1500] if rows == [] else None,
+        'payload_preview': str(payload)[:1500] if not nonnull else None,
     })
 
 
