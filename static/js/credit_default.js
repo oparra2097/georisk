@@ -131,7 +131,7 @@
       })
       .catch((err) => {
         document.getElementById('cd-tbody').innerHTML =
-          `<tr><td colspan="13" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
+          `<tr><td colspan="12" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
       });
   }
 
@@ -305,7 +305,7 @@
   function renderTable() {
     const tbody = document.getElementById('cd-tbody');
     if (!state.filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="13" class="cd-loading">No countries match the current filters.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12" class="cd-loading">No countries match the current filters.</td></tr>';
       return;
     }
     const html = state.filtered.map((r) => rowHtml(r)).join('');
@@ -323,7 +323,6 @@
     return `
       <tr data-iso3="${r.iso3}">
         <td><span class="cd-flag">${flagEmoji(r.iso3)}</span>${escapeHtml(r.name || r.iso3)}<span class="cd-iso">${r.iso3}</span></td>
-        <td>${escapeHtml(r.region || '')}</td>
         <td>${ratingChipHtml(r)}</td>
         <td class="num">${compositeScoreHtml(r)}</td>
         <td>${escapeHtml(r.agency_sp || '—')}</td>

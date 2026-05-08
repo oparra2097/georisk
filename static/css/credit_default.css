@@ -215,23 +215,26 @@
 .cd-table thead th.sortable.sort-desc::after { content: ' ▼'; font-size: 9px; }
 
 /* Column-group ribbon: identity | PM | agencies | risk.
- * Indices match the 13 columns in templates/credit_default.html. */
-.cd-table th:nth-child(2),
-.cd-table th:nth-child(4),
-.cd-table th:nth-child(9),
-.cd-table td:nth-child(2),
-.cd-table td:nth-child(4),
-.cd-table td:nth-child(9) {
+ * Without Region the 12-column layout is:
+ *   1 Country | 2 PM Rating | 3 Composite | 4-7 S&P/Moody/Fitch/Δ | 8 Watch
+ *   | 9-11 PD 1y/3y/5y | 12 Shadow gap.
+ * Group boundaries are after columns 1, 3, and 8. */
+.cd-table th:nth-child(1),
+.cd-table th:nth-child(3),
+.cd-table th:nth-child(8),
+.cd-table td:nth-child(1),
+.cd-table td:nth-child(3),
+.cd-table td:nth-child(8) {
   border-right: 1px solid var(--cd-border);
 }
+.cd-table th:nth-child(2),
 .cd-table th:nth-child(3),
-.cd-table th:nth-child(4),
-.cd-table td:nth-child(3),
-.cd-table td:nth-child(4) {
+.cd-table td:nth-child(2),
+.cd-table td:nth-child(3) {
   background: rgba(59, 130, 246, 0.05);
 }
-.cd-table tbody tr:hover td:nth-child(3),
-.cd-table tbody tr:hover td:nth-child(4) {
+.cd-table tbody tr:hover td:nth-child(2),
+.cd-table tbody tr:hover td:nth-child(3) {
   background: rgba(59, 130, 246, 0.10);
 }
 
