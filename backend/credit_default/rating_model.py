@@ -156,38 +156,41 @@ IG_BOUNDARY_NUMERIC = 10
 
 def _score_with_gbm(payload, indicators, shadow, scaler, medians, shift):
     """Run a country through the persisted GBM tree ensemble. Returns
-    the natural-rate-rescaled PD."""
+    the natural-rate-rescaled PD, or ``None`` if the model can't run
+    for any reason (sklearn version mismatch, missing numpy, etc.) so
+    the caller can fall back to the linear-importance approximation."""
     try:
         import numpy as np
     except ImportError:
         return None
-    features = payload['features']
-    model = payload['model']
-    vec = []
-    for f in features:
-        if f == 'shadow_debt_gap_pp':
-            raw = shadow.get('debt_gap_pp')
-        else:
-            raw = (indicators or {}).get(f)
-        if raw is None:
-            raw = medians.get(f)
-        if raw is None:
-            # If the feature is genuinely unavailable, fall back to 0
-            # (median in standardized space) so the tree still runs.
-            std_val = 0.0
-        else:
-            sc = scaler.get(f) or {}
-            mean = float(sc.get('mean', 0.0))
-            std = float(sc.get('std', 1.0)) or 1.0
-            std_val = (float(raw) - mean) / std
-            if std_val > Z_CLIP:
-                std_val = Z_CLIP
-            elif std_val < -Z_CLIP:
-                std_val = -Z_CLIP
-        vec.append(std_val)
-    proba = float(model.predict_proba(np.asarray([vec]))[0, 1])
+    try:
+        features = payload['features']
+        model = payload['model']
+        vec = []
+        for f in features:
+            if f == 'shadow_debt_gap_pp':
+                raw = shadow.get('debt_gap_pp')
+            else:
+                raw = (indicators or {}).get(f)
+            if raw is None:
+                raw = medians.get(f)
+            if raw is None:
+                std_val = 0.0
+            else:
+                sc = scaler.get(f) or {}
+                mean = float(sc.get('mean', 0.0))
+                std = float(sc.get('std', 1.0)) or 1.0
+                std_val = (float(raw) - mean) / std
+                if std_val > Z_CLIP:
+                    std_val = Z_CLIP
+                elif std_val < -Z_CLIP:
+                    std_val = -Z_CLIP
+            vec.append(std_val)
+        proba = float(model.predict_proba(np.asarray([vec]))[0, 1])
+    except Exception as e:  # noqa: BLE001
+        print(f'[credit_default.rating_model] GBM predict_proba failed: {e}')
+        return None
     proba = min(max(proba, 1e-9), 1.0 - 1e-9)
-    # Platt-rescale balanced GBM proba → natural-rate PD.
     bal_logit = math.log(proba / (1.0 - proba))
     nat_logit = bal_logit + shift
     try:
@@ -425,26 +428,29 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
             z_total = fit_latent + intercept
             shift = float(fit_state.get('class_balance_log_odds') or 0.0)
 
+            model_pd = None
             if gbm_payload is not None:
                 # Score with the actual GBM tree ensemble. Builds the
                 # standardized feature vector in the same order the
                 # model was trained on, runs predict_proba, then Platt-
                 # rescales to natural rate so the displayed PD has the
-                # same base-rate semantics as the logit path.
+                # same base-rate semantics as the logit path. Returns
+                # None if predict_proba fails (e.g. sklearn version
+                # mismatch); we fall back to the linear path below.
                 model_pd = _score_with_gbm(
                     gbm_payload, ind, shadow,
                     fit_state.get('scaler') or {},
                     fit_state.get('medians') or {}, shift,
                 )
-                model_normalized = (
-                    math.log(model_pd / (1 - model_pd))
-                    if 0 < model_pd < 1 else (
-                        -50.0 if model_pd <= 0 else 50.0
-                    )
-                )
-            else:
-                # Logit path (or GBM fallback when pickle missing): use
-                # the linear z_total + Platt shift.
+                if model_pd is not None:
+                    if 0 < model_pd < 1:
+                        model_normalized = math.log(model_pd / (1 - model_pd))
+                    else:
+                        model_normalized = -50.0 if model_pd <= 0 else 50.0
+            if model_pd is None:
+                # Logit path (or GBM fallback when pickle missing or
+                # predict_proba failed): use the linear z_total + Platt
+                # shift.
                 adj = z_total + shift
                 try:
                     model_pd = 1.0 / (1.0 + math.exp(-adj))

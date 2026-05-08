@@ -124,12 +124,13 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
     import math
     history = []
     for _, row in sub.iterrows():
+        proba = None
         if gbm_payload is not None:
             # Build standardized feature vector and run predict_proba.
-            try:
-                import numpy as np
-            except ImportError:
-                np = None
+            # Wrapped because sklearn version mismatches between the
+            # build and runtime environments cause predict_proba to
+            # raise — we fall back to the linear-coef path below
+            # rather than 500-ing the chart endpoint.
             vec = []
             for feat in gbm_payload['features']:
                 raw = row.get(feat)
@@ -153,7 +154,13 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
                 elif zf < -rating_model.Z_CLIP:
                     zf = -rating_model.Z_CLIP
                 vec.append(zf)
-            proba = float(gbm_payload['model'].predict_proba([vec])[0, 1])
+            try:
+                proba = float(gbm_payload['model'].predict_proba([vec])[0, 1])
+            except Exception as e:  # noqa: BLE001
+                print(f'[credit_default.service] history GBM predict_proba failed for {iso3}: {e}')
+                gbm_payload = None  # disable for the rest of this call
+                proba = None
+        if proba is not None:
             proba = min(max(proba, 1e-9), 1.0 - 1e-9)
             bal_logit = math.log(proba / (1.0 - proba))
             adj = bal_logit + class_shift

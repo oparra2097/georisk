@@ -371,7 +371,11 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
 
 def load_gbm_model(horizon_years: int):
     """Load the pickled GBM tree ensemble for live scoring. Returns
-    ``(model, feature_names)`` or ``None`` if the pickle is missing."""
+    ``(model, feature_names)`` or ``None`` on any failure — including
+    sklearn version mismatches between the build environment that
+    pickled the model and the runtime environment that's loading it.
+    Callers must fall back to the linear-importance approximation
+    when this returns None."""
     import pickle
     path = _FIT_DIR / f'fit_model_h{horizon_years}.pkl'
     if not path.exists():
@@ -380,7 +384,11 @@ def load_gbm_model(horizon_years: int):
         with open(path, 'rb') as f:
             payload = pickle.load(f)
         return payload.get('model'), payload.get('features')
-    except (OSError, pickle.UnpicklingError, EOFError):
+    except Exception as e:  # noqa: BLE001
+        # AttributeError, ModuleNotFoundError, ImportError on sklearn
+        # internal renames; broad catch is intentional so a stale
+        # pickle never takes the dashboard down.
+        print(f'[credit_default.fit] load_gbm_model({horizon_years}) failed: {e}')
         return None
 
 
