@@ -302,6 +302,31 @@ const DataCenterMap = {
             lines.push(`<div style="color:#9ca3af;margin-top:6px;font-size:10px;">+${Math.round(other.queue_mw_total).toLocaleString()} MW in unmapped counties</div>`);
           }
         }
+
+        // Diff vs. cached planned_mw
+        const diff = (j.diff_vs_cached || []).filter(d => d.suggestion).slice(0, 8);
+        if (diff.length) {
+          lines.push('<div style="margin-top:10px;font-size:11px;font-weight:600;color:#78350f;text-transform:uppercase;letter-spacing:0.04em;">Δ vs. cached planned_mw</div>');
+          lines.push('<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:4px;"><thead><tr style="text-align:left;color:#6b7280;border-bottom:1px solid #e5e7eb;">'
+            + '<th style="padding:4px 6px;">Metro</th>'
+            + '<th style="padding:4px 6px;text-align:right;">Queue DC MW</th>'
+            + '<th style="padding:4px 6px;text-align:right;">Cached planned_mw</th>'
+            + '<th style="padding:4px 6px;text-align:right;">Δ</th>'
+            + '<th style="padding:4px 6px;">Suggestion</th>'
+            + '</tr></thead><tbody>');
+          for (const d of diff) {
+            const dColor = d.delta_mw > 0 ? '#15803d' : '#b91c1c';
+            const dSign  = d.delta_mw > 0 ? '+' : '';
+            lines.push(`<tr style="border-bottom:1px solid #f3f4f6;">
+              <td style="padding:4px 6px;">${d.metro}</td>
+              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;">${Math.round(d.queue_dc_named_mw).toLocaleString()}</td>
+              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:#9ca3af;">${Math.round(d.cached_planned_mw).toLocaleString()}</td>
+              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:${dColor};font-weight:600;">${dSign}${Math.round(d.delta_mw).toLocaleString()}</td>
+              <td style="padding:4px 6px;color:#374151;">${d.suggestion}</td>
+            </tr>`);
+          }
+          lines.push('</tbody></table>');
+        }
         out.innerHTML = lines.join('');
         this.refreshFreshness();
       } catch (e) {

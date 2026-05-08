@@ -162,6 +162,53 @@ def init_scheduler(app):
     )
     logger.info("Data center drift scan scheduled (daily 07:30 UTC).")
 
+    # Job 7: SEC EDGAR REIT 10-K pull weekly (Sunday 08:00 UTC).
+    def _pull_dc_sec_edgar():
+        try:
+            from backend.data_centers import sec_edgar
+            out = sec_edgar.pull_all()
+            ok = sum(1 for v in out.get('reits', {}).values() if v.get('ok'))
+            logger.info(f"Data center SEC EDGAR pull: {ok}/{len(out.get('reits', {}))} REITs OK, "
+                         f"{out.get('total_rows', 0)} rows total.")
+        except Exception as e:
+            logger.error(f"Data center SEC EDGAR pull failed: {e}")
+
+    scheduler.add_job(
+        func=_pull_dc_sec_edgar,
+        trigger='cron',
+        day_of_week='sun', hour=8, minute=0,
+        id='dc_sec_edgar_pull',
+        replace_existing=True,
+        misfire_grace_time=7200,
+        max_instances=1,
+    )
+    logger.info("Data center SEC EDGAR pull scheduled (Sunday 08:00 UTC).")
+
+    # Job 8: ISO interconnection queue pull weekly (Monday 08:00 UTC).
+    def _pull_dc_iso_queues():
+        try:
+            from backend.data_centers import iso_queue
+            out = iso_queue.pull_all()
+            isos_ok = []
+            for k in ('pjm', 'ercot', 'miso', 'caiso'):
+                if out.get(k, {}).get('ok'):
+                    isos_ok.append(k.upper())
+            logger.info(f"Data center ISO queue pull: {','.join(isos_ok) or 'none'} OK, "
+                         f"{out.get('total_rows', 0)} requests aggregated.")
+        except Exception as e:
+            logger.error(f"Data center ISO queue pull failed: {e}")
+
+    scheduler.add_job(
+        func=_pull_dc_iso_queues,
+        trigger='cron',
+        day_of_week='mon', hour=8, minute=0,
+        id='dc_iso_queue_pull',
+        replace_existing=True,
+        misfire_grace_time=7200,
+        max_instances=1,
+    )
+    logger.info("Data center ISO queue pull scheduled (Monday 08:00 UTC).")
+
     scheduler.start()
     logger.info(
         f"Scheduler started. GDELT every {gdelt_interval}min (ALL countries), "

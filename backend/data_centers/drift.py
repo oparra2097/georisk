@@ -53,6 +53,26 @@ USER_AGENT = (
     'Chrome/124.0.0.0 Safari/537.36'
 )
 
+# SEC EDGAR fair-access policy requires identifying ourselves.
+SEC_USER_AGENT = (
+    'ParraMacro Research data-centers admin@parramacro.com '
+    '(SEC fair-access; identify and contact)'
+)
+SEC_HEADERS = {'User-Agent': SEC_USER_AGENT, 'Accept': 'application/json,text/html;q=0.9'}
+
+# Hyperscaler CIKs to scan for recent 8-K filings.  Material capex
+# announcements (e.g. "we're expanding our X campus by $Y billion") often
+# land here before the press release fully circulates.
+HYPERSCALER_CIKS = {
+    'MSFT':  '0000789019',
+    'META':  '0001326801',
+    'GOOGL': '0001652044',
+    'AMZN':  '0001018724',
+    'AAPL':  '0000320193',
+    'ORCL':  '0001341439',
+}
+SEC_8K_LOOKBACK_DAYS = 30
+
 # "<number> MW" / "<number> GW" with reasonable bounds (10–10000 MW after
 # any GW→MW conversion). Allow single-digit numbers since "2 GW" is common.
 _MW_RE = re.compile(r'(?<!\d)(\d{1,5}(?:[.,]\d+)?)\s*(MW|megawatt|GW|gigawatt)', re.IGNORECASE)
@@ -155,6 +175,85 @@ def _flag_drift(mention: dict, matched_facilities: list[str]) -> dict | None:
     return None
 
 
+def _scan_sec_8k(facility_names: list[str], market_names: list[str]) -> dict:
+    """Scan recent 8-K filings from each hyperscaler CIK for MW / data center
+    mentions. Returns {signals, urls_scanned, urls_failed} same shape as the
+    RSS scan so results can be merged."""
+    signals = []
+    urls_scanned = 0
+    urls_failed = []
+    cutoff = _dt.datetime.utcnow().date() - _dt.timedelta(days=SEC_8K_LOOKBACK_DAYS)
+
+    for ticker, cik in HYPERSCALER_CIKS.items():
+        cik_padded = cik.lstrip('0').zfill(10)
+        sub_url = f'https://data.sec.gov/submissions/CIK{cik_padded}.json'
+        try:
+            r = requests.get(sub_url, headers=SEC_HEADERS, timeout=20)
+            if r.status_code != 200:
+                urls_failed.append({'url': sub_url, 'error': f'HTTP {r.status_code}'})
+                continue
+            j = r.json()
+        except Exception as e:
+            urls_failed.append({'url': sub_url, 'error': str(e)})
+            continue
+        urls_scanned += 1
+
+        recent = j.get('filings', {}).get('recent', {})
+        forms = recent.get('form', [])
+        # Iterate recent 8-Ks within the lookback window.
+        for i, form in enumerate(forms):
+            if form != '8-K':
+                continue
+            filed = recent['filingDate'][i]
+            try:
+                filed_dt = _dt.date.fromisoformat(filed)
+            except ValueError:
+                continue
+            if filed_dt < cutoff:
+                continue
+            accession = recent['accessionNumber'][i]
+            primary   = recent['primaryDocument'][i]
+            int_cik   = str(int(cik))
+            no_dashes = accession.replace('-', '')
+            doc_url   = f'https://www.sec.gov/Archives/edgar/data/{int_cik}/{no_dashes}/{primary}'
+            try:
+                d = requests.get(doc_url, headers=SEC_HEADERS, timeout=30)
+                if d.status_code != 200:
+                    urls_failed.append({'url': doc_url, 'error': f'HTTP {d.status_code}'})
+                    continue
+                text = _strip_html(d.content.decode('utf-8', errors='ignore'))
+            except Exception as e:
+                urls_failed.append({'url': doc_url, 'error': str(e)})
+                continue
+            urls_scanned += 1
+
+            # Only emit a signal if the 8-K text contains data-center
+            # context AND a numeric MW/GW reference.  Pure governance /
+            # earnings 8-Ks are skipped.
+            low = text.lower()
+            if not any(k in low for k in ('data center', 'datacenter', 'data-center',
+                                            'ai infrastructure', 'cloud capacity',
+                                            'compute capacity')):
+                continue
+            mentions = _extract_mw_mentions(text)
+            for m in mentions:
+                ctx = m['context']
+                matched_fac = _matches(ctx, facility_names)
+                matched_mkt = _matches(ctx, market_names)
+                signals.append({
+                    'url':    doc_url,
+                    'ticker': ticker,
+                    'filed':  filed,
+                    'mw':     m['mw'],
+                    'unit':   m['unit'],
+                    'context': ctx,
+                    'matched_facilities': matched_fac,
+                    'matched_markets':    matched_mkt,
+                    'is_8k': True,
+                })
+    return {'signals': signals, 'urls_scanned': urls_scanned, 'urls_failed': urls_failed}
+
+
 def scan() -> dict:
     """Run a single scan pass; return a summary and persist signals."""
     facility_names = _facility_names()
@@ -195,8 +294,24 @@ def scan() -> dict:
                 df['context'] = ctx
                 out['drift_flags'].append(df)
 
+    # Layer in SEC 8-K scan (hyperscaler material event filings).
+    sec = _scan_sec_8k(facility_names, market_names)
+    out['urls_scanned'] += sec['urls_scanned']
+    out['urls_failed'].extend(sec['urls_failed'])
+    for s in sec['signals']:
+        # If the 8-K matches one of our cached facilities, run the same
+        # ≥20% drift check we apply to RSS signals.
+        if s['matched_facilities']:
+            df = _flag_drift({'mw': s['mw']}, s['matched_facilities'])
+            if df:
+                df['url'] = s['url']
+                df['context'] = s['context']
+                df['source'] = f'SEC 8-K · {s["ticker"]} · {s["filed"]}'
+                out['drift_flags'].append(df)
+        out['signals'].append(s)
+
     # Cap to keep file size reasonable.
-    out['signals'] = out['signals'][:60]
+    out['signals'] = out['signals'][:80]
     out['drift_flags'] = out['drift_flags'][:30]
 
     try:

@@ -483,6 +483,7 @@ def pull_all() -> dict:
         if r.get('ok'):
             rows.extend(r['rows'])
     summary = summarize_by_metro(rows)
+    diff = diff_vs_cached_markets(summary) if summary else []
     out = {
         'ok': any(r.get('ok') for r in (pjm, ercot, miso, caiso)),
         'pjm':   {k: v for k, v in pjm.items()   if k != 'rows'},
@@ -491,6 +492,7 @@ def pull_all() -> dict:
         'caiso': {k: v for k, v in caiso.items() if k != 'rows'},
         'total_rows': len(rows),
         'by_metro': summary,
+        'diff_vs_cached': diff,
     }
     # Record freshness on success.
     try:
@@ -501,6 +503,57 @@ def pull_all() -> dict:
         })
     except Exception:
         pass
+    return out
+
+
+def diff_vs_cached_markets(by_metro: list[dict]) -> list[dict]:
+    """Compare each ISO-queue metro's DC-named MW against the cached
+    markets CSV's planned_mw column. Returns rows sorted by absolute delta,
+    with a `suggestion` field that says whether to consider bumping
+    planned_mw.
+
+    The dc_named_mw column is the subset of generation queue requests whose
+    project name matches data-center keywords or known operators — roughly
+    comparable in units to planned_mw (data-center load capacity).
+    """
+    from backend.data_centers import service
+    if not service._CACHE.get('built'):
+        service.build()
+    cached = {m['market']: m for m in service._CACHE.get('markets', [])}
+
+    out = []
+    for q in by_metro:
+        if q['metro'] == 'Other':
+            continue
+        market = cached.get(q['metro'])
+        if not market:
+            continue
+        cached_planned = float(market.get('planned_mw') or 0)
+        observed_dc    = float(q.get('dc_named_mw') or 0)
+        delta          = observed_dc - cached_planned
+        # Suggestion thresholds:
+        #   queue dwarfs cached → flag as "bump planned_mw"
+        #   cached >> queue     → either queue laggy or we're stale; surface for review
+        if cached_planned > 0:
+            ratio = observed_dc / cached_planned
+        else:
+            ratio = float('inf') if observed_dc > 0 else 1.0
+        if observed_dc >= cached_planned * 1.3 and abs(delta) >= 200:
+            suggestion = f'consider bumping planned_mw to ~{int(observed_dc)}'
+        elif cached_planned >= observed_dc * 2.0 and abs(delta) >= 500:
+            suggestion = 'queue lower than recorded — verify cached planned_mw'
+        else:
+            suggestion = ''
+        out.append({
+            'metro': q['metro'],
+            'queue_dc_named_mw': round(observed_dc, 1),
+            'queue_total_mw':    round(q.get('queue_mw_total') or 0, 1),
+            'cached_planned_mw': round(cached_planned, 1),
+            'delta_mw':          round(delta, 1),
+            'ratio':             round(ratio, 2) if ratio != float('inf') else None,
+            'suggestion':        suggestion,
+        })
+    out.sort(key=lambda x: abs(x['delta_mw']), reverse=True)
     return out
 
 
