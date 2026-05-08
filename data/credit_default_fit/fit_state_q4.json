@@ -1,0 +1,306 @@
+{
+  "estimator": "gbm",
+  "cadence": "quarterly",
+  "horizon_quarters": 4,
+  "feature_importance": {
+    "gross_debt_pct_gdp": 0.004060363512720544,
+    "fiscal_balance_pct_gdp": 0.004691075026951363,
+    "interest_pct_revenue": 0.001962995414868063,
+    "shadow_debt_gap_pp": 0.0,
+    "current_account_pct_gdp": 0.028573349602667487,
+    "reserves_to_imports_months": 0.023077943263540558,
+    "short_term_debt_pct_reserves": 0.015066115965629767,
+    "external_debt_pct_gni": 0.006810134938432832,
+    "real_gdp_growth": 0.011410817932050964,
+    "inflation": 0.013370700301581651,
+    "gdp_per_capita_ppp": 0.05359342092694266,
+    "rule_of_law": 0.006157177232636357,
+    "control_of_corruption": 0.004577129038714411,
+    "govt_effectiveness": 0.01059486600543127,
+    "regulatory_quality": 0.002109820279201857,
+    "political_stability": 0.009504696007569136,
+    "voice_accountability": 0.003582134360742573
+  },
+  "coefficients": {
+    "gross_debt_pct_gdp": 0.004060363512720544,
+    "fiscal_balance_pct_gdp": -0.004691075026951363,
+    "interest_pct_revenue": 0.001962995414868063,
+    "shadow_debt_gap_pp": 0.0,
+    "current_account_pct_gdp": -0.028573349602667487,
+    "reserves_to_imports_months": -0.023077943263540558,
+    "short_term_debt_pct_reserves": 0.015066115965629767,
+    "external_debt_pct_gni": 0.006810134938432832,
+    "real_gdp_growth": -0.011410817932050964,
+    "inflation": 0.013370700301581651,
+    "gdp_per_capita_ppp": -0.05359342092694266,
+    "rule_of_law": -0.006157177232636357,
+    "control_of_corruption": -0.004577129038714411,
+    "govt_effectiveness": -0.01059486600543127,
+    "regulatory_quality": -0.002109820279201857,
+    "political_stability": -0.009504696007569136,
+    "voice_accountability": -0.003582134360742573
+  },
+  "intercept": 0.0,
+  "class_balance_log_odds": -3.1824073417951433,
+  "scaler": {
+    "gross_debt_pct_gdp": {
+      "mean": 52.61651720542231,
+      "std": 35.90379632735771
+    },
+    "fiscal_balance_pct_gdp": {
+      "mean": -2.1904692387904063,
+      "std": 6.204877484913531
+    },
+    "interest_pct_revenue": {
+      "mean": 6.506121983254685,
+      "std": 5.904410925087459
+    },
+    "shadow_debt_gap_pp": {
+      "mean": 9.143983315954117,
+      "std": 1.6864283715946684
+    },
+    "current_account_pct_gdp": {
+      "mean": -0.8449843587069865,
+      "std": 13.136083967131235
+    },
+    "reserves_to_imports_months": {
+      "mean": 4.767469585823737,
+      "std": 3.884249732046102
+    },
+    "short_term_debt_pct_reserves": {
+      "mean": 30.815414871740728,
+      "std": 61.3238646189927
+    },
+    "external_debt_pct_gni": {
+      "mean": 45.278042194964605,
+      "std": 26.212807904623066
+    },
+    "real_gdp_growth": {
+      "mean": 3.3880709071949946,
+      "std": 4.672483194563838
+    },
+    "inflation": {
+      "mean": 24.794056308654852,
+      "std": 987.6746599081151
+    },
+    "gdp_per_capita_ppp": {
+      "mean": 23524.83682836288,
+      "std": 24733.187733239374
+    },
+    "rule_of_law": {
+      "mean": 0.049905615057351756,
+      "std": 0.8425620386687604
+    },
+    "control_of_corruption": {
+      "mean": 0.028479709051095252,
+      "std": 0.8503546508773904
+    },
+    "govt_effectiveness": {
+      "mean": 0.09034278963503678,
+      "std": 0.8199461894305586
+    },
+    "regulatory_quality": {
+      "mean": 0.07374428444212748,
+      "std": 0.8263647850634454
+    },
+    "political_stability": {
+      "mean": 0.11012221099061549,
+      "std": 0.8004468095534674
+    },
+    "voice_accountability": {
+      "mean": 0.0740176400729931,
+      "std": 0.8343145879066279
+    }
+  },
+  "medians": {
+    "gross_debt_pct_gdp": 46.3,
+    "fiscal_balance_pct_gdp": -2.5,
+    "interest_pct_revenue": 5.41407297462898,
+    "shadow_debt_gap_pp": 9.1,
+    "current_account_pct_gdp": -1.5,
+    "reserves_to_imports_months": 4.1676367510060555,
+    "short_term_debt_pct_reserves": 25.071969614961098,
+    "external_debt_pct_gni": 41.305984636710704,
+    "real_gdp_growth": 3.5,
+    "inflation": 3.5,
+    "gdp_per_capita_ppp": 15052.708,
+    "rule_of_law": -0.0201063,
+    "control_of_corruption": -0.0798663999999999,
+    "govt_effectiveness": 0.0250833,
+    "regulatory_quality": 0.0071335,
+    "political_stability": 0.1588848,
+    "voice_accountability": 0.09736294999999995
+  },
+  "pd_calibration": [
+    {
+      "bucket": 1,
+      "score_lo": 0.004846994055022647,
+      "score_hi": 0.01107191576233693,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 2,
+      "score_lo": 0.01107191576233693,
+      "score_hi": 0.014805930913034964,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 3,
+      "score_lo": 0.014805930913034964,
+      "score_hi": 0.01969155191573441,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 4,
+      "score_lo": 0.01969155191573441,
+      "score_hi": 0.028547175270421034,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 5,
+      "score_lo": 0.02860638604256197,
+      "score_hi": 0.04064159718047627,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 6,
+      "score_lo": 0.04064159718047627,
+      "score_hi": 0.05465075950281182,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 7,
+      "score_lo": 0.05465075950281182,
+      "score_hi": 0.06793459638027179,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 8,
+      "score_lo": 0.06793459638027179,
+      "score_hi": 0.08176650606143895,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 9,
+      "score_lo": 0.08180652747444815,
+      "score_hi": 0.09803324053032543,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 10,
+      "score_lo": 0.09803324053032543,
+      "score_hi": 0.11863397210317411,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 11,
+      "score_lo": 0.11863397210317411,
+      "score_hi": 0.14500889938909758,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 12,
+      "score_lo": 0.14500889938909758,
+      "score_hi": 0.17708172239637612,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 13,
+      "score_lo": 0.1775648447983241,
+      "score_hi": 0.2155866848348653,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 14,
+      "score_lo": 0.2155866848348653,
+      "score_hi": 0.25835638307285236,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 15,
+      "score_lo": 0.25835638307285236,
+      "score_hi": 0.3086929845479763,
+      "pd_empirical": 0.0,
+      "n_obs": 959,
+      "n_events": 0
+    },
+    {
+      "bucket": 16,
+      "score_lo": 0.3086929845479763,
+      "score_hi": 0.3690228332532282,
+      "pd_empirical": 0.004171011470281543,
+      "n_obs": 959,
+      "n_events": 4
+    },
+    {
+      "bucket": 17,
+      "score_lo": 0.3693888537696143,
+      "score_hi": 0.45008543919986443,
+      "pd_empirical": 0.004171011470281543,
+      "n_obs": 959,
+      "n_events": 4
+    },
+    {
+      "bucket": 18,
+      "score_lo": 0.45008543919986443,
+      "score_hi": 0.5473449703129198,
+      "pd_empirical": 0.020855057351407715,
+      "n_obs": 959,
+      "n_events": 20
+    },
+    {
+      "bucket": 19,
+      "score_lo": 0.5473449703129198,
+      "score_hi": 0.7115092495070887,
+      "pd_empirical": 0.08342022940563086,
+      "n_obs": 959,
+      "n_events": 80
+    },
+    {
+      "bucket": 20,
+      "score_lo": 0.7115092495070887,
+      "score_hi": 0.9575354895461357,
+      "pd_empirical": 0.6840458811261731,
+      "n_obs": 959,
+      "n_events": 656
+    }
+  ],
+  "auc_in_sample": 0.9904499160757093,
+  "n_obs": 19180,
+  "n_events": 764,
+  "trained_at": "2026-05-08T19:09:29Z",
+  "hyperparams": {
+    "n_estimators": 300,
+    "max_depth": 3,
+    "learning_rate": 0.05
+  },
+  "model_pickle": "fit_model_q4.pkl"
+}

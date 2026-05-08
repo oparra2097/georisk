@@ -338,6 +338,48 @@ def get_history_panel(years_back: int = 25):
     return df
 
 
+def get_history_panel_quarterly(years_back: int = 25):
+    """Quarterly-grained history panel: 4 rows per (iso3, year) with
+    annual indicator values forward-filled across each year's four
+    quarters. The schema mirrors :func:`get_history_panel` plus a
+    ``quarter`` column ∈ {1,2,3,4} and a ``period`` string ("2024Q3").
+
+    Notes:
+
+    * Most upstream sources (IMF WEO, WB WGI, WB WDI) publish annual
+      data only, so within a single year the four quarter rows have
+      identical feature values. The grain change is structural — it
+      lets the labeler attach onset-quarter precision to defaults and
+      gives us a place to hang any future quarterly-native series
+      (CDS spreads, FX volatility) without a second refactor. With
+      annual features alone the quarterly fit reduces to the annual
+      fit at 4× cadence.
+    * The shadow-debt overlay is still snapshot-only and attaches to
+      the most recent (year, Q4) row.
+    """
+    df = get_history_panel(years_back)
+    if df is None or df.empty:
+        return df
+    try:
+        import pandas as pd
+    except ImportError:
+        return None
+    quarters = pd.DataFrame({'quarter': [1, 2, 3, 4]})
+    out = df.merge(quarters, how='cross')
+    out['period'] = (
+        out['year'].astype(str) + 'Q' + out['quarter'].astype(str)
+    )
+    # Snap shadow-debt to Q4 of the most recent year only — it's a
+    # snapshot, not a quarterly time series.
+    if 'shadow_debt_gap_pp' in out.columns:
+        snapshot_mask = (out['year'] != out['year'].max()) | (out['quarter'] != 4)
+        out.loc[snapshot_mask, 'shadow_debt_gap_pp'] = None
+        out.loc[(out['year'] == out['year'].max()) & (out['quarter'] == 4),
+                'shadow_debt_gap_pp'] = df.loc[df['year'] == df['year'].max(),
+                                                'shadow_debt_gap_pp'].values
+    return out.sort_values(['iso3', 'year', 'quarter']).reset_index(drop=True)
+
+
 def _country_iso3_universe(per_indicator: Dict[str, Dict[str, float]]) -> Iterable[str]:
     universe = set()
     for series in per_indicator.values():

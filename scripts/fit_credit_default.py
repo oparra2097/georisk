@@ -38,6 +38,12 @@ def parse_horizons(raw: str):
     return [int(x) for x in raw.split(',') if x.strip()]
 
 
+def parse_horizons_quarters(raw: str):
+    if raw == 'all':
+        return [4, 12, 20]   # quarterly equivalents of 1y / 3y / 5y
+    return [int(x) for x in raw.split(',') if x.strip()]
+
+
 def parse_estimators(raw: str):
     if raw == 'both':
         return ['logit', 'gbm']
@@ -52,7 +58,18 @@ def main() -> int:
                         help='Comma-separated horizons (years). Use "all" for 1,3,5.')
     parser.add_argument('--years-back', type=int, default=25,
                         help='How many years of history to include in the panel.')
+    parser.add_argument('--cadence', choices=['annual', 'quarterly'],
+                        default='annual',
+                        help='Panel grain. quarterly forward-fills annuals to '
+                             'quarter-rows and uses defaulted_within_Nq targets.')
+    parser.add_argument('--horizon-quarters', default='all',
+                        help='Comma-separated horizons in quarters (used when '
+                             '--cadence quarterly). "all" maps to 4,12,20 '
+                             '(matches 1y/3y/5y).')
     args = parser.parse_args()
+
+    if args.cadence == 'quarterly':
+        return _run_quarterly(args)
 
     horizons = parse_horizons(args.horizon)
     estimators = parse_estimators(args.estimator)
@@ -81,6 +98,33 @@ def main() -> int:
             }
 
     print('\n[fit] summary:')
+    print(json.dumps(summary, indent=2, default=str))
+    return 0
+
+
+def _run_quarterly(args) -> int:
+    horizons_q = parse_horizons_quarters(args.horizon_quarters)
+    summary = {}
+    for h_q in horizons_q:
+        print(f'\n[fit] running quarterly GBM for horizon={h_q}q ({h_q/4:.1f}y) …')
+        try:
+            state = cd_fit.fit_gbm_quarterly(
+                horizon_quarters=h_q, years_back=args.years_back,
+            )
+        except Exception as e:
+            print(f'[fit] FAILED (quarterly h={h_q}q): {e}')
+            summary[f'gbm_q{h_q}'] = {'error': str(e)}
+            continue
+        summary[f'gbm_q{h_q}'] = {
+            'auc': state.get('auc_in_sample'),
+            'n_obs': state.get('n_obs'),
+            'n_events': state.get('n_events'),
+            'top_features': sorted(
+                state.get('feature_importance', {}).items(),
+                key=lambda kv: kv[1], reverse=True,
+            )[:5],
+        }
+    print('\n[fit] quarterly summary:')
     print(json.dumps(summary, indent=2, default=str))
     return 0
 

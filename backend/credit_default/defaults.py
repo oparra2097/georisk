@@ -146,3 +146,76 @@ def build_label_frame(panel_iso_years: Iterable[Tuple[str, int]],
             rec[f'defaulted_within_{h}y'] = defaulted_within(starts, year, h)
         rows.append(rec)
     return pd.DataFrame(rows)
+
+
+# ── Quarterly labelling ─────────────────────────────────────────────────
+# CRAG events carry year-precision boundaries (start_year, end_year), so
+# we project them onto a quarterly grid by treating the onset as
+# (start_year, Q1) and any quarter inside the spell as "in default".
+# That's coarser than true quarterly precision but it's the best the
+# upstream data supports.
+
+
+def _quarter_advance(year: int, quarter: int, h_q: int) -> Tuple[int, int]:
+    """Return (year, quarter) advanced by ``h_q`` quarters."""
+    total = (quarter - 1) + h_q
+    return year + total // 4, (total % 4) + 1
+
+
+def defaulted_within_quarters(start_quarters: Set[Tuple[int, int]],
+                              year: int, quarter: int, h_q: int) -> int:
+    """Did a default *start* in any of the next ``h_q`` quarters?"""
+    if not start_quarters:
+        return 0
+    for h in range(1, h_q + 1):
+        target = _quarter_advance(year, quarter, h)
+        if target in start_quarters:
+            return 1
+    return 0
+
+
+def build_quarterly_label_frame(
+    panel_iso_quarters: Iterable[Tuple[str, int, int]],
+    horizons_quarters: Iterable[int] = (4, 12, 20),
+    include_distress: bool = False,
+):
+    """Return DataFrame with binary ``defaulted_within_{n}q`` columns.
+
+    ``panel_iso_quarters`` is an iterable of (iso3, year, quarter)
+    tuples (usually ``df[['iso3', 'year', 'quarter']].itertuples()``).
+    Onset for each CRAG event is mapped to (start_year, Q1) — the
+    upstream panel doesn't carry sub-year precision.
+    """
+    try:
+        import pandas as pd
+    except ImportError:
+        return None
+
+    events = load_events(include_distress=include_distress)
+    starts_by_iso: Dict[str, Set[Tuple[int, int]]] = {}
+    in_default_by_iso: Dict[str, Set[Tuple[int, int]]] = {}
+    for ev in events:
+        iso = ev['iso3']
+        start_yr = ev['start_year']
+        end_yr = ev.get('end_year') or start_yr
+        starts_by_iso.setdefault(iso, set()).add((start_yr, 1))
+        for y in range(start_yr, end_yr + 1):
+            for q in range(1, 5):
+                in_default_by_iso.setdefault(iso, set()).add((y, q))
+
+    rows = []
+    for iso3, year, quarter in panel_iso_quarters:
+        starts = starts_by_iso.get(iso3, set())
+        in_def = in_default_by_iso.get(iso3, set())
+        rec = {
+            'iso3': iso3,
+            'year': int(year),
+            'quarter': int(quarter),
+            'in_default_quarter': int((int(year), int(quarter)) in in_def),
+        }
+        for h_q in horizons_quarters:
+            rec[f'defaulted_within_{h_q}q'] = defaulted_within_quarters(
+                starts, int(year), int(quarter), int(h_q),
+            )
+        rows.append(rec)
+    return pd.DataFrame(rows)

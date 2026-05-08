@@ -60,6 +60,10 @@ def fit_state_path(horizon_years: int) -> Path:
     return _FIT_DIR / f'fit_state_h{horizon_years}.json'
 
 
+def fit_state_path_q(horizon_quarters: int) -> Path:
+    return _FIT_DIR / f'fit_state_q{horizon_quarters}.json'
+
+
 # ── Panel construction ──────────────────────────────────────────────────
 
 
@@ -134,6 +138,72 @@ def build_training_panel(years_back: int = 25, horizon_years: int = 1):
         'n_obs': int(len(X_std)),
         'n_events': int(y.sum()),
         'iso_years': df[['iso3', 'year']].reset_index(drop=True),
+    }
+    return X_std, y, feature_names, meta
+
+
+def build_training_panel_quarterly(years_back: int = 25,
+                                   horizon_quarters: int = 4):
+    """Quarterly analog of :func:`build_training_panel`. Returns
+    ``(X, y, feature_names, meta)`` at (iso3, year, quarter) grain.
+
+    With our current data, annual indicator values get forward-filled
+    across each year's four quarters, so feature distributions per
+    quarter are identical within a year. Once we add quarterly-native
+    features (CDS, FX vol, etc.) this is where the signal lives.
+    """
+    try:
+        import pandas as pd  # noqa: F401
+        import numpy as np
+    except ImportError as e:
+        raise RuntimeError(f'pandas/numpy required: {e}')
+
+    panel = cd_data.get_history_panel_quarterly(years_back=years_back)
+    if panel is None or panel.empty:
+        raise RuntimeError(
+            'quarterly history panel is empty — annual upstream pull '
+            'returned nothing. Confirm IMF WEO and WB connectivity.'
+        )
+    for col in ('iso3', 'year', 'quarter'):
+        if col not in panel.columns:
+            raise RuntimeError(
+                f'quarterly panel is missing column {col!r}; cannot fit.'
+            )
+
+    label_df = cd_defaults.build_quarterly_label_frame(
+        panel[['iso3', 'year', 'quarter']].itertuples(index=False, name=None),
+        horizons_quarters=(horizon_quarters,),
+    )
+    df = panel.merge(label_df, on=['iso3', 'year', 'quarter'], how='left')
+    df = df[df['in_default_quarter'] != 1].copy()
+
+    feature_names = list(SCAFFOLD_WEIGHTS.keys())
+    feature_names = [f for f in feature_names if f in df.columns]
+
+    X = df[feature_names].copy()
+    for col in feature_names:
+        X[col] = pd.to_numeric(X[col], errors='coerce')
+
+    y_col = f'defaulted_within_{horizon_quarters}q'
+    y = df[y_col].fillna(0).astype(int)
+
+    keep = X.notna().any(axis=1)
+    X, y, df = X[keep], y[keep], df[keep]
+
+    medians = X.median(numeric_only=True)
+    X = X.fillna(medians)
+    means = X.mean()
+    stds = X.std().replace(0, 1.0)
+    X_std = (X - means) / stds
+
+    meta = {
+        'feature_names': feature_names,
+        'scaler': {f: {'mean': float(means[f]), 'std': float(stds[f])} for f in feature_names},
+        'medians': {f: float(medians[f]) for f in feature_names},
+        'horizon_quarters': horizon_quarters,
+        'n_obs': int(len(X_std)),
+        'n_events': int(y.sum()),
+        'iso_quarters': df[['iso3', 'year', 'quarter']].reset_index(drop=True),
     }
     return X_std, y, feature_names, meta
 
@@ -366,6 +436,90 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
         'model_pickle': f'fit_model_h{horizon_years}.pkl',
     }
     _save_state(state, horizon_years)
+    return state
+
+
+def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
+                      n_estimators: int = 300, max_depth: int = 3,
+                      learning_rate: float = 0.05) -> Dict:
+    """Quarterly-grain GBM fit. Same hyperparameters as :func:`fit_gbm`
+    but the panel is re-grained to (iso3, year, quarter) and the target
+    is ``defaulted_within_{horizon_quarters}q`` (onset in next N
+    quarters). State persists to fit_state_q{N}.json + fit_model_q{N}.pkl
+    so the annual files stay untouched.
+    """
+    X, y, features, meta = build_training_panel_quarterly(
+        years_back, horizon_quarters,
+    )
+    try:
+        from sklearn.ensemble import GradientBoostingClassifier
+        from sklearn.metrics import roc_auc_score
+        from sklearn.inspection import permutation_importance
+    except ImportError as e:
+        raise RuntimeError(f'sklearn required for fit_gbm_quarterly: {e}')
+
+    pos_weight = (len(y) - y.sum()) / max(1, y.sum())
+    sample_weight = (y * (pos_weight - 1) + 1).values
+
+    model = GradientBoostingClassifier(
+        n_estimators=n_estimators, max_depth=max_depth,
+        learning_rate=learning_rate, subsample=0.8,
+        random_state=42, min_samples_leaf=20,
+    )
+    model.fit(X.values, y.values, sample_weight=sample_weight)
+    proba = model.predict_proba(X.values)[:, 1]
+    auc = float(roc_auc_score(y.values, proba)) if 0 < y.sum() < len(y) else None
+
+    perm = permutation_importance(
+        model, X.values, y.values, n_repeats=5,
+        random_state=42, scoring='roc_auc',
+    )
+    importance = {f: float(perm.importances_mean[i]) for i, f in enumerate(features)}
+
+    n_pos = int(y.sum())
+    n_neg = int(len(y) - n_pos)
+    pd_log_odds_shift = (
+        math.log(max(1, n_pos) / max(1, n_neg)) if n_pos and n_neg else 0.0
+    )
+
+    pd_calibration = _calibrate_pd_buckets(proba, y.values)
+
+    importance_signed: Dict[str, float] = {}
+    for f, imp in importance.items():
+        s = +1.0 if SCAFFOLD_HIGHER_IS_WORSE.get(f, True) else -1.0
+        importance_signed[f] = float(s * imp)
+
+    import pickle
+    model_path = _FIT_DIR / f'fit_model_q{horizon_quarters}.pkl'
+    with open(model_path, 'wb') as f:
+        pickle.dump({'model': model, 'features': features}, f)
+
+    state = {
+        'estimator': 'gbm',
+        'cadence': 'quarterly',
+        'horizon_quarters': horizon_quarters,
+        'feature_importance': importance,
+        'coefficients': importance_signed,
+        'intercept': 0.0,
+        'class_balance_log_odds': float(pd_log_odds_shift),
+        'scaler': meta['scaler'],
+        'medians': meta['medians'],
+        'pd_calibration': pd_calibration,
+        'auc_in_sample': auc,
+        'n_obs': meta['n_obs'],
+        'n_events': meta['n_events'],
+        'trained_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'hyperparams': {
+            'n_estimators': n_estimators, 'max_depth': max_depth,
+            'learning_rate': learning_rate,
+        },
+        'model_pickle': f'fit_model_q{horizon_quarters}.pkl',
+    }
+    path = fit_state_path_q(horizon_quarters)
+    serializable = {k: v for k, v in state.items() if k != 'iso_quarters'}
+    with open(path, 'w') as f:
+        json.dump(serializable, f, indent=2)
+    print(f'[credit_default.fit] wrote {path}')
     return state
 
 
