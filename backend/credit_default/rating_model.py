@@ -84,6 +84,7 @@ WEIGHTS: Dict[str, float] = {
     'debt_chg_5y_pp':                0.05,   # Manasse 2003 + IMF SRDSF; faster build-up = worse
     'tot_volatility_5y':             0.04,   # IMF PCTOT, Hilscher-Nosbusch 2010
     'reer_overvaluation_pct':        0.03,   # BIS WS_EER, IMF SRDSF
+    'reserve_currency_share':        0.06,   # IMF COFER 2024Q4 — reserve-currency offset
 }
 
 # How each weight maps onto the directionality of the risk contribution.
@@ -112,6 +113,7 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'debt_chg_5y_pp':                True,   # faster debt build-up = worse
     'tot_volatility_5y':             True,   # higher ToT vol = worse
     'reer_overvaluation_pct':        True,   # over-valued REER = worse
+    'reserve_currency_share':        False,  # higher share = lower default risk
 }
 
 # Hard caps on individual indicator z-scores so a single outlier (e.g. Lebanon
@@ -179,6 +181,32 @@ PD_SENSITIVITY_BY_YEAR = {1: 0.55, 3: 0.75, 5: 0.65}
 def _adjusted_shift(class_balance_log_odds: float, years_eq: int) -> float:
     sens = PD_SENSITIVITY_BY_YEAR.get(int(years_eq), 1.0)
     return class_balance_log_odds * sens
+
+
+# Reserve-currency-status logit discount. The macro feature panel
+# (debt/GDP, fiscal balance, etc.) penalises USA / Japan / eurozone for
+# elevated debt without crediting the structural funding advantage of
+# being a reserve-currency issuer — the underlying reason agencies put
+# them at AA+/AAA despite high public debt. We apply a per-country
+# log-odds discount proportional to the country's share of allocated
+# global FX reserves (IMF COFER 2024Q4). USA at 57% gets a -2.87 logit
+# shift (≈ 17× PD reduction); eurozone members at 19.8% get -0.99
+# (≈ 2.7× reduction); CNY 2.2% gets -0.11 (≈ 11% reduction).
+_RESERVE_CURRENCY_LOGIT_COEF = -0.05
+
+
+def _reserve_currency_shift(country_block: Dict) -> float:
+    """Logit-space shift applied to a country's PD based on its
+    reserve-currency share. Returns 0 for non-reserve-currency
+    sovereigns (i.e. the vast majority).
+    """
+    share = (country_block.get('indicators') or {}).get('reserve_currency_share')
+    if share is None:
+        return 0.0
+    try:
+        return _RESERVE_CURRENCY_LOGIT_COEF * float(share)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _score_with_gbm(payload, indicators, shadow, scaler, medians, shift):
@@ -474,6 +502,12 @@ def score_panel(panel: Dict, horizon_years: int = 1,
             else:
                 years_eq = horizon_years
             shift = _adjusted_shift(raw_shift, years_eq)
+            # Reserve-currency discount applies on top of the Platt
+            # shift for sovereigns whose currency is held as global
+            # FX reserves (USD / EUR / JPY / GBP / etc.). Captures the
+            # structural funding advantage the macro panel otherwise
+            # misses.
+            shift += _reserve_currency_shift(c)
 
             model_pd = None
             if gbm_payload is not None:

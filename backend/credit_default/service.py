@@ -119,6 +119,9 @@ def get_country_history(iso3: str, horizon_years: int = 1,
     else:
         years_eq = horizon_years
     class_shift = rating_model._adjusted_shift(raw_shift, years_eq)
+    # Reserve-currency logit discount, see rating_model._reserve_currency_shift.
+    panel_country = (cd_data.get_panel().get('countries') or {}).get(iso3) or {}
+    class_shift += rating_model._reserve_currency_shift(panel_country)
     rb = fit_state.get('rating_buckets') or {}
     cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
 

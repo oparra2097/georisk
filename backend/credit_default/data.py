@@ -388,7 +388,38 @@ def get_history_panel(years_back: int = 25):
     except Exception as e:
         print(f'[credit_default.data] BIS REER fetch failed: {e}')
 
+    # 5. Reserve-currency share — IMF COFER 2024Q4 share of allocated
+    # global FX reserves held in each country's currency. Captures the
+    # structural funding advantage of reserve-currency issuers
+    # (USD, EUR, JPY, GBP, CHF, CAD, AUD, CNY) that historically have
+    # never defaulted in our panel and shouldn't be flagged as
+    # equivalent default risk to non-reserve emerging markets. Without
+    # this feature the model penalises USA / Japan / eurozone for high
+    # debt/GDP without crediting the offsetting structural advantage.
+    df['reserve_currency_share'] = df['iso3'].map(_RESERVE_CURRENCY_SHARE).fillna(0.0)
+
     return df
+
+
+# IMF COFER 2024Q4 (released March 2025): allocated global FX reserves
+# share by currency, percent. Each eurozone country is assigned the
+# full EUR share since it benefits from collective reserve-currency
+# status; in practice the GBM learns "share > 0 → near-zero PD" so
+# the exact distribution among eurozone members doesn't matter much.
+_RESERVE_CURRENCY_SHARE = {
+    'USA': 57.4,                                   # USD
+    'JPN': 5.8,                                    # JPY
+    'GBR': 4.9,                                    # GBP
+    'CHE': 0.2,                                    # CHF
+    'CAN': 2.7,                                    # CAD
+    'AUS': 2.2,                                    # AUD
+    'CHN': 2.2,                                    # CNY (RMB)
+    # ── Eurozone ──
+    'DEU': 19.8, 'FRA': 19.8, 'ITA': 19.8, 'ESP': 19.8, 'NLD': 19.8,
+    'BEL': 19.8, 'AUT': 19.8, 'FIN': 19.8, 'IRL': 19.8, 'PRT': 19.8,
+    'GRC': 19.8, 'LUX': 19.8, 'EST': 19.8, 'LVA': 19.8, 'LTU': 19.8,
+    'SVK': 19.8, 'SVN': 19.8, 'MLT': 19.8, 'CYP': 19.8, 'HRV': 19.8,
+}
 
 
 _QEDS_ST_DEBT_CODES = (
@@ -667,6 +698,11 @@ def get_panel(force_refresh: bool = False) -> Dict:
             name: per_indicator_periods.get(name, {}).get(iso3)
             for name in INDICATORS
         }
+        # Surface the reserve-currency share alongside the regular
+        # indicators so the rating-model score path can apply its
+        # logit-discount per country (USA / JPN / GBR / CHE / eurozone /
+        # CAD / AUD / CNY).
+        ind_values['reserve_currency_share'] = _RESERVE_CURRENCY_SHARE.get(iso3, 0.0)
         countries_out[iso3] = {
             'iso3': iso3,
             'name': name_lookup.get(iso3, iso3),
