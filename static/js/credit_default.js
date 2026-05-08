@@ -4,12 +4,33 @@
 (function () {
   'use strict';
 
+  // Cadence + horizon are passed as query params on every fetch so the
+  // backend loads the right fit_state JSON. Annual horizons are years
+  // (1/3/5); quarterly horizons are quarters (4/12/20). The headline
+  // chart toggle still says 1y/3y/5y — we map it to quarters when
+  // quarterly mode is active.
+  function _yearsToCadenceHorizon(years) {
+    if (state.cadence === 'quarterly') return Math.max(1, years) * 4;
+    return years || 1;
+  }
+  function _qs(extra) {
+    const horizon = _yearsToCadenceHorizon(state.historyHorizon || 1);
+    const params = new URLSearchParams({
+      cadence: state.cadence || 'annual',
+      horizon: String(horizon),
+      ...(extra || {}),
+    });
+    return `?${params.toString()}`;
+  }
+
   const API = {
-    table: '/api/credit-default/table',
-    country: (iso3) => `/api/credit-default/country/${iso3}`,
-    history: (iso3, horizon) =>
-      `/api/credit-default/country/${iso3}/history?horizon=${horizon || 1}`,
-    dashboard: '/api/credit-default/dashboard',
+    table: () => `/api/credit-default/table${_qs()}`,
+    country: (iso3) => `/api/credit-default/country/${iso3}${_qs()}`,
+    history: (iso3, years) =>
+      `/api/credit-default/country/${iso3}/history${_qs({
+        horizon: String(_yearsToCadenceHorizon(years || 1)),
+      })}`,
+    dashboard: () => `/api/credit-default/dashboard${_qs()}`,
   };
 
   let historyChart = null;
@@ -58,6 +79,7 @@
     region: '',
     search: '',
     historyHorizon: 1,    // 1y by default, toggleable to 3y / 5y
+    cadence: 'annual',    // 'annual' | 'quarterly' — switches fit_state file
   };
 
   // Agency consensus notch (1=AAA, 22=D) → benchmark default probability
@@ -98,7 +120,7 @@
   });
 
   function fetchTable() {
-    fetch(API.table)
+    fetch(API.table())
       .then((r) => r.json())
       .then((data) => {
         state.rows = data.rows || [];
@@ -151,6 +173,25 @@
           state.historyHorizon = parseInt(btn.dataset.horizon, 10) || 1;
           syncHorizonButtons();
           reloadHistoryForCurrent();
+        });
+      });
+    }
+    const cadenceGroup = document.querySelector('.cd-cadence-group');
+    if (cadenceGroup) {
+      cadenceGroup.querySelectorAll('.cd-toggle').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const cad = btn.dataset.cadence === 'quarterly' ? 'quarterly' : 'annual';
+          if (cad === state.cadence) return;
+          state.cadence = cad;
+          cadenceGroup.querySelectorAll('.cd-toggle')
+            .forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          // Re-fetch the table at the new cadence so PD columns and the
+          // Watch indicator reflect the active fit_state.
+          fetchTable();
+          if (state.selectedIso3) {
+            loadDetail(state.selectedIso3);
+          }
         });
       });
     }
