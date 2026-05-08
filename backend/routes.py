@@ -18,6 +18,7 @@ from backend.data_sources.gdp_nowcast import get_gdp_nowcast
 from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
 from backend.data_sources.trade_quarterly import get_us_trade_quarterly
+from backend.data_sources.currency_debt import get_currency_debt
 from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.data_sources.yale_tariff import get_yale_tariff_data
@@ -1209,6 +1210,104 @@ def export_trade_us_quarterly():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'us_trade_quarterly_{today}.xlsx'
+    )
+
+
+@api_bp.route('/currency-debt')
+def get_currency_debt_route():
+    """Currency composition of long-term external debt (WB IDS, cached 24h)."""
+    return jsonify(get_currency_debt())
+
+
+@api_bp.route('/currency-debt/export')
+def export_currency_debt_excel():
+    """Excel export of currency composition data — one sheet per country."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_currency_debt()
+    countries = data.get('countries', {})
+    currencies = data.get('currencies', [])
+    meta = data.get('meta', {})
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Latest Snapshot'
+
+    ws.cell(row=1, column=1, value='Currency Composition of Long-Term External Debt (% share)').font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value=f"{meta.get('source', '')} · Year range: {meta.get('year_range', '')}").font = Font(italic=True, size=9, color='6B7280')
+
+    headers = ['Country', 'ISO3', 'Latest Year'] + [c['label'] for c in currencies]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    sorted_countries = sorted(countries.items(), key=lambda x: x[1].get('name', x[0]))
+    for row_idx, (iso3, cdata) in enumerate(sorted_countries, 5):
+        ws.cell(row=row_idx, column=1, value=cdata.get('name', iso3)).border = thin_border
+        ws.cell(row=row_idx, column=2, value=iso3).border = thin_border
+        ws.cell(row=row_idx, column=3, value=cdata.get('latest_year', '')).border = thin_border
+        latest = cdata.get('latest', {})
+        for col_idx, ccy in enumerate(currencies, 4):
+            val = latest.get(ccy['key'])
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.number_format = '0.00'
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+
+    ws.column_dimensions['A'].width = 26
+    ws.column_dimensions['B'].width = 8
+    ws.column_dimensions['C'].width = 12
+    for col_idx in range(4, len(headers) + 1):
+        col_letter = ws.cell(row=4, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].width = 16
+    ws.freeze_panes = 'D5'
+
+    # Second sheet: full history (long format)
+    ws2 = wb.create_sheet('History (long)')
+    long_headers = ['Country', 'ISO3', 'Year'] + [c['label'] for c in currencies]
+    for col, h in enumerate(long_headers, 1):
+        cell = ws2.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+
+    row = 2
+    for iso3, cdata in sorted_countries:
+        history = cdata.get('history', {})
+        for year in sorted(history.keys()):
+            vals = history[year]
+            ws2.cell(row=row, column=1, value=cdata.get('name', iso3))
+            ws2.cell(row=row, column=2, value=iso3)
+            ws2.cell(row=row, column=3, value=year)
+            for col_idx, ccy in enumerate(currencies, 4):
+                v = vals.get(ccy['key'])
+                cell = ws2.cell(row=row, column=col_idx, value=v)
+                cell.number_format = '0.00'
+            row += 1
+    ws2.freeze_panes = 'D2'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'currency_debt_composition_{today}.xlsx'
     )
 
 

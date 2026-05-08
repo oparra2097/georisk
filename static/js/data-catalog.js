@@ -587,6 +587,18 @@ window.ParraData.CATALOG = {
                     searchTerms: ['debt', 'government debt', 'fiscal', 'deficit', 'sovereign', 'public debt', 'debt to GDP'],
                 },
                 {
+                    id: 'currency-debt',
+                    label: 'Debt Currency Composition',
+                    source: 'World Bank · IDS',
+                    sourceDetail: 'Currency Composition of Long-Term External Debt (% share, DRS-reporting countries)',
+                    api: '/api/currency-debt',
+                    exportUrl: '/api/currency-debt/export',
+                    type: 'currency-debt',
+                    controls: [],
+                    subviews: [],
+                    searchTerms: ['currency', 'debt', 'composition', 'external debt', 'dollar', 'euro', 'yen', 'SDR', 'DRS', 'IDS', 'foreign currency debt', 'currency mismatch', 'original sin', 'dollarization'],
+                },
+                {
                     id: 'sovereign-debt',
                     label: 'Shadow Debt Indicator',
                     source: 'ParraMacro',

@@ -433,6 +433,7 @@
             case 'weo': renderWeo(ds); break;
             case 'wb': renderWeo(ds); break;  // World Bank uses same data shape as WEO
             case 'us-trade-quarterly': renderUsTradeQuarterly(ds); break;
+            case 'currency-debt': renderCurrencyDebt(ds); break;
             case 'sovereign-debt': renderSovereignDebt(ds); break;
             case 'fertilizer-em': renderFertilizerEM(ds); break;
             case 'cofer-nowcast': renderCoferNowcast(ds); break;
@@ -3851,6 +3852,234 @@
 
         const histSection = document.getElementById('panel-history-section');
         if (histSection) histSection.style.display = 'none';
+    }
+
+    // ══════════════════════════════════════════════════════
+    // CURRENCY DEBT COMPOSITION RENDERER (World Bank IDS)
+    // ══════════════════════════════════════════════════════
+
+    let _currencyDebtSelectedIso = null;
+
+    function renderCurrencyDebt(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || !data.countries) return;
+
+        const panel = document.getElementById('active-panel');
+        if (!panel) return;
+
+        const currencies = data.currencies || [];
+        const countries = data.countries || {};
+        const meta = data.meta || {};
+
+        const sortedCountries = Object.entries(countries)
+            .map(([iso, c]) => ({ iso, name: c.name || iso }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        // Pick a sensible default if nothing already selected
+        if (!_currencyDebtSelectedIso || !countries[_currencyDebtSelectedIso]) {
+            const preferred = ['BRA', 'IND', 'IDN', 'TUR', 'MEX', 'NGA', 'ZAF', 'ARG', 'PAK', 'EGY'];
+            _currencyDebtSelectedIso = preferred.find(iso => countries[iso]) || (sortedCountries[0] && sortedCountries[0].iso);
+        }
+
+        const optsHtml = sortedCountries.map(c =>
+            `<option value="${c.iso}"${c.iso === _currencyDebtSelectedIso ? ' selected' : ''}>${c.name}</option>`
+        ).join('');
+
+        panel.innerHTML = `
+            <div class="data-section-header">
+                <div>
+                    <h1 class="data-title" id="panel-title">${ds.label}</h1>
+                    <p class="data-source">${ds.source} &mdash; ${ds.sourceDetail || ''}</p>
+                </div>
+                <div class="data-controls">
+                    <select id="ctrl-currency-country" class="data-select" style="min-width:180px;">${optsHtml}</select>
+                    <a href="${ds.exportUrl}" class="export-btn-data" title="Download Excel">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>Excel
+                    </a>
+                </div>
+            </div>
+            <div class="cpi-summary-cards" id="panel-summary"></div>
+            <div class="chart-container" id="panel-chart-container">
+                <canvas id="panel-chart"></canvas>
+            </div>
+            <div class="data-table-container" id="panel-table-container">
+                <table class="data-table" id="panel-table">
+                    <thead id="panel-thead"></thead>
+                    <tbody id="panel-tbody"></tbody>
+                </table>
+            </div>
+            <div class="data-meta" id="panel-meta"></div>
+        `;
+
+        const sel = document.getElementById('ctrl-currency-country');
+        if (sel) {
+            sel.addEventListener('change', (e) => {
+                _currencyDebtSelectedIso = e.target.value;
+                _drawCurrencyDebt(data, _currencyDebtSelectedIso);
+            });
+        }
+
+        _drawCurrencyDebt(data, _currencyDebtSelectedIso);
+    }
+
+    function _drawCurrencyDebt(data, iso) {
+        const currencies = data.currencies || [];
+        const country = (data.countries || {})[iso];
+        if (!country) return;
+
+        const history = country.history || {};
+        const years = Object.keys(history).sort();
+        const latestYear = country.latest_year;
+        const latest = country.latest || {};
+
+        // Summary: top 3 currency shares in latest year
+        const sortedLatest = currencies
+            .map(c => ({ ...c, value: latest[c.key] }))
+            .filter(c => c.value != null)
+            .sort((a, b) => b.value - a.value);
+
+        const summary = document.getElementById('panel-summary');
+        if (summary) {
+            const top = sortedLatest.slice(0, 3);
+            const fmt = (v) => v == null ? '—' : v.toFixed(1) + '%';
+            const cardHtml = (rank, item) => `
+                <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                    <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">#${rank} · ${item ? item.label : '—'}</div>
+                    <div style="color:${item ? item.color : '#f1f5f9'};font-size:24px;font-weight:700;margin-top:4px;">${item ? fmt(item.value) : '—'}</div>
+                    <div style="color:#64748b;font-size:11px;">${latestYear || ''}</div>
+                </div>
+            `;
+            summary.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;width:100%;">
+                    ${cardHtml(1, top[0])}
+                    ${cardHtml(2, top[1])}
+                    ${cardHtml(3, top[2])}
+                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Reporting Years</div>
+                        <div style="color:#f1f5f9;font-size:24px;font-weight:700;margin-top:4px;">${years.length}</div>
+                        <div style="color:#64748b;font-size:11px;">${years.length ? years[0] + '–' + years[years.length - 1] : ''}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Stacked bar chart: currency mix over time
+        PD.destroyChart('main');
+        const canvasEl = document.getElementById('panel-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        const chartDatasets = currencies.map(c => ({
+            label: c.label,
+            data: years.map(y => {
+                const v = (history[y] || {})[c.key];
+                return v != null ? v : null;
+            }),
+            backgroundColor: c.color,
+            borderColor: c.color,
+            borderWidth: 0,
+            stack: 'currency',
+        }));
+
+        PD.setChart('main', new Chart(ctx, {
+            type: 'bar',
+            data: { labels: years, datasets: chartDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'rect' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: (tt) => {
+                                const v = tt.parsed.y;
+                                if (v == null) return tt.dataset.label + ': N/A';
+                                return tt.dataset.label + ': ' + v.toFixed(1) + '%';
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: country.name + ' — Long-term External Debt by Currency',
+                        color: '#e5e7eb',
+                        font: { size: 13, weight: '600' },
+                        padding: { bottom: 10 },
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 },
+                        grid: { display: false },
+                        title: { display: true, text: 'Year', color: '#6b7280', font: { size: 11 } },
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: { color: '#6b7280', font: { size: 10 }, callback: (v) => v + '%' },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        title: { display: true, text: '% of Long-Term Debt', color: '#6b7280', font: { size: 11 } },
+                    }
+                }
+            }
+        }));
+
+        // Table: last 10 years × currencies
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            const tableYears = years.slice(-10).reverse();
+            let hdr = '<tr><th>Year</th>';
+            currencies.forEach(c => { hdr += '<th>' + c.label + '</th>'; });
+            hdr += '<th>Total</th></tr>';
+            thead.innerHTML = hdr;
+
+            let rows = '';
+            tableYears.forEach(y => {
+                const yvals = history[y] || {};
+                rows += '<tr><td>' + y + '</td>';
+                let total = 0;
+                let hasAny = false;
+                currencies.forEach(c => {
+                    const v = yvals[c.key];
+                    if (v != null) {
+                        rows += '<td>' + v.toFixed(1) + '%</td>';
+                        total += v;
+                        hasAny = true;
+                    } else {
+                        rows += '<td>—</td>';
+                    }
+                });
+                rows += '<td>' + (hasAny ? total.toFixed(1) + '%' : '—') + '</td></tr>';
+            });
+            tbody.innerHTML = rows;
+        }
+
+        // Meta line
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            const m = data.meta || {};
+            const parts = [];
+            if (m.source) parts.push(m.source);
+            if (m.year_range) parts.push('Year range: ' + m.year_range);
+            if (m.country_count != null) parts.push(m.country_count + ' countries');
+            if (m.last_updated) parts.push('Updated: ' + m.last_updated);
+            parts.push('Long-term external debt only (PPG, public and publicly guaranteed)');
+            metaEl.textContent = parts.join(' · ');
+        }
     }
 
 })();
