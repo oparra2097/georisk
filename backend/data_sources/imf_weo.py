@@ -122,4 +122,8 @@ _INDICATOR_NAMES = {
     'BCA': 'Current Account Balance (Billions USD)',
     'GGXWDG_NGDP': 'General Government Gross Debt (% of GDP)',
     'LP': 'Population (Millions)',
+    'TX_RPCH': 'Volume of Exports of Goods & Services (Annual % Change)',
+    'TM_RPCH': 'Volume of Imports of Goods & Services (Annual % Change)',
+    'TXG_RPCH': 'Volume of Exports of Goods (Annual % Change)',
+    'TMG_RPCH': 'Volume of Imports of Goods (Annual % Change)',
 }
