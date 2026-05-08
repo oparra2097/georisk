@@ -9,6 +9,7 @@ data/*
 !data/datacenter_markets.csv
 !data/datacenter_facilities.csv
 !data/agency_ratings.csv
+!data/agency_ratings_history.csv
 !data/sovereign_defaults.csv
 !data/credit_default_fit/
 !data/credit_default_fit/*.json

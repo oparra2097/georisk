@@ -206,6 +206,20 @@
 .cd-delta-neg { color: #047857; font-weight: 600; }
 .cd-delta-zero { color: #6b7280; }
 
+/* Downgrade / upgrade watch indicator on the table.
+ * Down = model rates worse than S&P (candidate for downgrade) — red.
+ * Up   = model rates better than S&P (candidate for upgrade) — green.
+ * Double arrow signals a 3+ notch gap. */
+.cd-watch-down {
+  color: #b91c1c; font-weight: 700; font-size: 14px;
+  display: inline-block; min-width: 22px; text-align: center;
+}
+.cd-watch-up {
+  color: #047857; font-weight: 700; font-size: 14px;
+  display: inline-block; min-width: 22px; text-align: center;
+}
+.cd-watch-none { color: #d1d5db; }
+
 /* Country detail panel (full-width in detail view) */
 .cd-panel {
   background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;

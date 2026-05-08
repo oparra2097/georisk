@@ -13,6 +13,7 @@ import time
 from typing import Dict, List, Optional
 
 from backend.credit_default import agency_ratings
+from backend.credit_default import agency_ratings_history as cd_agency_history
 from backend.credit_default import data as cd_data
 from backend.credit_default import defaults as cd_defaults
 from backend.credit_default import fit as cd_fit
@@ -112,7 +113,12 @@ def get_country_history(iso3: str, horizon_years: int = 1,
     intercept = float(fit_state.get('intercept') or 0.0)
     scaler = fit_state.get('scaler') or {}
     medians = fit_state.get('medians') or {}
-    class_shift = float(fit_state.get('class_balance_log_odds') or 0.0)
+    raw_shift = float(fit_state.get('class_balance_log_odds') or 0.0)
+    if cadence == 'quarterly':
+        years_eq = max(1, int(round(horizon_years / 4)))
+    else:
+        years_eq = horizon_years
+    class_shift = rating_model._adjusted_shift(raw_shift, years_eq)
     rb = fit_state.get('rating_buckets') or {}
     cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
 
@@ -265,6 +271,7 @@ def get_country_history(iso3: str, horizon_years: int = 1,
             'consensus_num': agency.get('consensus_num'),
             'as_of': agency.get('as_of'),
         },
+        'agency_history': cd_agency_history.get_country_history(iso3),
     }
 
     with _cache_lock:

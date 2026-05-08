@@ -1,0 +1,62 @@
+# Historical sovereign rating actions from S&P, Moody's, Fitch.
+# Long format: one row per (iso3, as_of) tuple. Used by the dashboard's
+# country drilldown chart to overlay agency rating trajectory alongside
+# model PD.
+#
+# as_of is YYYY-MM. Missing agency cells are blank, not "—".
+# Rating strings match the agency_ratings NUMERIC_SCALE (AAA/Aaa = 1, D/SD/RD = 22).
+#
+# Seed data covers the obvious back-test cases (Ghana 2022 default, Argentina
+# 2019-2020, Lebanon 2020, Russia 2022 sanctions, Egypt 2022-2024 distress).
+# Extend by appending rows — no other code changes required.
+iso3,as_of,sp,moodys,fitch,sp_outlook,moodys_outlook,fitch_outlook
+# ── Ghana ────────────────────────────────────────────────────────────────
+GHA,2015-10,B-,B3,B,Stable,Stable,Negative
+GHA,2017-09,B-,B3,B,Stable,Stable,Stable
+GHA,2018-08,B,B3,B,Stable,Positive,Stable
+GHA,2020-04,B-,B3,B,Stable,Negative,Negative
+GHA,2022-02,B-,Caa1,B-,Negative,Stable,Negative
+GHA,2022-08,CCC+,Caa2,CCC,Negative,Negative,
+GHA,2022-12,SD,Ca,RD,,,RD
+GHA,2023-04,SD,Ca,RD,,,
+GHA,2024-10,CCC+,Caa2,CCC,Stable,Positive,Stable
+# ── Argentina ────────────────────────────────────────────────────────────
+ARG,2016-05,B-,B3,B,Stable,Stable,Stable
+ARG,2018-12,B,B2,B,Stable,Stable,Stable
+ARG,2019-08,B-,B2,CCC,Negative,Negative,Negative
+ARG,2019-09,CCC-,Caa2,CCC,Negative,Negative,Negative
+ARG,2020-04,SD,Ca,RD,,,RD
+ARG,2020-09,CCC+,Ca,CCC,Stable,Stable,Stable
+ARG,2023-09,CCC-,Ca,CC,Negative,Stable,Negative
+ARG,2024-09,CCC,Ca,CCC,Stable,Stable,Stable
+# ── Lebanon ──────────────────────────────────────────────────────────────
+LBN,2017-09,B-,B3,B-,Negative,Negative,Stable
+LBN,2019-09,CCC,Caa2,CCC,Negative,Negative,Negative
+LBN,2020-03,SD,Ca,RD,,,RD
+LBN,2022-12,SD,C,RD,,,
+LBN,2024-12,SD,C,RD,,,
+# ── Russia ───────────────────────────────────────────────────────────────
+RUS,2018-02,BBB-,Ba1,BBB-,Stable,Positive,Positive
+RUS,2018-08,BBB-,Ba1,BBB-,Stable,Positive,Positive
+RUS,2020-02,BBB,Baa3,BBB,Stable,Stable,Stable
+RUS,2022-03,CCC-,Caa3,C,Negative,Negative,
+RUS,2022-04,SD,Ca,RD,,,RD
+RUS,2023-09,SD,Ca,RD,,,
+# ── Egypt ────────────────────────────────────────────────────────────────
+EGY,2018-05,B,B3,B,Stable,Positive,Stable
+EGY,2020-04,B,B2,B+,Stable,Stable,Stable
+EGY,2022-05,B,B2,B+,Stable,Negative,Negative
+EGY,2022-12,B,B3,B,Negative,Stable,Negative
+EGY,2023-10,B-,Caa1,B-,Stable,Negative,Negative
+EGY,2024-04,B-,Caa1,B,Positive,Positive,Positive
+EGY,2024-11,B-,Caa1,B,Positive,Stable,Positive
+# ── Romania (the user's current test case) ───────────────────────────────
+ROU,2014-05,BB+,Baa3,BBB-,Stable,Stable,Stable
+ROU,2018-04,BBB-,Baa3,BBB-,Stable,Stable,Stable
+ROU,2020-06,BBB-,Baa3,BBB-,Negative,Negative,Negative
+ROU,2024-08,BBB-,Baa3,BBB-,Stable,Stable,Stable
+# ── United States (reference) ────────────────────────────────────────────
+USA,2011-08,AA+,Aaa,AAA,Negative,Stable,Stable
+USA,2013-03,AA+,Aaa,AAA,Stable,Stable,Stable
+USA,2023-08,AA+,Aaa,AA+,Stable,Stable,Stable
+USA,2024-11,AA+,Aaa,AA+,Stable,Negative,Stable

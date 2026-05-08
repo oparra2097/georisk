@@ -109,7 +109,7 @@
       })
       .catch((err) => {
         document.getElementById('cd-tbody').innerHTML =
-          `<tr><td colspan="12" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
+          `<tr><td colspan="13" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
       });
   }
 
@@ -213,6 +213,12 @@
   }
 
   function compareRows(a, b, key, dir) {
+    // Synthetic key: rank watchlist entries by signed notch delta so
+    // sorting "watch" descending puts the strongest downgrade signals
+    // at the top, ascending puts the strongest upgrade signals first.
+    if (key === 'watch') {
+      key = 'notch_delta_sp';
+    }
     const va = a[key]; const vb = b[key];
     const sign = dir === 'asc' ? 1 : -1;
     if (va == null && vb == null) return 0;
@@ -258,7 +264,7 @@
   function renderTable() {
     const tbody = document.getElementById('cd-tbody');
     if (!state.filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="12" class="cd-loading">No countries match the current filters.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" class="cd-loading">No countries match the current filters.</td></tr>';
       return;
     }
     const html = state.filtered.map((r) => rowHtml(r)).join('');
@@ -283,12 +289,27 @@
         <td>${escapeHtml(r.agency_moodys || '—')}</td>
         <td>${escapeHtml(r.agency_fitch || '—')}</td>
         <td class="num">${notchDeltaHtml(r.notch_delta_sp)}</td>
+        <td>${watchIndicatorHtml(r)}</td>
         <td class="num">${pdHtml(r.pd_1y)}</td>
         <td class="num">${pdHtml(r.pd_3y)}</td>
         <td class="num">${pdHtml(r.pd_5y)}</td>
         <td class="num">${formatNumber(r.shadow_debt_gap_pp, 1, 'pp')}</td>
       </tr>
     `;
+  }
+
+  // Downgrade / upgrade indicator: positive notch_delta means the model
+  // rates the country worse than S&P (candidate for downgrade); negative
+  // means it rates better (candidate for upgrade). Magnitude ≥3 gets a
+  // double arrow as a stronger signal.
+  function watchIndicatorHtml(r) {
+    const d = r.notch_delta_sp;
+    if (d == null) return '<span class="cd-watch-none">—</span>';
+    if (d >= 3)  return '<span class="cd-watch-down" title="Strong downgrade signal (model 3+ notches harsher than S&amp;P)">↓↓</span>';
+    if (d >= 1)  return '<span class="cd-watch-down" title="Downgrade candidate (model harsher than S&amp;P)">↓</span>';
+    if (d <= -3) return '<span class="cd-watch-up" title="Strong upgrade signal (model 3+ notches more lenient than S&amp;P)">↑↑</span>';
+    if (d <= -1) return '<span class="cd-watch-up" title="Upgrade candidate (model more lenient than S&amp;P)">↑</span>';
+    return '<span class="cd-watch-none">—</span>';
   }
 
   function compositeScoreHtml(r) {
@@ -656,16 +677,59 @@
       b.label = top.toUpperCase();
     });
 
-    // Agency consensus → implied PD at the active horizon. Drawn as a
-    // dashed reference line so the user can see how the model's PD
-    // trajectory compares to where the agencies sit today.
+    // Agency consensus → implied PD at the active horizon. Two paths:
+    //
+    // (a) If we have a historical rating timeline (h.agency_history),
+    //     project each rating action onto the chart's year axis and
+    //     emit a step-line of agency-implied PD over time. This is
+    //     the proper back-test view — model PD line vs agency rating
+    //     line over the same window, with default-event bands as
+    //     ground truth.
+    // (b) Otherwise fall back to a single horizontal reference line
+    //     at the current consensus PD.
     const consensusNum = (h.agency || {}).consensus_num;
-    let agencyPd = null;
-    if (consensusNum != null && AGENCY_PD_BY_HORIZON[consensusNum]) {
-      const anchor = AGENCY_PD_BY_HORIZON[consensusNum][horizon];
-      if (anchor != null) agencyPd = anchor * 100;
+    const fallbackAgencyPd = (
+      consensusNum != null && AGENCY_PD_BY_HORIZON[consensusNum]
+        ? (AGENCY_PD_BY_HORIZON[consensusNum][horizon] || 0) * 100
+        : null
+    );
+    let agencyLine = null;
+    let usingAgencyHistory = false;
+    const agencyHistory = h.agency_history || [];
+    if (agencyHistory.length) {
+      // Build a {year -> consensus_num} map by stepping through the
+      // sorted rating actions; carry the last seen rating forward.
+      const sorted = agencyHistory.slice().sort(
+        (a, b) => (a.as_of || '').localeCompare(b.as_of || '')
+      );
+      let curr = null;
+      let idx = 0;
+      agencyLine = years.map((yr) => {
+        // Advance the pointer through any actions that happened
+        // on or before this year.
+        while (idx < sorted.length) {
+          const actionYear = parseInt(String(sorted[idx].as_of).slice(0, 4), 10);
+          if (Number.isFinite(actionYear) && actionYear <= yr) {
+            const c = sorted[idx].consensus_num;
+            if (c != null && AGENCY_PD_BY_HORIZON[c]) {
+              curr = (AGENCY_PD_BY_HORIZON[c][horizon] || 0) * 100;
+            }
+            idx += 1;
+          } else {
+            break;
+          }
+        }
+        return curr;
+      });
+      // Only count it as "history" if at least one year has a value;
+      // otherwise fall back to the single-anchor line below.
+      if (agencyLine.some((v) => v != null)) {
+        usingAgencyHistory = true;
+      }
     }
-    const agencyLine = agencyPd != null ? years.map(() => agencyPd) : null;
+    if (!usingAgencyHistory && fallbackAgencyPd != null) {
+      agencyLine = years.map(() => fallbackAgencyPd);
+    }
 
     // Plugin: red event bands + a per-event label so "default years"
     // are visible at a glance + a 50% PD threshold line marking the
@@ -673,7 +737,11 @@
     // even the most distressed model PD typically sits well below 50%,
     // so the threshold line is a clear marker for "would the model
     // call this country a default").
-    const DEFAULT_PD_THRESHOLD_PCT = 50;
+    // Default-territory threshold: tighter at 1y (catches near-term
+    // distress earlier), looser at 5y (only sovereigns we genuinely
+    // expect to default cross 75% over a 5-year window).
+    const PD_THRESHOLDS_BY_HORIZON = { 1: 25, 3: 50, 5: 75 };
+    const DEFAULT_PD_THRESHOLD_PCT = PD_THRESHOLDS_BY_HORIZON[horizon] || 50;
     const eventBandsPlugin = {
       id: 'cd-event-bands',
       beforeDatasetsDraw(chart) {
@@ -735,7 +803,7 @@
         ctx.fillStyle = 'rgba(220, 38, 38, 0.85)';
         ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
         ctx.textBaseline = 'bottom';
-        ctx.fillText('Default threshold (50%)', chartArea.left + 6, y - 2);
+        ctx.fillText(`Default threshold (${DEFAULT_PD_THRESHOLD_PCT}%)`, chartArea.left + 6, y - 2);
         ctx.restore();
       },
     };
@@ -757,13 +825,18 @@
       const moodys = (h.agency || {}).moodys;
       const fitch = (h.agency || {}).fitch;
       const tag = [sp, moodys, fitch].filter(Boolean).join(' / ');
+      const baseLabel = usingAgencyHistory
+        ? `Agency consensus PD ${horizon}y (history)`
+        : `Agency consensus PD ${horizon}y (${tag || '?'})`;
       datasets.push({
-        label: `Agency consensus PD ${horizon}y (${tag || '?'}, ${agencyPd.toFixed(2)}%)`,
+        label: baseLabel,
         data: agencyLine,
         borderColor: '#9333ea',
         borderDash: [6, 4],
         borderWidth: 1.5,
-        pointRadius: 0,
+        pointRadius: usingAgencyHistory ? 1.5 : 0,
+        spanGaps: true,
+        stepped: usingAgencyHistory ? 'before' : false,
         fill: false,
       });
     }

@@ -156,6 +156,20 @@ RATING_BUCKETS: List[Tuple[float, str, int, str, str, float, float, float]] = [
 IG_BOUNDARY_NUMERIC = 10
 
 
+# Per-horizon sensitivity multiplier on the Platt-rescale shift.
+# Reducing the (negative) shift towards 0 lifts PDs without retraining;
+# the user wanted 1y to be more sensitive (catches near-term distress
+# faster) and 5y elevated for downgrade-prone sovereigns. Numbers
+# chosen so 1y PDs roughly triple and 5y PDs roughly double versus
+# the pure natural-rate baseline.
+PD_SENSITIVITY_BY_YEAR = {1: 0.55, 3: 0.75, 5: 0.65}
+
+
+def _adjusted_shift(class_balance_log_odds: float, years_eq: int) -> float:
+    sens = PD_SENSITIVITY_BY_YEAR.get(int(years_eq), 1.0)
+    return class_balance_log_odds * sens
+
+
 def _score_with_gbm(payload, indicators, shadow, scaler, medians, shift):
     """Run a country through the persisted GBM tree ensemble. Returns
     the natural-rate-rescaled PD, or ``None`` if the model can't run
@@ -440,7 +454,15 @@ def score_panel(panel: Dict, horizon_years: int = 1,
             intercept = float(fit_state.get('intercept') or 0.0)
             estimator = fit_state.get('estimator', 'logit')
             z_total = fit_latent + intercept
-            shift = float(fit_state.get('class_balance_log_odds') or 0.0)
+            raw_shift = float(fit_state.get('class_balance_log_odds') or 0.0)
+            # Map the active horizon back to year-equivalent so we
+            # apply the right per-horizon sensitivity multiplier (1y
+            # gets the biggest lift, 5y a moderate lift).
+            if cadence == 'quarterly':
+                years_eq = max(1, int(round(horizon_years / 4)))
+            else:
+                years_eq = horizon_years
+            shift = _adjusted_shift(raw_shift, years_eq)
 
             model_pd = None
             if gbm_payload is not None:
