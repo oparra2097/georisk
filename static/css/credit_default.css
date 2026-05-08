@@ -5,6 +5,13 @@
   margin: 0 auto;
   padding: 24px 24px 48px;
   color: #1f2937;
+  /* The site uses a dark global theme (var(--bg-primary) = #0a0e1a),
+     but the credit-default dashboard is designed against a light
+     surface — without an explicit background here the page inherits
+     dark grey from <body> and the dark-text headings (cd-title,
+     cd-status-value, etc.) render nearly invisible. */
+  background: #ffffff;
+  min-height: calc(100vh - 60px);
 }
 
 /* Header */

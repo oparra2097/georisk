@@ -338,24 +338,57 @@ def get_history_panel(years_back: int = 25):
     return df
 
 
+_QEDS_ST_DEBT_CODES = (
+    ('DT.DOD.DSTC.CD.US', 22),     # SDDS — ~120 countries
+    ('DT.DOD.DECT.CD.ST.US', 23),  # GDDS — ~50 fallbacks
+)
+
+
+def _fetch_qeds_quarterly_st_debt() -> Dict[str, Dict[str, float]]:
+    """Pull quarterly short-term external debt (USD) from QEDS sources.
+    Returns ``{iso3: {"2024Q3": value_usd, ...}}``. Falls back from
+    SDDS (source 22) to GDDS (source 23) per country."""
+    merged: Dict[str, Dict[str, float]] = {}
+    for code, src in _QEDS_ST_DEBT_CODES:
+        try:
+            payload = world_bank.get_wb_data(code, source=src) or {}
+        except Exception as e:
+            print(f'[credit_default.data] QEDS fetch failed ({code} src={src}): {e}')
+            continue
+        for iso3, block in (payload.get('countries') or {}).items():
+            if not iso3 or len(iso3) != 3:
+                continue
+            vals = (block or {}).get('values') or {}
+            quarter_vals = {k: v for k, v in vals.items()
+                            if isinstance(k, str) and 'Q' in k and v}
+            if not quarter_vals:
+                continue
+            # Prefer the SDDS (first) source; only fill in countries
+            # that didn't have any SDDS data.
+            if iso3 not in merged:
+                merged[iso3] = quarter_vals
+    return merged
+
+
 def get_history_panel_quarterly(years_back: int = 25):
-    """Quarterly-grained history panel: 4 rows per (iso3, year) with
-    annual indicator values forward-filled across each year's four
-    quarters. The schema mirrors :func:`get_history_panel` plus a
-    ``quarter`` column ∈ {1,2,3,4} and a ``period`` string ("2024Q3").
+    """Quarterly-grained history panel: 4 rows per (iso3, year). Where
+    quarterly upstream data is available (currently QEDS short-term
+    external debt for ~150 SDDS/GDDS subscribers), the indicator
+    actually varies by quarter; annual-only series are forward-filled
+    so the row schema stays uniform.
 
     Notes:
 
-    * Most upstream sources (IMF WEO, WB WGI, WB WDI) publish annual
-      data only, so within a single year the four quarter rows have
-      identical feature values. The grain change is structural — it
-      lets the labeler attach onset-quarter precision to defaults and
-      gives us a place to hang any future quarterly-native series
-      (CDS spreads, FX volatility) without a second refactor. With
-      annual features alone the quarterly fit reduces to the annual
-      fit at 4× cadence.
-    * The shadow-debt overlay is still snapshot-only and attaches to
-      the most recent (year, Q4) row.
+    * QEDS quarterly ST debt overrides ``short_term_debt_pct_reserves``
+      where present. The numerator is the QEDS quarterly USD amount;
+      the denominator is the latest annual reserves value carried
+      forward across the four quarters of that year. Within-year
+      variation in the ratio therefore reflects movements in ST debt,
+      not reserves.
+    * IMF WEO / WB WGI / WB WDI series remain annual; the four quarter
+      rows of any single year share their values.
+    * Shadow-debt overlay is snapshot-only; attaches to (latest year,
+      Q4).
     """
     df = get_history_panel(years_back)
     if df is None or df.empty:
@@ -369,6 +402,62 @@ def get_history_panel_quarterly(years_back: int = 25):
     out['period'] = (
         out['year'].astype(str) + 'Q' + out['quarter'].astype(str)
     )
+
+    # ── Overlay quarterly QEDS ST debt where available ───────────────
+    # We need annual reserves (USD) to compute the ratio; pull from the
+    # WB indicator already cached by the panel build.
+    try:
+        reserves_payload = world_bank.get_wb_data('FI.RES.TOTL.CD') or {}
+    except Exception:
+        reserves_payload = {}
+    reserves_by_iso_year: Dict[str, Dict[int, float]] = {}
+    for iso3, block in (reserves_payload.get('countries') or {}).items():
+        if not iso3 or len(iso3) != 3:
+            continue
+        for k, v in ((block or {}).get('values') or {}).items():
+            try:
+                yr = int(str(k)[:4])
+                reserves_by_iso_year.setdefault(iso3, {})[yr] = float(v)
+            except (TypeError, ValueError):
+                continue
+
+    qeds_st_debt = _fetch_qeds_quarterly_st_debt()
+    quarterly_overrides = 0
+    for iso3, quarter_vals in qeds_st_debt.items():
+        reserves_history = reserves_by_iso_year.get(iso3) or {}
+        if not reserves_history:
+            continue
+        for period, st_debt_usd in quarter_vals.items():
+            try:
+                yr = int(period[:4])
+                qtr = int(period[5])
+            except (ValueError, IndexError):
+                continue
+            # Walk back up to 3 years to find a non-null reserve value;
+            # WB's annual reserves often lags 1-2 years.
+            reserves_usd = None
+            for back in range(0, 4):
+                v = reserves_history.get(yr - back)
+                if v and v > 0:
+                    reserves_usd = v
+                    break
+            if not reserves_usd:
+                continue
+            ratio_pct = float(st_debt_usd) / float(reserves_usd) * 100.0
+            mask = (
+                (out['iso3'] == iso3)
+                & (out['year'] == yr)
+                & (out['quarter'] == qtr)
+            )
+            if mask.any():
+                out.loc[mask, 'short_term_debt_pct_reserves'] = ratio_pct
+                quarterly_overrides += 1
+    print(
+        f'[credit_default.data] quarterly panel: applied {quarterly_overrides} '
+        f'QEDS short_term_debt_pct_reserves overrides across '
+        f'{len(qeds_st_debt)} countries'
+    )
+
     # Snap shadow-debt to Q4 of the most recent year only — it's a
     # snapshot, not a quarterly time series.
     if 'shadow_debt_gap_pp' in out.columns:
