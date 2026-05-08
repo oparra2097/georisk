@@ -604,16 +604,41 @@
     // Default-event spans → vertical red bands. We restrict to events
     // that count as a hard credit event in the model's binary target so
     // the chart isn't cluttered with Paris-Club rescheduling history.
+    // Multiple CRAG events for the same country often overlap (the BoC
+    // panel keeps Paris Club / bank loan / domestic-arrears entries
+    // running in parallel) — we merge them into a single band per
+    // overlapping cluster so the chart doesn't end up as a wall of
+    // stacked transparent reds with overlapping labels.
     const HARD_EVENT_TYPES = new Set(['default', 'restructuring', 'arrears']);
-    const eventBands = (h.default_events || [])
+    const rawBands = (h.default_events || [])
       .filter((e) => HARD_EVENT_TYPES.has(e.event_type))
       .map((e) => {
         const start = Math.max(yMin, e.start_year || yMin);
         const end = Math.min(yMax, e.end_year || yMax);
         if (end < yMin || start > yMax) return null;
-        return { start, end, label: `${e.event_type}/${e.instrument}` };
+        return { start, end, type: e.event_type, instrument: e.instrument || '' };
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort((a, b) => a.start - b.start || a.end - b.end);
+
+    const eventBands = [];
+    rawBands.forEach((b) => {
+      const last = eventBands[eventBands.length - 1];
+      if (last && b.start <= last.end + 1) {
+        last.end = Math.max(last.end, b.end);
+        last.types.add(b.type);
+      } else {
+        eventBands.push({
+          start: b.start, end: b.end, types: new Set([b.type]),
+        });
+      }
+    });
+    eventBands.forEach((b) => {
+      // Pick the most-severe label: default > restructuring > arrears.
+      const order = ['default', 'restructuring', 'arrears'];
+      const top = order.find((t) => b.types.has(t)) || [...b.types][0];
+      b.label = top.toUpperCase();
+    });
 
     // Agency consensus → implied PD at the active horizon. Drawn as a
     // dashed reference line so the user can see how the model's PD
@@ -627,15 +652,21 @@
     const agencyLine = agencyPd != null ? years.map(() => agencyPd) : null;
 
     // Plugin: red event bands + a per-event label so "default years"
-    // are visible at a glance. Years in the band carry the event type
-    // (default / restructuring / arrears) printed near the top.
+    // are visible at a glance + a 50% PD threshold line marking the
+    // "default territory" cutoff (the user wants this visible because
+    // even the most distressed model PD typically sits well below 50%,
+    // so the threshold line is a clear marker for "would the model
+    // call this country a default").
+    const DEFAULT_PD_THRESHOLD_PCT = 50;
     const eventBandsPlugin = {
       id: 'cd-event-bands',
       beforeDatasetsDraw(chart) {
         const { ctx, chartArea, scales } = chart;
         if (!chartArea || !scales.x) return;
+
+        // 1. Red event bands (merged so overlaps don't stack).
         ctx.save();
-        ctx.fillStyle = 'rgba(229, 57, 53, 0.22)';
+        ctx.fillStyle = 'rgba(229, 57, 53, 0.20)';
         eventBands.forEach((b) => {
           const x0 = scales.x.getPixelForValue(String(b.start));
           const x1 = scales.x.getPixelForValue(String(b.end));
@@ -643,18 +674,42 @@
           const width = Math.max(2, Math.abs(x1 - x0));
           ctx.fillRect(left, chartArea.top, width, chartArea.bottom - chartArea.top);
         });
-        // Print "DEFAULT" along the top of any band wider than ~28px.
-        ctx.fillStyle = 'rgba(153, 27, 27, 0.85)';
+
+        // 2. Single label per merged band, only if it physically fits.
+        ctx.fillStyle = 'rgba(153, 27, 27, 0.9)';
         ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        ctx.textBaseline = 'top';
         eventBands.forEach((b) => {
           const x0 = scales.x.getPixelForValue(String(b.start));
           const x1 = scales.x.getPixelForValue(String(b.end));
           const left = Math.min(x0, x1);
           const width = Math.abs(x1 - x0);
-          if (width >= 28) {
-            ctx.fillText(b.label.toUpperCase(), left + 4, chartArea.top + 12);
+          if (width >= 36) {
+            ctx.fillText(b.label, left + 4, chartArea.top + 4);
           }
         });
+        ctx.restore();
+      },
+      afterDatasetsDraw(chart) {
+        // 3. Default-territory threshold line at 50% PD.
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea || !scales.y) return;
+        if (scales.y.max < DEFAULT_PD_THRESHOLD_PCT) return;
+        const y = scales.y.getPixelForValue(DEFAULT_PD_THRESHOLD_PCT);
+        if (y < chartArea.top || y > chartArea.bottom) return;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(220, 38, 38, 0.55)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(chartArea.left, y);
+        ctx.lineTo(chartArea.right, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(220, 38, 38, 0.85)';
+        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('Default threshold (50%)', chartArea.left + 6, y - 2);
         ctx.restore();
       },
     };
