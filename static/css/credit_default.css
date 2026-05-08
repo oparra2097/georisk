@@ -290,6 +290,16 @@
   font-size: 12px; color: #9ca3af; text-align: center;
   padding: 80px 0; margin: 0;
 }
+.cd-history-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px; gap: 12px;
+}
+.cd-history-header h3 { margin: 0; }
+.cd-history-horizon .cd-toggle { height: 28px; padding: 0 10px; font-size: 11px; }
+.cd-legend-dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+  vertical-align: middle; margin-right: 4px;
+}
 
 .cd-shadow-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;

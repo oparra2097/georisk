@@ -7,7 +7,8 @@
   const API = {
     table: '/api/credit-default/table',
     country: (iso3) => `/api/credit-default/country/${iso3}`,
-    history: (iso3) => `/api/credit-default/country/${iso3}/history`,
+    history: (iso3, horizon) =>
+      `/api/credit-default/country/${iso3}/history?horizon=${horizon || 1}`,
     dashboard: '/api/credit-default/dashboard',
   };
 
@@ -56,7 +57,26 @@
     grade: 'all',
     region: '',
     search: '',
+    historyHorizon: 1,    // 1y by default, toggleable to 3y / 5y
   };
+
+  // Map agency consensus notch (1=AAA, 22=D) to a benchmark 1y default
+  // probability so the chart can overlay an "agency-implied PD" line
+  // on top of the model's trajectory. PD anchors are taken from the
+  // Parra rating-bucket scaffold (the same table used for letter
+  // mapping); the 3y / 5y values come from the same row.
+  const AGENCY_NOTCH_TO_PD = {
+    1: 0.0000, 2: 0.0010, 3: 0.0010, 4: 0.0020,
+    5: 0.0030, 6: 0.0050, 7: 0.0080,
+    8: 0.0120, 9: 0.0180, 10: 0.0250,
+    11: 0.0400, 12: 0.0600, 13: 0.0800,
+    14: 0.1100, 15: 0.1500, 16: 0.2000,
+    17: 0.3500, 18: 0.3500, 19: 0.3500,  // CCC+ / CCC / CCC- collapse to ORR 7
+    20: 0.5800, 21: 0.7000,
+    22: 1.0000,
+  };
+  // Multipliers to project 1y → {3y, 5y} agency-implied PD.
+  const AGENCY_HORIZON_MULTIPLIER = { 1: 1.0, 3: 2.4, 5: 4.0 };
 
   // ── Boot ────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
@@ -107,6 +127,15 @@
       detailSearch.addEventListener('input', (e) =>
         renderDetailSidebar(e.target.value));
     }
+    document.querySelectorAll('.cd-history-horizon .cd-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.cd-history-horizon .cd-toggle')
+          .forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.historyHorizon = parseInt(btn.dataset.horizon, 10) || 1;
+        reloadHistoryForCurrent();
+      });
+    });
   }
 
   function populateRegionFilter(rows) {
@@ -315,7 +344,7 @@
       .then((r) => r.json())
       .then((c) => renderPanel(c))
       .catch(() => clearPanel());
-    fetch(API.history(iso3))
+    fetch(API.history(iso3, state.historyHorizon))
       .then((r) => (r.ok ? r.json() : null))
       .then((h) => renderHistoryChart(h))
       .catch(() => renderHistoryChart(null));
@@ -323,6 +352,14 @@
     // doesn't inherit the previous scroll position.
     const panel = document.getElementById('cd-panel');
     if (panel) panel.scrollTop = 0;
+  }
+
+  function reloadHistoryForCurrent() {
+    if (!state.selectedIso3) return;
+    fetch(API.history(state.selectedIso3, state.historyHorizon))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((h) => renderHistoryChart(h))
+      .catch(() => renderHistoryChart(null));
   }
 
   function renderDetailSidebar(filterText) {
@@ -545,6 +582,7 @@
     canvas.style.display = '';
     if (empty) empty.hidden = true;
 
+    const horizon = h.horizon_years || state.historyHorizon || 1;
     const years = h.history.map((r) => r.year);
     const pd = h.history.map((r) => (r.model_pd != null ? r.model_pd * 100 : null));
     const yMin = Math.min(...years);
@@ -564,13 +602,27 @@
       })
       .filter(Boolean);
 
-    const annotationPlugin = {
+    // Agency consensus → implied PD at the active horizon. Drawn as a
+    // dashed reference line so the user can see how the model's PD
+    // trajectory compares to where the agencies sit today.
+    const consensusNum = (h.agency || {}).consensus_num;
+    let agencyPd = null;
+    if (consensusNum != null && AGENCY_NOTCH_TO_PD[consensusNum] != null) {
+      const mult = AGENCY_HORIZON_MULTIPLIER[horizon] || 1.0;
+      agencyPd = Math.min(1.0, AGENCY_NOTCH_TO_PD[consensusNum] * mult) * 100;
+    }
+    const agencyLine = agencyPd != null ? years.map(() => agencyPd) : null;
+
+    // Plugin: red event bands + a per-event label so "default years"
+    // are visible at a glance. Years in the band carry the event type
+    // (default / restructuring / arrears) printed near the top.
+    const eventBandsPlugin = {
       id: 'cd-event-bands',
       beforeDatasetsDraw(chart) {
         const { ctx, chartArea, scales } = chart;
         if (!chartArea || !scales.x) return;
         ctx.save();
-        ctx.fillStyle = 'rgba(229, 57, 53, 0.18)';
+        ctx.fillStyle = 'rgba(229, 57, 53, 0.22)';
         eventBands.forEach((b) => {
           const x0 = scales.x.getPixelForValue(String(b.start));
           const x1 = scales.x.getPixelForValue(String(b.end));
@@ -578,27 +630,53 @@
           const width = Math.max(2, Math.abs(x1 - x0));
           ctx.fillRect(left, chartArea.top, width, chartArea.bottom - chartArea.top);
         });
+        // Print "DEFAULT" along the top of any band wider than ~28px.
+        ctx.fillStyle = 'rgba(153, 27, 27, 0.85)';
+        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+        eventBands.forEach((b) => {
+          const x0 = scales.x.getPixelForValue(String(b.start));
+          const x1 = scales.x.getPixelForValue(String(b.end));
+          const left = Math.min(x0, x1);
+          const width = Math.abs(x1 - x0);
+          if (width >= 28) {
+            ctx.fillText(b.label.toUpperCase(), left + 4, chartArea.top + 12);
+          }
+        });
         ctx.restore();
       },
     };
 
     if (historyChart) historyChart.destroy();
 
+    const datasets = [{
+      label: `Model PD ${horizon}y (%)`,
+      data: pd,
+      borderColor: '#1976d2',
+      backgroundColor: 'rgba(25, 118, 210, 0.12)',
+      tension: 0.2,
+      spanGaps: true,
+      pointRadius: 2,
+      fill: true,
+    }];
+    if (agencyLine) {
+      const sp = (h.agency || {}).sp;
+      const moodys = (h.agency || {}).moodys;
+      const fitch = (h.agency || {}).fitch;
+      const tag = [sp, moodys, fitch].filter(Boolean).join(' / ');
+      datasets.push({
+        label: `Agency consensus PD ${horizon}y (${tag || '?'}, ${agencyPd.toFixed(2)}%)`,
+        data: agencyLine,
+        borderColor: '#9333ea',
+        borderDash: [6, 4],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: false,
+      });
+    }
+
     historyChart = new Chart(canvas.getContext('2d'), {
       type: 'line',
-      data: {
-        labels: years.map(String),
-        datasets: [{
-          label: 'Model PD 1y (%)',
-          data: pd,
-          borderColor: '#1976d2',
-          backgroundColor: 'rgba(25, 118, 210, 0.12)',
-          tension: 0.2,
-          spanGaps: true,
-          pointRadius: 2,
-          fill: true,
-        }],
-      },
+      data: { labels: years.map(String), datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -606,12 +684,12 @@
           y: {
             beginAtZero: true,
             ticks: { callback: (v) => `${v}%` },
-            title: { display: true, text: 'PD 1y' },
+            title: { display: true, text: `PD ${horizon}y` },
           },
           x: { title: { display: true, text: 'Year' } },
         },
         plugins: {
-          legend: { display: false },
+          legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
           tooltip: {
             callbacks: {
               afterBody(ctxs) {
@@ -624,7 +702,7 @@
           },
         },
       },
-      plugins: [annotationPlugin],
+      plugins: [eventBandsPlugin],
     });
   }
 

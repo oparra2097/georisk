@@ -291,10 +291,10 @@ def _country_iso3_universe(per_indicator: Dict[str, Dict[str, float]]) -> Iterab
 
 
 # Aggregates the upstream APIs surface alongside real sovereigns. The
-# dashboard only shows sovereigns, sub-sovereigns (HKG/MAC/PRI/GRL/WBG/
-# XKX), and island nations/territories — everything below is filtered out.
-# WB aggregate codes come from world_bank._AGGREGATE_CODES; the rest are
-# IMF WEO regional groupings observed in the panel.
+# dashboard shows sovereigns, sub-sovereigns (HKG/MAC/PRI/GRL/WBG/XKX),
+# and island countries that issue their own debt — everything below is
+# filtered out. WB aggregate codes come from world_bank._AGGREGATE_CODES;
+# the rest are IMF WEO regional groupings observed in the panel.
 _AGGREGATE_BLOCKLIST = {
     # WB regional / income groupings
     'ARB','CEB','CSS','EAP','EAR','EAS','ECA','ECS','EMU','EUU','FCS','HIC','HPC',
@@ -306,13 +306,41 @@ _AGGREGATE_BLOCKLIST = {
 }
 
 
+# US / French / British dependencies that don't issue independent debt
+# and aren't rated by the agencies as sovereigns. Kept separate from
+# _AGGREGATE_BLOCKLIST since these are real ISO-3 codes for places, not
+# regional aggregations. Aruba (ABW), Bermuda (BMU), Cayman (CYM),
+# Curaçao (CUW) are agency-rated and stay; Hong Kong / Macao / Puerto
+# Rico / Greenland / West Bank & Gaza / Kosovo are sub-sovereigns we
+# also keep.
+_NON_RATED_DEPENDENCY_BLOCKLIST = {
+    'ASM',   # American Samoa (US territory)
+    'GUM',   # Guam (US territory)
+    'MNP',   # Northern Mariana Islands (US territory)
+    'VIR',   # US Virgin Islands
+    'NCL',   # New Caledonia (French collectivity)
+    'PYF',   # French Polynesia (French collectivity)
+    'MAF',   # Saint Martin (French collectivity)
+    'BLM',   # Saint Barthélemy (French collectivity)
+    'VGB',   # British Virgin Islands
+    'TCA',   # Turks & Caicos
+    'AIA',   # Anguilla
+    'MSR',   # Montserrat
+    'SXM',   # Sint Maarten (Dutch dependency, no separate rating)
+    'BES',   # Bonaire/Sint Eustatius/Saba (Dutch special municipalities)
+}
+
+
 def _is_sovereign_iso(iso3: str) -> bool:
-    """Drop continent/income/region aggregates. Real sovereigns and sub-
-    sovereigns (HKG, MAC, PRI, GRL, WBG, XKX, …) all pass — only known
-    aggregate codes and the IMF 'Q'-suffix WEO groupings are blocked."""
+    """Drop continent/income/region aggregates and US/French/British
+    dependencies that don't issue independent sovereign debt. Real
+    sovereigns and sub-sovereigns the agencies actually rate
+    (HKG, MAC, PRI, GRL, WBG, XKX, ABW, BMU, CYM, CUW, …) all pass."""
     if not iso3 or len(iso3) != 3:
         return False
     if iso3 in _AGGREGATE_BLOCKLIST:
+        return False
+    if iso3 in _NON_RATED_DEPENDENCY_BLOCKLIST:
         return False
     # IMF WEO regional groupings end in 'Q' (e.g. AFQ, APQ, EUQ, WHQ).
     if iso3.endswith('Q'):

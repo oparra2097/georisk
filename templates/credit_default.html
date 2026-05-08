@@ -172,7 +172,15 @@
         </section>
 
         <section class="cd-section">
-          <h3>Historical PD vs default events</h3>
+          <div class="cd-history-header">
+            <h3>Historical PD vs default events</h3>
+            <div class="cd-toggle-group cd-history-horizon" role="tablist"
+                 aria-label="PD horizon">
+              <button class="cd-toggle active" data-horizon="1">1y</button>
+              <button class="cd-toggle" data-horizon="3">3y</button>
+              <button class="cd-toggle" data-horizon="5">5y</button>
+            </div>
+          </div>
           <div class="cd-history-chart">
             <canvas id="cd-panel-history"></canvas>
             <p class="cd-history-empty" id="cd-panel-history-empty" hidden>
@@ -180,10 +188,12 @@
             </p>
           </div>
           <p class="cd-section-note">
-            Blue line = model PD 1y applied to each year's macro panel.
-            Red bands = years inside a CRAG default / restructuring event.
-            Use this to back-test whether the model would have flagged the
-            country before its actual default.
+            <span class="cd-legend-dot" style="background:#1976d2"></span>
+            Model PD applied to each year's macro panel.
+            <span class="cd-legend-dot" style="background:rgba(229, 57, 53, 0.45); margin-left: 12px"></span>
+            Years inside a CRAG default / restructuring spell.
+            <span class="cd-legend-dot" style="background:#9333ea; border-style:dashed; margin-left: 12px"></span>
+            Current agency consensus PD (reference, S&amp;P/Moody's/Fitch median).
           </p>
         </section>
       </div>
