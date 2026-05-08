@@ -335,6 +335,32 @@ def get_history_panel(years_back: int = 25):
             mask = (df['iso3'] == iso3) & (df['year'] == snapshot_year)
             df.loc[mask, 'shadow_debt_gap_pp'] = blk.get('debt_gap_pp')
 
+    # ── Research-driven feature additions ───────────────────────────
+    # 1. Serial-default features (Reinhart-Rogoff 2009; Cantor-Packer
+    #    1996): years since the country's last default onset and count
+    #    of onsets in the past 25 years.
+    # 2. 5y change in gross debt/GDP (Manasse-Roubini-Schimmelpfennig
+    #    2003 + IMF MAC SRDSF): debt-build-up speed beats the level
+    #    alone for short-horizon forecasting.
+    try:
+        from backend.credit_default import defaults as _cd_defaults
+        years_since = _cd_defaults.years_since_last_default()
+        default_counts = _cd_defaults.default_count_window(window_years=25)
+        df['years_since_default'] = df.apply(
+            lambda r: years_since.get((r['iso3'], int(r['year'])), 100),
+            axis=1,
+        )
+        df['default_count_25y'] = df.apply(
+            lambda r: default_counts.get((r['iso3'], int(r['year'])), 0),
+            axis=1,
+        )
+    except Exception as e:
+        print(f'[credit_default.data] serial-default features failed: {e}')
+
+    if 'gross_debt_pct_gdp' in df.columns:
+        df = df.sort_values(['iso3', 'year']).reset_index(drop=True)
+        df['debt_chg_5y_pp'] = df.groupby('iso3')['gross_debt_pct_gdp'].diff(5)
+
     return df
 
 

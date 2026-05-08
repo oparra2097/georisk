@@ -354,15 +354,24 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
     X, y, features, meta = build_training_panel(years_back, horizon_years)
 
     try:
+        import numpy as np
         from sklearn.ensemble import GradientBoostingClassifier
-        from sklearn.metrics import roc_auc_score
+        from sklearn.metrics import roc_auc_score, brier_score_loss
         from sklearn.inspection import permutation_importance
+        from sklearn.model_selection import GroupKFold
     except ImportError as e:
-        raise RuntimeError(f'sklearn required for fit_gbm: {e}')
+        raise RuntimeError(f'sklearn/numpy required for fit_gbm: {e}')
 
-    # subsample < 1 + balanced sample weights handles rare-event imbalance.
-    pos_weight = (len(y) - y.sum()) / max(1, y.sum())
-    sample_weight = (y * (pos_weight - 1) + 1).values
+    # ── Switch from class_weight='balanced' to scale_pos_weight ──────
+    # Petropoulos 2022 + Savona-Vezzoli 2015: random over-weighting on
+    # rare events leaks information across folds and inflates AUC.
+    # XGBoost-style scale_pos_weight (= n_neg / n_pos) up-weights
+    # positives only, less aggressive at flattening signal than
+    # class_weight='balanced'.
+    n_pos = int(y.sum())
+    n_neg = int(len(y) - n_pos)
+    scale_pos_weight = n_neg / max(1, n_pos)
+    sample_weight = np.where(y.values == 1, scale_pos_weight, 1.0)
 
     model = GradientBoostingClassifier(
         n_estimators=n_estimators, max_depth=max_depth,
@@ -378,6 +387,20 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
         random_state=42, scoring='roc_auc',
     )
     importance = {f: float(perm.importances_mean[i]) for i, f in enumerate(features)}
+
+    # ── Out-of-sample validation (GroupKFold by country) ─────────────
+    # In-sample AUC is fits, not predictions. Petropoulos 2022 and
+    # Savona-Vezzoli 2015 both warn that random-fold AUC is leaky on
+    # sovereign panels because the same country appears in train and
+    # test. GroupKFold by iso3 holds out *whole countries*, so the
+    # reported AUC is what you'd see on a brand-new sovereign that
+    # was never observed at fit time. Brier score on the same folds
+    # gives the SRDSF-style headline calibration metric.
+    oos = _evaluate_oos_groupkfold(
+        X, y, meta, n_estimators, max_depth, learning_rate,
+        scale_pos_weight, GroupKFold, GradientBoostingClassifier,
+        roc_auc_score, brier_score_loss,
+    )
 
     # GBM trained with class-balanced sample_weight overstates absolute
     # PD just like the logit; rescale to the natural panel base rate so
@@ -426,17 +449,71 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
         'pd_calibration': pd_calibration,
         'rating_buckets': rating_buckets,
         'auc_in_sample': auc,
+        'auc_oos': oos.get('auc'),
+        'brier_oos': oos.get('brier'),
+        'oos_method': oos.get('method'),
+        'oos_n_folds': oos.get('n_folds'),
         'n_obs': meta['n_obs'],
         'n_events': meta['n_events'],
         'trained_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'hyperparams': {
             'n_estimators': n_estimators, 'max_depth': max_depth,
             'learning_rate': learning_rate,
+            'scale_pos_weight': scale_pos_weight,
         },
         'model_pickle': f'fit_model_h{horizon_years}.pkl',
     }
     _save_state(state, horizon_years)
     return state
+
+
+def _evaluate_oos_groupkfold(
+    X, y, meta, n_estimators, max_depth, learning_rate,
+    scale_pos_weight, GroupKFold, GradientBoostingClassifier,
+    roc_auc_score, brier_score_loss,
+    n_splits: int = 5,
+) -> Dict:
+    """Cross-validated OOS metrics with country-level group folds, so
+    the AUC reflects performance on countries the model never saw at
+    fit time. Returns ``{auc, brier, method, n_folds}``."""
+    try:
+        import numpy as np
+    except ImportError:
+        return {}
+    iso_years = meta.get('iso_years')
+    if iso_years is None or iso_years.empty:
+        return {}
+    groups = iso_years['iso3'].values
+    unique_groups = np.unique(groups)
+    splits = min(n_splits, len(unique_groups))
+    if splits < 2:
+        return {}
+    gkf = GroupKFold(n_splits=splits)
+    aucs: List[float] = []
+    briers: List[float] = []
+    for train_idx, test_idx in gkf.split(X.values, y.values, groups=groups):
+        X_tr, X_te = X.values[train_idx], X.values[test_idx]
+        y_tr, y_te = y.values[train_idx], y.values[test_idx]
+        if y_te.sum() == 0 or y_te.sum() == len(y_te):
+            continue  # fold has no positives or no negatives — skip
+        sw_tr = np.where(y_tr == 1, scale_pos_weight, 1.0)
+        m = GradientBoostingClassifier(
+            n_estimators=n_estimators, max_depth=max_depth,
+            learning_rate=learning_rate, subsample=0.8,
+            random_state=42, min_samples_leaf=20,
+        )
+        m.fit(X_tr, y_tr, sample_weight=sw_tr)
+        proba_te = m.predict_proba(X_te)[:, 1]
+        aucs.append(float(roc_auc_score(y_te, proba_te)))
+        briers.append(float(brier_score_loss(y_te, proba_te)))
+    if not aucs:
+        return {}
+    return {
+        'auc': sum(aucs) / len(aucs),
+        'brier': sum(briers) / len(briers),
+        'method': f'GroupKFold by iso3 ({splits} folds)',
+        'n_folds': len(aucs),
+    }
 
 
 def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
@@ -452,14 +529,18 @@ def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
         years_back, horizon_quarters,
     )
     try:
+        import numpy as np
         from sklearn.ensemble import GradientBoostingClassifier
-        from sklearn.metrics import roc_auc_score
+        from sklearn.metrics import roc_auc_score, brier_score_loss
         from sklearn.inspection import permutation_importance
+        from sklearn.model_selection import GroupKFold
     except ImportError as e:
-        raise RuntimeError(f'sklearn required for fit_gbm_quarterly: {e}')
+        raise RuntimeError(f'sklearn/numpy required for fit_gbm_quarterly: {e}')
 
-    pos_weight = (len(y) - y.sum()) / max(1, y.sum())
-    sample_weight = (y * (pos_weight - 1) + 1).values
+    n_pos = int(y.sum())
+    n_neg = int(len(y) - n_pos)
+    scale_pos_weight = n_neg / max(1, n_pos)
+    sample_weight = np.where(y.values == 1, scale_pos_weight, 1.0)
 
     model = GradientBoostingClassifier(
         n_estimators=n_estimators, max_depth=max_depth,
@@ -476,8 +557,16 @@ def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
     )
     importance = {f: float(perm.importances_mean[i]) for i, f in enumerate(features)}
 
-    n_pos = int(y.sum())
-    n_neg = int(len(y) - n_pos)
+    # OOS via GroupKFold by iso3 — same methodology as the annual fit.
+    # Use iso_quarters['iso3'] as the group label.
+    iso_meta = dict(meta)
+    iso_meta['iso_years'] = meta['iso_quarters'][['iso3']]  # only iso3 needed
+    oos = _evaluate_oos_groupkfold(
+        X, y, iso_meta, n_estimators, max_depth, learning_rate,
+        scale_pos_weight, GroupKFold, GradientBoostingClassifier,
+        roc_auc_score, brier_score_loss,
+    )
+
     pd_log_odds_shift = (
         math.log(max(1, n_pos) / max(1, n_neg)) if n_pos and n_neg else 0.0
     )
@@ -506,12 +595,17 @@ def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
         'medians': meta['medians'],
         'pd_calibration': pd_calibration,
         'auc_in_sample': auc,
+        'auc_oos': oos.get('auc'),
+        'brier_oos': oos.get('brier'),
+        'oos_method': oos.get('method'),
+        'oos_n_folds': oos.get('n_folds'),
         'n_obs': meta['n_obs'],
         'n_events': meta['n_events'],
         'trained_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'hyperparams': {
             'n_estimators': n_estimators, 'max_depth': max_depth,
             'learning_rate': learning_rate,
+            'scale_pos_weight': scale_pos_weight,
         },
         'model_pickle': f'fit_model_q{horizon_quarters}.pkl',
     }

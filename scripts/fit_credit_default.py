@@ -88,7 +88,10 @@ def main() -> int:
                 summary[f'{est}_h{h}'] = {'error': str(e)}
                 continue
             summary[f'{est}_h{h}'] = {
-                'auc': state.get('auc_in_sample'),
+                'auc_in_sample': state.get('auc_in_sample'),
+                'auc_oos': state.get('auc_oos'),
+                'brier_oos': state.get('brier_oos'),
+                'oos_method': state.get('oos_method'),
                 'n_obs': state.get('n_obs'),
                 'n_events': state.get('n_events'),
                 'top_features': sorted(

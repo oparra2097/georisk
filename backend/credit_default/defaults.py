@@ -78,6 +78,53 @@ def load_events(include_distress: bool = False) -> List[Dict]:
     return rows
 
 
+def years_since_last_default(events: Optional[List[Dict]] = None,
+                             include_distress: bool = False,
+                             max_years: int = 100) -> Dict[Tuple[str, int], int]:
+    """``{(iso3, year): years_since_last_default_start}``.
+
+    Reinhart-Rogoff (2009/2010) document serial-default behaviour: two-
+    thirds of recurrences happen within 20 years and "graduation"
+    requires 50-100 clean years. A smoothly decaying years-since
+    feature lets the GBM learn that pattern. Capped at ``max_years``
+    when no prior default is on file.
+    """
+    if events is None:
+        events = load_events(include_distress=include_distress)
+    starts_by_iso = default_starts_by_country(events)
+    out: Dict[Tuple[str, int], int] = {}
+    for iso3, starts in starts_by_iso.items():
+        if not starts:
+            continue
+        sorted_starts = sorted(starts)
+        for year in range(min(sorted_starts), 2030 + 1):
+            past = [s for s in sorted_starts if s <= year]
+            if past:
+                out[(iso3, year)] = min(max_years, year - max(past))
+    return out
+
+
+def default_count_window(events: Optional[List[Dict]] = None,
+                         include_distress: bool = False,
+                         window_years: int = 25) -> Dict[Tuple[str, int], int]:
+    """``{(iso3, year): count of default-onsets in [year-window, year]}``.
+    Cantor-Packer (1996) treat default history as a top-3 predictor.
+    """
+    if events is None:
+        events = load_events(include_distress=include_distress)
+    starts_by_iso = default_starts_by_country(events)
+    out: Dict[Tuple[str, int], int] = {}
+    for iso3, starts in starts_by_iso.items():
+        if not starts:
+            continue
+        sorted_starts = sorted(starts)
+        for year in range(min(sorted_starts), 2030 + 1):
+            count = sum(1 for s in sorted_starts if year - window_years <= s <= year)
+            if count:
+                out[(iso3, year)] = count
+    return out
+
+
 def default_starts_by_country(events: Optional[List[Dict]] = None,
                               include_distress: bool = False) -> Dict[str, Set[int]]:
     """{iso3: {start_year, ...}} — useful for fast forward-looking labels."""

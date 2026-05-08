@@ -78,6 +78,10 @@ WEIGHTS: Dict[str, float] = {
     'regulatory_quality':            0.02,
     'political_stability':           0.02,
     'voice_accountability':          0.01,
+    # ── Serial-default + debt-velocity features (research-driven) ──
+    'years_since_default':           0.04,   # R&R 2009; smaller = worse (recent default)
+    'default_count_25y':             0.03,   # Cantor-Packer 1996; serial defaulter dummy
+    'debt_chg_5y_pp':                0.05,   # Manasse 2003 + IMF SRDSF; faster build-up = worse
 }
 
 # How each weight maps onto the directionality of the risk contribution.
@@ -101,6 +105,9 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'regulatory_quality':            False,
     'political_stability':           False,
     'voice_accountability':          False,
+    'years_since_default':           False,  # more years = better
+    'default_count_25y':             True,   # more defaults = worse
+    'debt_chg_5y_pp':                True,   # faster debt build-up = worse
 }
 
 # Hard caps on individual indicator z-scores so a single outlier (e.g. Lebanon
