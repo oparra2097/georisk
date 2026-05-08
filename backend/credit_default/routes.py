@@ -22,22 +22,49 @@ from backend.credit_default import rating_model, service
 credit_default_bp = Blueprint('credit_default', __name__)
 
 
+def _parse_cadence_args():
+    """Parse ?cadence=annual|quarterly and ?horizon=N from query args.
+
+    Annual horizon ∈ {1, 3, 5} (years); quarterly horizon ∈ {4, 12, 20}
+    (quarters). Falls back to annual / 1y on any garbage input.
+    """
+    cadence = (request.args.get('cadence') or 'annual').lower()
+    if cadence not in ('annual', 'quarterly'):
+        cadence = 'annual'
+    try:
+        horizon = int(request.args.get('horizon', 1))
+    except (TypeError, ValueError):
+        horizon = 1
+    if cadence == 'quarterly':
+        if horizon not in (4, 12, 20):
+            horizon = 4
+    else:
+        if horizon not in (1, 3, 5):
+            horizon = 1
+    return cadence, horizon
+
+
 @credit_default_bp.route('/dashboard')
 def dashboard():
-    return jsonify(service.get_dashboard())
+    cadence, horizon = _parse_cadence_args()
+    return jsonify(service.get_dashboard(cadence=cadence, horizon=horizon))
 
 
 @credit_default_bp.route('/table')
 def table():
+    cadence, horizon = _parse_cadence_args()
     return jsonify({
-        'rows': service.get_table_rows(),
-        'as_of': service.get_dashboard().get('as_of'),
+        'rows': service.get_table_rows(cadence=cadence, horizon=horizon),
+        'as_of': service.get_dashboard(cadence=cadence, horizon=horizon).get('as_of'),
+        'cadence': cadence,
+        'horizon': horizon,
     })
 
 
 @credit_default_bp.route('/country/<iso3>')
 def country(iso3: str):
-    c = service.get_country(iso3)
+    cadence, horizon = _parse_cadence_args()
+    c = service.get_country(iso3, cadence=cadence, horizon=horizon)
     if not c:
         return jsonify({'error': f'country {iso3} not found'}), 404
     return jsonify(c)
@@ -45,13 +72,10 @@ def country(iso3: str):
 
 @credit_default_bp.route('/country/<iso3>/history')
 def country_history(iso3: str):
-    try:
-        horizon = int(request.args.get('horizon', 1))
-    except (TypeError, ValueError):
-        horizon = 1
-    if horizon not in (1, 3, 5):
-        horizon = 1
-    h = service.get_country_history(iso3, horizon_years=horizon)
+    cadence, horizon = _parse_cadence_args()
+    h = service.get_country_history(
+        iso3, horizon_years=horizon, cadence=cadence,
+    )
     if h is None:
         return jsonify({'error': f'history unavailable for {iso3}'}), 404
     return jsonify(h)

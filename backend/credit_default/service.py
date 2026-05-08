@@ -47,35 +47,45 @@ def _enrich_with_agencies(scored: Dict) -> Dict:
     return scored
 
 
-def get_dashboard(force_refresh: bool = False) -> Dict:
+def get_dashboard(force_refresh: bool = False, cadence: str = 'annual',
+                  horizon: int = 1) -> Dict:
+    """Build (or return cached) dashboard payload.
+
+    cadence='annual' uses ``fit_state_h{horizon}.json`` (horizon in years,
+    default 1). cadence='quarterly' uses ``fit_state_q{horizon}.json``
+    (horizon in quarters, conventionally 4/12/20 for 1y/3y/5y).
+    """
+    cache_key = f'dashboard_{cadence}_{horizon}'
     with _cache_lock:
-        cached = _cache.get('dashboard')
-        cached_ts = _cache.get('dashboard_ts', 0)
+        cached = _cache.get(cache_key)
+        cached_ts = _cache.get(f'{cache_key}_ts', 0)
     if cached and not force_refresh and (time.time() - cached_ts) < _CACHE_TTL:
         return cached
 
     panel = cd_data.get_panel(force_refresh=force_refresh)
-    scored = rating_model.score_panel(panel)
+    scored = rating_model.score_panel(panel, horizon_years=horizon, cadence=cadence)
     enriched = _enrich_with_agencies(scored)
 
     summary = _summarize(enriched)
     enriched['summary'] = summary
 
     with _cache_lock:
-        _cache['dashboard'] = enriched
-        _cache['dashboard_ts'] = time.time()
+        _cache[cache_key] = enriched
+        _cache[f'{cache_key}_ts'] = time.time()
     return enriched
 
 
-def get_country(iso3: str) -> Optional[Dict]:
+def get_country(iso3: str, cadence: str = 'annual',
+                horizon: int = 1) -> Optional[Dict]:
     iso3 = (iso3 or '').upper()
     if len(iso3) != 3:
         return None
-    dash = get_dashboard()
+    dash = get_dashboard(cadence=cadence, horizon=horizon)
     return (dash.get('countries') or {}).get(iso3)
 
 
-def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
+def get_country_history(iso3: str, horizon_years: int = 1,
+                        cadence: str = 'annual') -> Optional[Dict]:
     """Re-score one country's macro panel year-by-year using the current
     fit_state, alongside CRAG default events. Used by the dashboard's
     drilldown chart to back-test whether the model would have flagged
@@ -85,14 +95,17 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
     if len(iso3) != 3 or not cd_data._is_sovereign_iso(iso3):
         return None
 
-    cache_key = f'history_{iso3}_h{horizon_years}'
+    cache_key = f'history_{cadence}_{iso3}_h{horizon_years}'
     with _cache_lock:
         cached = _cache.get(cache_key)
         cached_ts = _cache.get(f'{cache_key}_ts', 0)
     if cached and (time.time() - cached_ts) < _CACHE_TTL:
         return cached
 
-    fit_state = cd_fit.load_state(horizon_years)
+    if cadence == 'quarterly':
+        fit_state = cd_fit.load_state_quarterly(horizon_years)
+    else:
+        fit_state = cd_fit.load_state(horizon_years)
     if not fit_state or not fit_state.get('coefficients'):
         return None
     coefs = fit_state.get('coefficients') or {}
@@ -104,16 +117,22 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
     cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
 
     # If the persisted fit is a GBM with a saved tree-ensemble pickle,
-    # score the per-year history through the actual model so the chart
+    # score the per-period history through the actual model so the chart
     # shows the real GBM trajectory (the linear-importance fallback
     # collapsed everything to ~base-rate PD).
     gbm_payload = None
     if fit_state.get('estimator') == 'gbm' and fit_state.get('model_pickle'):
-        loaded = cd_fit.load_gbm_model(horizon_years)
+        if cadence == 'quarterly':
+            loaded = cd_fit.load_gbm_model_quarterly(horizon_years)
+        else:
+            loaded = cd_fit.load_gbm_model(horizon_years)
         if loaded:
             gbm_payload = {'model': loaded[0], 'features': loaded[1]}
 
-    panel_df = cd_data.get_history_panel()
+    if cadence == 'quarterly':
+        panel_df = cd_data.get_history_panel_quarterly()
+    else:
+        panel_df = cd_data.get_history_panel()
     if panel_df is None or panel_df.empty:
         return None
     sub = panel_df[panel_df['iso3'] == iso3].copy()
@@ -198,14 +217,21 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
         rating = rating_model._letter_and_pd(
             score, defaulted=False, calibrated_buckets=cal_buckets,
         )
-        history.append({
+        record = {
             'year': int(row['year']),
             'model_pd': round(model_pd, 5),
             'model_score': round(score, 3),
             'pm_notch': rating['pm_notch'],
             'pm_numeric': rating['pm_numeric'],
             'sp_equiv': rating['sp_equiv'],
-        })
+        }
+        if cadence == 'quarterly':
+            q = int(row.get('quarter') or 1)
+            record['quarter'] = q
+            record['period'] = f"{int(row['year'])}Q{q}"
+        else:
+            record['period'] = str(int(row['year']))
+        history.append(record)
 
     events = [
         {'start_year': ev['start_year'],
@@ -220,12 +246,15 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
     agencies = agency_ratings.get_agency_ratings()
     agency = agencies.get(iso3) or {}
 
-    dash_country = (get_dashboard().get('countries') or {}).get(iso3) or {}
+    dash_country = (
+        get_dashboard(cadence=cadence, horizon=horizon_years).get('countries') or {}
+    ).get(iso3) or {}
     out = {
         'iso3': iso3,
         'name': dash_country.get('name', iso3),
         'region': dash_country.get('region', ''),
         'horizon_years': horizon_years,
+        'cadence': cadence,
         'history': history,
         'default_events': events,
         'agency': {
@@ -244,13 +273,13 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
     return out
 
 
-def get_table_rows() -> List[Dict]:
+def get_table_rows(cadence: str = 'annual', horizon: int = 1) -> List[Dict]:
     """Compact list-of-dicts suitable for the dashboard table.
 
     Mirrors the Tellimer screenshot columns: country, region, PD 1y,
     PD 3y, PD 5y, model rating, agency consensus, shadow-debt gap.
     """
-    dash = get_dashboard()
+    dash = get_dashboard(cadence=cadence, horizon=horizon)
     rows: List[Dict] = []
     for iso3, c in (dash.get('countries') or {}).items():
         rating = c.get('rating') or {}

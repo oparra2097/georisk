@@ -834,6 +834,32 @@ def load_state(horizon_years: int = 1) -> Optional[Dict]:
         return None
 
 
+def load_state_quarterly(horizon_quarters: int = 4) -> Optional[Dict]:
+    path = fit_state_path_q(horizon_quarters)
+    if not path.exists():
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def load_gbm_model_quarterly(horizon_quarters: int):
+    """Load the pickled quarterly-grain GBM tree ensemble."""
+    import pickle
+    path = _FIT_DIR / f'fit_model_q{horizon_quarters}.pkl'
+    if not path.exists():
+        return None
+    try:
+        with open(path, 'rb') as f:
+            payload = pickle.load(f)
+        return payload.get('model'), payload.get('features')
+    except Exception as e:  # noqa: BLE001
+        print(f'[credit_default.fit] load_gbm_model_quarterly({horizon_quarters}) failed: {e}')
+        return None
+
+
 def has_fitted_model(horizon_years: int = 1) -> bool:
     return fit_state_path(horizon_years).exists()
 

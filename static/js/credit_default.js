@@ -109,7 +109,7 @@
       })
       .catch((err) => {
         document.getElementById('cd-tbody').innerHTML =
-          `<tr><td colspan="11" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
+          `<tr><td colspan="12" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
       });
   }
 
@@ -123,14 +123,20 @@
       state.region = e.target.value;
       applyFilters();
     });
-    document.querySelectorAll('.cd-toggle').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.cd-toggle').forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.grade = btn.dataset.grade;
-        applyFilters();
+    // Scope each toggle group to its own buttons so the grade and
+    // horizon toggles don't fight over the global `.cd-toggle` class.
+    const gradeGroup = document.querySelector('.cd-toolbar .cd-toggle-group');
+    if (gradeGroup) {
+      gradeGroup.querySelectorAll('.cd-toggle').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          gradeGroup.querySelectorAll('.cd-toggle')
+            .forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.grade = btn.dataset.grade;
+          applyFilters();
+        });
       });
-    });
+    }
     const back = document.getElementById('cd-back-btn');
     if (back) back.addEventListener('click', exitDetailView);
     const detailSearch = document.getElementById('cd-detail-search');
@@ -138,14 +144,23 @@
       detailSearch.addEventListener('input', (e) =>
         renderDetailSidebar(e.target.value));
     }
-    document.querySelectorAll('.cd-history-horizon .cd-toggle').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.cd-history-horizon .cd-toggle')
-          .forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.historyHorizon = parseInt(btn.dataset.horizon, 10) || 1;
-        reloadHistoryForCurrent();
+    const horizonGroup = document.querySelector('.cd-history-horizon');
+    if (horizonGroup) {
+      horizonGroup.querySelectorAll('.cd-toggle').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.historyHorizon = parseInt(btn.dataset.horizon, 10) || 1;
+          syncHorizonButtons();
+          reloadHistoryForCurrent();
+        });
       });
+    }
+  }
+
+  function syncHorizonButtons() {
+    document.querySelectorAll('.cd-history-horizon .cd-toggle').forEach((b) => {
+      const on = parseInt(b.dataset.horizon, 10) === state.historyHorizon;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
     });
   }
 
@@ -243,7 +258,7 @@
   function renderTable() {
     const tbody = document.getElementById('cd-tbody');
     if (!state.filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="11" class="cd-loading">No countries match the current filters.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12" class="cd-loading">No countries match the current filters.</td></tr>';
       return;
     }
     const html = state.filtered.map((r) => rowHtml(r)).join('');
@@ -349,6 +364,7 @@
 
   function loadDetail(iso3) {
     state.selectedIso3 = iso3;
+    syncHorizonButtons();
     document.querySelectorAll('#cd-detail-list li')
       .forEach((li) => li.classList.toggle('selected', li.dataset.iso3 === iso3));
     fetch(API.country(iso3))
@@ -675,18 +691,28 @@
           ctx.fillRect(left, chartArea.top, width, chartArea.bottom - chartArea.top);
         });
 
-        // 2. Single label per merged band, only if it physically fits.
-        ctx.fillStyle = 'rgba(153, 27, 27, 0.9)';
+        // 2. Single label per merged band: full word for wide bands,
+        //    one-letter tag (D / R / A) for narrow bands so no event
+        //    is anonymous. Stroked white halo + red fill keeps text
+        //    legible whether it lands over the blue PD line or the
+        //    purple agency line.
         ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
         ctx.textBaseline = 'top';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
         eventBands.forEach((b) => {
           const x0 = scales.x.getPixelForValue(String(b.start));
           const x1 = scales.x.getPixelForValue(String(b.end));
           const left = Math.min(x0, x1);
           const width = Math.abs(x1 - x0);
-          if (width >= 36) {
-            ctx.fillText(b.label, left + 4, chartArea.top + 4);
-          }
+          const text = width >= 36 ? b.label : (b.label[0] || '');
+          if (!text) return;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+          ctx.fillStyle = 'rgba(153, 27, 27, 0.95)';
+          const tx = left + (width >= 36 ? 4 : 1);
+          const ty = chartArea.top + 4;
+          ctx.strokeText(text, tx, ty);
+          ctx.fillText(text, tx, ty);
         });
         ctx.restore();
       },

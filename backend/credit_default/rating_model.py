@@ -33,11 +33,13 @@ from typing import Dict, List, Optional, Tuple
 
 # Lazy import — fit.py pulls pandas/sklearn which we don't want to load
 # unconditionally on the dashboard request path.
-def _load_fit_state(horizon_years: int = 1):
+def _load_fit_state(horizon_years: int = 1, cadence: str = 'annual'):
     try:
         from backend.credit_default import fit as cd_fit
     except Exception:
         return None
+    if cadence == 'quarterly':
+        return cd_fit.load_state_quarterly(horizon_years)
     return cd_fit.load_state(horizon_years)
 
 
@@ -268,28 +270,37 @@ def _z(value: Optional[float], med: Optional[float], sigma: Optional[float]) -> 
 # ── Public API ───────────────────────────────────────────────────────────
 
 
-def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
+def score_panel(panel: Dict, horizon_years: int = 1,
+                cadence: str = 'annual') -> Dict:
     """Add 'rating' block to every country in the panel and return it.
 
-    If a fitted-model state file exists for the requested horizon (created
-    by ``backend.credit_default.fit``), uses the fitted coefficients and
-    empirical PD calibration. Otherwise falls back to the scaffold weights
-    + bucket-table calibration so the dashboard always has something to
-    render.
-
-    Mutates a copy of `panel`; the original isn't modified.
+    Loads either the annual fit_state (cadence='annual', horizon in
+    years) or the quarterly fit_state (cadence='quarterly', horizon in
+    quarters: 4/12/20). Falls back to the scaffold weights when no
+    fit_state is available.
     """
     countries = panel.get('countries') or {}
     if not countries:
         return panel
 
-    fit_state = _load_fit_state(horizon_years)
+    fit_state = _load_fit_state(horizon_years, cadence=cadence)
     use_fit = fit_state is not None and bool(fit_state.get('coefficients'))
     cal_buckets = None
     gbm_payload = None
     if use_fit:
         rb = fit_state.get('rating_buckets') or {}
         cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
+        # Quarterly fits don't generate their own rating_buckets — the
+        # PD scale is identical to the annual fit's (both are
+        # 100·natural_pd), so reuse the annual calibrated buckets to
+        # avoid every country collapsing into AAA against the hand-set
+        # max_score table.
+        if cadence == 'quarterly' and not cal_buckets:
+            annual_horizon = max(1, int(round(horizon_years / 4))) if horizon_years > 5 else 1
+            annual_state = _load_fit_state(annual_horizon, cadence='annual')
+            if annual_state:
+                ann_rb = annual_state.get('rating_buckets') or {}
+                cal_buckets = ann_rb.get('buckets') if isinstance(ann_rb, dict) else ann_rb
         # If the fit is a GBM and a pickled model is available, score
         # countries through the actual tree ensemble for the displayed
         # PD. The linear-importance fallback we used before flattens
@@ -297,7 +308,10 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
         # discrimination GBM was trained to provide.
         if fit_state.get('estimator') == 'gbm' and fit_state.get('model_pickle'):
             from backend.credit_default import fit as cd_fit
-            loaded = cd_fit.load_gbm_model(horizon_years)
+            if cadence == 'quarterly':
+                loaded = cd_fit.load_gbm_model_quarterly(horizon_years)
+            else:
+                loaded = cd_fit.load_gbm_model(horizon_years)
             if loaded:
                 gbm_payload = {
                     'model': loaded[0],
@@ -466,7 +480,13 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
             model_score, defaulted=defaulted, calibrated_buckets=cal_buckets,
         )
         if model_pd is not None and not defaulted:
-            horizon_key = f'pd_{horizon_years}y'
+            # Map quarterly horizon (4/12/20) back to year-equivalent so
+            # we replace the right pd_*y key on the bucket-anchor PDs.
+            if cadence == 'quarterly':
+                years_eq = max(1, int(round(horizon_years / 4)))
+            else:
+                years_eq = horizon_years
+            horizon_key = f'pd_{years_eq}y'
             if horizon_key in model_rating:
                 model_rating[horizon_key] = round(model_pd, 4)
 
