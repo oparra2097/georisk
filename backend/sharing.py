@@ -466,8 +466,11 @@ def og_preview():
             except Exception:
                 pass
 
-    resp = send_file(cache_file, mimetype="image/png", max_age=60 * 60 * 24)
-    resp.headers["Cache-Control"] = "public, max-age=86400, immutable"
+    resp = send_file(cache_file, mimetype="image/png", max_age=300)
+    # Short browser cache (5 min) so updates show up after a deploy
+    # without forcing manual cache-busts. Disk cache on the server side
+    # handles the long-tail efficiency.
+    resp.headers["Cache-Control"] = "public, max-age=300"
     return resp
 
 
@@ -519,6 +522,6 @@ def og_default():
                 fh.write(png)
         except Exception:
             abort(500)
-    resp = send_file(cache_file, mimetype="image/png", max_age=60 * 60 * 24)
-    resp.headers["Cache-Control"] = "public, max-age=86400, immutable"
+    resp = send_file(cache_file, mimetype="image/png", max_age=300)
+    resp.headers["Cache-Control"] = "public, max-age=300"
     return resp
