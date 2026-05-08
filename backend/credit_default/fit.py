@@ -48,6 +48,7 @@ from backend.credit_default import defaults as cd_defaults
 from backend.credit_default.rating_model import (
     HIGHER_IS_WORSE as SCAFFOLD_HIGHER_IS_WORSE,
     WEIGHTS as SCAFFOLD_WEIGHTS,
+    _adjusted_shift,
 )
 
 
@@ -763,16 +764,19 @@ def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,
     iso = list(iso_years_df['iso3'].values)
     yrs = list(iso_years_df['year'].values)
 
-    # Platt-rescale the class-balanced sigmoid PD back to the natural
-    # base rate so the score scale matches what the dashboard will show.
-    # natural_logit = balanced_logit + log(n_pos / n_neg). The empirical
-    # pd_calibration table used to be the source here, but it quantizes
-    # the bottom of the distribution to 0 (no events in those buckets)
-    # and collapses USA / DEU / ITA / etc. into a single AAA score.
+    # Use the SAME shift the dashboard uses at this horizon. The score
+    # path applies a per-horizon sensitivity multiplier to the
+    # natural-rate Platt shift (1y gets the biggest lift); without
+    # mirroring it here, bucket boundaries live in a different score
+    # space than displayed PDs, and AAA-rated countries land in BB
+    # because the bucket's "AAA boundary" was set against
+    # un-amplified scores while displayed scores are amplified.
+    display_shift = _adjusted_shift(class_balance_log_odds, horizon_years)
+
     def _to_score(p: float) -> float:
         p_clipped = min(max(p, 1e-9), 1.0 - 1e-9)
         balanced_logit = math.log(p_clipped / (1.0 - p_clipped))
-        natural_logit = balanced_logit + class_balance_log_odds
+        natural_logit = balanced_logit + display_shift
         if natural_logit > 0:
             natural_pd = 1.0 / (1.0 + math.exp(-natural_logit))
         else:
@@ -806,39 +810,35 @@ def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,
     score_arr = np.array([p[1] for p in pairs], dtype=float)
     n = len(pairs)
 
-    try:
-        from sklearn.isotonic import IsotonicRegression
-    except ImportError:
-        return None
-
-    # Isotonic regression of agency consensus_num on model score. This
-    # is a monotone non-decreasing fit: as the model PD goes up, the
-    # predicted agency notch goes up (worse). It gracefully handles the
-    # quantization in pd_calibration (many countries sharing the same
-    # empirical PD) by averaging consensus_num within ties, and avoids
-    # the percentile-CDF approach's degeneracy where 30%+ of anchors
-    # land at score=0 and crush the AAA→A bucket spread.
-    ir = IsotonicRegression(out_of_bounds='clip', increasing=True)
-    ir.fit(score_arr, consensus_arr)
-
-    grid = np.linspace(0.0, 100.0, 10001)
-    preds = np.asarray(ir.predict(grid))
+    # ── Rank-based bucket calibration ────────────────────────────────
+    # The previous isotonic-regression approach collapsed the AAA
+    # boundary to 0 because the smooth monotone fit averages over
+    # consensus values at the lowest scores; with 9 AAA anchors mixed
+    # in with 80 IG/HY anchors at similar scores, the predicted
+    # consensus at the bottom never falls below 1.5, so no country
+    # ever maps to ORR 1.
+    #
+    # Replace with rank-based percentile matching: for each ORR k,
+    # the bucket boundary is set so that the FRACTION of anchor
+    # countries below the boundary matches the fraction of agencies
+    # rating those countries at consensus_num ≤ max_consensus(k).
+    # That guarantees each bucket has the right share of the anchor
+    # distribution, even when model scores don't perfectly track
+    # agency rank-order.
+    sorted_scores = np.sort(score_arr)
 
     out: List[Dict] = []
     for orr in range(1, 21):
         max_c = _PM_ORR_TO_MAX_CONSENSUS_NUM[orr]
-        # Pick the largest model_score whose predicted consensus_num is
-        # still ≤ max_c + 0.5 (half-notch tolerance to avoid placing a
-        # country whose isotonic prediction equals max_c on the wrong
-        # side of the boundary).
-        mask = preds <= (max_c + 0.5)
-        if not mask.any():
+        share = float(np.sum(consensus_arr <= max_c)) / n
+        if share <= 0:
             ms = 0.0
-        elif mask.all():
+        elif share >= 1.0:
             ms = 100.0
         else:
-            idx = int(np.argmax(np.where(mask, grid, -1.0)))
-            ms = float(grid[idx])
+            # Take the score at the (share)-th percentile rank.
+            idx = max(0, min(n - 1, int(round(share * n)) - 1))
+            ms = float(sorted_scores[idx])
         out.append({
             'pm_numeric': orr,
             'max_consensus_num': max_c,

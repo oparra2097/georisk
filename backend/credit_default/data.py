@@ -361,6 +361,33 @@ def get_history_panel(years_back: int = 25):
         df = df.sort_values(['iso3', 'year']).reset_index(drop=True)
         df['debt_chg_5y_pp'] = df.groupby('iso3')['gross_debt_pct_gdp'].diff(5)
 
+    # 3. Terms-of-trade volatility (IMF PCTOT, Hilscher-Nosbusch 2010):
+    #    5y rolling std-dev of log changes in commodity export-to-import
+    #    price ratio. Best fundamental beyond debt and reserves for
+    #    sovereign-spread explanatory power.
+    # 4. REER overvaluation (BIS WS_EER, IMF SRDSF + Hilscher 2010):
+    #    annual percent deviation of real-effective exchange rate from
+    #    its trailing 10-year mean. Positive = currency over-valued.
+    try:
+        from backend.data_sources import imf_pctot
+        tot_vol = imf_pctot.get_pctot_volatility_5y()
+        df['tot_volatility_5y'] = df.apply(
+            lambda r: tot_vol.get(r['iso3'], {}).get(int(r['year'])),
+            axis=1,
+        )
+    except Exception as e:
+        print(f'[credit_default.data] PCTOT terms-of-trade fetch failed: {e}')
+
+    try:
+        from backend.data_sources import bis_eer
+        reer_ov = bis_eer.get_reer_overvaluation()
+        df['reer_overvaluation_pct'] = df.apply(
+            lambda r: reer_ov.get(r['iso3'], {}).get(int(r['year'])),
+            axis=1,
+        )
+    except Exception as e:
+        print(f'[credit_default.data] BIS REER fetch failed: {e}')
+
     return df
 
 

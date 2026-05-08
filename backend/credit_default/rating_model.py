@@ -82,6 +82,8 @@ WEIGHTS: Dict[str, float] = {
     'years_since_default':           0.04,   # R&R 2009; smaller = worse (recent default)
     'default_count_25y':             0.03,   # Cantor-Packer 1996; serial defaulter dummy
     'debt_chg_5y_pp':                0.05,   # Manasse 2003 + IMF SRDSF; faster build-up = worse
+    'tot_volatility_5y':             0.04,   # IMF PCTOT, Hilscher-Nosbusch 2010
+    'reer_overvaluation_pct':        0.03,   # BIS WS_EER, IMF SRDSF
 }
 
 # How each weight maps onto the directionality of the risk contribution.
@@ -108,6 +110,8 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'years_since_default':           False,  # more years = better
     'default_count_25y':             True,   # more defaults = worse
     'debt_chg_5y_pp':                True,   # faster debt build-up = worse
+    'tot_volatility_5y':             True,   # higher ToT vol = worse
+    'reer_overvaluation_pct':        True,   # over-valued REER = worse
 }
 
 # Hard caps on individual indicator z-scores so a single outlier (e.g. Lebanon
