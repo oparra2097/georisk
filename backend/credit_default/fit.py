@@ -103,7 +103,12 @@ def build_training_panel(years_back: int = 25, horizon_years: int = 1):
     df = panel.merge(label_df, on=['iso3', 'year'], how='left')
 
     # Drop years where the country is currently in default — those are
-    # not "predict next year" rows.
+    # not "predict next year" rows. The dashboard separately
+    # force-overrides ``defaulted=True`` and ``pd_1y=1.0`` at inference
+    # time for ISOs inside an active CRAG hard-default spell, so the
+    # GBM never has to learn "in-default → in-default-next-year". That
+    # keeps the trained PD distribution centered around onset risk
+    # instead of conflating ongoing-default with next-period onset.
     df = df[df['in_default_year'] != 1].copy()
 
     feature_names = list(SCAFFOLD_WEIGHTS.keys())
@@ -138,7 +143,7 @@ def build_training_panel(years_back: int = 25, horizon_years: int = 1):
         'horizon_years': horizon_years,
         'n_obs': int(len(X_std)),
         'n_events': int(y.sum()),
-        'iso_years': df[['iso3', 'year']].reset_index(drop=True),
+        'iso_years': df[['iso3', 'year', 'in_default_year']].reset_index(drop=True),
     }
     return X_std, y, feature_names, meta
 
@@ -763,6 +768,10 @@ def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,
     proba = np.asarray(proba, dtype=float)
     iso = list(iso_years_df['iso3'].values)
     yrs = list(iso_years_df['year'].values)
+    if 'in_default_year' in iso_years_df.columns:
+        in_def = list(iso_years_df['in_default_year'].values)
+    else:
+        in_def = [0] * len(iso)
 
     # Use the SAME shift the dashboard uses at this horizon. The score
     # path applies a per-horizon sensitivity multiplier to the
@@ -784,10 +793,17 @@ def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,
             natural_pd = ez / (1.0 + ez)
         return float(100.0 * natural_pd)
 
+    # Per-country most-recent NON-default-spell year. Currently-in-
+    # default rows score near pd=1.0 and would push the agency-CDF
+    # mapping to compress all sub-default tiers into the bottom 1% of
+    # scores (USA / DEU / JPN ended up in BBB+ because everything
+    # between A- and the high-PD cluster got squashed into one
+    # boundary). Anchoring on healthy-state observations preserves
+    # the AAA-A spread.
     latest_score: Dict[str, float] = {}
     latest_year: Dict[str, int] = {}
-    for i, (s, yr) in enumerate(zip(iso, yrs)):
-        if not s:
+    for i, (s, yr, d) in enumerate(zip(iso, yrs, in_def)):
+        if not s or int(d) == 1:
             continue
         if s not in latest_year or yr > latest_year[s]:
             latest_year[s] = int(yr)

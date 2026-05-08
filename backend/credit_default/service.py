@@ -25,11 +25,87 @@ _cache_lock = threading.Lock()
 _CACHE_TTL = 6 * 3600
 
 
+_CURRENT_DEFAULT_AGENCY_LETTERS = {'SD', 'D', 'RD'}
+_NON_DEFAULT_AGENCY_LETTERS = {
+    'AAA','AA+','AA','AA-','A+','A','A-','BBB+','BBB','BBB-',
+    'BB+','BB','BB-','B+','B','B-','CCC+','CCC','CCC-','CC',
+}
+# An ISO with an OPEN CRAG ``default`` event that started within this
+# many years is provisionally "in default", but agency-rating evidence
+# overrides. The CRAG release lags real-world restructurings by roughly
+# a year (e.g. GHA/ZMB/LKA restructured Q4 2024 but the 2025 BoC dump
+# still shows their 2022 spells open). Without the agency override
+# those would be force-marked D when agencies have already moved them
+# back to CCC+.
+_CRAG_DEFAULT_RECENCY_YEARS = 4
+
+
+def _currently_defaulted_isos(current_year: Optional[int] = None) -> set:
+    """ISOs with an active hard-default spell as of ``current_year``.
+
+    Restricted to ``event_type='default'`` (not restructuring) AND
+    ``end_year is None`` AND ``start_year ≥ current_year - 4``.
+    ``_enrich_with_agencies`` further filters this against agency
+    letters: if S&P / Fitch already moved the country back to CCC+ or
+    better, it's NOT currently defaulted regardless of CRAG.
+    """
+    if current_year is None:
+        current_year = time.localtime().tm_year
+    cutoff = current_year - _CRAG_DEFAULT_RECENCY_YEARS
+    out: set = set()
+    for ev in cd_defaults.load_events(include_distress=False):
+        if ev.get('end_year') is not None:
+            continue
+        if ev.get('event_type') != 'default':
+            continue
+        start = ev.get('start_year')
+        if start is None or start < cutoff:
+            continue
+        out.add(ev['iso3'])
+    return out
+
+
 def _enrich_with_agencies(scored: Dict) -> Dict:
     agencies = agency_ratings.get_agency_ratings()
     countries = scored.get('countries') or {}
+
+    # Force-mark countries currently inside an active CRAG hard-default
+    # spell (LBN 2020+, GHA 2022+, ZMB 2020+, VEN 2017+, SUR 2020+,
+    # RUS 2022+) as defaulted on the dashboard. The score path itself
+    # only checks `shadow_debt.risk_tier == 'Defaulted'`, which CRAG
+    # events never set — so without this override, currently-defaulting
+    # sovereigns silently get scored as middling-PD non-defaulters.
+    crag_defaulted = _currently_defaulted_isos()
+
     for iso3, c in countries.items():
         a = agencies.get(iso3)
+        sp = (a or {}).get('sp')
+        fitch = (a or {}).get('fitch')
+        agency_in_default = bool(
+            sp in _CURRENT_DEFAULT_AGENCY_LETTERS
+            or fitch in _CURRENT_DEFAULT_AGENCY_LETTERS
+        )
+        # Agency override: if S&P / Fitch have moved the country back
+        # to CCC+ or better, the CRAG spell is stale (post-restructure
+        # lag) — don't force-mark them defaulted.
+        agency_cleared = bool(
+            sp in _NON_DEFAULT_AGENCY_LETTERS
+            or fitch in _NON_DEFAULT_AGENCY_LETTERS
+        )
+        crag_says_default = iso3 in crag_defaulted and not agency_cleared
+        if crag_says_default or agency_in_default:
+            rating = c.setdefault('rating', {})
+            rating['defaulted'] = True
+            rating['pd_1y'] = 1.0
+            rating['pd_3y'] = 1.0
+            rating['pd_5y'] = 1.0
+            rating['sp_equiv'] = 'D'
+            rating['moodys_equiv'] = 'D'
+            rating['pm_notch'] = '10'
+            rating['pm_numeric'] = 20
+            rating['is_investment_grade'] = False
+            rating['score'] = 100.0
+
         if not a:
             continue
         c['agency'] = a

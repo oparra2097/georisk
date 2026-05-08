@@ -137,19 +137,28 @@ def default_starts_by_country(events: Optional[List[Dict]] = None,
 
 
 def in_default_years_by_country(events: Optional[List[Dict]] = None,
-                                include_distress: bool = False) -> Dict[str, Set[int]]:
+                                include_distress: bool = False,
+                                current_year: Optional[int] = None) -> Dict[str, Set[int]]:
     """{iso3: {years country was inside an active default spell}}.
 
     Used to censor the *current-year* indicators of a country that's
     already in default — predicting "PD next year" doesn't make sense if
     we already know the country is in default this year.
+
+    CRAG open ``end_year`` (blank in source) means "spell still active
+    as of dataset release". We extend through ``current_year`` so
+    ongoing defaulters (LBN 2020+, GHA 2022+, ZMB 2020+, VEN 2017+)
+    get correctly flagged as in-default today.
     """
     if events is None:
         events = load_events(include_distress=include_distress)
+    if current_year is None:
+        import time as _t
+        current_year = _t.localtime().tm_year
     out: Dict[str, Set[int]] = {}
     for ev in events:
         start = ev['start_year']
-        end = ev.get('end_year') or start  # ongoing -> treat as one-year tag
+        end = ev.get('end_year') if ev.get('end_year') is not None else current_year
         years = set(range(start, end + 1))
         out.setdefault(ev['iso3'], set()).update(years)
     return out
@@ -238,13 +247,19 @@ def build_quarterly_label_frame(
     except ImportError:
         return None
 
+    import time as _t
+    current_year = _t.localtime().tm_year
     events = load_events(include_distress=include_distress)
     starts_by_iso: Dict[str, Set[Tuple[int, int]]] = {}
     in_default_by_iso: Dict[str, Set[Tuple[int, int]]] = {}
     for ev in events:
         iso = ev['iso3']
         start_yr = ev['start_year']
-        end_yr = ev.get('end_year') or start_yr
+        # Open spell → still active through current_year (matches the
+        # annual fix). Used by the dashboard's currently-in-default
+        # override at inference; not used to alter training labels —
+        # see the annual path for rationale.
+        end_yr = ev.get('end_year') if ev.get('end_year') is not None else current_year
         starts_by_iso.setdefault(iso, set()).add((start_yr, 1))
         for y in range(start_yr, end_yr + 1):
             for q in range(1, 5):
