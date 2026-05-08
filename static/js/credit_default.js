@@ -813,8 +813,8 @@
     const datasets = [{
       label: `Model PD ${horizon}y (%)`,
       data: pd,
-      borderColor: '#1976d2',
-      backgroundColor: 'rgba(25, 118, 210, 0.12)',
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59, 130, 246, 0.18)',
       tension: 0.2,
       spanGaps: true,
       pointRadius: 2,
@@ -831,7 +831,7 @@
       datasets.push({
         label: baseLabel,
         data: agencyLine,
-        borderColor: '#9333ea',
+        borderColor: '#a855f7',
         borderDash: [6, 4],
         borderWidth: 1.5,
         pointRadius: usingAgencyHistory ? 1.5 : 0,
@@ -850,13 +850,21 @@
         scales: {
           y: {
             beginAtZero: true,
-            ticks: { callback: (v) => `${v}%` },
-            title: { display: true, text: `PD ${horizon}y` },
+            ticks: { callback: (v) => `${v}%`, color: '#9ca3af', font: { size: 10 } },
+            title: { display: true, text: `PD ${horizon}y`, color: '#e5e7eb', font: { size: 11 } },
+            grid: { color: 'rgba(255, 255, 255, 0.06)' },
           },
-          x: { title: { display: true, text: 'Year' } },
+          x: {
+            title: { display: true, text: 'Year', color: '#e5e7eb', font: { size: 11 } },
+            ticks: { color: '#9ca3af', font: { size: 10 } },
+            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+          },
         },
         plugins: {
-          legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+          legend: {
+            display: true, position: 'bottom',
+            labels: { boxWidth: 10, font: { size: 10 }, color: '#e5e7eb' },
+          },
           tooltip: {
             callbacks: {
               afterBody(ctxs) {

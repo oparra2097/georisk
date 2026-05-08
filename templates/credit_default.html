@@ -188,16 +188,24 @@
               No fitted history available for this country.
             </p>
           </div>
-          <p class="cd-section-note">
-            <span class="cd-legend-dot" style="background:#1976d2"></span>
-            Model PD applied to each year's macro panel.
-            <span class="cd-legend-dot" style="background:rgba(229, 57, 53, 0.45); margin-left: 12px"></span>
-            CRAG event years &mdash; <b>D</b>=default · <b>R</b>=restructuring · <b>A</b>=arrears.
-            <span class="cd-legend-dot" style="background:#9333ea; border-style:dashed; margin-left: 12px"></span>
-            Agency consensus PD (S&amp;P/Moody's/Fitch median).
-            <span class="cd-legend-dot" style="background:rgba(220,38,38,0.6); margin-left: 12px"></span>
-            50% default-territory threshold.
-          </p>
+          <div class="cd-legend">
+            <div class="cd-legend-item">
+              <span class="cd-legend-dot" style="background:#3b82f6"></span>
+              <span><b>Model PD</b><span class="sub">Annual macro panel applied each year via the fitted GBM.</span></span>
+            </div>
+            <div class="cd-legend-item">
+              <span class="cd-legend-dot" style="background:rgba(239,68,68,0.45)"></span>
+              <span><b>CRAG events</b><span class="sub">D = default · R = restructuring · A = arrears.</span></span>
+            </div>
+            <div class="cd-legend-item">
+              <span class="cd-legend-dot" style="background:#a855f7"></span>
+              <span><b>Agency consensus</b><span class="sub">S&amp;P / Moody's / Fitch median, stepped at each rating action.</span></span>
+            </div>
+            <div class="cd-legend-item">
+              <span class="cd-legend-dot" style="background:rgba(220,38,38,0.7)"></span>
+              <span><b>Default threshold</b><span class="sub">25 / 50 / 75 % at the 1y / 3y / 5y horizons.</span></span>
+            </div>
+          </div>
         </section>
       </div>
     </main>
