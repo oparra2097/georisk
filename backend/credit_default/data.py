@@ -182,6 +182,34 @@ def _latest_value(country_block: Dict) -> Optional[float]:
     return values.get(latest_year)
 
 
+def _latest_period(country_block: Dict,
+                   forecast_start_year: Optional[int] = None) -> Optional[str]:
+    """Return the period label of the most recent non-null *actual*
+    observation (e.g. ``"2024"`` for annual sources, ``"2024Q3"`` for
+    QEDS quarterly). When ``forecast_start_year`` is provided, periods
+    at or after that year are skipped — IMF WEO publishes projections
+    out to ~+6 years, and surfacing them as freshness misleads the user
+    into thinking 2031 numbers are real data."""
+    if not country_block:
+        return None
+    values = country_block.get('values') or {}
+    if not values:
+        return None
+    keys = sorted(values.keys(), reverse=True)
+    if forecast_start_year is not None:
+        for k in keys:
+            try:
+                yr = int(str(k)[:4])
+            except (TypeError, ValueError):
+                continue
+            if yr < forecast_start_year:
+                return k
+    try:
+        return keys[0]
+    except IndexError:
+        return None
+
+
 def _annual_series(country_block: Dict) -> Dict[int, float]:
     """Return {int_year: float} for annual data; ignores quarterly suffixes."""
     out: Dict[int, float] = {}
@@ -207,6 +235,33 @@ def _fetch_indicator(name: str, meta: Dict) -> Dict[str, Optional[float]]:
         if not iso3 or len(iso3) != 3:
             continue
         out[iso3] = _latest_value(block)
+    return out
+
+
+def _fetch_indicator_periods(name: str, meta: Dict) -> Dict[str, str]:
+    """Return {iso3: latest_period_label} so the dashboard can show
+    indicator freshness. Period is annual ("2024") or quarterly
+    ("2024Q3") depending on the upstream source. Values from years
+    inside the WEO forecast horizon are excluded so IMF projections
+    don't masquerade as fresh data."""
+    out: Dict[str, str] = {}
+    if meta['source'] == 'WEO':
+        payload = imf_weo.get_weo_data(meta['code'])
+    else:
+        payload = world_bank.get_wb_data(meta['code'], source=meta.get('wb_source'))
+    payload = payload or {}
+    forecast_start = payload.get('forecast_start_year')
+    try:
+        forecast_start = int(forecast_start) if forecast_start else None
+    except (TypeError, ValueError):
+        forecast_start = None
+    countries = payload.get('countries') or {}
+    for iso3, block in countries.items():
+        if not iso3 or len(iso3) != 3:
+            continue
+        period = _latest_period(block, forecast_start_year=forecast_start)
+        if period:
+            out[iso3] = period
     return out
 
 
@@ -376,12 +431,15 @@ def get_panel(force_refresh: bool = False) -> Dict:
 
     # 1. Pull every indicator (cached upstream, so this is cheap on warm cache)
     per_indicator: Dict[str, Dict[str, Optional[float]]] = {}
+    per_indicator_periods: Dict[str, Dict[str, str]] = {}
     for name, meta in INDICATORS.items():
         try:
             per_indicator[name] = _fetch_indicator(name, meta)
+            per_indicator_periods[name] = _fetch_indicator_periods(name, meta)
         except Exception as e:
             print(f'[credit_default.data] failed to fetch {name}: {e}')
             per_indicator[name] = {}
+            per_indicator_periods[name] = {}
 
     # 2. Sovereign-debt overlay (already on disk as static JSON)
     debt_payload = get_sovereign_debt_data() or {}
@@ -421,11 +479,16 @@ def get_panel(force_refresh: bool = False) -> Dict:
                 'debt_service_pct_exports': debt_block.get('debt_service_pct_exports'),
             }
 
+        ind_periods = {
+            name: per_indicator_periods.get(name, {}).get(iso3)
+            for name in INDICATORS
+        }
         countries_out[iso3] = {
             'iso3': iso3,
             'name': name_lookup.get(iso3, iso3),
             'region': region_lookup.get(iso3, ''),
             'indicators': ind_values,
+            'indicator_periods': ind_periods,
             'shadow_debt': shadow,
         }
 

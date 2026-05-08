@@ -318,6 +318,11 @@
   gap: 8px; align-items: center; font-size: 12px;
 }
 .cd-contrib-label { color: #4b5563; }
+.cd-contrib-period {
+  display: inline-block; font-size: 9px; padding: 1px 5px;
+  background: #f3f4f6; color: #6b7280; border-radius: 3px;
+  margin-left: 4px; font-variant-numeric: tabular-nums;
+}
 .cd-contrib-value { color: #111827; text-align: right; font-variant-numeric: tabular-nums; }
 .cd-contrib-bar-track {
   position: relative; height: 8px; background: #f3f4f6; border-radius: 4px;

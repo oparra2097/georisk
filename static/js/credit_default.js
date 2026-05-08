@@ -444,7 +444,7 @@
     document.getElementById('cd-panel-gap').textContent = formatNumber(shadow.debt_gap_pp, 1, 'pp');
     document.getElementById('cd-panel-tier').textContent = shadow.risk_tier || '—';
 
-    renderContributions(rating.contributions || []);
+    renderContributions(rating.contributions || [], c.indicator_periods || {});
   }
 
   function setRating(id, value, outlook) {
@@ -453,7 +453,7 @@
     if (meta) meta.textContent = outlook || '';
   }
 
-  function renderContributions(contribs) {
+  function renderContributions(contribs, periods) {
     const wrap = document.getElementById('cd-panel-contributions');
     // Sort by absolute contribution; place missing at the bottom.
     const sorted = contribs.slice().sort((a, b) => {
@@ -462,17 +462,19 @@
       return sb - sa;
     });
     const maxAbs = Math.max(0.01, ...sorted.map((c) => Math.abs(c.contribution || 0)));
-    const html = sorted.map((c) => contribRowHtml(c, maxAbs)).join('');
+    const html = sorted.map((c) => contribRowHtml(c, maxAbs, periods || {})).join('');
     wrap.innerHTML = html;
   }
 
-  function contribRowHtml(c, maxAbs) {
+  function contribRowHtml(c, maxAbs, periods) {
     const label = INDICATOR_LABELS[c.indicator] || c.indicator;
     const units = INDICATOR_UNITS[c.indicator] || '';
+    const period = (periods || {})[c.indicator];
+    const periodTag = period ? ` <span class="cd-contrib-period">${escapeHtml(period)}</span>` : '';
     if (c.contribution == null) {
       return `
         <div class="cd-contrib-row">
-          <div class="cd-contrib-label">${escapeHtml(label)}</div>
+          <div class="cd-contrib-label">${escapeHtml(label)}${periodTag}</div>
           <div class="cd-contrib-value">—</div>
           <div class="cd-contrib-bar-track"><div class="cd-contrib-bar missing"></div></div>
           <div class="cd-contrib-z">no data</div>
@@ -485,7 +487,7 @@
     const zStr = c.z != null ? `z=${c.z.toFixed(1)}` : '';
     return `
       <div class="cd-contrib-row">
-        <div class="cd-contrib-label">${escapeHtml(label)}</div>
+        <div class="cd-contrib-label">${escapeHtml(label)}${periodTag}</div>
         <div class="cd-contrib-value">${valueStr}</div>
         <div class="cd-contrib-bar-track">
           <div class="cd-contrib-bar ${cls}" style="width:${widthPct}%"></div>
