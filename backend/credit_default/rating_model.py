@@ -154,6 +154,48 @@ RATING_BUCKETS: List[Tuple[float, str, int, str, str, float, float, float]] = [
 IG_BOUNDARY_NUMERIC = 10
 
 
+def _score_with_gbm(payload, indicators, shadow, scaler, medians, shift):
+    """Run a country through the persisted GBM tree ensemble. Returns
+    the natural-rate-rescaled PD."""
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+    features = payload['features']
+    model = payload['model']
+    vec = []
+    for f in features:
+        if f == 'shadow_debt_gap_pp':
+            raw = shadow.get('debt_gap_pp')
+        else:
+            raw = (indicators or {}).get(f)
+        if raw is None:
+            raw = medians.get(f)
+        if raw is None:
+            # If the feature is genuinely unavailable, fall back to 0
+            # (median in standardized space) so the tree still runs.
+            std_val = 0.0
+        else:
+            sc = scaler.get(f) or {}
+            mean = float(sc.get('mean', 0.0))
+            std = float(sc.get('std', 1.0)) or 1.0
+            std_val = (float(raw) - mean) / std
+            if std_val > Z_CLIP:
+                std_val = Z_CLIP
+            elif std_val < -Z_CLIP:
+                std_val = -Z_CLIP
+        vec.append(std_val)
+    proba = float(model.predict_proba(np.asarray([vec]))[0, 1])
+    proba = min(max(proba, 1e-9), 1.0 - 1e-9)
+    # Platt-rescale balanced GBM proba → natural-rate PD.
+    bal_logit = math.log(proba / (1.0 - proba))
+    nat_logit = bal_logit + shift
+    try:
+        return 1.0 / (1.0 + math.exp(-nat_logit))
+    except OverflowError:
+        return 0.0 if nat_logit < 0 else 1.0
+
+
 def _letter_and_pd(score: float, defaulted: bool = False,
                    calibrated_buckets: Optional[List[Dict]] = None) -> Dict:
     if defaulted:
@@ -241,9 +283,23 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
     fit_state = _load_fit_state(horizon_years)
     use_fit = fit_state is not None and bool(fit_state.get('coefficients'))
     cal_buckets = None
+    gbm_payload = None
     if use_fit:
         rb = fit_state.get('rating_buckets') or {}
         cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
+        # If the fit is a GBM and a pickled model is available, score
+        # countries through the actual tree ensemble for the displayed
+        # PD. The linear-importance fallback we used before flattens
+        # every country to base-rate PD (≈4%), which destroys the
+        # discrimination GBM was trained to provide.
+        if fit_state.get('estimator') == 'gbm' and fit_state.get('model_pickle'):
+            from backend.credit_default import fit as cd_fit
+            loaded = cd_fit.load_gbm_model(horizon_years)
+            if loaded:
+                gbm_payload = {
+                    'model': loaded[0],
+                    'features': loaded[1],
+                }
 
     # 1. Build cross-section vectors so we can compute z-scores per indicator.
     # We *always* compute the transparent composite (it's the secondary
@@ -367,21 +423,35 @@ def score_panel(panel: Dict, horizon_years: int = 1) -> Dict:
             intercept = float(fit_state.get('intercept') or 0.0)
             estimator = fit_state.get('estimator', 'logit')
             z_total = fit_latent + intercept
-            # Platt-rescale balanced log-odds to the natural base rate.
-            # The class-balanced fit assumes a 50/50 prior; adding
-            # log(n_pos/n_neg) recovers the natural-rate logit, giving a
-            # smooth PD with no AAA pile-up. The empirical pd_calibration
-            # table is kept on fit_state for diagnostics but is no longer
-            # the headline score (it quantized 0% across the bottom four
-            # deciles and collapsed USA/DEU/ITA into a single bucket).
             shift = float(fit_state.get('class_balance_log_odds') or 0.0)
-            adj = z_total + shift
-            try:
-                model_pd = 1.0 / (1.0 + math.exp(-adj))
-            except OverflowError:
-                model_pd = 0.0 if adj < 0 else 1.0
+
+            if gbm_payload is not None:
+                # Score with the actual GBM tree ensemble. Builds the
+                # standardized feature vector in the same order the
+                # model was trained on, runs predict_proba, then Platt-
+                # rescales to natural rate so the displayed PD has the
+                # same base-rate semantics as the logit path.
+                model_pd = _score_with_gbm(
+                    gbm_payload, ind, shadow,
+                    fit_state.get('scaler') or {},
+                    fit_state.get('medians') or {}, shift,
+                )
+                model_normalized = (
+                    math.log(model_pd / (1 - model_pd))
+                    if 0 < model_pd < 1 else (
+                        -50.0 if model_pd <= 0 else 50.0
+                    )
+                )
+            else:
+                # Logit path (or GBM fallback when pickle missing): use
+                # the linear z_total + Platt shift.
+                adj = z_total + shift
+                try:
+                    model_pd = 1.0 / (1.0 + math.exp(-adj))
+                except OverflowError:
+                    model_pd = 0.0 if adj < 0 else 1.0
+                model_normalized = z_total
             model_score = 100.0 * model_pd
-            model_normalized = z_total
         else:
             model_score = composite_score
             model_normalized = composite_normalized

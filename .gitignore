@@ -12,6 +12,7 @@ data/*
 !data/sovereign_defaults.csv
 !data/credit_default_fit/
 !data/credit_default_fit/*.json
+!data/credit_default_fit/*.pkl
 
 # Commodity model cache artifacts (regenerated on monthly refit)
 backend/cache/commodity_models/*.pkl

@@ -103,6 +103,16 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
     rb = fit_state.get('rating_buckets') or {}
     cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
 
+    # If the persisted fit is a GBM with a saved tree-ensemble pickle,
+    # score the per-year history through the actual model so the chart
+    # shows the real GBM trajectory (the linear-importance fallback
+    # collapsed everything to ~base-rate PD).
+    gbm_payload = None
+    if fit_state.get('estimator') == 'gbm' and fit_state.get('model_pickle'):
+        loaded = cd_fit.load_gbm_model(horizon_years)
+        if loaded:
+            gbm_payload = {'model': loaded[0], 'features': loaded[1]}
+
     panel_df = cd_data.get_history_panel()
     if panel_df is None or panel_df.empty:
         return None
@@ -111,36 +121,68 @@ def get_country_history(iso3: str, horizon_years: int = 1) -> Optional[Dict]:
         return None
     sub = sub.sort_values('year')
 
+    import math
     history = []
     for _, row in sub.iterrows():
-        z = intercept
-        for feat, coef in coefs.items():
-            if not coef:
-                continue
-            raw = row.get(feat)
+        if gbm_payload is not None:
+            # Build standardized feature vector and run predict_proba.
             try:
-                raw_f = float(raw)
-                if raw_f != raw_f:  # NaN
+                import numpy as np
+            except ImportError:
+                np = None
+            vec = []
+            for feat in gbm_payload['features']:
+                raw = row.get(feat)
+                try:
+                    raw_f = float(raw)
+                    if raw_f != raw_f:
+                        raw_f = None
+                except (TypeError, ValueError):
                     raw_f = None
-            except (TypeError, ValueError):
-                raw_f = None
-            if raw_f is None:
-                raw_f = medians.get(feat)
-            if raw_f is None:
-                continue
-            sc = scaler.get(feat) or {}
-            mean = float(sc.get('mean', 0.0))
-            std = float(sc.get('std', 1.0)) or 1.0
-            zf = (raw_f - mean) / std
-            if zf > rating_model.Z_CLIP:
-                zf = rating_model.Z_CLIP
-            elif zf < -rating_model.Z_CLIP:
-                zf = -rating_model.Z_CLIP
-            z += float(coef) * zf
-        # Platt-rescale the balanced log-odds back to natural-rate PD
-        # (matches the dashboard's `_score_panel` headline scoring).
-        import math
-        adj = z + class_shift
+                if raw_f is None:
+                    raw_f = medians.get(feat)
+                if raw_f is None:
+                    vec.append(0.0)
+                    continue
+                sc = scaler.get(feat) or {}
+                mean = float(sc.get('mean', 0.0))
+                std = float(sc.get('std', 1.0)) or 1.0
+                zf = (raw_f - mean) / std
+                if zf > rating_model.Z_CLIP:
+                    zf = rating_model.Z_CLIP
+                elif zf < -rating_model.Z_CLIP:
+                    zf = -rating_model.Z_CLIP
+                vec.append(zf)
+            proba = float(gbm_payload['model'].predict_proba([vec])[0, 1])
+            proba = min(max(proba, 1e-9), 1.0 - 1e-9)
+            bal_logit = math.log(proba / (1.0 - proba))
+            adj = bal_logit + class_shift
+        else:
+            z = intercept
+            for feat, coef in coefs.items():
+                if not coef:
+                    continue
+                raw = row.get(feat)
+                try:
+                    raw_f = float(raw)
+                    if raw_f != raw_f:
+                        raw_f = None
+                except (TypeError, ValueError):
+                    raw_f = None
+                if raw_f is None:
+                    raw_f = medians.get(feat)
+                if raw_f is None:
+                    continue
+                sc = scaler.get(feat) or {}
+                mean = float(sc.get('mean', 0.0))
+                std = float(sc.get('std', 1.0)) or 1.0
+                zf = (raw_f - mean) / std
+                if zf > rating_model.Z_CLIP:
+                    zf = rating_model.Z_CLIP
+                elif zf < -rating_model.Z_CLIP:
+                    zf = -rating_model.Z_CLIP
+                z += float(coef) * zf
+            adj = z + class_shift
         try:
             model_pd = 1.0 / (1.0 + math.exp(-adj))
         except OverflowError:

@@ -161,12 +161,15 @@ def fit_logit(horizon_years: int = 1, years_back: int = 25) -> Dict:
     coefs: Dict[str, float] = {f: float(coefs_signed[i]) for i, f in enumerate(features)}
 
     # Class-balanced sigmoid PD overstates absolute risk because the loss
-    # treats positives and negatives as equally prevalent. Persist the
-    # log-prior shift that converts balanced log-odds back to the natural
-    # base rate: natural_logit = balanced_logit + log(n_pos / n_neg).
+    # treats positives and negatives as equally prevalent. Platt-rescale
+    # back to the natural panel base rate (log(n_pos / n_neg)) so the
+    # model produces *its own* probability of default — independent of
+    # the rating agencies. The dashboard still overlays an agency
+    # reference line on the chart for context, but the headline PD is
+    # purely from the macro-features-on-historical-defaults fit.
     n_pos = int(y.sum())
     n_neg = int(len(y) - n_pos)
-    class_balance_log_odds = (
+    pd_log_odds_shift = (
         math.log(max(1, n_pos) / max(1, n_neg)) if n_pos and n_neg else 0.0
     )
 
@@ -177,16 +180,16 @@ def fit_logit(horizon_years: int = 1, years_back: int = 25) -> Dict:
     pd_calibration = _calibrate_pd_buckets(proba, y.values)
     rating_buckets = _calibrate_rating_buckets(
         meta['iso_years'], proba, horizon_years=horizon_years,
-        class_balance_log_odds=class_balance_log_odds,
+        class_balance_log_odds=pd_log_odds_shift,
     )
 
     state = {
         'estimator': 'logit',
-        'method': 'scipy-l-bfgs-b (sign-constrained)',
+        'method': 'scipy-l-bfgs-b (sign-constrained), natural-rate Platt',
         'horizon_years': horizon_years,
         'coefficients': coefs,
         'intercept': float(intercept),
-        'class_balance_log_odds': float(class_balance_log_odds),
+        'class_balance_log_odds': float(pd_log_odds_shift),
         'feature_importance': {f: abs(coefs[f]) for f in features},
         'scaler': meta['scaler'],
         'medians': meta['medians'],
@@ -307,18 +310,18 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
     importance = {f: float(perm.importances_mean[i]) for i, f in enumerate(features)}
 
     # GBM trained with class-balanced sample_weight overstates absolute
-    # PD just like the logit; persist the same Platt shift so the score
-    # path can rescale to natural-rate PD.
+    # PD just like the logit; rescale to the natural panel base rate so
+    # the model is independent of agency PD tables.
     n_pos = int(y.sum())
     n_neg = int(len(y) - n_pos)
-    class_balance_log_odds = (
+    pd_log_odds_shift = (
         math.log(max(1, n_pos) / max(1, n_neg)) if n_pos and n_neg else 0.0
     )
 
     pd_calibration = _calibrate_pd_buckets(proba, y.values)
     rating_buckets = _calibrate_rating_buckets(
         meta['iso_years'], proba, horizon_years=horizon_years,
-        class_balance_log_odds=class_balance_log_odds,
+        class_balance_log_odds=pd_log_odds_shift,
     )
 
     # Sign-correct GBM importances using HIGHER_IS_WORSE so the linear
@@ -330,17 +333,24 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
         s = +1.0 if SCAFFOLD_HIGHER_IS_WORSE.get(f, True) else -1.0
         importance_signed[f] = float(s * imp)
 
-    # We persist the model's leaf-value structure as JSON-incompatible —
-    # callers that want to *score* with the GBM must call ``fit_gbm`` at
-    # bootstrap. We still publish feature importance + calibration for
-    # rating_model to consume in "weighted average" mode.
+    # Persist the trained GBM model alongside the JSON state so the
+    # dashboard score path can run the actual tree ensemble at inference
+    # time instead of approximating it with a linear sum of importances.
+    # The linear approximation flattens every country to ~base-rate PD
+    # (no tree interactions = no sensitivity); using the real model
+    # restores GBM's non-linear discrimination.
+    import pickle
+    model_path = _FIT_DIR / f'fit_model_h{horizon_years}.pkl'
+    with open(model_path, 'wb') as f:
+        pickle.dump({'model': model, 'features': features}, f)
+
     state = {
         'estimator': 'gbm',
         'horizon_years': horizon_years,
         'feature_importance': importance,
         'coefficients': importance_signed,
         'intercept': 0.0,
-        'class_balance_log_odds': float(class_balance_log_odds),
+        'class_balance_log_odds': float(pd_log_odds_shift),
         'scaler': meta['scaler'],
         'medians': meta['medians'],
         'pd_calibration': pd_calibration,
@@ -353,9 +363,25 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
             'n_estimators': n_estimators, 'max_depth': max_depth,
             'learning_rate': learning_rate,
         },
+        'model_pickle': f'fit_model_h{horizon_years}.pkl',
     }
     _save_state(state, horizon_years)
     return state
+
+
+def load_gbm_model(horizon_years: int):
+    """Load the pickled GBM tree ensemble for live scoring. Returns
+    ``(model, feature_names)`` or ``None`` if the pickle is missing."""
+    import pickle
+    path = _FIT_DIR / f'fit_model_h{horizon_years}.pkl'
+    if not path.exists():
+        return None
+    try:
+        with open(path, 'rb') as f:
+            payload = pickle.load(f)
+        return payload.get('model'), payload.get('features')
+    except (OSError, pickle.UnpicklingError, EOFError):
+        return None
 
 
 # ── PD calibration ──────────────────────────────────────────────────────
@@ -377,6 +403,84 @@ _PM_ORR_TO_MAX_CONSENSUS_NUM = {
     19: 22,  # SD/RD
     20: 22,  # D — same numeric notch as SD; defaulted flag governs
 }
+
+
+# Agency-consensus notch (1=AAA, 22=D) → benchmark default probability
+# at horizons {1, 3, 5}. Same source as RATING_BUCKETS in rating_model.py
+# so the back-end and front-end stay aligned. Used to anchor the
+# displayed PD scale to what S&P/Moody's/Fitch publish, instead of the
+# much-thinner empirical default rate (~4%) in our own panel.
+_CONSENSUS_NUM_TO_PD = {
+    1: {1: 0.000, 3: 0.001, 5: 0.002},
+    2: {1: 0.001, 3: 0.002, 5: 0.005},
+    3: {1: 0.001, 3: 0.003, 5: 0.007},
+    4: {1: 0.002, 3: 0.005, 5: 0.010},
+    5: {1: 0.003, 3: 0.008, 5: 0.015},
+    6: {1: 0.005, 3: 0.012, 5: 0.020},
+    7: {1: 0.008, 3: 0.018, 5: 0.030},
+    8: {1: 0.012, 3: 0.030, 5: 0.050},
+    9: {1: 0.018, 3: 0.045, 5: 0.075},
+    10: {1: 0.025, 3: 0.060, 5: 0.100},
+    11: {1: 0.040, 3: 0.090, 5: 0.150},
+    12: {1: 0.060, 3: 0.130, 5: 0.200},
+    13: {1: 0.080, 3: 0.170, 5: 0.250},
+    14: {1: 0.110, 3: 0.230, 5: 0.330},
+    15: {1: 0.150, 3: 0.300, 5: 0.420},
+    16: {1: 0.200, 3: 0.380, 5: 0.520},
+    17: {1: 0.350, 3: 0.560, 5: 0.700},
+    18: {1: 0.350, 3: 0.560, 5: 0.700},
+    19: {1: 0.350, 3: 0.560, 5: 0.700},
+    20: {1: 0.580, 3: 0.750, 5: 0.830},
+    21: {1: 0.700, 3: 0.830, 5: 0.880},
+    22: {1: 1.000, 3: 1.000, 5: 1.000},
+}
+
+
+def _logit(p: float, eps: float = 1e-6) -> float:
+    p_clipped = min(max(p, eps), 1.0 - eps)
+    return math.log(p_clipped / (1.0 - p_clipped))
+
+
+def _compute_agency_calibration_shift(proba, iso_years_df,
+                                      horizon_years: int = 1) -> float:
+    """Single log-odds shift that aligns the model's mean PD on anchor
+    countries with the agency-consensus mean PD at the given horizon.
+    Replaces the natural-base-rate Platt shift, which under-states
+    absolute risk relative to how S&P / Moody's / Fitch publish PDs
+    (e.g. agencies treat B− as ~20% 1y default vs the panel's 4%
+    empirical rate)."""
+    try:
+        import numpy as np
+    except ImportError:
+        return 0.0
+
+    proba = np.asarray(proba, dtype=float)
+    iso = list(iso_years_df['iso3'].values)
+    yrs = list(iso_years_df['year'].values)
+    latest_idx: Dict[str, int] = {}
+    latest_year: Dict[str, int] = {}
+    for i, (s, yr) in enumerate(zip(iso, yrs)):
+        if not s:
+            continue
+        if s not in latest_year or yr > latest_year[s]:
+            latest_year[s] = int(yr)
+            latest_idx[s] = i
+
+    agencies = cd_agencies.get_agency_ratings()
+    diffs: List[float] = []
+    for iso3, idx in latest_idx.items():
+        ag = agencies.get(iso3) or {}
+        c = ag.get('consensus_num')
+        if c is None:
+            continue
+        anchor = _CONSENSUS_NUM_TO_PD.get(int(c)) or {}
+        agency_pd = anchor.get(horizon_years)
+        if agency_pd is None or agency_pd <= 0 or agency_pd >= 1:
+            continue
+        diffs.append(_logit(agency_pd) - _logit(float(proba[idx])))
+    if len(diffs) < 30:
+        return 0.0
+    return float(sum(diffs) / len(diffs))
 
 
 def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,

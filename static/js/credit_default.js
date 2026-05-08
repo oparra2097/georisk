@@ -60,23 +60,34 @@
     historyHorizon: 1,    // 1y by default, toggleable to 3y / 5y
   };
 
-  // Map agency consensus notch (1=AAA, 22=D) to a benchmark 1y default
-  // probability so the chart can overlay an "agency-implied PD" line
-  // on top of the model's trajectory. PD anchors are taken from the
-  // Parra rating-bucket scaffold (the same table used for letter
-  // mapping); the 3y / 5y values come from the same row.
-  const AGENCY_NOTCH_TO_PD = {
-    1: 0.0000, 2: 0.0010, 3: 0.0010, 4: 0.0020,
-    5: 0.0030, 6: 0.0050, 7: 0.0080,
-    8: 0.0120, 9: 0.0180, 10: 0.0250,
-    11: 0.0400, 12: 0.0600, 13: 0.0800,
-    14: 0.1100, 15: 0.1500, 16: 0.2000,
-    17: 0.3500, 18: 0.3500, 19: 0.3500,  // CCC+ / CCC / CCC- collapse to ORR 7
-    20: 0.5800, 21: 0.7000,
-    22: 1.0000,
+  // Agency consensus notch (1=AAA, 22=D) → benchmark default probability
+  // at horizons {1, 3, 5}. Mirrors the backend _CONSENSUS_NUM_TO_PD
+  // table in fit.py so the chart's reference line uses the same anchor
+  // values the model is calibrated against.
+  const AGENCY_PD_BY_HORIZON = {
+    1:  { 1: 0.0000, 3: 0.0010, 5: 0.0020 },
+    2:  { 1: 0.0010, 3: 0.0020, 5: 0.0050 },
+    3:  { 1: 0.0010, 3: 0.0030, 5: 0.0070 },
+    4:  { 1: 0.0020, 3: 0.0050, 5: 0.0100 },
+    5:  { 1: 0.0030, 3: 0.0080, 5: 0.0150 },
+    6:  { 1: 0.0050, 3: 0.0120, 5: 0.0200 },
+    7:  { 1: 0.0080, 3: 0.0180, 5: 0.0300 },
+    8:  { 1: 0.0120, 3: 0.0300, 5: 0.0500 },
+    9:  { 1: 0.0180, 3: 0.0450, 5: 0.0750 },
+    10: { 1: 0.0250, 3: 0.0600, 5: 0.1000 },
+    11: { 1: 0.0400, 3: 0.0900, 5: 0.1500 },
+    12: { 1: 0.0600, 3: 0.1300, 5: 0.2000 },
+    13: { 1: 0.0800, 3: 0.1700, 5: 0.2500 },
+    14: { 1: 0.1100, 3: 0.2300, 5: 0.3300 },
+    15: { 1: 0.1500, 3: 0.3000, 5: 0.4200 },
+    16: { 1: 0.2000, 3: 0.3800, 5: 0.5200 },
+    17: { 1: 0.3500, 3: 0.5600, 5: 0.7000 },
+    18: { 1: 0.3500, 3: 0.5600, 5: 0.7000 },
+    19: { 1: 0.3500, 3: 0.5600, 5: 0.7000 },
+    20: { 1: 0.5800, 3: 0.7500, 5: 0.8300 },
+    21: { 1: 0.7000, 3: 0.8300, 5: 0.8800 },
+    22: { 1: 1.0000, 3: 1.0000, 5: 1.0000 },
   };
-  // Multipliers to project 1y → {3y, 5y} agency-implied PD.
-  const AGENCY_HORIZON_MULTIPLIER = { 1: 1.0, 3: 2.4, 5: 4.0 };
 
   // ── Boot ────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
@@ -607,9 +618,9 @@
     // trajectory compares to where the agencies sit today.
     const consensusNum = (h.agency || {}).consensus_num;
     let agencyPd = null;
-    if (consensusNum != null && AGENCY_NOTCH_TO_PD[consensusNum] != null) {
-      const mult = AGENCY_HORIZON_MULTIPLIER[horizon] || 1.0;
-      agencyPd = Math.min(1.0, AGENCY_NOTCH_TO_PD[consensusNum] * mult) * 100;
+    if (consensusNum != null && AGENCY_PD_BY_HORIZON[consensusNum]) {
+      const anchor = AGENCY_PD_BY_HORIZON[consensusNum][horizon];
+      if (anchor != null) agencyPd = anchor * 100;
     }
     const agencyLine = agencyPd != null ? years.map(() => agencyPd) : null;
 
