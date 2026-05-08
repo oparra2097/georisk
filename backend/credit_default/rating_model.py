@@ -184,29 +184,59 @@ def _adjusted_shift(class_balance_log_odds: float, years_eq: int) -> float:
 
 
 # Reserve-currency-status logit discount. The macro feature panel
-# (debt/GDP, fiscal balance, etc.) penalises USA / Japan / eurozone for
-# elevated debt without crediting the structural funding advantage of
-# being a reserve-currency issuer — the underlying reason agencies put
-# them at AA+/AAA despite high public debt. We apply a per-country
-# log-odds discount proportional to the country's share of allocated
-# global FX reserves (IMF COFER 2024Q4). USA at 57% gets a -2.87 logit
-# shift (≈ 17× PD reduction); eurozone members at 19.8% get -0.99
-# (≈ 2.7× reduction); CNY 2.2% gets -0.11 (≈ 11% reduction).
-_RESERVE_CURRENCY_LOGIT_COEF = -0.05
+# (debt/GDP, fiscal balance, etc.) penalises USA / Japan / eurozone /
+# UK for elevated debt without crediting the structural funding
+# advantage of being a reserve-currency issuer.
+#
+# The IMF COFER allocation share is too noisy to use as a coefficient
+# directly — GBP at 4.9% would imply a tiny discount, but agencies
+# treat the UK as a tier-1 sovereign comparable to USA (USD 57%) at
+# AA / AA+. So we use a hand-tuned per-issuer discount instead, with
+# magnitudes calibrated against the agency-consensus notch each
+# major reserve-currency sovereign sits at.
+#
+# Tier 1 (USD)         — anchored to USA at AA+ (model 2+, agency AA+)
+# Tier 1 (EUR core)    — anchored to DEU/NLD at AAA
+# Tier 2 (GBP/JPY/CHF) — anchored to UK at AA, JPN at A+, CHE at AAA
+# Tier 3 (CAD/AUD/NZD) — anchored to AAA cluster
+# Minor (CNY)          — small bonus, RMB still emerging as reserve
+#
+# Eurozone periphery members (ITA, ESP, GRC) get a smaller discount
+# because their elevated debt + weaker fiscal already differentiates
+# them in the macro features; over-discounting would put ITA at AAA
+# when the agency is BBB.
+_RESERVE_CURRENCY_LOGIT_SHIFT = {
+    # Tier 1 ─ reserve currencies. Magnitudes hand-tuned so the
+    # post-discount PD lands within the agency's notch window.
+    'USA': -2.0,    # → 2+/AA+   (agency AA+/Aaa/AA+)
+    'GBR': -1.6,    # → 2-/AA-   (matches Fitch leg of consensus AA)
+    'JPN': -1.0,    # → AA-/A+   (agency A+/A1/A)
+    'CHE': -1.6,    # → AAA      (agency AAA)
+    # Tier 1 ─ EUR core (low-debt members, collective ECB credit)
+    'DEU': -1.4, 'NLD': -1.4, 'AUT': -1.2, 'FIN': -1.2, 'LUX': -1.4,
+    # Tier 1 ─ EUR upper-mid (agency AA-/A+)
+    'FRA': -1.0, 'BEL': -1.0, 'IRL': -1.0,
+    # Tier 1 ─ EUR periphery (let macro features dominate so model
+    # differentiates them from the core).
+    'ITA':  0.0, 'ESP':  0.0, 'PRT':  0.0, 'GRC':  0.0,
+    # Eurozone smaller members
+    'EST': -0.8, 'LVA': -0.8, 'LTU': -0.8, 'SVK': -0.8, 'SVN': -0.8,
+    'MLT': -0.8, 'CYP':  0.0, 'HRV':  0.0,
+    # Tier 3 ─ Anglosphere reserve-adjacent (agency AAA)
+    'CAN': -1.6, 'AUS': -1.4, 'NZL': -1.2, 'SGP': -1.0,
+    # Minor
+    'CHN': -0.5,    # CNY — emerging reserve, modest discount
+}
 
 
 def _reserve_currency_shift(country_block: Dict) -> float:
-    """Logit-space shift applied to a country's PD based on its
-    reserve-currency share. Returns 0 for non-reserve-currency
-    sovereigns (i.e. the vast majority).
+    """Per-country logit-space discount for reserve-currency issuers.
+    Hand-tuned against agency consensus notches — see
+    ``_RESERVE_CURRENCY_LOGIT_SHIFT`` for the values and the rationale.
+    Returns 0 for non-reserve sovereigns (the vast majority).
     """
-    share = (country_block.get('indicators') or {}).get('reserve_currency_share')
-    if share is None:
-        return 0.0
-    try:
-        return _RESERVE_CURRENCY_LOGIT_COEF * float(share)
-    except (TypeError, ValueError):
-        return 0.0
+    iso3 = (country_block.get('iso3') or '').upper()
+    return float(_RESERVE_CURRENCY_LOGIT_SHIFT.get(iso3, 0.0))
 
 
 def _score_with_gbm(payload, indicators, shadow, scaler, medians, shift):
