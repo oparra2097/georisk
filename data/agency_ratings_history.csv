@@ -1,14 +1,13 @@
 # Historical sovereign rating actions from S&P, Moody's, Fitch.
-# Long format: one row per (iso3, as_of) tuple. Used by the dashboard's
-# country drilldown chart to overlay agency rating trajectory alongside
-# model PD.
+# Long format: one row per (iso3, as_of) tuple. Each row carries the
+# rating from the agency that acted on that date; the other agencies'
+# columns are blank (the loader treats blank as "no change", so the
+# consensus_num that day reflects whichever agency moved). Sourced
+# from countryeconomy.com (free, public). Append rows or run
+# scripts/fetch_agency_history.py to extend coverage.
 #
-# as_of is YYYY-MM. Missing agency cells are blank, not "—".
-# Rating strings match the agency_ratings NUMERIC_SCALE (AAA/Aaa = 1, D/SD/RD = 22).
-#
-# Seed data covers the obvious back-test cases (Ghana 2022 default, Argentina
-# 2019-2020, Lebanon 2020, Russia 2022 sanctions, Egypt 2022-2024 distress).
-# Extend by appending rows — no other code changes required.
+# Date format: YYYY-MM-DD or YYYY-MM. Outlook values: Stable, Positive,
+# Negative, Watch, Under Review, RD (restricted default), or blank.
 iso3,as_of,sp,moodys,fitch,sp_outlook,moodys_outlook,fitch_outlook
 # ── Ghana ────────────────────────────────────────────────────────────────
 GHA,2015-10,B-,B3,B,Stable,Stable,Negative
@@ -50,11 +49,166 @@ EGY,2022-12,B,B3,B,Negative,Stable,Negative
 EGY,2023-10,B-,Caa1,B-,Stable,Negative,Negative
 EGY,2024-04,B-,Caa1,B,Positive,Positive,Positive
 EGY,2024-11,B-,Caa1,B,Positive,Stable,Positive
-# ── Romania (the user's current test case) ───────────────────────────────
-ROU,2014-05,BB+,Baa3,BBB-,Stable,Stable,Stable
-ROU,2018-04,BBB-,Baa3,BBB-,Stable,Stable,Stable
-ROU,2020-06,BBB-,Baa3,BBB-,Negative,Negative,Negative
-ROU,2024-08,BBB-,Baa3,BBB-,Stable,Stable,Stable
+# ── Romania ──────────────────────────────────────────────────────────────
+ROU,2003-09-24,,,BB,,,Positive
+ROU,2003-12-11,,Ba3,,,,
+ROU,2004-08-23,,,BB+,,,Positive
+ROU,2004-09-14,BBB-,,,,,
+ROU,2004-11-17,,,BBB,,,Stable
+ROU,2005-03-02,,Ba1,,,Positive,
+ROU,2006-08-31,,,BBB+,,,Stable
+ROU,2006-10-06,,Baa3,,,Stable,
+ROU,2008-01-31,,,BBB+,,,Negative
+ROU,2008-11-09,,,BBB-,,,Negative
+ROU,2010-02-02,,,BBB-,,,Stable
+ROU,2012-06-29,,Baa3,,,Negative,
+ROU,2013-11-22,BBB-,,,Positive,,
+ROU,2014-04-25,,Baa3,,,Stable,
+ROU,2014-05-16,BBB-,,,Stable,,
+ROU,2015-12-11,,Baa3,,,Positive,
+ROU,2016-01-22,,,BBB,,,Stable
+ROU,2016-07-22,,,BBB-,,,Stable
+ROU,2017-04-21,,Baa3,,,Stable,
+ROU,2018-08-24,,Baa3,,,Stable,
+ROU,2020-04-24,,Baa3,,,Negative,
+ROU,2021-04-16,BBB-,,,Stable,,
+ROU,2021-10-15,,Baa3,,,Stable,
+ROU,2023-11-03,,Baa3,,,Stable,
+ROU,2025-01-24,BBB-,,,Negative,,
+ROU,2025-03-14,,Baa3,,,Negative,
+# ── Angola ───────────────────────────────────────────────────────────────
+AGO,2010-05-19,B,B1,B+,,Positive,Positive
+AGO,2011-06-03,,Ba3,,,Stable,
+AGO,2011-07-12,BB-,,,Stable,,
+AGO,2012-05-23,,,BB-,,,
+AGO,2012-08-22,,Ba2,,,Positive,
+AGO,2014-08-08,,Ba2,,,Stable,
+AGO,2015-02-13,B+,,,Stable,,
+AGO,2015-03-03,,Ba2,,,Negative,
+AGO,2015-08-14,B+,,,Negative,,
+AGO,2015-09-25,,,B+,,,Stable
+AGO,2016-02-12,B,,,Stable,,
+AGO,2016-03-04,,Ba2,,,Watch,
+AGO,2016-04-29,,B1,,,Negative,
+AGO,2016-08-12,B,,,Negative,,
+AGO,2016-09-23,,,B,,,Negative
+AGO,2017-04-07,,B1,,,Negative,
+AGO,2017-08-11,B-,,,Stable,,
+AGO,2017-10-20,,B2,,,Stable,
+AGO,2018-02-07,,B2,,,Watch,
+AGO,2018-04-25,,,B,,,Stable
+AGO,2018-04-27,,B3,,,Stable,
+AGO,2019-02-08,CCC+,,,Negative,,
+AGO,2020-03-06,,,B-,,,Stable
+AGO,2020-03-26,CCC+,,,Stable,,
+AGO,2020-03-31,,B3,,,Watch,
+AGO,2020-09-04,,,CCC,,,
+AGO,2020-09-08,,Caa1,,,Stable,
+AGO,2021-09-13,,B3,,,Stable,
+AGO,2022-01-21,,,B-,,,Stable
+AGO,2022-02-04,B-,,,Stable,,
+AGO,2022-10-20,,B3,,,Positive,
+AGO,2024-11-29,,B3,,,Stable,
+# ── Philippines ──────────────────────────────────────────────────────────
+PHL,2010-11-12,BB,,,Stable,,
+PHL,2011-06-15,,Ba2,,,Stable,
+PHL,2012-07-04,BB+,,,Stable,,
+PHL,2012-10-29,,Ba1,,,Stable,
+PHL,2012-11-20,,,BBB-,,,Stable
+PHL,2013-05-02,BBB-,,,Stable,,
+PHL,2013-10-03,,Baa3,,,Positive,
+PHL,2014-05-08,BBB,,,Stable,,
+PHL,2017-03-29,,,BBB-,,,Positive
+PHL,2017-12-10,,,BBB,,,Stable
+PHL,2019-04-30,BBB+,,,Stable,,
+PHL,2024-11-25,BBB+,,,Positive,,
+# ── India ────────────────────────────────────────────────────────────────
+IND,2007-01-30,BBB-,,,,,
+IND,2017-11-16,,Baa2,,,Stable,
+IND,2019-11-07,,Baa2,,,Negative,
+IND,2020-06-01,,Baa3,,,Negative,
+IND,2021-10-05,,Baa3,,,Stable,
+IND,2024-05-29,BBB-,,,Positive,,
+IND,2025-08-14,BBB,,,Stable,,
+# ── South Africa ─────────────────────────────────────────────────────────
+ZAF,2008-06-17,,,BBB+,,,Stable
+ZAF,2008-11-09,,,BBB+,,,Negative
+ZAF,2012-10-12,BBB,,,Negative,,
+ZAF,2013-07-17,,Baa1,,,Negative,
+ZAF,2014-06-13,BBB-,,,Stable,,
+ZAF,2014-09-29,,,BBB,,,Negative
+ZAF,2015-06-05,,,BBB,,,Stable
+ZAF,2015-12-04,,,BBB-,,,Stable
+ZAF,2015-12-15,,Baa2,,,Negative,
+ZAF,2016-05-06,,Baa2,,,Negative,
+ZAF,2016-11-25,,,BBB-,,,Negative
+ZAF,2017-04-03,BB+,Baa2,,Negative,Watch,
+ZAF,2017-06-09,,Baa3,,,Negative,
+ZAF,2017-11-24,BB,,,Stable,,
+ZAF,2018-06-15,,,BB+,,,Stable
+ZAF,2019-11-01,,Baa3,,,Negative,
+ZAF,2020-03-27,,Ba1,,,Negative,
+ZAF,2020-04-03,,,BB,,,Negative
+ZAF,2020-04-29,BB-,,,Stable,,
+ZAF,2020-11-20,,Ba2,,BB-,Negative,Negative
+ZAF,2023-03-08,BB-,,,Stable,,
+ZAF,2024-11-15,BB-,,,Positive,,
+ZAF,2024-12-03,,Ba2,,,Stable,
+ZAF,2025-11-14,BB,,,Positive,,
+# ── Brazil ───────────────────────────────────────────────────────────────
+BRA,2011-05-23,BBB,,,Positive,,
+BRA,2011-11-17,BBB,,,Stable,,
+BRA,2014-03-24,BBB-,,,Stable,,
+BRA,2014-09-09,,Baa2,,,Negative,
+BRA,2015-09-09,BBB-,,,Negative,,
+BRA,2015-12-09,,Baa3,,,Watch,
+BRA,2015-12-16,,,BB+,,,Negative
+BRA,2016-02-17,BB,,,Negative,,
+BRA,2016-02-24,,Ba2,,,Negative,
+BRA,2017-05-19,,,BB,,,Negative
+BRA,2017-08-15,BB-,,,Negative,,
+BRA,2018-01-11,BB-,,,Stable,,
+BRA,2018-08-01,,,BB-,,,Stable
+BRA,2023-06-14,BB-,,,Positive,,
+BRA,2023-12-19,BB,,,Stable,,
+BRA,2024-05-01,,Ba2,,,Positive,
+BRA,2024-10-01,,Ba1,,,Positive,
+BRA,2025-05-30,,Ba1,,,Stable,
+# ── Turkey ───────────────────────────────────────────────────────────────
+TUR,2012-08-01,,,BB+,,,Stable
+TUR,2013-03-27,BBB,,,Stable,,
+TUR,2013-05-16,,Baa3,,,Stable,
+TUR,2014-02-07,,,,Negative,,
+TUR,2016-07-18,,Baa3,,,Watch,
+TUR,2016-07-22,,,BBB-,,,Stable
+TUR,2016-08-19,,,BBB-,,,Negative
+TUR,2016-09-23,,Ba1,,,Stable,
+TUR,2017-01-27,,,B,,,Stable
+TUR,2017-03-17,,Ba1,,,Negative,
+TUR,2018-03-07,,Ba2,,,Stable,
+TUR,2018-05-01,BB,,,Stable,,
+TUR,2018-06-01,,Ba2,,,Watch,
+TUR,2018-07-13,,,B,,,Negative
+TUR,2018-08-17,BB-,Ba3,,Stable,Negative,
+TUR,2019-06-14,,B1,,,Negative,
+TUR,2020-09-11,,B2,,,Negative,
+TUR,2021-12-03,,B2,,,Negative,
+TUR,2021-12-10,BB-,,,Negative,,
+TUR,2022-02-11,,,B+,,,Negative
+TUR,2022-04-01,B+,,,,,
+TUR,2022-07-08,,,B,,,Negative
+TUR,2022-08-12,,B3,,,Stable,
+TUR,2022-09-30,B,,,Stable,,
+TUR,2023-03-31,B,,,Negative,,
+TUR,2023-09-29,B,,,Stable,,
+TUR,2023-11-30,B,,,Positive,,
+TUR,2024-01-12,,B3,,,Positive,
+TUR,2024-05-03,B+,,,Positive,,
+TUR,2024-07-19,,B1,,,Positive,
+TUR,2024-11-01,BB-,,,Stable,,
+TUR,2025-07-25,,Ba3,,,Stable,
+# ── Romania snapshot used by the agency_ratings.csv loader ───────────────
+# (older quarterly snapshots remain in agency_ratings.csv)
 # ── United States (reference) ────────────────────────────────────────────
 USA,2011-08,AA+,Aaa,AAA,Negative,Stable,Stable
 USA,2013-03,AA+,Aaa,AAA,Stable,Stable,Stable
