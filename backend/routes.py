@@ -1824,6 +1824,51 @@ def get_currency_debt_route():
     return jsonify(get_currency_debt())
 
 
+@api_bp.route('/currency-debt/diag/counterparts')
+def diag_currency_debt_counterparts():
+    """List the counterpart-area codes valid for WB IDS source=6.
+
+    Each entry has {id, value} — we want the one labelled "World" or
+    "All Counterparts" or similar to use as the totals aggregate.
+    """
+    import requests
+    url = 'https://api.worldbank.org/v2/sources/6/counterpart-area?format=json&per_page=500'
+    try:
+        resp = requests.get(url, timeout=30)
+        payload = resp.json()
+    except Exception as e:
+        return jsonify({'error': str(e), 'url': url})
+    # Same source-prefixed wrapper shape: {source: {data: [...]}} or similar
+    items = []
+    if isinstance(payload, dict):
+        src = payload.get('source')
+        if isinstance(src, dict):
+            items = src.get('concept', [{}])[0].get('variable', []) if isinstance(src.get('concept'), list) else (src.get('data') or [])
+        if not items and isinstance(payload.get('source'), list):
+            for s in payload['source']:
+                if isinstance(s, dict) and isinstance(s.get('concept'), list):
+                    for c in s['concept']:
+                        items = c.get('variable') or items
+    elif isinstance(payload, list) and len(payload) >= 2:
+        items = payload[1] if isinstance(payload[1], list) else []
+
+    # Look for likely "All" / "World" labels
+    candidates = []
+    for it in items if isinstance(items, list) else []:
+        if not isinstance(it, dict):
+            continue
+        name = (it.get('value') or it.get('name') or '').lower()
+        if 'world' in name or 'all' in name or 'total' in name or 'aggreg' in name:
+            candidates.append({'id': it.get('id'), 'value': it.get('value') or it.get('name')})
+    return jsonify({
+        'url': url,
+        'item_count': len(items) if isinstance(items, list) else 0,
+        'aggregate_candidates': candidates,
+        'first_20_items': items[:20] if isinstance(items, list) else None,
+        'raw_preview': str(payload)[:1500],
+    })
+
+
 @api_bp.route('/currency-debt/diag')
 def diag_currency_debt():
     """Show raw WB IDS API response for one indicator. Debug-only.
