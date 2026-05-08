@@ -1824,6 +1824,51 @@ def get_currency_debt_route():
     return jsonify(get_currency_debt())
 
 
+@api_bp.route('/currency-debt/diag/series')
+def diag_currency_debt_series():
+    """List WB IDS series whose name mentions 'currency' or '%'.
+
+    Lets us see whether the currency-composition indicators exist for
+    Short-term, Total external, or Domestic debt — not just Long-term PPG.
+    Query: ?q=currency  (case-insensitive substring match on name)
+    """
+    import requests
+    q = request.args.get('q', 'currency').lower()
+    url = 'https://api.worldbank.org/v2/sources/6/series?format=json&per_page=3000'
+    try:
+        resp = requests.get(url, timeout=30)
+        payload = resp.json()
+    except Exception as e:
+        return jsonify({'error': str(e), 'url': url})
+
+    items = []
+    if isinstance(payload, dict):
+        src = payload.get('source')
+        if isinstance(src, list):
+            for s in src:
+                if isinstance(s, dict) and isinstance(s.get('concept'), list):
+                    for c in s['concept']:
+                        items = c.get('variable') or items
+        elif isinstance(src, dict) and isinstance(src.get('concept'), list):
+            for c in src['concept']:
+                items = c.get('variable') or items
+    matches = []
+    for it in items if isinstance(items, list) else []:
+        if not isinstance(it, dict):
+            continue
+        name = (it.get('value') or '').strip()
+        code = (it.get('id') or '').strip()
+        if q in name.lower() or q in code.lower():
+            matches.append({'id': code, 'name': name})
+    return jsonify({
+        'q': q,
+        'url': url,
+        'total_series_in_ids': len(items) if isinstance(items, list) else 0,
+        'match_count': len(matches),
+        'matches': matches,
+    })
+
+
 @api_bp.route('/currency-debt/diag/counterparts')
 def diag_currency_debt_counterparts():
     """List the counterpart-area codes valid for WB IDS source=6.

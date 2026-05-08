@@ -1,29 +1,30 @@
 """
-Currency Composition of External Debt — World Bank IDS.
+External Debt Composition — World Bank IDS.
 
-Fetches the WB International Debt Statistics "Currency composition of PPG debt"
-group: % share of long-term, public-and-publicly-guaranteed external debt held
-in each of seven currency buckets, for ~120 low/middle-income countries that
-report to the WB Debtor Reporting System (DRS).
+Fetches two complementary slices of WB International Debt Statistics for
+each DRS-reporting country (~120 LMICs):
 
-Indicators (all DT.CUR.*.ZS, unit = % of long-term PPG debt):
-  USDL  U.S. dollars
-  EURO  Euros
-  JYEN  Japanese yen
-  UKPS  Pound sterling
-  SWFR  Swiss francs
-  SDRW  Special Drawing Rights
-  MULC  Multiple currencies
-  OTHC  All other currencies
+1. Currency composition of long-term PPG external debt (% share)
+   Series: DT.CUR.{USDL,EURO,JYEN,UKPS,SWFR,SDRW,MULC,OTHC}.ZS
+   This is the only debt category for which WB IDS publishes a currency
+   breakdown. ST debt, total external debt, and domestic public debt do
+   NOT have a published currency split in IDS.
 
-Verified codes via WB DataBank metadata + ONEcampaign/bblocks IDS importer
-(2024 data still flowing). Annual back to ~1970, lags publication by ~2 years.
+2. External debt stocks by maturity (USD billions)
+   Series: DT.DOD.DECT.CD (total external)
+           DT.DOD.DLXF.CD (long-term external)
+           DT.DOD.DSTC.CD (short-term external)
+           DT.DOD.DPPG.CD (PPG long-term external)
 
-These are IDS-only series — they're invisible to the standard WDI-style
-endpoint (`/v2/country/all/indicator/{code}?source=6`), which silently
-returns an empty data array. We have to use the source-prefixed SDMX-style
-endpoint (`/v2/sources/6/series/{code}/country/all/time/all`) instead, which
-is what wbgapi uses internally.
+All IDS series live in WB API source=6 and are dimensioned by
+Series × Country × Counterpart-Area × Time. The counterpart-area
+aggregate "World" is coded ``WLD`` (verified via the sources/6/
+counterpart-area metadata endpoint — numeric codes like 907 are
+specific creditors, not the totals aggregate).
+
+Source-prefixed SDMX-style endpoint is required because IDS-only series
+are invisible to the legacy WDI-style endpoint:
+  /v2/sources/6/series/{CODE}/country/all/counterpart-area/WLD/time/all
 """
 
 import threading
@@ -39,7 +40,7 @@ _CACHE_TTL = 86400  # 24h
 _WB_API = 'https://api.worldbank.org/v2'
 _IDS_SOURCE = 6
 
-# (WB indicator code, internal key, display label, hex color)
+# Currency composition (% of long-term PPG external debt)
 _CURRENCY_SPEC = [
     ('DT.CUR.USDL.ZS', 'USD',   'US Dollar',           '#10b981'),
     ('DT.CUR.EURO.ZS', 'EUR',   'Euro',                '#3b82f6'),
@@ -51,8 +52,14 @@ _CURRENCY_SPEC = [
     ('DT.CUR.OTHC.ZS', 'OTHER', 'Other Currencies',    '#94a3b8'),
 ]
 
-# IDS reports country-level aggregates we don't want plotted alongside actual
-# countries. Standard WB aggregate codes:
+# External debt stocks by maturity (USD, current — divide by 1e9 for billions)
+_STOCK_SPEC = [
+    ('DT.DOD.DECT.CD', 'total_ext', 'Total External Debt',   '#3b82f6'),
+    ('DT.DOD.DLXF.CD', 'lt_ext',    'Long-Term External',    '#10b981'),
+    ('DT.DOD.DSTC.CD', 'st_ext',    'Short-Term External',   '#f59e0b'),
+    ('DT.DOD.DPPG.CD', 'ppg_ext',   'PPG Long-Term External','#a855f7'),
+]
+
 _AGGREGATE_CODES = {
     'ARB', 'CEB', 'CSS', 'EAP', 'EAR', 'EAS', 'ECA', 'ECS', 'EMU', 'EUU',
     'FCS', 'HIC', 'HPC', 'IBD', 'IBT', 'IDA', 'IDB', 'IDX', 'INX', 'LAC',
@@ -65,13 +72,7 @@ _AGGREGATE_CODES = {
 def _fetch_ids_series_raw(indicator, counterpart='WLD'):
     """Fetch raw response from the WB IDS source-prefixed endpoint.
 
-    IDS data is dimensioned by Series × Country (debtor) × Counterpart-Area
-    (creditor) × Time. For "currency composition of total PPG debt" we want
-    the All-Counterparts aggregate, coded ``WLD`` ("World") in WB IDS.
-    (Numeric counterpart codes like 907 are specific creditors, not the
-    aggregate — confirmed via /v2/sources/6/counterpart-area metadata.)
-
-    Returns ``(url, status_code, payload_or_error_str)`` for diagnostics.
+    Returns (url, status_code, payload_or_error_str).
     """
     url = (
         f'{_WB_API}/sources/{_IDS_SOURCE}/series/{indicator}'
@@ -91,45 +92,31 @@ def _fetch_ids_series_raw(indicator, counterpart='WLD'):
 
 
 def _extract_data_rows(payload):
-    """Pull the list of data rows out of a WB SDMX-JSON response.
-
-    The source-prefixed endpoint returns:
-        {'page', 'pages', 'per_page', 'total', 'lastupdated',
-         'source': {'id', 'name', 'data': [...]}}
-
-    We also tolerate older/newer variants:
-      - {'data': [...]}                              (flat dict)
-      - [{...meta...}, {'data': [...]}]              (list wrapper)
-      - [{...meta...}, [...rows...]]                 (legacy WDI-ish)
-      - {'source': [{'data': [...]}], ...}           (list-of-source variant)
-    """
+    """Pull data rows out of a WB SDMX-JSON response (handles all variants)."""
     if payload is None:
         return []
     if isinstance(payload, dict):
         if isinstance(payload.get('data'), list):
             return payload['data']
         src = payload.get('source')
-        # Newer source-prefixed shape: source is a dict with a 'data' list.
         if isinstance(src, dict) and isinstance(src.get('data'), list):
             return src['data']
-        # Older variant: source is a list of dicts, each carrying data.
         if isinstance(src, list) and src and isinstance(src[0], dict):
             inner = src[0].get('data')
             if isinstance(inner, list):
                 return inner
         return []
-    if isinstance(payload, list):
-        if len(payload) >= 2:
-            tail = payload[1]
-            if isinstance(tail, list):
-                return tail
-            if isinstance(tail, dict) and isinstance(tail.get('data'), list):
-                return tail['data']
+    if isinstance(payload, list) and len(payload) >= 2:
+        tail = payload[1]
+        if isinstance(tail, list):
+            return tail
+        if isinstance(tail, dict) and isinstance(tail.get('data'), list):
+            return tail['data']
     return []
 
 
 def _parse_row(row):
-    """Parse one SDMX data row into (iso3, name, year_str, value) or None."""
+    """Parse one SDMX data row → (iso3, name, year_str, value) or None."""
     if not isinstance(row, dict):
         return None
     val = row.get('value')
@@ -141,7 +128,6 @@ def _parse_row(row):
         return None
 
     iso3, name, year_str = None, None, None
-    # Source-prefixed shape: variable=[{concept, id, value}, ...]
     for var in row.get('variable') or []:
         cid = (var.get('concept') or '').lower()
         vid = var.get('id') or ''
@@ -152,10 +138,10 @@ def _parse_row(row):
         elif cid in ('time', 'year'):
             year_str = vid[2:] if vid.startswith('YR') else vid
 
-    # Fallback: legacy WDI shape with flat fields
     if iso3 is None and 'countryiso3code' in row:
         iso3 = row.get('countryiso3code') or None
-        name = (row.get('country') or {}).get('value') if isinstance(row.get('country'), dict) else None
+        c = row.get('country')
+        name = c.get('value') if isinstance(c, dict) else None
     if year_str is None and 'date' in row:
         year_str = row.get('date')
 
@@ -165,28 +151,12 @@ def _parse_row(row):
 
 
 def _fetch_ids_series(indicator):
-    """Fetch a single IDS series via the source-prefixed endpoint.
-
-    Returns ``{iso3: {name, values: {year_str: float}}}`` or ``{}`` on error.
-    """
+    """Fetch one IDS series → {iso3: {name, values: {year: float}}}."""
     url, status, payload = _fetch_ids_series_raw(indicator)
     if status != 200:
-        print(f'[CurrencyDebt] {indicator}: HTTP {status} from {url}')
+        print(f'[CurrencyDebt] {indicator}: HTTP {status}')
         return {}
-
     rows = _extract_data_rows(payload)
-    if not rows:
-        # Diagnostic: log payload shape so we can see what came back.
-        if isinstance(payload, dict):
-            keys = list(payload.keys())
-            print(f'[CurrencyDebt] {indicator}: empty data, payload dict keys={keys}')
-        elif isinstance(payload, list):
-            shapes = [type(x).__name__ for x in payload[:3]]
-            print(f'[CurrencyDebt] {indicator}: empty data, payload list shapes={shapes}')
-        else:
-            print(f'[CurrencyDebt] {indicator}: empty data, payload type={type(payload).__name__}')
-        return {}
-
     countries = {}
     for row in rows:
         parsed = _parse_row(row)
@@ -195,29 +165,18 @@ def _fetch_ids_series(indicator):
         iso3, name, year_str, val = parsed
         entry = countries.setdefault(iso3, {'name': name, 'values': {}})
         entry['values'][year_str] = val
-    print(f'[CurrencyDebt] {indicator}: {len(countries)} countries, {sum(len(c["values"]) for c in countries.values())} obs')
+    print(f'[CurrencyDebt] {indicator}: {len(countries)} countries, '
+          f'{sum(len(c["values"]) for c in countries.values())} obs')
     return countries
 
-    return countries
 
-
-def get_currency_debt():
-    """Return per-country currency composition of long-term external debt."""
-    cache_key = 'currency_debt'
-    with _cache_lock:
-        entry = _cache.get(cache_key)
-        if entry and time.time() - entry['ts'] < _CACHE_TTL:
-            return entry['data']
-
-    per_currency = {key: _fetch_ids_series(indicator)
-                    for indicator, key, _l, _c in _CURRENCY_SPEC}
-
-    # Merge into per-country, per-year structure
+def _build_currency_per_country(per_currency):
+    """Merge per-currency series into {iso3: {name, latest_year, latest, history}}."""
     countries = {}
     all_years = set()
     for _ind, key, _l, _c in _CURRENCY_SPEC:
-        wb_countries = per_currency.get(key) or {}
-        for iso3, cdata in wb_countries.items():
+        wb = per_currency.get(key) or {}
+        for iso3, cdata in wb.items():
             entry = countries.setdefault(iso3, {
                 'name': cdata.get('name', iso3),
                 'history': {},
@@ -247,21 +206,106 @@ def get_currency_debt():
             'latest': latest,
             'history': history,
         }
+    return keep, sorted(all_years)
 
-    years = sorted(all_years)
+
+def _build_stocks_per_country(per_stock):
+    """Merge per-stock series into {iso3: {name, latest_year, latest, history}}.
+
+    Values are in USD; convert to billions for display friendliness.
+    """
+    countries = {}
+    all_years = set()
+    for _ind, key, _l, _c in _STOCK_SPEC:
+        wb = per_stock.get(key) or {}
+        for iso3, cdata in wb.items():
+            entry = countries.setdefault(iso3, {
+                'name': cdata.get('name', iso3),
+                'history': {},
+            })
+            for year_str, val in (cdata.get('values') or {}).items():
+                # WB IDS publishes stocks in USD; convert to $B for display.
+                val_b = val / 1e9
+                all_years.add(year_str)
+                entry['history'].setdefault(year_str, {})[key] = val_b
+
+    keep = {}
+    for iso3, entry in countries.items():
+        history = entry['history']
+        if not history:
+            continue
+        years_with_data = sorted(
+            (y for y, vals in history.items() if vals),
+            reverse=True,
+        )
+        if not years_with_data:
+            continue
+        latest_year = years_with_data[0]
+        latest = dict(history[latest_year])
+        for _i, key, _l, _c in _STOCK_SPEC:
+            latest.setdefault(key, None)
+        keep[iso3] = {
+            'name': entry['name'],
+            'latest_year': latest_year,
+            'latest': latest,
+            'history': history,
+        }
+    return keep, sorted(all_years)
+
+
+def get_currency_debt():
+    """Return currency composition + debt stocks for DRS-reporting countries."""
+    cache_key = 'currency_debt'
+    with _cache_lock:
+        entry = _cache.get(cache_key)
+        if entry and time.time() - entry['ts'] < _CACHE_TTL:
+            return entry['data']
+
+    per_currency = {key: _fetch_ids_series(ind)
+                    for ind, key, _l, _c in _CURRENCY_SPEC}
+    per_stock = {key: _fetch_ids_series(ind)
+                 for ind, key, _l, _c in _STOCK_SPEC}
+
+    countries, ccy_years = _build_currency_per_country(per_currency)
+    stocks, stock_years = _build_stocks_per_country(per_stock)
+
+    # Union of country names across currency + stock data
+    all_countries = {}
+    for iso3, c in countries.items():
+        all_countries[iso3] = c.get('name', iso3)
+    for iso3, c in stocks.items():
+        all_countries.setdefault(iso3, c.get('name', iso3))
+
+    all_years = sorted(set(ccy_years) | set(stock_years))
+
     data = {
         'currencies': [
             {'key': key, 'label': label, 'color': color}
             for _i, key, label, color in _CURRENCY_SPEC
         ],
-        'countries': keep,
-        'years': years,
+        'stock_series': [
+            {'key': key, 'label': label, 'color': color}
+            for _i, key, label, color in _STOCK_SPEC
+        ],
+        'countries': countries,    # currency composition (LT PPG only)
+        'stocks': stocks,          # debt levels by maturity ($B)
+        'country_names': all_countries,
+        'years': all_years,
         'meta': {
             'source': 'World Bank · International Debt Statistics',
-            'description': 'Currency composition of PPG long-term external debt (% share). Coverage: DRS-reporting low/middle-income countries.',
+            'description': (
+                'Currency composition of long-term PPG external debt (% share) '
+                'and external debt stocks by maturity ($B). Coverage: '
+                'DRS-reporting low/middle-income countries. Note: WB IDS '
+                'publishes a currency breakdown only for long-term PPG; '
+                'short-term, total, and domestic public debt do not have a '
+                'currency split in this dataset.'
+            ),
             'last_updated': datetime.utcnow().strftime('%Y-%m-%d'),
-            'country_count': len(keep),
-            'year_range': f'{years[0]}–{years[-1]}' if years else '',
+            'country_count': len(all_countries),
+            'currency_country_count': len(countries),
+            'stock_country_count': len(stocks),
+            'year_range': f'{all_years[0]}–{all_years[-1]}' if all_years else '',
         },
     }
 
