@@ -62,12 +62,14 @@ _AGGREGATE_CODES = {
 }
 
 
-def _fetch_ids_series_raw(indicator, counterpart='907'):
+def _fetch_ids_series_raw(indicator, counterpart='WLD'):
     """Fetch raw response from the WB IDS source-prefixed endpoint.
 
     IDS data is dimensioned by Series × Country (debtor) × Counterpart-Area
     (creditor) × Time. For "currency composition of total PPG debt" we want
-    the All-Counterparts aggregate, coded ``907`` ("World") in WB IDS.
+    the All-Counterparts aggregate, coded ``WLD`` ("World") in WB IDS.
+    (Numeric counterpart codes like 907 are specific creditors, not the
+    aggregate — confirmed via /v2/sources/6/counterpart-area metadata.)
 
     Returns ``(url, status_code, payload_or_error_str)`` for diagnostics.
     """

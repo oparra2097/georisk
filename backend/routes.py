@@ -1877,7 +1877,7 @@ def diag_currency_debt():
     """
     from backend.data_sources.currency_debt import _fetch_ids_series_raw, _extract_data_rows
     indicator = request.args.get('indicator', 'DT.CUR.USDL.ZS')
-    counterpart = request.args.get('counterpart', '907')
+    counterpart = request.args.get('counterpart', 'WLD')
     url, status, payload = _fetch_ids_series_raw(indicator, counterpart=counterpart)
     rows = _extract_data_rows(payload)
     sample = rows[:3] if isinstance(rows, list) else []
