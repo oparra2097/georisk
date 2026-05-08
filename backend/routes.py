@@ -1824,6 +1824,32 @@ def get_currency_debt_route():
     return jsonify(get_currency_debt())
 
 
+@api_bp.route('/currency-debt/diag')
+def diag_currency_debt():
+    """Show raw WB IDS API response for one indicator. Debug-only."""
+    from backend.data_sources.currency_debt import _fetch_ids_series_raw, _extract_data_rows
+    indicator = request.args.get('indicator', 'DT.CUR.USDL.ZS')
+    url, status, payload = _fetch_ids_series_raw(indicator)
+    rows = _extract_data_rows(payload)
+    sample = rows[:3] if isinstance(rows, list) else []
+    if isinstance(payload, dict):
+        shape = {'type': 'dict', 'keys': list(payload.keys())}
+    elif isinstance(payload, list):
+        shape = {'type': 'list', 'len': len(payload),
+                 'item_types': [type(x).__name__ for x in payload[:3]]}
+    else:
+        shape = {'type': type(payload).__name__}
+    return jsonify({
+        'indicator': indicator,
+        'url': url,
+        'status': status,
+        'payload_shape': shape,
+        'row_count': len(rows) if isinstance(rows, list) else 0,
+        'sample_rows': sample,
+        'payload_preview': str(payload)[:1500] if rows == [] else None,
+    })
+
+
 @api_bp.route('/currency-debt/export')
 def export_currency_debt_excel():
     """Excel export of currency composition data — one sheet per country."""

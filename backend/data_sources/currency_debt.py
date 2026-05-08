@@ -62,10 +62,10 @@ _AGGREGATE_CODES = {
 }
 
 
-def _fetch_ids_series(indicator):
-    """Fetch a single IDS series via the source-prefixed endpoint.
+def _fetch_ids_series_raw(indicator):
+    """Fetch raw response from the WB IDS source-prefixed endpoint.
 
-    Returns ``{iso3: {name, values: {year_str: float}}}`` or ``{}`` on error.
+    Returns ``(url, status_code, payload_or_error_str)`` for diagnostics.
     """
     url = (
         f'{_WB_API}/sources/{_IDS_SOURCE}/series/{indicator}'
@@ -73,40 +73,117 @@ def _fetch_ids_series(indicator):
     )
     try:
         resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
-        payload = resp.json()
+        status = resp.status_code
+        try:
+            payload = resp.json()
+        except Exception:
+            payload = resp.text[:2000]
+        return url, status, payload
     except Exception as e:
-        print(f'[CurrencyDebt] fetch error {indicator}: {e}')
+        return url, 0, f'ERROR: {e}'
+
+
+def _extract_data_rows(payload):
+    """Pull the list of data rows out of a WB SDMX-JSON response.
+
+    The source-prefixed endpoint can return any of these shapes:
+      - {'data': [...]}                                        (single dict)
+      - [{...meta...}, {'data': [...]}]                        (list wrapper)
+      - [{...meta...}, [...rows...]]                           (legacy WDI-ish)
+      - {'source': [{'data': [...]}], ...}                     (deeply nested)
+    """
+    if payload is None:
+        return []
+    if isinstance(payload, dict):
+        if isinstance(payload.get('data'), list):
+            return payload['data']
+        # Some responses nest data under source[0].data
+        src = payload.get('source')
+        if isinstance(src, list) and src and isinstance(src[0], dict):
+            inner = src[0].get('data')
+            if isinstance(inner, list):
+                return inner
+        # Or under page wrappers
+        return []
+    if isinstance(payload, list):
+        if len(payload) >= 2:
+            tail = payload[1]
+            if isinstance(tail, list):
+                return tail
+            if isinstance(tail, dict) and isinstance(tail.get('data'), list):
+                return tail['data']
+    return []
+
+
+def _parse_row(row):
+    """Parse one SDMX data row into (iso3, name, year_str, value) or None."""
+    if not isinstance(row, dict):
+        return None
+    val = row.get('value')
+    if val is None or val == '':
+        return None
+    try:
+        val = float(val)
+    except (TypeError, ValueError):
+        return None
+
+    iso3, name, year_str = None, None, None
+    # Source-prefixed shape: variable=[{concept, id, value}, ...]
+    for var in row.get('variable') or []:
+        cid = (var.get('concept') or '').lower()
+        vid = var.get('id') or ''
+        vlabel = var.get('value') or ''
+        if cid in ('country', 'economy', 'ref_area'):
+            iso3 = vid
+            name = vlabel or vid
+        elif cid in ('time', 'year'):
+            year_str = vid[2:] if vid.startswith('YR') else vid
+
+    # Fallback: legacy WDI shape with flat fields
+    if iso3 is None and 'countryiso3code' in row:
+        iso3 = row.get('countryiso3code') or None
+        name = (row.get('country') or {}).get('value') if isinstance(row.get('country'), dict) else None
+    if year_str is None and 'date' in row:
+        year_str = row.get('date')
+
+    if not iso3 or iso3 in _AGGREGATE_CODES or not year_str:
+        return None
+    return (iso3, name or iso3, year_str, val)
+
+
+def _fetch_ids_series(indicator):
+    """Fetch a single IDS series via the source-prefixed endpoint.
+
+    Returns ``{iso3: {name, values: {year_str: float}}}`` or ``{}`` on error.
+    """
+    url, status, payload = _fetch_ids_series_raw(indicator)
+    if status != 200:
+        print(f'[CurrencyDebt] {indicator}: HTTP {status} from {url}')
         return {}
 
-    rows = (payload or {}).get('data') or []
+    rows = _extract_data_rows(payload)
+    if not rows:
+        # Diagnostic: log payload shape so we can see what came back.
+        if isinstance(payload, dict):
+            keys = list(payload.keys())
+            print(f'[CurrencyDebt] {indicator}: empty data, payload dict keys={keys}')
+        elif isinstance(payload, list):
+            shapes = [type(x).__name__ for x in payload[:3]]
+            print(f'[CurrencyDebt] {indicator}: empty data, payload list shapes={shapes}')
+        else:
+            print(f'[CurrencyDebt] {indicator}: empty data, payload type={type(payload).__name__}')
+        return {}
+
     countries = {}
     for row in rows:
-        val = row.get('value')
-        if val is None or val == '':
+        parsed = _parse_row(row)
+        if not parsed:
             continue
-        try:
-            val = float(val)
-        except (TypeError, ValueError):
-            continue
-
-        iso3, name, year_str = None, None, None
-        for var in row.get('variable', []) or []:
-            cid = (var.get('concept') or '').lower()
-            vid = var.get('id') or ''
-            vlabel = var.get('value') or ''
-            if cid == 'country' or cid == 'economy':
-                iso3 = vid
-                name = vlabel or vid
-            elif cid == 'time':
-                # WB time IDs are like "YR2023" — strip the YR prefix.
-                year_str = vid[2:] if vid.startswith('YR') else vid
-
-        if not iso3 or iso3 in _AGGREGATE_CODES or not year_str:
-            continue
-
-        entry = countries.setdefault(iso3, {'name': name or iso3, 'values': {}})
+        iso3, name, year_str, val = parsed
+        entry = countries.setdefault(iso3, {'name': name, 'values': {}})
         entry['values'][year_str] = val
+    print(f'[CurrencyDebt] {indicator}: {len(countries)} countries, {sum(len(c["values"]) for c in countries.values())} obs')
+    return countries
 
     return countries
 
