@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}API Keys - Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+    .keys-wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px; }
+    .keys-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+    .keys-header h1 { color: #f1f5f9; font-size: 22px; font-weight: 700; margin: 0; }
+    .keys-header a { color: #3b82f6; font-size: 13px; text-decoration: none; }
+    .keys-sub { color: #64748b; font-size: 13px; margin: 0 0 22px; }
+    .keys-sub code { background: #0f172a; border: 1px solid #1e293b; padding: 1px 6px; border-radius: 4px; color: #cbd5f5; font-size: 12px; }
+
+    .panel { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .panel h2 { color: #e2e8f0; font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+
+    .new-key-banner { background: #10b9810f; border: 1px solid #10b98144; border-radius: 8px; padding: 16px 18px; margin-bottom: 20px; }
+    .new-key-banner h3 { color: #6ee7b7; font-size: 13px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .new-key-banner .secret { display: block; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: #020617; color: #cbd5f5; padding: 12px 14px; border-radius: 6px; border: 1px solid #1e293b; }
+    .new-key-banner .warn { color: #fbbf24; font-size: 12px; margin: 8px 0 0; }
+    .copy-btn { margin-top: 8px; padding: 5px 12px; font-size: 12px; background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 4px; cursor: pointer; }
+    .copy-btn:hover { background: #334155; }
+
+    form.create-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    form.create-form input[type=text] { flex: 1 1 200px; padding: 8px 10px; background: #020617; border: 1px solid #1e293b; border-radius: 4px; color: #e2e8f0; font-size: 13px; }
+    form.create-form select { padding: 8px 10px; background: #020617; border: 1px solid #1e293b; border-radius: 4px; color: #e2e8f0; font-size: 13px; }
+    form.create-form button { padding: 8px 18px; background: #3b82f6; color: #fff; border: 0; border-radius: 4px; font-weight: 600; font-size: 13px; cursor: pointer; }
+    form.create-form button:hover { background: #2563eb; }
+
+    table.keys { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.keys th { background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px; text-align: left; }
+    table.keys td { padding: 10px; border-bottom: 1px solid #1e293b; color: #e2e8f0; vertical-align: middle; }
+    table.keys td.prefix { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #cbd5f5; font-size: 12px; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .pill-active { background: #10b98118; color: #10b981; }
+    .pill-revoked { background: #f59e0b18; color: #f59e0b; }
+    .revoke-btn { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; border: 1px solid #ef444444; background: transparent; color: #ef4444; cursor: pointer; }
+    .revoke-btn:hover { background: #ef444418; }
+    .empty { color: #64748b; font-size: 13px; text-align: center; padding: 24px; }
+
+    .flash-bar { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+    .flash-bar.success { background: #10b98118; color: #6ee7b7; border: 1px solid #10b98133; }
+    .flash-bar.error { background: #ef444418; color: #fca5a5; border: 1px solid #ef444433; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="keys-wrap">
+    <div class="keys-header">
+        <h1>API Keys</h1>
+        <a href="/data">&larr; Back to Data</a>
+    </div>
+    <p class="keys-sub">
+        Bearer tokens for programmatic access (algotrader bots, scripts, integrations).
+        Send as <code>Authorization: Bearer pk_live_…</code> against
+        <code>/api/v1/*</code> endpoints. Keys inherit your user's permissions
+        (insurance / macro / hpi access). They <strong>cannot</strong> be used
+        to mint more keys, change account settings, or log in as you.
+    </p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="flash-bar {{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    {% if new_key %}
+    <div class="new-key-banner">
+        <h3>New API key — copy it now</h3>
+        <code class="secret" id="newkey">{{ new_key }}</code>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('newkey').textContent); this.textContent='Copied'; setTimeout(()=>this.textContent='Copy',1500);">Copy</button>
+        <p class="warn">⚠ This is the only time the full key will be shown. Save it in your bot's secret store now. If you lose it, revoke this key and mint a new one.</p>
+    </div>
+    {% endif %}
+
+    <div class="panel">
+        <h2>Create a new key</h2>
+        <form class="create-form" action="{{ url_for('auth.api_keys_create') }}" method="POST">
+            <input type="text" name="name" placeholder="Name (e.g. 'gold-bot prod')" required maxlength="80">
+            <select name="scopes">
+                <option value="read">read (default)</option>
+            </select>
+            <button type="submit">Create key</button>
+        </form>
+    </div>
+
+    <div class="panel">
+        <h2>Your keys</h2>
+        {% if keys %}
+        <table class="keys">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Prefix</th>
+                    <th>Scopes</th>
+                    <th>Created</th>
+                    <th>Last used</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for k in keys %}
+                <tr>
+                    <td>{{ k.name }}</td>
+                    <td class="prefix">{{ k.key_prefix }}…</td>
+                    <td>{{ k.scopes }}</td>
+                    <td>{{ k.created_at[:10] if k.created_at else '—' }}</td>
+                    <td>{{ k.last_used_at[:16].replace('T',' ') if k.last_used_at else 'never' }}</td>
+                    <td>
+                        {% if k.revoked %}
+                        <span class="pill pill-revoked">revoked</span>
+                        {% else %}
+                        <span class="pill pill-active">active</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not k.revoked %}
+                        <form action="{{ url_for('auth.api_keys_revoke', key_id=k.id) }}" method="POST" style="margin:0;display:inline" onsubmit="return confirm('Revoke this key? Bots using it will stop working immediately.');">
+                            <button class="revoke-btn" type="submit">Revoke</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No keys yet. Create one above to start using the <code>/api/v1/</code> surface.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

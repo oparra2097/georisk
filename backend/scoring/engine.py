@@ -48,6 +48,7 @@ from backend.data_sources.gnews_client import (
 )
 from backend.data_sources.world_bank_wgi import fetch_base_scores, get_base_score
 from backend.scoring.keyword_analyzer import analyze_articles
+from backend.scoring.relevance import filter_articles_for_country
 from backend.scoring.indicator_calculators import calculate_indicator_score
 from backend.scoring.baselines import get_country_baseline
 from backend.scoring.normalizer import calculate_news_score, calculate_composite
@@ -205,14 +206,28 @@ def score_single_country(country_alpha2, use_news=False):
         else:
             news_articles = store.get_newsapi_articles(country_alpha2)
 
+    # Relevance filter: drop articles not actually about this country and
+    # collapse duplicate titles across providers.
+    gdelt_article_dicts = filter_articles_for_country(
+        gdelt_article_dicts, country_alpha2)
+    news_articles = filter_articles_for_country(news_articles, country_alpha2)
+
     all_articles = gdelt_article_dicts + news_articles
+    # Cross-provider dedupe on the merged list
+    all_articles = filter_articles_for_country(all_articles, country_alpha2)
     analysis = analyze_articles(all_articles)
 
-    # Archive articles for historical training data (once per day per country)
+    # Archive articles for historical training data (once per day per country).
+    # Also filter the raw provider lists so archived articles match what
+    # actually contributed to the score.
     try:
-        archive_articles(country_alpha2, gdelt_articles, analysis, provider='gdelt')
+        filtered_gdelt_raw = filter_articles_for_country(
+            gdelt_articles, country_alpha2)
+        archive_articles(country_alpha2, filtered_gdelt_raw, analysis,
+                         provider='gdelt')
         if news_articles:
-            archive_articles(country_alpha2, news_articles, analysis, provider='news')
+            archive_articles(country_alpha2, news_articles, analysis,
+                             provider='news')
     except Exception as e:
         logger.debug(f"Article archive failed for {country_alpha2}: {e}")
 
@@ -324,9 +339,14 @@ def score_single_country(country_alpha2, use_news=False):
                 f"articles={len(all_articles)}, tone={avg_tone:.2f}"
             )
 
-    headlines = []
+    # Build headlines from FILTERED articles, sorted by freshness.
+    # Use the relevance-filtered GDELT list (not raw) so irrelevant
+    # articles don't crowd out real news.
+    filtered_gdelt = filter_articles_for_country(gdelt_articles, country_alpha2)
+
+    headline_candidates = []
     for art in news_articles[:10]:
-        headlines.append(NewsArticle(
+        headline_candidates.append(NewsArticle(
             title=art.get('title', ''),
             description=art.get('description', ''),
             url=art.get('url', ''),
@@ -335,8 +355,8 @@ def score_single_country(country_alpha2, use_news=False):
             country_code=country_alpha2
         ))
 
-    for art in gdelt_articles[:10]:
-        headlines.append(NewsArticle(
+    for art in filtered_gdelt[:10]:
+        headline_candidates.append(NewsArticle(
             title=art.get('title', ''),
             description='',
             url=art.get('url', ''),
@@ -345,7 +365,12 @@ def score_single_country(country_alpha2, use_news=False):
             country_code=country_alpha2
         ))
 
-    return risk, headlines[:15]
+    # Sort by published date descending so the freshest articles always
+    # appear first, regardless of which provider they came from.
+    headline_candidates.sort(
+        key=lambda h: h.published_at or '', reverse=True)
+
+    return risk, headline_candidates[:15]
 
 
 def _score_country_safe(code, use_news=False):

@@ -66,22 +66,19 @@ def fetch_headlines_for_country(country_alpha2, page_size=10):
         logger.debug("NewsData.io daily budget exhausted — skipping request")
         return []
 
-    code = country_alpha2.lower()
     articles = []
 
     try:
+        # Always query by quoted country name — the `country=` param filters
+        # by publisher origin, not article topic, which contaminated the
+        # feed with unrelated international news.
+        country_name = iso_alpha2_to_name(country_alpha2)
         params = {
             'apikey': key,
             'language': 'en',
             'size': page_size,
+            'q': f'"{country_name}"',
         }
-
-        if code in NEWSDATA_SUPPORTED:
-            params['country'] = code
-        else:
-            # Fallback: search by country name
-            country_name = iso_alpha2_to_name(country_alpha2)
-            params['q'] = country_name
 
         resp = requests.get(NEWSDATA_URL, params=params, timeout=12)
         if resp.status_code == 200:

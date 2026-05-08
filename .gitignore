@@ -3,5 +3,16 @@ __pycache__/
 *.pyc
 venv/
 .venv/
-data/
+data/*
 !static/data/
+!data/consensus.yaml
+!data/datacenter_markets.csv
+!data/datacenter_facilities.csv
+!data/agency_ratings.csv
+!data/sovereign_defaults.csv
+!data/credit_default_fit/
+!data/credit_default_fit/*.json
+
+# Commodity model cache artifacts (regenerated on monthly refit)
+backend/cache/commodity_models/*.pkl
+backend/cache/commodity_models/*.json

@@ -29,15 +29,36 @@ INDICATOR_KEYWORDS = {
             'authoritarian', 'crackdown', 'purge', 'despot',
             'state of emergency', 'power grab', 'political crisis',
             'narco state', 'failed state', 'lawlessness', 'anarchy',
+            # Regime / autocracy vocabulary
+            'regime', 'autocrat', 'autocracy', 'theocracy', 'theocratic',
+            'strongman', 'one-party', 'one party rule', 'suppression',
+            # Personalist rule signals
+            'hardliner', 'hardliners', 'loyalist', 'loyalists',
+            # Political crisis signals
+            'constitutional crisis', 'government collapse', 'no confidence',
+            'cabinet reshuffle', 'caretaker government', 'power vacuum',
+            'succession crisis', 'political turmoil', 'leadership crisis',
+            'regime change',
+            # Election integrity
+            'stolen election', 'electoral fraud', 'election rigged',
         ],
         'medium': [
             'corruption', 'scandal', 'fraud', 'rigged', 'disputed',
             'opposition', 'censorship', 'detained', 'arrested',
             'prisoner', 'dissident', 'repression', 'resign',
+            # Regime figures (medium — context-dependent)
+            'supreme leader', 'ayatollah', 'mullah', 'mullahs',
+            'politburo', 'politburo standing committee',
+            # Governance dysfunction
+            'instability', 'unstable', 'paralysis', 'gridlock',
+            'infighting', 'faction', 'factions', 'factional',
+            'exile', 'exiled', 'persecution', 'political prisoner',
+            'sham trial', 'show trial',
         ],
         'low': [
             'election', 'vote', 'parliament', 'legislation', 'reform',
             'governance', 'political', 'coalition', 'cabinet',
+            'minister', 'ministry', 'legislator', 'legislature',
         ]
     },
     'military_conflict': {
@@ -110,6 +131,17 @@ INDICATOR_KEYWORDS = {
             'gang', 'gangs', 'trafficking', 'traffickers',
             'paramilitary', 'paramilitaries', 'sicario', 'hitman',
             'extortion', 'beheading', 'dismembered',
+            # State-sponsor / proxy-force vocabulary
+            'proxy', 'proxies', 'proxy war', 'proxy forces',
+            'state-sponsored', 'state sponsor of terror',
+            # Named groups commonly covered
+            'hezbollah', 'hamas', 'houthi', 'houthis',
+            'al-shabaab', 'shabaab', 'boko haram', 'iswap', 'jnim',
+            'isis', 'isil', "islamic state", 'daesh', 'al-qaeda', 'al qaeda',
+            'irgc', 'quds force', 'taliban', 'ttp', 'pkk',
+            # Maritime / shipping attacks
+            'tanker seized', 'ship seized', 'vessel attacked',
+            'strait of hormuz attack', 'red sea attack', 'ship hijacked',
         ],
         'medium': [
             'militant', 'militants', 'extremist', 'extremism',
@@ -117,23 +149,37 @@ INDICATOR_KEYWORDS = {
             'jihadist', 'armed', 'gunmen', 'threat',
             'organized crime', 'drug lord', 'kingpin', 'smuggling',
             'drug war', 'turf war',
+            # Proxy / militant network language
+            'axis of resistance', 'iran-backed', 'iranian-backed',
+            'russia-backed', 'proxy group', 'affiliated', 'aligned',
+            'splinter group', 'rebel group', 'armed wing',
+            'radical', 'radicalization', 'sleeper cell',
         ],
         'low': [
             'security', 'surveillance', 'intelligence',
             'alert', 'warning', 'counter-terrorism',
+            'watchlist', 'designation', 'blacklist',
         ]
     },
     'diplomatic_tensions': {
         'high': [
             'expelled', 'expel', 'embassy', 'diplomat', 'severed',
             'recalled', 'ultimatum', 'condemn', 'condemned',
-            'retaliation', 'retaliatory',
+            'retaliation', 'retaliatory', 'retaliate', 'retaliates',
             'diplomatic crisis', 'trade dispute', 'border dispute',
+            # Active diplomatic breakdown signals
+            'talks collapsed', 'talks break down', 'walked out',
+            'withdrew from talks', 'suspended negotiations',
+            'diplomatic row', 'diplomatic rift', 'diplomatic spat',
         ],
         'medium': [
             'tensions', 'dispute', 'disputed', 'provocative',
             'provocation', 'territorial', 'summoned', 'warned',
             'denounce', 'denounced', 'accuse', 'accused',
+            # Failure-to-resolve signals (Iran style coverage)
+            'talks stall', 'talks falter', 'stalemate', 'impasse',
+            'unresolved', 'rejected', 'refused', 'dismissed',
+            'standoff', 'standoffs', 'brinkmanship',
         ],
         'low': [
             'talks', 'negotiations', 'summit', 'treaty',

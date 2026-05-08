@@ -27,11 +27,11 @@ BLS_API_URL = 'https://api.bls.gov/publicAPI/v2/timeseries/data/'
 
 # Series IDs for CPI categories
 BLS_SERIES = {
-    'all_items': {'id': 'CUSR0000SA0',    'label': 'All Items',              'color': '#3b82f6'},
-    'core':      {'id': 'CUSR0000SA0L1E', 'label': 'Core (ex Food & Energy)', 'color': '#10b981'},
-    'food':      {'id': 'CUSR0000SAF1',   'label': 'Food',                    'color': '#f59e0b'},
-    'energy':    {'id': 'CUSR0000SA0E',   'label': 'Energy',                  'color': '#ef4444'},
-    'housing':   {'id': 'CUSR0000SAH1',   'label': 'Housing/Shelter',         'color': '#8b5cf6'},
+    'all_items': {'id': 'CUUR0000SA0',    'label': 'All Items',              'color': '#3b82f6'},
+    'core':      {'id': 'CUUR0000SA0L1E', 'label': 'Core (ex Food & Energy)', 'color': '#10b981'},
+    'food':      {'id': 'CUUR0000SAF1',   'label': 'Food',                    'color': '#f59e0b'},
+    'energy':    {'id': 'CUUR0000SA0E',   'label': 'Energy',                  'color': '#ef4444'},
+    'housing':   {'id': 'CUUR0000SAH1',   'label': 'Housing/Shelter',         'color': '#8b5cf6'},
 }
 
 # Month period codes to month numbers
@@ -175,7 +175,7 @@ def _fetch_bls_cpi():
             'categories': {k: v['label'] for k, v in BLS_SERIES.items()},
             'colors': {k: v['color'] for k, v in BLS_SERIES.items()},
             'meta': {
-                'source': 'Bureau of Labor Statistics (CPI-U, Seasonally Adjusted)',
+                'source': 'Bureau of Labor Statistics (CPI-U, Not Seasonally Adjusted)',
                 'frequency': 'Monthly',
                 'year_range': f'{start_year}-{current_year}',
                 'has_api_key': bool(api_key),
@@ -200,14 +200,14 @@ def get_bls_cpi_data():
 # ══════════════════════════════════════════════════════════
 
 BLS_COMPONENTS = {
-    'food_bev':        {'id': 'CUSR0000SAF', 'label': 'Food & Beverages',          'color': '#f59e0b'},
-    'housing':         {'id': 'CUSR0000SAH', 'label': 'Housing',                   'color': '#8b5cf6'},
-    'apparel':         {'id': 'CUSR0000SAA', 'label': 'Apparel',                   'color': '#ec4899'},
-    'transportation':  {'id': 'CUSR0000SAT', 'label': 'Transportation',            'color': '#06b6d4'},
-    'medical':         {'id': 'CUSR0000SAM', 'label': 'Medical Care',              'color': '#ef4444'},
-    'recreation':      {'id': 'CUSR0000SAR', 'label': 'Recreation',                'color': '#10b981'},
-    'education':       {'id': 'CUSR0000SAE', 'label': 'Education & Communication', 'color': '#6366f1'},
-    'other':           {'id': 'CUSR0000SAG', 'label': 'Other Goods & Services',    'color': '#64748b'},
+    'food_bev':        {'id': 'CUUR0000SAF', 'label': 'Food & Beverages',          'color': '#f59e0b'},
+    'housing':         {'id': 'CUUR0000SAH', 'label': 'Housing',                   'color': '#8b5cf6'},
+    'apparel':         {'id': 'CUUR0000SAA', 'label': 'Apparel',                   'color': '#ec4899'},
+    'transportation':  {'id': 'CUUR0000SAT', 'label': 'Transportation',            'color': '#06b6d4'},
+    'medical':         {'id': 'CUUR0000SAM', 'label': 'Medical Care',              'color': '#ef4444'},
+    'recreation':      {'id': 'CUUR0000SAR', 'label': 'Recreation',                'color': '#10b981'},
+    'education':       {'id': 'CUUR0000SAE', 'label': 'Education & Communication', 'color': '#6366f1'},
+    'other':           {'id': 'CUUR0000SAG', 'label': 'Other Goods & Services',    'color': '#64748b'},
 }
 
 
@@ -337,7 +337,7 @@ def _fetch_bls_components():
             'categories': {k: v['label'] for k, v in BLS_COMPONENTS.items()},
             'colors': {k: v['color'] for k, v in BLS_COMPONENTS.items()},
             'meta': {
-                'source': 'Bureau of Labor Statistics (CPI-U, Seasonally Adjusted)',
+                'source': 'Bureau of Labor Statistics (CPI-U, Not Seasonally Adjusted)',
                 'frequency': 'Monthly',
                 'year_range': f'{start_year}-{current_year}',
                 'has_api_key': bool(api_key),

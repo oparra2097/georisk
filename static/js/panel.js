@@ -45,8 +45,71 @@ const PanelModule = {
         this.renderHistoryChart(countryCode, this.currentHistoryDays);
         this.renderHeadlines(headlines.articles || []);
         this.bindHistoryControls();
+        this.bindShareButton(detail.country_name || countryCode, countryCode);
 
         document.getElementById('country-panel').classList.remove('hidden');
+    },
+
+    bindShareButton(countryName, countryCode) {
+        const btn = document.getElementById('panel-share-btn');
+        if (!btn || btn._bound) {
+            // Still need to update the dataset URL on re-open
+            if (btn) btn.dataset.shareUrl = this._shareUrl(countryCode);
+            return;
+        }
+        btn._bound = true;
+        btn.dataset.shareUrl = this._shareUrl(countryCode);
+
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const url = btn.dataset.shareUrl;
+            const label = btn.querySelector('.share-btn-label');
+            const prev = label ? label.textContent : null;
+            const doCopy = navigator.clipboard && window.isSecureContext
+                ? navigator.clipboard.writeText(url).then(() => true, () => false)
+                : Promise.resolve((() => {
+                    try {
+                        const ta = document.createElement('textarea');
+                        ta.value = url;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        const ok = document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        return ok;
+                    } catch (_) { return false; }
+                })());
+
+            doCopy.then((ok) => {
+                if (!ok) return;
+                btn.classList.add('copied');
+                if (label) label.textContent = 'Copied';
+                let toast = document.getElementById('share-toast');
+                if (!toast) {
+                    toast = document.createElement('div');
+                    toast.id = 'share-toast';
+                    toast.className = 'share-toast';
+                    document.body.appendChild(toast);
+                }
+                toast.textContent = 'Link copied — paste it into LinkedIn, X, or Substack';
+                requestAnimationFrame(() => toast.classList.add('show'));
+                clearTimeout(toast._hideTimer);
+                toast._hideTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    if (label && prev !== null) label.textContent = prev;
+                }, 1800);
+            });
+        });
+    },
+
+    _shareUrl(countryCode) {
+        // A georisk country detail is a modal, not its own URL, so we share
+        // the GeoRisk page itself (which has an OG preview) plus a hash so
+        // the modal can reopen when the page loads (future enhancement).
+        const base = window.location.origin + '/georisk';
+        return countryCode ? base + '#country=' + encodeURIComponent(countryCode) : base;
     },
 
     renderRadarChart(indicators) {

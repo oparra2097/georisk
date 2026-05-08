@@ -23,6 +23,7 @@ from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.data_sources.yale_tariff import get_yale_tariff_data
 from backend.data_sources.insurance_inflation import get_insurance_inflation_data
+from backend.data_sources.em_vulnerability import get_em_vulnerability_data
 from flask_login import login_required, current_user
 from functools import wraps
 from backend.cache.database import get_country_history, get_all_history, detect_anomalies, get_score_count
@@ -507,10 +508,135 @@ def get_forecasts():
     return jsonify(data)
 
 
+# Map commodity display names → methodology markdown file names.
+_METHODOLOGY_FILES = {
+    'WTI Crude':        'wti_crude.md',
+    'Brent Crude':      'brent_crude.md',
+    'Natural Gas (HH)': 'natural_gas_hh.md',
+    'TTF Gas':          'ttf_gas.md',
+    'Gold':             'gold.md',
+    'Silver':           'silver.md',
+    'Platinum':         'platinum.md',
+    'Copper':           'copper.md',
+    'Aluminum':         'aluminum.md',
+    'Cocoa':            'cocoa.md',
+    'Wheat':            'wheat.md',
+    'Soybeans':         'soybeans.md',
+    'Coffee':           'coffee.md',
+    'overview':         'README.md',
+}
+
+
+@api_bp.route('/forecasts/methodology/<path:commodity>')
+def get_methodology(commodity):
+    """Serve the per-commodity methodology markdown as plain text JSON.
+
+    Frontend renders client-side via marked.js in a modal. `commodity` is
+    the display name used in commodities_forecast.COMMODITIES (or the
+    literal string 'overview' for the index / README).
+    """
+    import os
+    fname = _METHODOLOGY_FILES.get(commodity)
+    if not fname:
+        return jsonify({'error': f'Unknown commodity: {commodity}'}), 404
+    docs_dir = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), 'docs', 'commodities')
+    path = os.path.join(docs_dir, fname)
+    if not os.path.exists(path):
+        return jsonify({'error': f'Methodology file missing: {fname}'}), 404
+    try:
+        with open(path) as f:
+            markdown = f.read()
+    except Exception as e:
+        return jsonify({'error': f'Failed to read {fname}: {e}'}), 500
+    return jsonify({
+        'commodity': commodity,
+        'markdown': markdown,
+        'file': fname,
+    })
+
+
+@api_bp.route('/forecasts/shocks', defaults={'commodity': None})
+@api_bp.route('/forecasts/shocks/<path:commodity>')
+def get_shocks(commodity):
+    """Return the scenario-shock catalogue.
+
+    Without a commodity → ``{all: {commodity_name: [shocks...]}}`` for the
+    full catalogue. With one → ``{commodity, shocks}``. Used by the
+    frontend scenario builder to render sliders.
+    """
+    from backend.data_sources import commodity_models
+    return jsonify(commodity_models.get_shocks_catalogue(commodity))
+
+
+@api_bp.route('/forecasts/scenario', methods=['POST'])
+def post_scenario_forecast():
+    """Run a scenario-modified forecast for a single commodity.
+
+    Body::
+
+        {
+            "commodity": "WTI Crude",
+            "shocks": [{"id": "opec_production", "magnitude": -2.0}],
+            "driver_shifts": {"yf:^GSPC": -0.01}
+        }
+
+    Both ``shocks`` and ``driver_shifts`` are optional — pass an empty
+    dict to retrieve the unmodified base forecast (same as
+    ``/api/forecasts`` per-commodity output).
+    """
+    from backend.data_sources import commodity_models
+    payload = request.get_json(silent=True) or {}
+    commodity = payload.get('commodity')
+    if not commodity or commodity not in commodity_models.TICKERS:
+        return jsonify({'error': f'Unknown or missing commodity: {commodity!r}'}), 400
+
+    shocks = payload.get('shocks') or []
+    driver_shifts = payload.get('driver_shifts') or {}
+    if not isinstance(shocks, list) or not isinstance(driver_shifts, dict):
+        return jsonify({'error': 'shocks must be a list, driver_shifts a dict'}), 400
+
+    try:
+        result = commodity_models.get_model_forecast(
+            commodity,
+            driver_shifts=driver_shifts,
+            shocks=shocks,
+        )
+    except Exception as exc:
+        return jsonify({'error': f'Forecast failed: {exc}'}), 500
+    if result is None:
+        return jsonify({'error': f'Model unavailable for {commodity}'}), 503
+
+    return jsonify({
+        'commodity': commodity,
+        'forecast': result.get('forecast'),
+        'summary': result.get('summary'),
+        'exog_columns': result.get('exog_columns', []),
+        'shocks_applied': shocks,
+        'driver_shifts_applied': driver_shifts,
+        'shocks_catalogue': commodity_models.SHOCKS.get(commodity, []),
+    })
+
+
 @api_bp.route('/gdp-nowcast')
 def gdp_nowcast():
     """Return US GDP nowcast estimate (cached 6 hours)."""
     data = get_gdp_nowcast()
+    return jsonify(data)
+
+
+@api_bp.route('/gdp-nowcast/refresh')
+def gdp_nowcast_refresh():
+    """Force-refresh the GDP nowcast (clears FRED + nowcast caches)."""
+    from backend.data_sources.fred_client import clear_cache as clear_fred
+    from backend.data_sources.gdp_nowcast import compute_nowcast
+    import backend.data_sources.gdp_nowcast as gnmod
+    import time as _time
+    clear_fred()
+    data = compute_nowcast()
+    with gnmod._lock:
+        gnmod._cached_result = data
+        gnmod._cached_at = _time.time()
     return jsonify(data)
 
 
@@ -553,7 +679,7 @@ def export_forecasts_excel():
             continue
 
         # Per-group scenario config
-        scenario_order = group.get('scenario_order', ['Actual', 'Weighted Avg'])
+        scenario_order = group.get('scenario_order', ['Actual'])
         scenario_weights = group.get('scenario_weights', {})
         scenario_labels = group.get('scenario_labels', {})
         commodities = group.get('commodities', {})
@@ -641,7 +767,7 @@ def export_forecasts_excel():
 
             # ── Scenario Descriptions ──
             for sc in scenario_order:
-                if sc in ('Actual', 'Weighted Avg'):
+                if sc == 'Actual':
                     continue
                 desc = scenario_labels.get(sc, '')
                 w = scenario_weights.get(sc)
@@ -1057,6 +1183,485 @@ def get_world_bank(indicator):
     """Return World Bank data for the given indicator (cached 24 hours)."""
     data = get_wb_data(indicator)
     return jsonify(data)
+
+
+@api_bp.route('/em-vulnerability')
+def get_em_vulnerability():
+    """Return EM external vulnerability bubble-chart dataset (cached 24 hours)."""
+    data = get_em_vulnerability_data()
+    return jsonify(data)
+
+
+@api_bp.route('/em-vulnerability/country/<iso3>')
+def em_country_detail(iso3):
+    """Return the full EM Vulnerability record for one ISO-3 code so the
+    underlying data can be verified directly (e.g. Argentina's reserves).
+    """
+    data = get_em_vulnerability_data()
+    countries = data.get('countries', {})
+    iso = iso3.upper()
+    if iso not in countries:
+        return jsonify({'error': f'{iso} not in dataset',
+                        'available_sample': sorted(list(countries.keys()))[:20]}), 404
+    return jsonify(countries[iso])
+
+
+@api_bp.route('/em-vulnerability/missing')
+def list_em_missing_st_debt():
+    """Return which EMs are currently missing ST-debt data, grouped by
+    whether they'd drop into the default Top 40 view. Drives the targeted
+    data-source hunt for the holdouts.
+    """
+    data = get_em_vulnerability_data()
+    countries = data.get('countries', {})
+    missing_em = []
+    missing_non_em = []
+    for iso, r in countries.items():
+        if r.get('reserves_to_st_debt_pct') is not None:
+            continue
+        row = {
+            'iso3': iso,
+            'name': r.get('name'),
+            'gdp_usd': r.get('gdp_usd'),
+            'em_rank': r.get('em_rank'),
+            'gdp_rank': r.get('gdp_rank'),
+            'basic_balance_pct_gdp': r.get('basic_balance_pct_gdp'),
+            'reserves_usd': r.get('reserves_usd'),
+            'reserves_source': r.get('reserves_source'),
+            'st_debt_usd': r.get('st_debt_usd'),
+            'st_debt_year': r.get('st_debt_year'),
+            'st_debt_source': r.get('st_debt_source'),
+        }
+        if r.get('is_em'):
+            missing_em.append(row)
+        else:
+            missing_non_em.append(row)
+    missing_em.sort(key=lambda x: -(x.get('gdp_usd') or 0))
+    missing_non_em.sort(key=lambda x: -(x.get('gdp_usd') or 0))
+    return jsonify({
+        'missing_em_count': len(missing_em),
+        'missing_em': missing_em,
+        'missing_non_em_count': len(missing_non_em),
+        'missing_non_em_sample': missing_non_em[:20],
+    })
+
+
+@api_bp.route('/em-vulnerability/diagnose')
+def diagnose_em_vulnerability():
+    """Temporary diagnostic — probes WB API for the right QEDS source + indicator.
+
+    Run this on prod (where api.worldbank.org is reachable) and paste the
+    output; the dev sandbox is behind an allowlist that blocks WB, so this
+    has to execute server-side. Remove once the right (source, indicator)
+    pair is confirmed.
+    """
+    import requests
+
+    result = {
+        'step1_sources': None,
+        'step2_indicators_with_short': {},
+        'step3_chile_sample': {},
+    }
+
+    # Step 1: list all sources, look for anything with "Debt" or "QEDS".
+    try:
+        r = requests.get(
+            'https://api.worldbank.org/v2/sources?format=json&per_page=100',
+            timeout=30,
+        )
+        r.raise_for_status()
+        doc = r.json()
+        sources = doc[1] if isinstance(doc, list) and len(doc) > 1 else []
+        result['step1_sources'] = [
+            {'id': s.get('id'), 'name': s.get('name'), 'code': s.get('code')}
+            for s in sources
+            if 'debt' in (s.get('name', '') or '').lower()
+            or 'qeds' in (s.get('name', '') or '').lower()
+        ]
+    except Exception as e:
+        result['step1_sources'] = {'error': str(e)}
+
+    # Step 2: for candidate source IDs, list short-term debt indicators.
+    # Source 22 (QEDS SDDS) has many granular breakdowns; narrow to the ones
+    # that look like the "all sectors, all instruments" aggregate.
+    # Added source 54 = JEDH (Joint External Debt Hub) which combines
+    # SDDS/GDDS/BIS/OECD and likely carries the cleanest aggregate.
+    for source_id in ('6', '22', '23', '54', '81'):
+        try:
+            r = requests.get(
+                f'https://api.worldbank.org/v2/sources/{source_id}/indicators'
+                f'?format=json&per_page=5000',
+                timeout=60,
+            )
+            r.raise_for_status()
+            doc = r.json()
+            indicators = doc[1] if isinstance(doc, list) and len(doc) > 1 else []
+            # Only the aggregates: "All Sectors" + "Short-term" + (all
+            # instruments OR no sub-qualifier). Exclude per-instrument
+            # (Currency, Loans, Debt Securities, Trade) and per-sector
+            # (Public, Private) breakdowns.
+            aggregate_matches = []
+            for i in indicators:
+                if not isinstance(i, dict):
+                    continue
+                name = (i.get('name', '') or '').lower()
+                if 'short-term' not in name:
+                    continue
+                if 'all sectors' not in name:
+                    continue
+                # Avoid partial-instrument or sector-specific ones
+                skips = ['currency', 'loan', 'trade credit', 'debt securities',
+                         'public sector', 'private sector', 'central bank',
+                         'deposit-taking', 'beginning', 'market value',
+                         'nominal value', 'diff.', 'other sector']
+                if any(s in name for s in skips):
+                    continue
+                aggregate_matches.append({
+                    'id': i.get('id'), 'name': i.get('name', '')[:120],
+                })
+            result['step2_indicators_with_short'][source_id] = aggregate_matches[:20]
+        except Exception as e:
+            result['step2_indicators_with_short'][source_id] = {'error': str(e)}
+
+    # Step 3: probe the aggregate "all sectors, short-term, all instruments"
+    # across QEDS SDDS, QEDS GDDS, and JEDH. For each, report how many
+    # records have *non-null values* for each of the stranded EMs and the
+    # most recent period+value found.
+    result['step3_chile_sample'] = {}
+    STRANDED_EMS = ['ARE', 'QAT', 'GTM', 'IRN', 'ISR', 'KWT', 'BHR', 'OMN',
+                    'CHL', 'LBN', 'LBY']
+    for source_id, ind in (
+        # QEDS SDDS — correct aggregate
+        ('22', 'DT.DOD.DSTC.CD.US'),
+        # QEDS GDDS — correct aggregate
+        ('23', 'DT.DOD.DECT.CD.ST.US'),
+        # JEDH — try both known aggregates + WDI code
+        ('54', 'DT.DOD.DSTC.CD'),
+        ('54', 'DT.DOD.DSTC.CD.US'),
+        ('54', 'DT.DOD.DECT.CD.ST.US'),
+        # IDS DSSI — last resort for low-income / small-state EMs
+        ('81', 'DT.DOD.DSTC.CD'),
+        # QEDS SDDS granular (debt securities only) as partial fallback
+        ('22', 'DT.DOD.DECT.CD.ST.TD.NV.US'),
+    ):
+        try:
+            r = requests.get(
+                f'https://api.worldbank.org/v2/country/all/indicator/{ind}'
+                f'?format=json&mrv=20&source={source_id}&per_page=20000',
+                timeout=60,
+            )
+            doc = r.json() if r.ok else None
+            records = doc[1] if isinstance(doc, list) and len(doc) > 1 and doc[1] else []
+            # Count records with a non-null value
+            populated = [rec for rec in records
+                         if isinstance(rec, dict) and rec.get('value') is not None]
+            populated_isos = {
+                (rec.get('country') or {}).get('id') for rec in populated
+            }
+            per_country = {}
+            for iso in STRANDED_EMS:
+                iso_records = [rec for rec in populated
+                               if (rec.get('country') or {}).get('id') == iso]
+                if iso_records:
+                    # Most recent period+value
+                    latest = sorted(iso_records,
+                                    key=lambda r: r.get('date', ''),
+                                    reverse=True)[0]
+                    per_country[iso] = {
+                        'period': latest.get('date'),
+                        'value': latest.get('value'),
+                    }
+                else:
+                    per_country[iso] = None
+            result['step3_chile_sample'][f'{source_id}/{ind}'] = {
+                'http': r.status_code,
+                'total_records': len(records),
+                'populated_records': len(populated),
+                'unique_populated_isos': len(populated_isos),
+                'populated_iso_sample': sorted(iso for iso in populated_isos if iso)[:20],
+                'stranded_em_coverage': per_country,
+            }
+        except Exception as e:
+            result['step3_chile_sample'][f'{source_id}/{ind}'] = {'error': str(e)}
+
+    # Step 4: Enumerate IMF datasets on DBnomics for external debt.
+    # Source 54 (JEDH) may or may not cover the stranded EMs — if not, a
+    # direct IMF external debt dataset might.
+    result['step4_dbnomics_imf'] = {}
+    try:
+        r = requests.get(
+            'https://api.db.nomics.world/v22/providers/IMF',
+            timeout=30,
+        )
+        if r.ok:
+            doc = r.json()
+            ds_list = (doc.get('category_tree') or [])
+            flat = []
+            def _walk(nodes):
+                for n in nodes or []:
+                    if n.get('code'):
+                        flat.append((n.get('code'), n.get('name', '')))
+                    _walk(n.get('children') or [])
+            _walk(ds_list)
+            debt_like = [(c, n) for c, n in flat
+                         if 'debt' in (n or '').lower()
+                         or 'sdds' in (n or '').lower()
+                         or 'external' in (n or '').lower()]
+            result['step4_dbnomics_imf']['imf_datasets_debt_related'] = debt_like[:30]
+    except Exception as e:
+        result['step4_dbnomics_imf']['enumerate_error'] = str(e)
+
+    return jsonify(result)
+
+
+@api_bp.route('/em-vulnerability/export')
+def export_em_vulnerability_excel():
+    """Generate Excel file with EM external vulnerability metrics.
+
+    Two sheets:
+      1. "Bubble Chart" — clean X / Y / Size / Label layout with an
+         embedded Excel bubble chart already configured. Users can re-create
+         or restyle the chart natively without touching column references.
+      2. "Full Metrics" — all per-country fields including data-source
+         provenance for the current account series.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.chart import BubbleChart, Reference, Series
+
+    data = get_em_vulnerability_data()
+    countries = data.get('countries', {})
+    meta = data.get('meta', {})
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    em_fill = PatternFill(start_color='FEE2E2', end_color='FEE2E2', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+
+    # Only countries that can be plotted (have basic balance). ST-debt-missing
+    # ones still get a row but with blank X so Excel skips them — user can
+    # tell from the blank cell why they're not on the chart.
+    plottable = [
+        r for r in countries.values()
+        if r.get('basic_balance_pct_gdp') is not None
+    ]
+    em_rows = sorted(
+        [r for r in plottable if r.get('is_em')],
+        key=lambda r: -(r.get('gdp_usd') or 0),
+    )
+    dm_rows = sorted(
+        [r for r in plottable if not r.get('is_em')],
+        key=lambda r: -(r.get('gdp_usd') or 0),
+    )
+    chart_rows = em_rows + dm_rows  # EM first so they're a contiguous series
+
+    wb = Workbook()
+
+    # ── Sheet 1: Bubble Chart (chart-data layout + embedded chart) ──────────
+    chart_ws = wb.active
+    chart_ws.title = 'Bubble Chart'
+
+    chart_ws.cell(row=1, column=1, value='EM External Vulnerability — Bubble Chart Data')
+    chart_ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+    chart_ws.cell(row=2, column=1, value=meta.get('source', 'World Bank'))
+    chart_ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
+    chart_ws.cell(
+        row=3, column=1,
+        value=(
+            'X = Reserves / Short-Term External Debt (%)  ·  '
+            'Y = Basic Balance (Current Account + Net FDI, % GDP)  ·  '
+            'Bubble size = Nominal GDP ($B). '
+            'EM rows (red shading) are listed first; the embedded chart '
+            'splits them into two series for color coding.'
+        ),
+    )
+    chart_ws.cell(row=3, column=1).font = Font(italic=True, size=9, color='6B7280')
+
+    chart_headers = [
+        'Country', 'ISO3', 'EM',
+        'X · Reserves / ST Debt (%)',
+        'Y · Basic Balance (% GDP)',
+        'Size · GDP ($B)',
+        'Year', 'CA Source',
+    ]
+    HEADER_ROW = 5
+    for col, h in enumerate(chart_headers, 1):
+        cell = chart_ws.cell(row=HEADER_ROW, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = thin_border
+
+    DATA_START = HEADER_ROW + 1
+    for i, r in enumerate(chart_rows):
+        row = DATA_START + i
+        values = [
+            r.get('name', ''),
+            r.get('iso3', ''),
+            'Yes' if r.get('is_em') else 'No',
+            r.get('reserves_to_st_debt_pct'),  # X — may be None
+            r.get('basic_balance_pct_gdp'),     # Y
+            (r.get('gdp_usd') or 0) / 1e9,      # Size in $B for legibility
+            r.get('year', ''),
+            r.get('ca_source', ''),
+        ]
+        for col, v in enumerate(values, 1):
+            cell = chart_ws.cell(row=row, column=col, value=v)
+            cell.border = thin_border
+            if r.get('is_em'):
+                cell.fill = em_fill
+            if col in (4, 5):
+                cell.number_format = '0.00'
+                cell.alignment = Alignment(horizontal='right')
+            elif col == 6:
+                cell.number_format = '#,##0'
+                cell.alignment = Alignment(horizontal='right')
+            elif col == 7:
+                cell.alignment = Alignment(horizontal='center')
+
+    chart_ws.column_dimensions['A'].width = 28
+    chart_ws.column_dimensions['B'].width = 7
+    chart_ws.column_dimensions['C'].width = 6
+    chart_ws.column_dimensions['D'].width = 18
+    chart_ws.column_dimensions['E'].width = 18
+    chart_ws.column_dimensions['F'].width = 14
+    chart_ws.column_dimensions['G'].width = 7
+    chart_ws.column_dimensions['H'].width = 18
+    chart_ws.row_dimensions[HEADER_ROW].height = 32
+    chart_ws.freeze_panes = f'A{DATA_START}'
+
+    # ── Embedded bubble chart ─────────────────────────────────────────────
+    if chart_rows:
+        em_count = len(em_rows)
+        dm_count = len(dm_rows)
+        em_end = DATA_START + em_count - 1
+        dm_start = em_end + 1
+        dm_end = dm_start + dm_count - 1
+
+        bubble = BubbleChart()
+        bubble.style = 18
+        bubble.title = 'EM External Vulnerability'
+        bubble.x_axis.title = 'Foreign Reserves / Short-Term External Debt (%)'
+        bubble.y_axis.title = 'Basic Balance (Current Account + Net FDI, % GDP)'
+        bubble.x_axis.scaling.min = 0
+        bubble.height = 14
+        bubble.width = 24
+        bubble.legend.position = 'b'
+
+        if em_count > 0:
+            em_series = Series(
+                values=Reference(chart_ws, min_col=5, min_row=DATA_START, max_row=em_end),
+                xvalues=Reference(chart_ws, min_col=4, min_row=DATA_START, max_row=em_end),
+                zvalues=Reference(chart_ws, min_col=6, min_row=DATA_START, max_row=em_end),
+                title='Emerging Markets',
+            )
+            bubble.series.append(em_series)
+        if dm_count > 0:
+            dm_series = Series(
+                values=Reference(chart_ws, min_col=5, min_row=dm_start, max_row=dm_end),
+                xvalues=Reference(chart_ws, min_col=4, min_row=dm_start, max_row=dm_end),
+                zvalues=Reference(chart_ws, min_col=6, min_row=dm_start, max_row=dm_end),
+                title='Advanced / Other',
+            )
+            bubble.series.append(dm_series)
+
+        # Anchor the chart to the right of the data, top-aligned with headers.
+        chart_ws.add_chart(bubble, 'J5')
+
+    # ── Sheet 2: Full Metrics (everything we have) ────────────────────────
+    ws = wb.create_sheet(title='Full Metrics')
+
+    ws.cell(row=1, column=1, value='EM External Vulnerability — Full Metrics')
+    ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value=meta.get('source', 'World Bank'))
+    ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
+
+    headers = [
+        'Country', 'ISO3', 'EM', 'As-Of Year',
+        'GDP (USD)', 'GDP Source', 'GDP Year', 'GDP Rank', 'EM Rank',
+        'Current Account (% GDP)', 'CA Source', 'CA Year',
+        'FDI Net (% GDP)', 'Basic Balance (% GDP)',
+        'Reserves (USD)', 'Reserves Source', 'Reserves Period',
+        'Short-Term External Debt (USD)', 'ST Debt Year', 'ST Debt Source',
+        'Reserves / ST Debt (%)',
+    ]
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=4, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = thin_border
+    ws.row_dimensions[4].height = 30
+
+    sorted_rows = sorted(
+        countries.values(),
+        key=lambda r: (-(r.get('gdp_usd') or 0), r.get('name', '')),
+    )
+    for row_idx, r in enumerate(sorted_rows, 5):
+        values = [
+            r.get('name', ''),
+            r.get('iso3', ''),
+            'Yes' if r.get('is_em') else 'No',
+            r.get('year', ''),
+            r.get('gdp_usd'),
+            r.get('gdp_source', ''),
+            r.get('gdp_year', ''),
+            r.get('gdp_rank'),
+            r.get('em_rank'),
+            r.get('ca_pct_gdp'),
+            r.get('ca_source', ''),
+            r.get('ca_year', ''),
+            r.get('fdi_pct_gdp'),
+            r.get('basic_balance_pct_gdp'),
+            r.get('reserves_usd'),
+            r.get('reserves_source', ''),
+            r.get('reserves_period', ''),
+            r.get('st_debt_usd'),
+            r.get('st_debt_year', ''),
+            r.get('st_debt_source', ''),
+            r.get('reserves_to_st_debt_pct'),
+        ]
+        for col, v in enumerate(values, 1):
+            cell = ws.cell(row=row_idx, column=col, value=v)
+            cell.border = thin_border
+            if col >= 4:
+                cell.alignment = Alignment(horizontal='right')
+                if col in (5, 15, 18):
+                    cell.number_format = '#,##0'
+                elif col in (10, 13, 14, 21):
+                    cell.number_format = '0.00'
+
+    ws.column_dimensions['A'].width = 28
+    ws.column_dimensions['B'].width = 7
+    ws.column_dimensions['C'].width = 5
+    ws.column_dimensions['D'].width = 10
+    ws.column_dimensions['F'].width = 18
+    ws.column_dimensions['G'].width = 10
+    ws.column_dimensions['K'].width = 18
+    ws.column_dimensions['P'].width = 16
+    ws.column_dimensions['Q'].width = 14
+    ws.column_dimensions['S'].width = 10
+    ws.column_dimensions['T'].width = 22
+    for col_letter in ('E', 'H', 'I', 'J', 'L', 'M', 'N', 'O', 'R', 'U'):
+        ws.column_dimensions[col_letter].width = 16
+    ws.freeze_panes = 'A5'
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'em_external_vulnerability_{today}.xlsx'
+    )
 
 
 @api_bp.route('/wb/<path:indicator>/export')

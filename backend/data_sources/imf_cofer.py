@@ -9,7 +9,9 @@ Primary: IMF Data API (api.imf.org/external/sdmx/3.0, live monthly)
 
 Fallback 1: DBnomics IMF/IFS (monthly, ~140 countries, reliable mirror)
   - RAFA_USD   = Total reserves incl. gold (USD millions)
-  - RAXGFX_USD = FX reserves excl. gold (USD millions)
+  - RAXG_USD   = Total reserves excl. gold (USD millions)
+    (NOT RAXGFX_USD, which is only the FX sub-component and excludes
+    SDRs + IMF reserve position, producing inflated gold figures)
   - IFS is the canonical IMF macro dataflow; the old IRFCL mirror was
     frozen and returned empty results due to REF_SECTOR mismatch.
 
@@ -320,20 +322,13 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
 
         total_values = []
         fx_values = []
-        gold_values = []
         latest_real_idx = -1
 
         for i, period in enumerate(periods):
             total_b = _usd_millions_to_billions(total_data.get(period))
             fx_b = _usd_millions_to_billions(fx_data.get(period))
-            gold_b = (
-                round(total_b - fx_b, 2)
-                if (total_b is not None and fx_b is not None)
-                else None
-            )
             total_values.append(total_b)
             fx_values.append(fx_b)
-            gold_values.append(gold_b)
             if total_b is not None:
                 latest_real_idx = i
 
@@ -344,11 +339,11 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
         # Capped forward-fill: smooth over reporting gaps to keep chart
         # lines continuous. IFS data is dense through ~2025-06 but IRFCL
         # FX only covers 10 countries — without fill, gold (= total − fx)
-        # shows dashes for every other country after 2025-06. A 9-month
+        # shows dashes for every other country after 2025-06. A 12-month
         # cap carries IFS values far enough to cover the gap between the
         # frozen mirror and today, while still breaking the line for
-        # countries that genuinely stopped reporting a long time ago.
-        def _capped_fill(arr, max_gap=9):
+        # countries that genuinely stopped reporting long ago.
+        def _capped_fill(arr, max_gap=12):
             last_val = None
             gap = 0
             for i, v in enumerate(arr):
@@ -362,14 +357,20 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label, freque
         _capped_fill(total_values)
         _capped_fill(fx_values)
 
-        # Recompute gold after filling so short fx gaps don't create
-        # spurious null gold entries.
+        # Recompute gold from the filled arrays. When total and fx come
+        # from different sources (IRFCL total + IFS fx) the methodology
+        # mismatch can produce negative residuals — treat those as
+        # missing rather than clamping to zero (which creates a visible
+        # dip to $0B on the chart). Then forward-fill gold so the chart
+        # line stays continuous through small gaps.
         gold_values = []
         for t, f in zip(total_values, fx_values):
             if t is not None and f is not None:
-                gold_values.append(round(t - f, 2))
+                g = round(t - f, 2)
+                gold_values.append(g if g > 0 else None)
             else:
                 gold_values.append(None)
+        _capped_fill(gold_values)
 
         latest_real_period = periods[latest_real_idx]
 
@@ -982,18 +983,21 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
 
         # IRFCL FX coverage is typically sparse (~10 countries). If we
         # got good total data but poor FX, REPLACE the entire FX dataset
-        # with DBnomics IFS RAXGFX_USD which has ~140 countries. The IRFCL
-        # FX values for the few countries it does cover are often wrong
-        # (e.g. India showing -$0.61B), so a full replacement is safer
-        # than a selective backfill.
+        # with DBnomics IFS RAXG_USD (total reserves excl. gold) which
+        # has ~140 countries. We use RAXG_USD (not RAXGFX_USD) because
+        # RAXGFX is only the foreign-exchange sub-component and excludes
+        # SDRs + IMF reserve position, producing inflated gold figures.
+        # The IRFCL FX values for the few countries it does cover are
+        # often wrong (e.g. India showing -$0.61B), so a full
+        # replacement is safer than a selective backfill.
         if total_by_country and len(fx_by_country) < len(total_by_country) * 0.5:
             if attempt_log is not None:
                 attempt_log.append(
                     f'IRFCL FX sparse ({len(fx_by_country)} vs {len(total_by_country)} total) '
-                    f'— replacing FX with DBnomics IFS (RAXGFX_USD)'
+                    f'— replacing FX with DBnomics IFS (RAXG_USD)'
                 )
             try:
-                ifs_fx_docs = _fetch_ifs_indicator('RAXGFX_USD')
+                ifs_fx_docs = _fetch_ifs_indicator('RAXG_USD')
                 ifs_fx = {}
                 for doc in ifs_fx_docs:
                     code = doc.get('series_code', '')
@@ -1150,7 +1154,9 @@ def _fetch_reserves_imf_sdmx(attempt_log=None):
 #
 # The old IRFCL mirror on DBnomics used REF_SECTOR='S1X' which returns
 # empty results. IFS is the canonical IMF macro dataflow for reserves
-# and has ~140 countries with RAFA_USD (total) and RAXGFX_USD (FX only).
+# and has ~140 countries with RAFA_USD (total) and RAXG_USD (total excl.
+# gold). Note: RAXGFX_USD is only the FX sub-component (excludes SDRs
+# and IMF reserve position) — using it inflates computed gold values.
 
 def _fetch_ifs_indicator(indicator_code):
     """Fetch one IFS indicator for all countries from DBnomics, paging."""
@@ -1193,7 +1199,7 @@ def _fetch_reserves_dbnomics():
         logger.info("Fetching reserves from DBnomics IMF/IFS (monthly)...")
 
         total_docs = _fetch_ifs_indicator('RAFA_USD')
-        fx_docs = _fetch_ifs_indicator('RAXGFX_USD')
+        fx_docs = _fetch_ifs_indicator('RAXG_USD')
 
         if not total_docs:
             logger.warning("DBnomics IFS returned no total reserves data")
@@ -1405,7 +1411,13 @@ def _fetch_reserves():
     ifs_total, ifs_fx = {}, {}
     try:
         ifs_docs_total = _fetch_ifs_indicator('RAFA_USD')
-        ifs_docs_fx = _fetch_ifs_indicator('RAXGFX_USD')
+        ifs_docs_fx = _fetch_ifs_indicator('RAXG_USD')
+        # If RAXG_USD doesn't exist on this DBnomics mirror, fall back
+        # to RAXGFX_USD (FX sub-component — inflates gold but better
+        # than nothing).
+        if not ifs_docs_fx:
+            logger.warning("RAXG_USD returned 0 docs, trying RAXGFX_USD fallback")
+            ifs_docs_fx = _fetch_ifs_indicator('RAXGFX_USD')
 
         def _parse_ifs(docs):
             by_country = {}
@@ -1440,39 +1452,66 @@ def _fetch_reserves():
         logger.warning(f"IMF IRFCL fetch failed: {e}")
 
     # ── Merge: IFS base + IRFCL overlay ─────────────────────────────
-    # Collect all country codes (union of both sources)
-    all_codes = set(ifs_total) | set(irfcl_total)
-    if not all_codes:
+    # Normalize all country codes to ISO3 first, so IFS ('CN') and
+    # IRFCL ('CHN') merge into one entry instead of creating duplicates.
+    def _to_iso3(code):
+        code = (code or '').strip().upper()
+        if len(code) == 2:
+            return ISO2_TO_ISO3.get(code)
+        if len(code) == 3 and code.isalpha():
+            return code
+        return None
+
+    def _normalize(by_country):
+        out = {}
+        for code, periods in by_country.items():
+            iso3 = _to_iso3(code)
+            if not iso3:
+                continue
+            if iso3 in out:
+                out[iso3].update(periods)
+            else:
+                out[iso3] = dict(periods)
+        return out
+
+    ifs_total_n = _normalize(ifs_total)
+    ifs_fx_n = _normalize(ifs_fx)
+    irfcl_total_n = _normalize(irfcl_total)
+    irfcl_fx_n = _normalize(irfcl_fx)
+
+    all_iso3 = set(ifs_total_n) | set(irfcl_total_n)
+    if not all_iso3:
         logger.warning("Both IFS and IRFCL returned no data — falling back to World Bank")
         return _fetch_reserves_wb()
 
     merged_total = {}
     merged_fx = {}
 
-    for code in all_codes:
-        # Start with IFS history (dense), then overlay IRFCL (current)
+    for iso3 in all_iso3:
+        # IFS first (dense history), then IRFCL overlay (current)
         periods_total = {}
-        if code in ifs_total:
-            periods_total.update(ifs_total[code])
-        # ISO2 ↔ ISO3 bridge: IRFCL uses ISO3, IFS uses ISO2
-        iso3 = ISO2_TO_ISO3.get(code, code) if len(code) == 2 else code
-        iso2 = next((k for k, v in ISO2_TO_ISO3.items() if v == code), code) if len(code) == 3 else code
-        for irfcl_code in (code, iso3, iso2):
-            if irfcl_code in irfcl_total:
-                periods_total.update(irfcl_total[irfcl_code])
-                break
+        if iso3 in ifs_total_n:
+            periods_total.update(ifs_total_n[iso3])
+        if iso3 in irfcl_total_n:
+            periods_total.update(irfcl_total_n[iso3])
         if periods_total:
-            merged_total[code] = periods_total
+            merged_total[iso3] = periods_total
 
+        # FX merge: IFS takes priority. IRFCL FX uses a different
+        # indicator (IRFCLDT4_IRFCL12 = narrow FX securities) that is
+        # incompatible with IFS's RAXG/RAXGFX (broader aggregate).
+        # Letting IRFCL overwrite IFS produces garbage like India
+        # fx=-$0.61B. Only use IRFCL FX to fill periods IFS doesn't
+        # cover, and skip negative values entirely.
         periods_fx = {}
-        if code in ifs_fx:
-            periods_fx.update(ifs_fx[code])
-        for irfcl_code in (code, iso3, iso2):
-            if irfcl_code in irfcl_fx:
-                periods_fx.update(irfcl_fx[irfcl_code])
-                break
+        if iso3 in ifs_fx_n:
+            periods_fx.update(ifs_fx_n[iso3])
+        if iso3 in irfcl_fx_n:
+            for period, val in irfcl_fx_n[iso3].items():
+                if period not in periods_fx and val is not None and val > 0:
+                    periods_fx[period] = val
         if periods_fx:
-            merged_fx[code] = periods_fx
+            merged_fx[iso3] = periods_fx
 
     source_parts = []
     if ifs_total:
@@ -1561,10 +1600,15 @@ def diagnose_fetch():
         # (their lines on the chart will show NAs from that month
         # forward).
         for c in countries[:15]:
+            # Sample gold/fx/total at the latest period for debugging
+            latest_idx = len(years) - 1
             stale_countries.append({
                 'iso3': c.get('iso3'),
                 'name': c.get('name'),
                 'latest_real_period': c.get('latest_real_period'),
+                'total': (c.get('total_reserves') or [None])[latest_idx] if latest_idx >= 0 else None,
+                'fx': (c.get('fx_reserves') or [None])[latest_idx] if latest_idx >= 0 else None,
+                'gold': (c.get('gold_reserves') or [None])[latest_idx] if latest_idx >= 0 else None,
             })
 
     return {

@@ -83,6 +83,85 @@ def init_scheduler(app):
         )
         logger.info("ACLED daily prefetch scheduled (6 AM UTC).")
 
+    # Job 4: Commodity model refit (monthly, 1st of month at 07:00 UTC)
+    def _refit_commodity_models():
+        try:
+            from backend.data_sources import commodity_models, commodities_forecast
+            summaries = commodity_models.refit_all()
+            fits = sum(1 for s in summaries.values() if not s.get('fit_error'))
+            logger.info(f"Commodity model refit: {fits}/{len(summaries)} succeeded")
+            # Invalidate the forecast cache so downstream calls pick up new fits
+            commodities_forecast._cache.clear()
+        except Exception as e:
+            logger.error(f"Commodity model refit failed: {e}")
+
+    scheduler.add_job(
+        func=_refit_commodity_models,
+        trigger='cron',
+        day=1, hour=7, minute=0,
+        id='refit_commodity_models',
+        replace_existing=True,
+        max_instances=1,
+    )
+    logger.info("Commodity model monthly refit scheduled (1st of month, 07:00 UTC).")
+
+    # Job 5: GDP nowcast refresh every 6 hours
+    # Use the dynamic resolver — Config.FRED_API_KEY is frozen at import
+    # time and may be empty even when env var is set.
+    from backend.data_sources.fred_client import _get_api_key as _fred_key
+    if _fred_key():
+        def _refresh_gdp_nowcast():
+            try:
+                from backend.data_sources.fred_client import clear_cache as clear_fred
+                from backend.data_sources.gdp_nowcast import compute_nowcast
+                import backend.data_sources.gdp_nowcast as gnmod
+                import time as _time
+                clear_fred()
+                data = compute_nowcast()
+                if not data.get('error'):
+                    with gnmod._lock:
+                        gnmod._cached_result = data
+                        gnmod._cached_at = _time.time()
+                    est = data.get('nowcast', {}).get('estimate')
+                    logger.info(f"GDP nowcast refreshed: {est}%")
+                else:
+                    logger.warning(f"GDP nowcast refresh error: {data.get('error')}")
+            except Exception as e:
+                logger.error(f"GDP nowcast refresh failed: {e}")
+
+        scheduler.add_job(
+            func=_refresh_gdp_nowcast,
+            trigger='interval',
+            hours=6,
+            id='refresh_gdp_nowcast',
+            replace_existing=True,
+            misfire_grace_time=600,
+            max_instances=1,
+        )
+        logger.info("GDP nowcast scheduled (every 6 hours).")
+
+    # Job 6: Data center drift scan once daily at 07:30 UTC.
+    def _scan_dc_drift():
+        try:
+            from backend.data_centers import drift
+            out = drift.scan()
+            n = len(out.get('drift_flags', []))
+            logger.info(f"Data center drift scan complete: {n} drift flag(s) across "
+                         f"{out.get('urls_scanned', 0)} URL(s).")
+        except Exception as e:
+            logger.error(f"Data center drift scan failed: {e}")
+
+    scheduler.add_job(
+        func=_scan_dc_drift,
+        trigger='cron',
+        hour=7, minute=30,
+        id='dc_drift_scan',
+        replace_existing=True,
+        misfire_grace_time=3600,
+        max_instances=1,
+    )
+    logger.info("Data center drift scan scheduled (daily 07:30 UTC).")
+
     scheduler.start()
     logger.info(
         f"Scheduler started. GDELT every {gdelt_interval}min (ALL countries), "
@@ -99,3 +178,111 @@ def init_scheduler(app):
         thread = threading.Thread(target=_startup_with_persisted, daemon=True)
         thread.start()
         logger.info("Persisted data loaded. Background WGI + GDELT refresh started.")
+
+    # Pre-warm the EM external vulnerability dataset so the first user
+    # hit is cache-served (5 World Bank fetches, ~15s in parallel).
+    def _warm_em_vuln():
+        try:
+            from backend.data_sources.em_vulnerability import get_em_vulnerability_data
+            get_em_vulnerability_data()
+            logger.info("EM vulnerability cache warmed.")
+        except Exception as e:
+            logger.error(f"EM vulnerability warmup failed: {e}")
+
+    threading.Thread(target=_warm_em_vuln, daemon=True).start()
+
+    # Pre-warm GDP nowcast so first visit is instant
+    # Use the dynamic resolver — Config.FRED_API_KEY is frozen at import
+    # time and may be empty even when env var is set.
+    from backend.data_sources.fred_client import _get_api_key as _fred_key
+    if _fred_key():
+        def _warm_gdp_nowcast():
+            try:
+                from backend.data_sources.gdp_nowcast import get_gdp_nowcast
+                result = get_gdp_nowcast()
+                est = result.get('nowcast', {}).get('estimate')
+                logger.info(f"GDP nowcast cache warmed: {est}%")
+            except Exception as e:
+                logger.error(f"GDP nowcast warmup failed: {e}")
+        threading.Thread(target=_warm_gdp_nowcast, daemon=True).start()
+
+    # Cross-deploy pickle invalidation: every fresh app boot wipes any
+    # leftover pickles from an earlier deploy so new code always builds
+    # fresh against current FRED data and current equation specs. Pickles
+    # are regenerated after the new build completes and are then useful
+    # for sibling-worker hot-loads within this deploy.
+    try:
+        from backend.macro_model.service import invalidate_pickle_on_boot as _mm_invalidate
+        _mm_invalidate()
+    except Exception as e:
+        logger.warning(f'macro_model pickle invalidation failed: {e}')
+    try:
+        from backend.house_prices.service import invalidate_pickle_on_boot as _hpi_invalidate
+        _hpi_invalidate()
+    except Exception as e:
+        logger.warning(f'house_prices pickle invalidation failed: {e}')
+
+    # Pre-warm macro-model: try the disk pickle first (instant if a sibling
+    # worker built recently), only kick off the expensive fit_all if no
+    # fresh pickle exists. Runs as a daemon thread so it doesn't block boot.
+    # Use the dynamic resolver — Config.FRED_API_KEY is frozen at import
+    # time and may be empty even when env var is set.
+    from backend.data_sources.fred_client import _get_api_key as _fred_key
+    if _fred_key():
+        def _warm_macro_model():
+            try:
+                from backend.macro_model import service as mm_svc
+                mm_svc.ensure_built()
+                # If the pickle wasn't loadable, ensure_built started a bg
+                # thread; we're done. If it was loadable, the simulator is
+                # ready and status() will show built=True.
+                logger.info(f"macro_model warmup: status={mm_svc.status()}")
+            except Exception as e:
+                logger.error(f"macro_model warmup failed: {e}")
+        threading.Thread(target=_warm_macro_model, daemon=True).start()
+
+    # Pre-warm HPI: same pattern.
+    def _warm_hpi():
+        try:
+            from backend.house_prices import service as hpi_svc
+            hpi_svc.ensure_built()
+            logger.info(f"house_prices warmup: status={hpi_svc.status()}")
+        except Exception as e:
+            logger.error(f"house_prices warmup failed: {e}")
+    threading.Thread(target=_warm_hpi, daemon=True).start()
+
+    # Pre-warm commodities: the monthly cron at job 4 only runs on the
+    # 1st of the month, so a deploy on any other day starts with no fits
+    # and /api/v1/health reports commodities=null. Use get_or_fit per
+    # commodity so already-fresh disk fits are reused (~instant) and only
+    # missing/stale ones do the slow ~30-90s fit. Daemon thread so boot
+    # doesn't block.
+    def _warm_commodities():
+        try:
+            from backend.data_sources import commodity_models, commodities_forecast
+            ok, fail = 0, 0
+            for name in commodity_models.TICKERS:
+                try:
+                    m = commodity_models.get_or_fit(name)
+                    if m is not None and m.fit_error is None:
+                        ok += 1
+                    else:
+                        fail += 1
+                except Exception as e:
+                    logger.warning(f"commodities warmup: {name} failed: {e}")
+                    fail += 1
+            logger.info(f"commodities warmup: {ok}/{ok+fail} fits ready "
+                        f"(cache_dir={commodity_models.CACHE_DIR})")
+            # Drop the daily forecast cache, then proactively rebuild it
+            # so /api/v1/health can report a real `commodities` timestamp
+            # without the algotrader having to first hit the forecast
+            # endpoint to trigger lazy population.
+            commodities_forecast._cache.clear()
+            data = commodities_forecast.get_forecast_data()
+            logger.info(
+                f"commodities warmup: daily cache primed "
+                f"(last_updated={data.get('last_updated') if data else 'none'})"
+            )
+        except Exception as e:
+            logger.error(f"commodities warmup failed: {e}")
+    threading.Thread(target=_warm_commodities, daemon=True).start()

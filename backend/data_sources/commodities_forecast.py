@@ -48,9 +48,8 @@ GROUP_SCENARIOS = {
             'Base Case':    '#3b82f6',
             'Severe Case':  '#f59e0b',
             'Worst Case':   '#ef4444',
-            'Weighted Avg': '#10b981',
         },
-        'scenario_order': ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'],
+        'scenario_order': ['Actual', 'Base Case', 'Severe Case', 'Worst Case'],
     },
     'Agriculture': {
         'weights': {
@@ -68,9 +67,8 @@ GROUP_SCENARIOS = {
             'Bear':         '#3b82f6',
             'Base':         '#10b981',
             'Bull':         '#ef4444',
-            'Weighted Avg': '#f59e0b',
         },
-        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull', 'Weighted Avg'],
+        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull'],
     },
     'Metals': {
         'weights': {
@@ -88,9 +86,8 @@ GROUP_SCENARIOS = {
             'Bear':         '#3b82f6',
             'Base':         '#10b981',
             'Bull':         '#ef4444',
-            'Weighted Avg': '#f59e0b',
         },
-        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull', 'Weighted Avg'],
+        'scenario_order': ['Actual', 'Bear', 'Base', 'Bull'],
     },
 }
 
@@ -106,6 +103,9 @@ COMMODITIES = {
     'Coffee':           ('KC=F',  '\u00a2/lb',  'Agriculture'),
     'Copper':           ('HG=F',  '\u00a2/lb',  'Metals'),
     'Gold':             ('GC=F',  '$/troy oz',  'Metals'),
+    'Silver':           ('SI=F',  '$/troy oz',  'Metals'),
+    'Platinum':         ('PL=F',  '$/troy oz',  'Metals'),
+    'Aluminum':         ('ALI=F', '$/MT',       'Metals'),
 }
 
 # ── Scenario Price Targets ──────────────────────────────────────────────────
@@ -184,6 +184,28 @@ SCENARIO_TARGETS = {
         'Base':  {'Q1': 5700, 'Q2': 5100, 'Q3': 5350, 'Q4': 5600},
         'Bull':  {'Q1': 6400, 'Q2': 5450, 'Q3': 5800, 'Q4': 6200},
     },
+    # ── PLACEHOLDER TARGETS ────────────────────────────────────────────────
+    # Silver / Platinum / Aluminum were added in Phase 1. The quarterly
+    # numbers below are hand-picked anchors to make the UI render sensibly
+    # until the SARIMAX + GARCH model (Phase 4) replaces them with real
+    # posterior p2.5 / p50 / p97.5 draws. Do NOT cite these externally.
+    # Spot reference (Apr 2026): Silver ~$52/oz, Platinum ~$1300/oz,
+    # Aluminum ~$2600/MT.
+    'Silver': {
+        'Bear':  {'Q1': 42, 'Q2': 44, 'Q3': 41, 'Q4': 43},
+        'Base':  {'Q1': 52, 'Q2': 54, 'Q3': 56, 'Q4': 58},
+        'Bull':  {'Q1': 65, 'Q2': 68, 'Q3': 72, 'Q4': 75},
+    },
+    'Platinum': {
+        'Bear':  {'Q1': 1080, 'Q2': 1120, 'Q3': 1060, 'Q4': 1100},
+        'Base':  {'Q1': 1300, 'Q2': 1330, 'Q3': 1360, 'Q4': 1400},
+        'Bull':  {'Q1': 1580, 'Q2': 1640, 'Q3': 1690, 'Q4': 1750},
+    },
+    'Aluminum': {
+        'Bear':  {'Q1': 2250, 'Q2': 2320, 'Q3': 2210, 'Q4': 2280},
+        'Base':  {'Q1': 2600, 'Q2': 2650, 'Q3': 2680, 'Q4': 2720},
+        'Bull':  {'Q1': 3100, 'Q2': 3220, 'Q3': 3300, 'Q4': 3400},
+    },
 }
 
 # Group colors for commodity lines in group overview
@@ -201,8 +223,11 @@ GROUP_COMMODITY_COLORS = {
         'Coffee':   '#ef4444',
     },
     'Metals': {
-        'Copper': '#f97316',
-        'Gold':   '#eab308',
+        'Copper':   '#f97316',
+        'Gold':     '#eab308',
+        'Silver':   '#94a3b8',
+        'Platinum': '#a78bfa',
+        'Aluminum': '#06b6d4',
     },
 }
 
@@ -400,10 +425,33 @@ def _fetch_all_data(time_ctx):
     historical = {}
     actuals = {}
 
+    # Pre-compute shared timing info — applies to every commodity even when
+    # yfinance stalls on its ticker, so the builder can still populate the
+    # current-quarter column.
+    cq = time_ctx['current_quarter']
+    cq_start, cq_end = quarters[cq]
+    shared_qtd_elapsed  = max(0, (today - cq_start).days)
+    shared_qtd_in_q     = max(1, (cq_end - cq_start).days + 1)
+
     for name, (ticker, unit, group) in COMMODITIES.items():
         series = _extract_series(data, ticker, len(tickers))
+
+        # Resilient path: if yfinance returned nothing for this ticker
+        # (common for newer / thinly traded contracts like ALI=F),
+        # keep the commodity in the response with an empty actuals dict
+        # so the frontend subview can still render scenario targets +
+        # the placeholder targets table. The scenario rows will fall
+        # back to hardcoded values.
         if series is None:
-            logger.warning(f"No data for {name} ({ticker})")
+            logger.warning(f"No data for {name} ({ticker}) — keeping with empty actuals")
+            historical[name] = []
+            actuals[name] = {
+                'completed': {},
+                'latest_close': None,
+                'current_q_avg': None,
+                'qtd_days_elapsed': shared_qtd_elapsed,
+                'qtd_days_in_quarter': shared_qtd_in_q,
+            }
             continue
 
         # ── Historical quarterly averages (past 10 years) ──
@@ -429,6 +477,14 @@ def _fetch_all_data(time_ctx):
         # ── Current year actuals ──
         ytd_series = series[date(year, 1, 1).isoformat():]
         if len(ytd_series) == 0:
+            logger.warning(f"No YTD data for {name} ({ticker}) — keeping with empty actuals")
+            actuals[name] = {
+                'completed': {},
+                'latest_close': None,
+                'current_q_avg': None,
+                'qtd_days_elapsed': shared_qtd_elapsed,
+                'qtd_days_in_quarter': shared_qtd_in_q,
+            }
             continue
 
         result = {
@@ -443,12 +499,15 @@ def _fetch_all_data(time_ctx):
             if len(q_data) > 0:
                 result['completed'][q_label] = round(float(q_data.mean()), 2)
 
-        # Current quarter partial average
-        cq = time_ctx['current_quarter']
-        cq_start, _ = quarters[cq]
+        # Current quarter partial average (raw mean of QTD closes)
         cq_data = ytd_series[cq_start.isoformat():]
         if len(cq_data) > 0:
             result['current_q_avg'] = round(float(cq_data.mean()), 2)
+
+        # Days-elapsed / days-in-quarter — shared across commodities but stored
+        # per-commodity so the builder has everything it needs in one dict.
+        result['qtd_days_elapsed'] = shared_qtd_elapsed
+        result['qtd_days_in_quarter'] = shared_qtd_in_q
 
         actuals[name] = result
         logger.info(
@@ -460,18 +519,112 @@ def _fetch_all_data(time_ctx):
     return historical, actuals
 
 
+# Mapping from group scenario name → percentile field returned by the
+# SARIMAX + GARCH model in commodity_models.get_model_forecast.
+# Oil & Gas: 3-tier disruption gradient (higher price = worse for consumers).
+# Agriculture / Metals: symmetric Bear/Base/Bull around the median.
+_SCENARIO_TO_PERCENTILE = {
+    'Oil & Gas':   {'Base Case': 'median', 'Severe Case': 'p90', 'Worst Case': 'p97_5'},
+    'Agriculture': {'Bear': 'p2_5', 'Base': 'median', 'Bull': 'p97_5'},
+    'Metals':      {'Bear': 'p2_5', 'Base': 'median', 'Bull': 'p97_5'},
+}
+
+
+def _model_targets_for_commodity(name, group_name, forecast_quarters,
+                                  qtd_mean=None, days_elapsed=0, days_in_quarter=90):
+    """
+    Build a dict shaped like SCENARIO_TARGETS[name] populated from the
+    SARIMAX + GARCH model. Also returns the model's blended nowcast for
+    the current quarter. Returns (None, None) on any failure so the caller
+    can fall back to the hardcoded targets.
+
+    Returns:
+        (targets_dict, nowcast_value, forward_curve_dict) — any element may
+        be None independently. forward_curve_dict is keyed by calendar
+        quarter (``'Q3'`` etc.) so the API can plot it alongside the
+        scenario rows without further translation.
+    """
+    try:
+        from backend.data_sources import commodity_models
+    except Exception as e:
+        logger.debug(f'commodity_models import failed ({e}); using hardcoded targets')
+        return None, None, None
+
+    scenario_map = _SCENARIO_TO_PERCENTILE.get(group_name)
+    if not scenario_map:
+        return None, None, None
+
+    try:
+        result = commodity_models.get_model_forecast(
+            name,
+            qtd_mean=qtd_mean,
+            days_elapsed=days_elapsed,
+            days_in_quarter=days_in_quarter,
+        )
+    except Exception as e:
+        logger.warning(f'{name}: model forecast crashed: {e}')
+        return None, None, None, None
+    if not result or not result.get('forecast'):
+        return None, None, None, None
+
+    fc = result['forecast']  # {'Q+1': {median, p2_5, p10, p90, p97_5, label}, ...}
+    nowcast_val = result.get('nowcast')
+
+    # Re-key anchor quarters from Q+i → calendar Q{fq_num} so the frontend
+    # can align them with the scenario rows directly.
+    def _rekey(raw: dict) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for i, (_fy, fq_num, _label) in enumerate(forecast_quarters):
+            cv = raw.get(f'Q+{i + 1}')
+            if cv and 'mean_price' in cv:
+                out[f'Q{fq_num}'] = round(float(cv['mean_price']), 2)
+        return out
+
+    forward_curve  = _rekey(result.get('forward_curve') or {})
+    long_run_trend = _rekey(result.get('long_run_trend') or {})
+
+    # Map forecast index to calendar-quarter key used by SCENARIO_TARGETS
+    # (lookup in _build_scenario_forecasts is by `Q{fq_num}` where fq_num ∈ 1..4).
+    targets = {scenario: {} for scenario in scenario_map}
+    for i, (_fy, fq_num, _label) in enumerate(forecast_quarters):
+        bucket = fc.get(f'Q+{i + 1}')
+        if not bucket:
+            continue
+        q_key = f'Q{fq_num}'
+        for scenario, percentile in scenario_map.items():
+            val = bucket.get(percentile)
+            if val is not None:
+                targets[scenario][q_key] = round(float(val), 2)
+
+    # If the model produced no usable numbers, signal fallback
+    if not any(q for q in targets.values()):
+        return None, nowcast_val, forward_curve or None, long_run_trend or None
+    return (targets, nowcast_val,
+            (forward_curve or None), (long_run_trend or None))
+
+
 def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
     """
     Build scenario-based forecasts for a single commodity.
 
-    Uses absolute price targets from SCENARIO_TARGETS (not spreads).
-    For actual/current_q columns uses live data; for forecast columns uses
-    the fixed model targets.  Q1 targets set to None are auto-filled from
-    the current quarter YTD average.
+    Tries the SARIMAX + GARCH model (commodity_models.get_model_forecast)
+    first; falls back to the hardcoded SCENARIO_TARGETS if the model fails,
+    is stale, or does not cover this commodity. For actual / current_q
+    columns always uses live data.
 
-    Returns a dict of scenario -> {label: price} for all time labels + FY.
+    Returns a dict of scenario -> {label: price} for all time labels + FY,
+    plus a `_source` marker ('model' or 'hardcoded') used by the meta block.
     """
-    targets_cfg = SCENARIO_TARGETS.get(name)
+    targets_cfg, nowcast_val, forward_curve, long_run_trend = _model_targets_for_commodity(
+        name, group_name, time_ctx['forecast_quarters'],
+        qtd_mean=actual_data.get('current_q_avg'),
+        days_elapsed=actual_data.get('qtd_days_elapsed', 0),
+        days_in_quarter=actual_data.get('qtd_days_in_quarter', 90),
+    )
+    source = 'model'
+    if not targets_cfg:
+        targets_cfg = SCENARIO_TARGETS.get(name)
+        source = 'hardcoded'
     if not targets_cfg:
         return None
 
@@ -515,10 +668,13 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
                     fy_parts.append(val)
 
             elif ltype == 'current_q':
-                # Use live actual for current quarter
-                row[label] = current_q_avg
-                if current_q_avg is not None:
-                    fy_parts.append(current_q_avg)
+                # Blended nowcast (QTD mean × elapsed_weight + model Q+0 ×
+                # remaining_weight) for scenario rows. Falls back to raw
+                # QTD mean if the model path didn't yield a nowcast.
+                cq_val = nowcast_val if nowcast_val is not None else current_q_avg
+                row[label] = round(float(cq_val), 2) if cq_val is not None else None
+                if cq_val is not None:
+                    fy_parts.append(cq_val)
 
             elif ltype == 'forecast':
                 fc_idx = sum(1 for lt in label_types[:i] if lt == 'forecast')
@@ -545,36 +701,7 @@ def _build_scenario_forecasts(name, actual_data, time_ctx, group_name):
 
         scenarios[scenario] = row
 
-    # ── Weighted average row (using group-specific weights) ──
-    weighted = {}
-    for label in labels:
-        val = 0.0
-        has_all = True
-        for sc, w in weights.items():
-            sc_val = scenarios.get(sc, {}).get(label)
-            if sc_val is not None:
-                val += w * sc_val
-            else:
-                has_all = False
-                break
-        weighted[label] = round(val, 2) if has_all else None
-
-    # FY and FY2 weighted averages
-    for fy_key in ('FY', 'FY2'):
-        fy_val = 0.0
-        fy_ok = True
-        for sc, w in weights.items():
-            sc_fy = scenarios.get(sc, {}).get(fy_key)
-            if sc_fy is not None:
-                fy_val += w * sc_fy
-            else:
-                fy_ok = False
-                break
-        weighted[fy_key] = round(fy_val, 2) if fy_ok else None
-
-    scenarios['Weighted Avg'] = weighted
-
-    return scenarios
+    return scenarios, source, forward_curve, long_run_trend
 
 
 def _fetch_forecasts():
@@ -587,17 +714,28 @@ def _fetch_forecasts():
             logger.error("No actuals available")
             return None
 
+        # Pull market consensus once (24h-cached inside the tracker).
+        try:
+            from backend.data_sources import consensus_tracker
+            consensus_data = consensus_tracker.get_consensus_data()
+        except Exception as e:
+            logger.warning(f'consensus fetch failed: {e}')
+            consensus_data = {}
+
         # Organize by group
         groups = {}
+        source_counts = {'model': 0, 'hardcoded': 0}
         for name, (ticker, unit, group) in COMMODITIES.items():
             if name not in actuals:
                 continue
 
-            scenarios = _build_scenario_forecasts(
+            built = _build_scenario_forecasts(
                 name, actuals[name], time_ctx, group
             )
-            if not scenarios:
+            if not built:
                 continue
+            scenarios, forecast_source, forward_curve, long_run_trend = built
+            source_counts[forecast_source] = source_counts.get(forecast_source, 0) + 1
 
             if group not in groups:
                 group_cfg = GROUP_SCENARIOS.get(group, {})
@@ -615,6 +753,10 @@ def _fetch_forecasts():
                 'latest_close': actuals[name]['latest_close'],
                 'scenarios': scenarios,
                 'historical': historical.get(name, []),
+                'forecast_source': forecast_source,
+                'forward_curve': forward_curve,
+                'long_run_trend': long_run_trend,
+                'consensus': consensus_data.get(name, []),
             }
 
         if not groups:
@@ -648,9 +790,18 @@ def _fetch_forecasts():
             'meta': {
                 'source': 'ParraMacro Commodities Forecast',
                 'data_source': f'yfinance ({HISTORY_YEARS}yr history + YTD {time_ctx["year"]})',
-                'method': 'Scenario-based absolute price targets · 4-quarter rolling forecast',
+                'method': (
+                    'Hybrid SARIMAX(1,0,1) + GARCH(1,1) with 95% CI bootstrap · '
+                    '4-quarter rolling forecast · hardcoded scenario targets as fallback'
+                ),
                 'baseline': 'Live YTD close prices via yfinance',
                 'commodities_count': commodities_count,
+                'forecast_sources': source_counts,
+                'consensus_sources': sorted({
+                    entry['source']
+                    for entries in consensus_data.values()
+                    for entry in entries
+                }),
                 'last_updated': now.isoformat(),
             }
         }

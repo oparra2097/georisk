@@ -7,6 +7,7 @@ Requires API key (register at https://fred.stlouisfed.org/docs/api/api_key.html)
 Thread-safe cache with 6-hour TTL — most series update daily or less.
 """
 
+import os
 import requests
 import logging
 import threading
@@ -27,7 +28,44 @@ _cache = {}  # {series_id: {'data': [...], 'fetched_at': float}}
 
 
 def _get_api_key():
-    return Config.FRED_API_KEY
+    """Resolve the FRED key at *call time* (not import time).
+
+    Priority: live env vars BEFORE Config.FRED_API_KEY. Config is loaded
+    once at app boot and freezes whatever os.environ said at that moment;
+    if the user adds the key later in Render's UI, Config stays empty
+    until a redeploy. Reading os.environ first picks up live changes
+    without a restart.
+
+    Strips whitespace and quotes, and accepts alternate names in case
+    the var was named slightly differently in the dashboard.
+    """
+    for source in (
+        os.environ.get('FRED_API_KEY', ''),
+        os.environ.get('FRED_KEY', ''),
+        os.environ.get('FRED_TOKEN', ''),
+        getattr(Config, 'FRED_API_KEY', ''),
+    ):
+        key = (source or '').strip().strip('"').strip("'")
+        if key:
+            return key
+    return ''
+
+
+_LOGGED_KEY_STATE = {'logged': False}
+
+
+def _log_key_state_once(key: str):
+    if _LOGGED_KEY_STATE['logged']:
+        return
+    _LOGGED_KEY_STATE['logged'] = True
+    if key:
+        logger.info(f'FRED API key detected (length={len(key)}, first 4 chars={key[:4]}…)')
+    else:
+        logger.warning(
+            'FRED API key NOT detected. Checked: Config.FRED_API_KEY, '
+            'env FRED_API_KEY, FRED_KEY, FRED_TOKEN. '
+            'Set FRED_API_KEY in Render Environment to enable macro model + Case-Shiller.'
+        )
 
 
 def fetch_series(series_id, start_date=None, end_date=None):
@@ -38,8 +76,8 @@ def fetch_series(series_id, start_date=None, end_date=None):
     sorted by date ascending. Periods marked '.' (missing) are skipped.
     """
     key = _get_api_key()
+    _log_key_state_once(key)
     if not key:
-        logger.debug("No FRED_API_KEY configured")
         return []
 
     # Check cache
@@ -63,12 +101,36 @@ def fetch_series(series_id, start_date=None, end_date=None):
         'sort_order': 'asc',
     }
 
-    try:
-        resp = requests.get(FRED_BASE_URL, params=params, timeout=15)
-        if resp.status_code != 200:
-            logger.warning(f"FRED API error {resp.status_code} for {series_id}")
+    # Retry on 429 (rate limit) with exponential backoff. Without this,
+    # sequential fetches like the HPI forecast's per-state HPI + unemp
+    # loop (~100+ calls in a tight burst) silently return [] for any
+    # request that briefly clips FRED's 120/min cap, so per-state models
+    # fail to build and the forecast dropdown stays empty.
+    resp = None
+    for attempt in range(4):
+        try:
+            resp = requests.get(FRED_BASE_URL, params=params, timeout=15)
+        except requests.exceptions.Timeout:
+            logger.warning(f"FRED timeout for {series_id} (attempt {attempt + 1})")
+            time.sleep(0.5 * (attempt + 1))
+            continue
+        except Exception as e:
+            logger.warning(f"FRED fetch error for {series_id}: {e}")
             return []
+        if resp.status_code == 200:
+            break
+        if resp.status_code == 429:
+            wait = 2 ** attempt   # 1s, 2s, 4s, 8s
+            logger.info(f"FRED 429 rate-limited on {series_id}, sleeping {wait}s")
+            time.sleep(wait)
+            continue
+        logger.warning(f"FRED API error {resp.status_code} for {series_id}")
+        return []
+    if resp is None or resp.status_code != 200:
+        logger.warning(f"FRED gave up on {series_id} after retries")
+        return []
 
+    try:
         raw = resp.json().get('observations', [])
         data = []
         for obs in raw:
@@ -90,11 +152,11 @@ def fetch_series(series_id, start_date=None, end_date=None):
         logger.debug(f"FRED {series_id}: fetched {len(data)} observations")
         return data
 
-    except requests.exceptions.Timeout:
-        logger.warning(f"FRED timeout for {series_id}")
-        return []
     except Exception as e:
-        logger.warning(f"FRED fetch error for {series_id}: {e}")
+        # Only the JSON parse / record-build can raise here now (the HTTP
+        # call is wrapped above); flag the parse failure so it isn't
+        # silently swallowed.
+        logger.warning(f"FRED parse error for {series_id}: {e}")
         return []
 
 

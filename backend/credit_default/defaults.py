@@ -1,0 +1,148 @@
+"""
+Loader for the sovereign default-events panel — the *dependent variable*
+for the credit default model.
+
+Reads ``data/sovereign_defaults.csv`` and exposes utilities that produce
+binary labels suitable for joining onto the (iso3, year) macro panel:
+
+  - ``defaulted_within(iso3, year, horizon)``: did this country experience a
+    default starting any time in [year+1, year+horizon]?
+  - ``build_label_frame(years, horizons)``: pandas DataFrame with one row
+    per (iso3, year) and one column per horizon.
+
+We treat ``event_type in {default, restructuring, arrears}`` as a
+"default" signal. Paris/London Club rescheduling, IMF programs, etc. are
+*available* in the CSV but turned off by default — the model targets
+genuine credit events, not broader distress (those are options #3/#4 we
+discussed in the README).
+"""
+
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Set, Tuple
+
+
+_CSV = Path(__file__).resolve().parent.parent.parent / 'data' / 'sovereign_defaults.csv'
+
+# Event types that count as a hard credit event for the binary target.
+DEFAULT_EVENT_TYPES = {'default', 'restructuring', 'arrears'}
+
+# Event types that signal *broader distress* but not a default. Available
+# via the `include_distress=True` flag for users who want target #3.
+DISTRESS_EVENT_TYPES = {'paris_club', 'london_club', 'imf_program'}
+
+
+def _parse_year(s: Optional[str]) -> Optional[int]:
+    if not s:
+        return None
+    try:
+        return int(str(s).strip()[:4])
+    except (ValueError, TypeError):
+        return None
+
+
+def load_events(include_distress: bool = False) -> List[Dict]:
+    """Return parsed event rows from the CSV."""
+    if not _CSV.exists():
+        return []
+
+    rows: List[Dict] = []
+    keep_types = set(DEFAULT_EVENT_TYPES)
+    if include_distress:
+        keep_types |= DISTRESS_EVENT_TYPES
+
+    with open(_CSV, newline='', encoding='utf-8') as f:
+        cleaned = (ln for ln in f if ln.strip() and not ln.lstrip().startswith('#'))
+        reader = csv.DictReader(cleaned)
+        for row in reader:
+            iso3 = (row.get('iso3') or '').strip().upper()
+            ev_type = (row.get('event_type') or '').strip()
+            start = _parse_year(row.get('start_year'))
+            if not iso3 or len(iso3) != 3:
+                continue
+            if not ev_type or start is None:
+                # "Reference" rows (USA, DEU, …) carry no event — skip.
+                continue
+            if ev_type not in keep_types:
+                continue
+            rows.append({
+                'iso3': iso3,
+                'start_year': start,
+                'end_year': _parse_year(row.get('end_year')),
+                'event_type': ev_type,
+                'instrument': (row.get('instrument') or '').strip(),
+                'source': (row.get('source') or '').strip(),
+            })
+    return rows
+
+
+def default_starts_by_country(events: Optional[List[Dict]] = None,
+                              include_distress: bool = False) -> Dict[str, Set[int]]:
+    """{iso3: {start_year, ...}} — useful for fast forward-looking labels."""
+    if events is None:
+        events = load_events(include_distress=include_distress)
+    out: Dict[str, Set[int]] = {}
+    for ev in events:
+        out.setdefault(ev['iso3'], set()).add(ev['start_year'])
+    return out
+
+
+def in_default_years_by_country(events: Optional[List[Dict]] = None,
+                                include_distress: bool = False) -> Dict[str, Set[int]]:
+    """{iso3: {years country was inside an active default spell}}.
+
+    Used to censor the *current-year* indicators of a country that's
+    already in default — predicting "PD next year" doesn't make sense if
+    we already know the country is in default this year.
+    """
+    if events is None:
+        events = load_events(include_distress=include_distress)
+    out: Dict[str, Set[int]] = {}
+    for ev in events:
+        start = ev['start_year']
+        end = ev.get('end_year') or start  # ongoing -> treat as one-year tag
+        years = set(range(start, end + 1))
+        out.setdefault(ev['iso3'], set()).update(years)
+    return out
+
+
+def defaulted_within(starts: Set[int], year: int, horizon: int) -> int:
+    """Did a default *start* in [year+1, year+horizon]?"""
+    if not starts:
+        return 0
+    for h in range(1, horizon + 1):
+        if (year + h) in starts:
+            return 1
+    return 0
+
+
+def build_label_frame(panel_iso_years: Iterable[Tuple[str, int]],
+                      horizons: Iterable[int] = (1, 3, 5),
+                      include_distress: bool = False):
+    """Return DataFrame with binary defaulted_within_{h}y columns.
+
+    ``panel_iso_years`` is an iterable of (iso3, year) tuples — usually
+    ``df[['iso3', 'year']].itertuples(index=False)``.
+    """
+    try:
+        import pandas as pd
+    except ImportError:
+        return None
+
+    starts_by_iso = default_starts_by_country(include_distress=include_distress)
+    in_default_by_iso = in_default_years_by_country(include_distress=include_distress)
+    rows = []
+    for iso3, year in panel_iso_years:
+        starts = starts_by_iso.get(iso3, set())
+        in_def = in_default_by_iso.get(iso3, set())
+        rec = {
+            'iso3': iso3,
+            'year': year,
+            'in_default_year': int(year in in_def),
+        }
+        for h in horizons:
+            rec[f'defaulted_within_{h}y'] = defaulted_within(starts, year, h)
+        rows.append(rec)
+    return pd.DataFrame(rows)

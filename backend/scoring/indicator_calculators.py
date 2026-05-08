@@ -36,29 +36,32 @@ FACTOR_WEIGHTS = {
 }
 
 # ─── BASELINE VOLUMES PER INDICATOR ─────────────────────────────────
-# These are "normal" keyword-matched article counts per indicator
-# from 75 GDELT articles. Lowered for earlier spike detection.
+# Post-relevance-filter the typical article stream per country is ~10-40
+# articles (was ~75 before filtering). Baselines scaled accordingly so
+# spike detection still fires on real events.
 
 BASELINE_VOLUMES = {
-    'political_stability': 5,
-    'military_conflict': 3,
+    'political_stability': 3,
+    'military_conflict': 2,
     'economic_sanctions': 1,
-    'protests_civil_unrest': 2,
+    'protests_civil_unrest': 1,
     'terrorism': 1,
-    'diplomatic_tensions': 2
+    'diplomatic_tensions': 1
 }
 
 # ─── ABSOLUTE SCALING THRESHOLDS ────────────────────────────────────
-# Calibrated for keyword-matched article counts from 75 GDELT articles.
-# Tuned for high sensitivity — even 2-3 keyword-matched articles is significant.
+# Calibrated for the post-relevance-filter regime (~10-40 articles/country).
+# With fewer-but-cleaner articles, 3-5 matches on a given indicator is a
+# strong signal. Old thresholds assumed 75 raw articles and were
+# unreachable after filtering.
 
 VOLUME_THRESHOLDS = {
-    'political_stability':   {'low': 1, 'moderate': 3,  'high': 8,   'critical': 20},
-    'military_conflict':     {'low': 1, 'moderate': 2,  'high': 7,   'critical': 18},
-    'economic_sanctions':    {'low': 1, 'moderate': 2,  'high': 5,   'critical': 12},
-    'protests_civil_unrest': {'low': 1, 'moderate': 2,  'high': 7,   'critical': 16},
-    'terrorism':             {'low': 1, 'moderate': 2,  'high': 5,   'critical': 10},
-    'diplomatic_tensions':   {'low': 1, 'moderate': 2,  'high': 6,   'critical': 15}
+    'political_stability':   {'low': 1, 'moderate': 2, 'high': 5, 'critical': 12},
+    'military_conflict':     {'low': 1, 'moderate': 2, 'high': 5, 'critical': 12},
+    'economic_sanctions':    {'low': 1, 'moderate': 2, 'high': 4, 'critical': 9},
+    'protests_civil_unrest': {'low': 1, 'moderate': 2, 'high': 5, 'critical': 11},
+    'terrorism':             {'low': 1, 'moderate': 2, 'high': 4, 'critical': 8},
+    'diplomatic_tensions':   {'low': 1, 'moderate': 2, 'high': 4, 'critical': 10}
 }
 
 
@@ -134,20 +137,22 @@ def _spike_score(current_volume, baseline_volume):
 def _source_breadth_score(total_articles):
     """
     Score based on how many articles cover this indicator.
-    More coverage = more significant. Tuned for higher sensitivity.
+    Recalibrated for post-relevance-filter regime where ~10-40 relevant
+    articles per country is typical (was ~75 before filtering).
+    1 article -> 20. 2 -> 35. 5 -> 65. 10 -> 85. 20+ -> ~100.
     """
     if total_articles <= 0:
         return 0.0
     elif total_articles <= 1:
-        return 18.0
-    elif total_articles <= 3:
-        return 18.0 + (total_articles - 1) / 2.0 * 22.0
-    elif total_articles <= 8:
-        return 40.0 + (total_articles - 3) / 5.0 * 30.0
-    elif total_articles <= 18:
-        return 70.0 + (total_articles - 8) / 10.0 * 20.0
+        return 20.0
+    elif total_articles <= 2:
+        return 35.0
+    elif total_articles <= 5:
+        return 35.0 + (total_articles - 2) / 3.0 * 30.0
+    elif total_articles <= 10:
+        return 65.0 + (total_articles - 5) / 5.0 * 20.0
     else:
-        return min(100.0, 90.0 + math.log2(total_articles / 18.0) * 5.0)
+        return min(100.0, 85.0 + math.log2(total_articles / 10.0) * 8.0)
 
 
 def calculate_indicator_score(indicator_name, keyword_theme_volume, gdelt_baseline,

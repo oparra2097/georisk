@@ -61,7 +61,66 @@
 
         // Initial load
         loadAndRender();
+
+        // Share button — copies the current URL to the clipboard. Uses
+        // delegation so it works for every panel variant (single handler,
+        // re-bound automatically when panels re-render).
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest && e.target.closest('#panel-share-btn, .js-share-url');
+            if (!btn) return;
+            e.preventDefault();
+            const url = btn.dataset.shareUrl || window.location.href;
+            copyToClipboard(url).then((ok) => {
+                if (ok) {
+                    btn.classList.add('copied');
+                    const label = btn.querySelector('.share-btn-label');
+                    const prev = label ? label.textContent : null;
+                    if (label) label.textContent = 'Copied';
+                    showShareToast('Link copied — paste it into LinkedIn, X, or Substack');
+                    setTimeout(() => {
+                        btn.classList.remove('copied');
+                        if (label && prev !== null) label.textContent = prev;
+                    }, 1800);
+                } else {
+                    showShareToast('Copy failed — ' + url);
+                }
+            });
+        });
     });
+
+    function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            return navigator.clipboard.writeText(text).then(() => true, () => false);
+        }
+        // Fallback for older browsers / http contexts
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return Promise.resolve(ok);
+        } catch (_) {
+            return Promise.resolve(false);
+        }
+    }
+
+    function showShareToast(msg) {
+        let toast = document.getElementById('share-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'share-toast';
+            toast.className = 'share-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        requestAnimationFrame(() => toast.classList.add('show'));
+        clearTimeout(toast._hideTimer);
+        toast._hideTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
 
     // ══════════════════════════════════════════════════════
     // SIDEBAR RENDERING (Phase 2)
@@ -76,8 +135,9 @@
             // Only show categories that have datasets
             if (!cat.datasets || cat.datasets.length === 0) continue;
 
-            const lockIcon = cat.requiresAuth && !PD.isAuthenticated
-                ? ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;vertical-align:-1px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'
+            const needsApproval = cat.requiresAuth && !PD.hasInsuranceAccess;
+            const lockIcon = needsApproval
+                ? ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;vertical-align:-1px;" title="Approval required"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'
                 : '';
             html += '<div class="sidebar-category-heading">' + cat.icon + ' ' + cat.label + lockIcon + '</div>';
             for (const ds of cat.datasets) {
@@ -205,6 +265,13 @@
               '</svg>Excel</a>'
             : '';
 
+        const shareBtn =
+            '<button type="button" class="share-btn-data" id="panel-share-btn" title="Copy shareable link">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
+            '</svg><span class="share-btn-label">Share</span></button>';
+
         panel.innerHTML = `
             <div class="data-section-header">
                 <div>
@@ -213,6 +280,7 @@
                 </div>
                 <div class="data-controls" id="panel-controls">
                     ${controlsHtml}
+                    ${shareBtn}
                     ${exportBtn}
                 </div>
             </div>
@@ -277,8 +345,11 @@
                 '</select>';
         }
         if (ds.controls.includes('scenario')) {
+            // Initial placeholder — populateScenarioDropdown replaces this
+            // with the group-specific scenario list once data loads.
             html += '<select id="ctrl-scenario" class="data-select">' +
-                '<option value="Weighted Avg"' + (state.scenario === 'Weighted Avg' ? ' selected' : '') + '>Weighted Avg</option>' +
+                '<option value="' + (state.scenario || 'Base') + '" selected>' +
+                (state.scenario || 'Base') + '</option>' +
                 '</select>';
         }
         if (ds.controls.includes('comm-freq')) {
@@ -311,6 +382,15 @@
             html += '<select id="ctrl-countries" class="data-select" multiple>' +
                 '</select>';
         }
+        if (ds.controls.includes('em-universe')) {
+            const u = state.emUniverse || 'em40';
+            html += '<select id="ctrl-em-universe" class="data-select">' +
+                '<option value="em40"' + (u === 'em40' ? ' selected' : '') + '>Top 40 EM (default)</option>' +
+                '<option value="em"' + (u === 'em' ? ' selected' : '') + '>All EMs</option>' +
+                '<option value="all"' + (u === 'all' ? ' selected' : '') + '>All Countries</option>' +
+                '<option value="custom"' + (u === 'custom' ? ' selected' : '') + '>Custom Selection</option>' +
+                '</select>';
+        }
         return html;
     }
 
@@ -327,6 +407,11 @@
         bind('ctrl-region', v => { state.region = v; });
         bind('ctrl-reserve-type', v => { state.reserveType = v; });
         bind('ctrl-ins-region', v => { state.insRegion = v; });
+        bind('ctrl-em-universe', v => {
+            state.emUniverse = v;
+            // Re-entering "custom" after leaving it should re-seed defaults.
+            if (v !== 'custom') state.emCustomTouched = false;
+        });
     }
 
     // ══════════════════════════════════════════════════════
@@ -432,14 +517,15 @@
             case 'forecast-group': renderForecast(ds); break;
             case 'weo': renderWeo(ds); break;
             case 'wb': renderWeo(ds); break;  // World Bank uses same data shape as WEO
-            case 'us-trade-quarterly': renderUsTradeQuarterly(ds); break;
-            case 'currency-debt': renderCurrencyDebt(ds); break;
             case 'sovereign-debt': renderSovereignDebt(ds); break;
             case 'fertilizer-em': renderFertilizerEM(ds); break;
             case 'cofer-nowcast': renderCoferNowcast(ds); break;
             case 'insurance-inflation': renderInsuranceInflation(ds); break;
             case 'yale-tariff': renderYaleTariff(ds); break;
             case 'gdp-nowcast': renderGdpNowcast(ds); break;
+            case 'em-vulnerability': renderEmVulnerability(ds); break;
+            case 'us-trade-quarterly': renderUsTradeQuarterly(ds); break;
+            case 'currency-debt': renderCurrencyDebt(ds); break;
         }
     }
 
@@ -587,6 +673,7 @@
                 borderColor: COLORS[i % COLORS.length],
                 backgroundColor: 'transparent',
                 borderWidth: 2, fill: false, pointRadius: 0, pointHitRadius: 8, tension: 0.3,
+                spanGaps: true,
             };
         });
 
@@ -1082,23 +1169,26 @@
         if (!group) return;
         const order = group.scenario_order || [];
         sel.innerHTML = '';
-        // "All Scenarios" option for overview mode
-        const allOpt = document.createElement('option');
-        allOpt.value = 'All'; allOpt.textContent = 'All Scenarios';
-        if (state.scenario === 'All') allOpt.selected = true;
-        sel.appendChild(allOpt);
-        // Weighted Avg
-        const waOpt = document.createElement('option');
-        waOpt.value = 'Weighted Avg'; waOpt.textContent = 'Weighted Avg';
-        if (state.scenario === 'Weighted Avg') waOpt.selected = true;
-        sel.appendChild(waOpt);
+        // Scenarios-only dropdown (no 'All' mode): user picks exactly one
+        // scenario line to display on the overview. Default is the group's
+        // base scenario.
         order.forEach(sc => {
-            if (sc === 'Actual' || sc === 'Weighted Avg') return;
+            if (sc === 'Actual') return;
             const opt = document.createElement('option');
             opt.value = sc; opt.textContent = sc;
             if (state.scenario === sc) opt.selected = true;
             sel.appendChild(opt);
         });
+        // Pick a sensible fallback when the persisted state.scenario isn't
+        // in this group's order (legacy 'Weighted Avg' / 'All' from
+        // localStorage, or a group that uses 'Base Case' vs 'Base').
+        const validValues = Array.from(sel.options).map(o => o.value);
+        if (!validValues.includes(state.scenario)) {
+            const baseScenario = order.find(sc => sc === 'Base Case' || sc === 'Base')
+                || validValues[0] || 'Base';
+            state.scenario = baseScenario;
+            sel.value = baseScenario;
+        }
     }
 
     function renderForecast(ds) {
@@ -1210,8 +1300,8 @@
                         }),
                         borderColor: lineColor,
                         backgroundColor: 'transparent',
-                        borderWidth: sc === 'Weighted Avg' ? 3 : 2,
-                        borderDash: sc === 'Weighted Avg' ? [6, 3] : [],
+                        borderWidth: 2,
+                        borderDash: [],
                         fill: false, pointRadius: 3, pointHitRadius: 8,
                         pointBackgroundColor: lineColor, pointBorderColor: lineColor, tension: 0.3,
                         segment: chartForecastStartIdx > 0 ? {
@@ -1239,15 +1329,30 @@
                         data: allQLabels.map(l => valMap[l] != null ? valMap[l] : null),
                         borderColor: lineColor,
                         backgroundColor: 'transparent',
-                        borderWidth: sc === 'Weighted Avg' ? 3 : 2,
-                        borderDash: sc === 'Weighted Avg' ? [6, 3] : [],
+                        borderWidth: 2,
+                        borderDash: [],
                         fill: false, pointRadius: 0, pointHitRadius: 8,
                         pointBackgroundColor: lineColor, pointBorderColor: lineColor, tension: 0.3,
+                        // Metals overview: Copper (~$5/lb) and Silver (~$50/oz)
+                        // sit on a secondary axis so they aren't dwarfed by
+                        // Gold (~$4000/oz), Aluminum (~$2600/MT), Platinum.
+                        yAxisID: (groupName === 'Metals' && (name === 'Copper' || name === 'Silver'))
+                            ? 'y1' : 'y',
                         segment: forecastStartIdx > 0 ? {
                             borderDash: ctx2 => ctx2.p0DataIndex >= forecastStartIdx - 1 ? [4, 3] : [],
                         } : undefined,
                     });
                 });
+            });
+        }
+
+        // Also tag yearly-mode datasets (built earlier) with yAxisIDs.
+        if (commFreq === 'yearly') {
+            chartDatasets.forEach(ds => {
+                if (ds.yAxisID) return;
+                const commodity = (ds.label || '').split(' (')[0];
+                ds.yAxisID = (groupName === 'Metals' && (commodity === 'Copper' || commodity === 'Silver'))
+                    ? 'y1' : 'y';
             });
         }
 
@@ -1289,26 +1394,43 @@
                         }
                     }
                 },
-                scales: {
-                    x: {
-                        type: 'category',
-                        ticks: {
-                            color: (tickCtx) => {
-                                if (chartIsForecast(tickCtx.index)) return '#6b7280';
-                                return '#9ca3af';
+                scales: (() => {
+                    const base = {
+                        x: {
+                            type: 'category',
+                            ticks: {
+                                color: (tickCtx) => {
+                                    if (chartIsForecast(tickCtx.index)) return '#6b7280';
+                                    return '#9ca3af';
+                                },
+                                font: { size: 11 },
+                                maxRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: commFreq === 'yearly' ? 15 : 20,
                             },
-                            font: { size: 11 },
-                            maxRotation: 45,
-                            autoSkip: true,
-                            maxTicksLimit: commFreq === 'yearly' ? 15 : 20,
+                            grid: { color: 'rgba(55,65,81,0.3)' },
                         },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
-                    },
-                    y: {
-                        ticks: { color: '#6b7280', font: { size: 10 } },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            ticks: { color: '#6b7280', font: { size: 10 } },
+                            grid: { color: 'rgba(55,65,81,0.3)' },
+                            title: groupName === 'Metals'
+                                ? { display: true, text: 'Gold / Platinum / Aluminum', color: '#6b7280', font: { size: 10 } }
+                                : undefined,
+                        },
+                    };
+                    if (groupName === 'Metals') {
+                        base.y1 = {
+                            type: 'linear',
+                            position: 'right',
+                            ticks: { color: '#a78bfa', font: { size: 10 } },
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: 'Copper / Silver', color: '#a78bfa', font: { size: 10 } },
+                        };
                     }
-                }
+                    return base;
+                })(),
             },
         }));
 
@@ -1400,7 +1522,7 @@
         const scenarios = info.scenarios || {};
         const scenarioColors = group.scenario_colors || {};
         const scenarioLabels = group.scenario_labels || {};
-        const scenarioOrder = group.scenario_order || ['Actual', 'Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
+        const scenarioOrder = group.scenario_order || ['Actual', 'Base Case', 'Severe Case', 'Worst Case'];
         const timeCtx = data.time_context || {};
         const forecastLabels = timeCtx.labels || [];
         const labelTypes = timeCtx.label_types || [];
@@ -1422,9 +1544,20 @@
         const titleEl = document.getElementById('panel-title');
         if (titleEl) titleEl.textContent = commodityName + ' \u2014 Scenario Forecast';
 
-        // Summary not used
+        // Methodology button — opens the per-commodity white paper modal
         const summary = document.getElementById('panel-summary');
-        if (summary) summary.innerHTML = '';
+        if (summary) {
+            summary.innerHTML =
+                '<div class="forecast-cta-row">' +
+                  '<button class="methodology-btn" onclick="window.openMethodology(\'' +
+                    commodityName.replace(/'/g, "\\'") +
+                  '\')">View methodology →</button>' +
+                  '<button class="scenario-btn" onclick="window.toggleScenarioPanel(\'' +
+                    commodityName.replace(/'/g, "\\'") +
+                  '\')">Build scenario →</button>' +
+                '</div>' +
+                '<div id="panel-scenario-container"></div>';
+        }
 
         // ── Chart ──
         PD.destroyChart('main');
@@ -1455,7 +1588,7 @@
             .forEach(sc => {
                 const scenData = scenarios[sc];
                 const color = scenarioColors[sc] || '#9ca3af';
-                const isDashed = sc === 'Weighted Avg';
+                const isDashed = false;
                 const isBase = sc === baseScenario;
 
                 // Build data array: null for historical, then scenario values
@@ -1474,7 +1607,7 @@
                     data: lineData,
                     borderColor: color,
                     backgroundColor: isBase ? color + '1A' : 'transparent',
-                    borderWidth: sc === 'Weighted Avg' ? 3 : 2,
+                    borderWidth: 2,
                     borderDash: isDashed ? [6, 3] : [],
                     fill: false, pointRadius: 4, pointHitRadius: 8,
                     pointBackgroundColor: color, pointBorderColor: color, tension: 0.3,
@@ -1580,7 +1713,7 @@
 
             // Line 1: Scenario narratives with weights
             const scenParts = [];
-            scenarioOrder.filter(sc => sc !== 'Actual' && sc !== 'Weighted Avg').forEach(sc => {
+            scenarioOrder.filter(sc => sc !== 'Actual').forEach(sc => {
                 const w = weights[sc] ? (weights[sc] * 100).toFixed(0) + '%' : '';
                 const label = scenarioLabels[sc] || '';
                 if (label) scenParts.push('<strong>' + sc + ' (' + w + ')</strong>: ' + label);
@@ -1865,26 +1998,26 @@
         if (summary) {
             const latestSrc = data.latest_source || '';
             summary.innerHTML = `
-                <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:12px;margin-bottom:20px;width:100%;">
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
+                <div class="yale-tariff-tiles">
+                    <div class="yale-tariff-tile">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Current Rate</div>
-                        <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">${latestVal.toFixed(2)}%</div>
+                        <div class="yale-tariff-tile-val" style="color:#f1f5f9;">${latestVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">as of ${latestDate}</div>
                         ${latestSrc ? '<div style="color:#64748b;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + latestSrc + '</div>' : ''}
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
+                    <div class="yale-tariff-tile">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak</div>
-                        <div style="color:#ef4444;font-size:28px;font-weight:700;margin-top:4px;">${peakVal.toFixed(2)}%</div>
+                        <div class="yale-tariff-tile-val" style="color:#ef4444;">${peakVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">${peakDate}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
+                    <div class="yale-tariff-tile">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Trade-War Low</div>
-                        <div style="color:#10b981;font-size:28px;font-weight:700;margin-top:4px;">${minVal.toFixed(2)}%</div>
+                        <div class="yale-tariff-tile-val" style="color:#10b981;">${minVal.toFixed(2)}%</div>
                         <div style="color:#64748b;font-size:11px;">${minDate}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:16px;text-align:center;min-width:0;">
+                    <div class="yale-tariff-tile">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Pre-Trade-War Baseline</div>
-                        <div style="color:#f1f5f9;font-size:28px;font-weight:700;margin-top:4px;">2.40%</div>
+                        <div class="yale-tariff-tile-val" style="color:#f1f5f9;">2.40%</div>
                         <div style="color:#64748b;font-size:11px;">early Jan 2025</div>
                     </div>
                 </div>
@@ -2088,21 +2221,21 @@
         const summary = document.getElementById('panel-summary');
         if (summary) {
             summary.innerHTML = `
-                <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:12px;margin-bottom:20px;width:100%;">
-                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                <div class="yale-tariff-tiles" style="grid-template-columns:repeat(3, minmax(0, 1fr));">
+                    <div class="yale-tariff-tile" style="padding:20px;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Nowcast</div>
-                        <div style="color:${estColor};font-size:36px;font-weight:700;margin-top:6px;">${estSign}${estimate.toFixed(1)}%</div>
+                        <div class="yale-tariff-tile-val" style="color:${estColor};font-size:36px;">${estSign}${estimate.toFixed(1)}%</div>
                         <div style="color:#64748b;font-size:12px;margin-top:4px;">${nowcast.quarter} (annualized)</div>
                         <div style="color:#475569;font-size:11px;">as of ${nowcast.as_of}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                    <div class="yale-tariff-tile" style="padding:20px;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Prior Quarter</div>
-                        <div style="color:${priorColor};font-size:36px;font-weight:700;margin-top:6px;">${priorActual != null ? priorSign + priorActual.toFixed(1) + '%' : 'N/A'}</div>
+                        <div class="yale-tariff-tile-val" style="color:${priorColor};font-size:36px;">${priorActual != null ? priorSign + priorActual.toFixed(1) + '%' : 'N/A'}</div>
                         <div style="color:#64748b;font-size:12px;margin-top:4px;">${prior.quarter || ''} (actual)</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:20px;text-align:center;">
+                    <div class="yale-tariff-tile" style="padding:20px;">
                         <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Indicators</div>
-                        <div style="color:#e2e8f0;font-size:36px;font-weight:700;margin-top:6px;">${contributions.filter(c => c.signal !== 'unavailable').length}<span style="font-size:18px;color:#64748b;">/${contributions.length}</span></div>
+                        <div class="yale-tariff-tile-val" style="color:#e2e8f0;font-size:36px;">${contributions.filter(c => c.signal !== 'unavailable').length}<span style="font-size:18px;color:#64748b;">/${contributions.length}</span></div>
                         <div style="color:#64748b;font-size:12px;margin-top:4px;">reporting this quarter</div>
                     </div>
                 </div>
@@ -2200,37 +2333,93 @@
         // Meta
         const metaEl = document.getElementById('panel-meta');
         if (metaEl) {
-            metaEl.innerHTML = '<div>Source: FRED (Federal Reserve Economic Data) · Parra Macro bridge equation model</div>' +
+            const refreshed = data.last_refreshed ? ' · Last refreshed: ' + data.last_refreshed : '';
+            metaEl.innerHTML = '<div>Source: FRED (Federal Reserve Economic Data) · Parra Macro bridge equation model' + refreshed + '</div>' +
                 '<div style="color:#475569;font-size:11px;margin-top:4px;">' + (data.methodology || '') + '</div>';
         }
 
-        // History section — show actual GDP history
+        // History section — actual GDP + current nowcast estimate
         const histSection = document.getElementById('panel-history-section');
-        if (histSection && history.length > 0) {
+        if (histSection && (history.length > 0 || nowcast.estimate != null)) {
             histSection.style.display = 'block';
             histSection.innerHTML = `
-                <h3 style="color:#e2e8f0;font-size:14px;font-weight:600;margin-bottom:12px;">Actual GDP Growth (Recent Quarters)</h3>
+                <h3 style="color:#e2e8f0;font-size:14px;font-weight:600;margin-bottom:12px;">GDP Growth (Recent Quarters)</h3>
                 <div style="height:250px;"><canvas id="gdp-history-chart"></canvas></div>
             `;
             const hCtx = document.getElementById('gdp-history-chart').getContext('2d');
+
+            // Build label + value arrays: actuals + prior estimate (if BEA
+            // hasn't released yet) + current-quarter nowcast
             const hLabels = history.map(h => h.quarter);
-            const hValues = history.map(h => h.actual);
-            const hColors = hValues.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)');
+            const actualValues = history.map(h => h.actual);
+            const estimateValues = history.map(() => null);
+
+            // If the immediately prior quarter (e.g. Q1 2026) isn't in BEA
+            // history, insert the model's retroactive estimate for it
+            const priorOfficial = prior.official_quarter || '';
+            const priorInHistory = hLabels.includes(priorOfficial);
+            if (!priorInHistory && priorOfficial && prior.model_estimate != null) {
+                hLabels.push(priorOfficial + '†');
+                actualValues.push(null);
+                estimateValues.push(prior.model_estimate);
+            }
+
+            // Append current-quarter nowcast
+            if (nowcast.quarter && nowcast.estimate != null) {
+                hLabels.push(nowcast.quarter + '*');
+                actualValues.push(null);
+                estimateValues.push(nowcast.estimate);
+            }
+
+            const actualColors = actualValues.map(v => v == null ? 'transparent' : (v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'));
+
+            const estColors = estimateValues.map(v => v == null ? 'transparent' : (v >= 0 ? 'rgba(59, 130, 246, 0.7)' : 'rgba(239, 68, 68, 0.7)'));
 
             new Chart(hCtx, {
                 type: 'bar',
                 data: {
                     labels: hLabels,
-                    datasets: [{
-                        data: hValues,
-                        backgroundColor: hColors,
-                        borderRadius: 4,
-                    }]
+                    datasets: [
+                        {
+                            label: 'BEA Actual',
+                            data: actualValues,
+                            backgroundColor: actualColors,
+                            borderRadius: 4,
+                        },
+                        {
+                            label: 'Estimate',
+                            data: estimateValues,
+                            backgroundColor: estColors,
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 2,
+                            borderDash: [4, 3],
+                            borderRadius: 4,
+                        },
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10 },
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#d1d5db',
+                            callbacks: {
+                                label: function(ctx) {
+                                    const val = ctx.parsed.y;
+                                    if (val == null) return null;
+                                    const sign = val >= 0 ? '+' : '';
+                                    const suffix = ctx.datasetIndex === 1 ? ' (model estimate)' : '';
+                                    return ctx.dataset.label + ': ' + sign + val.toFixed(1) + '%' + suffix;
+                                }
+                            }
+                        }
+                    },
                     scales: {
                         x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(55,65,81,0.3)' } },
                         y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => v.toFixed(0) + '%' }, grid: { color: 'rgba(55,65,81,0.3)' } }
@@ -3600,11 +3789,989 @@
     }
 
     // ══════════════════════════════════════════════════════
+    // EM EXTERNAL VULNERABILITY METRICS — Bubble Chart
+    // ══════════════════════════════════════════════════════
+    //
+    // X: Foreign Reserves / Short-Term External Debt (%)
+    // Y: Basic Balance = Current Account + Net FDI (% of GDP)
+    // Bubble size: Nominal GDP (USD)
+    // Color: EM (red) vs. non-EM (blue)
+    // Selection: Top 40 EM default; all EMs / all countries / custom toggle.
+
+    function _emSelectedISO(data) {
+        const mode = state.emUniverse || 'em40';
+        const all = data.countries || {};
+        if (mode === 'custom') {
+            // Once the user has touched the custom picker, respect their
+            // exact selection — including an empty list (don't fall back).
+            if (state.emCustomTouched) {
+                return (state.countries || []).filter(i => all[i]);
+            }
+            if (state.countries && state.countries.length) {
+                return state.countries.filter(i => all[i]);
+            }
+        }
+        if (mode === 'all') {
+            return Object.keys(all);
+        }
+        if (mode === 'em') {
+            return (data.em_countries || []).filter(i => all[i]);
+        }
+        // em40 default
+        return (data.default_em_countries || []).filter(i => all[i]);
+    }
+
+    function _emFormatUsd(v) {
+        if (v == null) return '—';
+        const abs = Math.abs(v);
+        if (abs >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+        if (abs >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
+        if (abs >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+        return '$' + v.toFixed(0);
+    }
+
+    function renderEmVulnerability(ds) {
+        const data = PD.getCached(ds.api);
+        if (!data || !data.countries) return;
+
+        const panel = document.getElementById('active-panel');
+        if (!panel) return;
+
+        // Pick countries to plot
+        const allCountries = data.countries;
+        let selected = _emSelectedISO(data);
+        // Need at least the basic-balance value to place a Y coord. Countries
+        // without a reserves/ST-debt ratio (typically advanced economies — WB
+        // doesn't collect short-term external debt for them) get plotted at
+        // the chart's right edge with a tooltip note.
+        const plottableWithRatio = selected.filter(iso => {
+            const c = allCountries[iso];
+            return c && c.reserves_to_st_debt_pct != null && c.basic_balance_pct_gdp != null;
+        });
+        const plottableNoRatio = selected.filter(iso => {
+            const c = allCountries[iso];
+            return c && c.reserves_to_st_debt_pct == null && c.basic_balance_pct_gdp != null;
+        });
+        const plottable = plottableWithRatio.concat(plottableNoRatio);
+        const missing = selected.length - plottable.length;
+        // Visual clip: ratios above 1500% are already "off the charts safe"
+        // (Gulf states, some AEs), so we plot them at the clip line instead
+        // of letting them stretch the X axis out to 4000%+. Negative ratios
+        // (NIR < 0 for Turkey / Argentina) pass through unchanged — they
+        // belong in the bottom-left "most vulnerable" zone which is the
+        // entire point of this chart.
+        const VISUAL_MAX_RATIO = 1500;
+        const fallbackX = VISUAL_MAX_RATIO;
+        function clipRatio(v) {
+            if (v == null) return null;
+            return v > VISUAL_MAX_RATIO ? VISUAL_MAX_RATIO : v;
+        }
+        // Dynamic X-axis min: 0 unless some ratio is negative, then extend
+        // left with padding so the point isn't flush against the axis.
+        const realRatios = plottableWithRatio
+            .map(i => allCountries[i].reserves_to_st_debt_pct)
+            .filter(v => v != null);
+        const minRatioShown = realRatios.length ? Math.min(...realRatios) : 0;
+        const xAxisMin = minRatioShown >= 0
+            ? 0
+            : Math.floor((minRatioShown * 1.2) / 100) * 100;
+
+        // Bubble scaling — radius proportional to sqrt(GDP) so that area ~ GDP
+        const gdpValues = plottable.map(i => allCountries[i].gdp_usd || 0).filter(v => v > 0);
+        const maxGdp = gdpValues.length ? Math.max(...gdpValues) : 1;
+        const minR = 6;
+        const maxR = 42;
+
+        function radiusFor(gdp) {
+            if (!gdp || gdp <= 0) return minR;
+            const norm = Math.sqrt(gdp / maxGdp);
+            return Math.max(minR, Math.min(maxR, minR + (maxR - minR) * norm));
+        }
+
+        // Build Chart.js datasets — split EM vs. non-EM for color coding
+        const emColor = 'rgba(239, 68, 68, 0.55)';      // red/salmon (EM) like the AIG chart
+        const emBorder = 'rgba(220, 38, 38, 1)';
+        const dmColor = 'rgba(59, 130, 246, 0.55)';     // blue (non-EM)
+        const dmBorder = 'rgba(37, 99, 235, 1)';
+
+        function pointFor(iso) {
+            const c = allCountries[iso];
+            const ratio = c.reserves_to_st_debt_pct;
+            return {
+                x: ratio != null ? clipRatio(ratio) : fallbackX,
+                xClipped: ratio != null && ratio > VISUAL_MAX_RATIO,
+                y: c.basic_balance_pct_gdp,
+                r: radiusFor(c.gdp_usd),
+                iso: iso,
+                name: c.name || iso,
+                ca: c.ca_pct_gdp,
+                caSource: c.ca_source,
+                caYear: c.ca_year,
+                fdi: c.fdi_pct_gdp,
+                basic: c.basic_balance_pct_gdp,
+                ratio: ratio,
+                ratioMissing: ratio == null,
+                gdp: c.gdp_usd,
+                gdpSource: c.gdp_source,
+                gdpYear: c.gdp_year,
+                reserves: c.reserves_usd,
+                reservesSource: c.reserves_source,
+                reservesPeriod: c.reserves_period,
+                stDebt: c.st_debt_usd,
+                stDebtYear: c.st_debt_year,
+                stDebtSource: c.st_debt_source,
+                year: c.year,
+                isEm: !!c.is_em,
+            };
+        }
+
+        const emPoints = plottable.filter(i => allCountries[i].is_em).map(pointFor);
+        const dmPoints = plottable.filter(i => !allCountries[i].is_em).map(pointFor);
+
+        const chartDatasets = [
+            {
+                label: 'Emerging Markets',
+                data: emPoints,
+                backgroundColor: emColor,
+                borderColor: emBorder,
+                borderWidth: 1,
+            },
+            {
+                label: 'Advanced / Other',
+                data: dmPoints,
+                backgroundColor: dmColor,
+                borderColor: dmBorder,
+                borderWidth: 1,
+            },
+        ];
+
+        // Build panel HTML
+        const controlsHtml = buildControlsHtml(ds);
+        const exportBtn = ds.exportUrl
+            ? '<a href="' + ds.exportUrl + '" class="export-btn-data" title="Download Excel">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+              '<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>' +
+              '<polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' +
+              '</svg>Excel</a>'
+            : '';
+        const shareBtnEm =
+            '<button type="button" class="share-btn-data" id="panel-share-btn" title="Copy shareable link">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>' +
+            '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
+            '</svg><span class="share-btn-label">Share</span></button>';
+
+        panel.innerHTML = `
+            <div class="data-section-header">
+                <div>
+                    <h1 class="data-title" id="panel-title">${ds.label}</h1>
+                    <p class="data-source">${ds.source} &mdash; ${ds.sourceDetail || ''}</p>
+                </div>
+                <div class="data-controls" id="panel-controls">
+                    ${controlsHtml}
+                    ${shareBtnEm}
+                    ${exportBtn}
+                </div>
+            </div>
+            <div class="em-vuln-legend" id="em-vuln-legend">
+                <span class="em-vuln-swatch" style="background:${emColor};border:1px solid ${emBorder};"></span>
+                <span class="em-vuln-legend-label">Emerging Markets</span>
+                <span class="em-vuln-swatch" style="background:${dmColor};border:1px solid ${dmBorder};"></span>
+                <span class="em-vuln-legend-label">Advanced / Other</span>
+                <span class="em-vuln-legend-label em-vuln-legend-note">Bubble size &#8776; nominal GDP (USD)</span>
+            </div>
+            <div class="chart-container em-vuln-chart-container">
+                <canvas id="panel-chart"></canvas>
+            </div>
+            <div class="em-vuln-picker" id="em-vuln-picker-wrap" style="display:none;">
+                <div class="em-vuln-picker-head">
+                    <span>Custom selection</span>
+                    <button type="button" class="em-vuln-btn" id="em-vuln-selall">Select All Shown</button>
+                    <button type="button" class="em-vuln-btn" id="em-vuln-selem">Top 40 EM</button>
+                    <button type="button" class="em-vuln-btn" id="em-vuln-selclear">Clear</button>
+                    <input type="text" class="em-vuln-search" id="em-vuln-search" placeholder="Filter countries…">
+                </div>
+                <div class="em-vuln-picker-grid" id="em-vuln-picker"></div>
+            </div>
+            <div class="data-table-container">
+                <table class="data-table" id="panel-table">
+                    <thead id="panel-thead"></thead>
+                    <tbody id="panel-tbody"></tbody>
+                </table>
+            </div>
+            <div class="data-meta" id="panel-meta"></div>
+        `;
+
+        bindControlListeners(ds);
+        _emBindExtraControls(ds, data);
+
+        // Render chart
+        PD.destroyChart('main');
+        const ctx = document.getElementById('panel-chart').getContext('2d');
+
+        PD.setChart('main', new Chart(ctx, {
+            type: 'bubble',
+            data: { datasets: chartDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: { top: 8, right: 18, bottom: 8, left: 8 } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.9)',
+                        titleColor: '#fff',
+                        bodyColor: '#d1d5db',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        callbacks: {
+                            title: items => items.length ? items[0].raw.name + ' (' + items[0].raw.iso + ')' : '',
+                            label: ctx2 => {
+                                const p = ctx2.raw;
+                                const lines = [];
+                                lines.push('Basic Balance: ' + (p.basic != null ? p.basic.toFixed(2) : '—') + '% GDP');
+                                const caTag = p.caSource && p.caSource !== 'World Bank'
+                                    ? ' (' + p.caSource + (p.caYear ? ' ' + p.caYear : '') + ')'
+                                    : '';
+                                lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%' + caTag +
+                                    '  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
+                                // Synthetic ratios (GCC net creditors, sanctions, WAEMU pool)
+                                // are flagged via st_debt_source that doesn't start with "World Bank".
+                                const isSynth = p.stDebtSource &&
+                                    !p.stDebtSource.startsWith('World Bank');
+                                let ratioLine;
+                                if (p.ratio == null) {
+                                    ratioLine = 'N/A — plotted at chart edge';
+                                } else if (isSynth) {
+                                    ratioLine = p.ratio.toFixed(0) + '% (synthetic — ' + p.stDebtSource + ')';
+                                } else if (p.xClipped) {
+                                    ratioLine = p.ratio.toFixed(0) + '% (clipped to 1500% on chart)';
+                                } else {
+                                    ratioLine = p.ratio.toFixed(0) + '%';
+                                }
+                                lines.push('Reserves / ST Debt: ' + ratioLine);
+                                let resvTag = '';
+                                if (p.reservesSource === 'IMF IFS' && p.reservesPeriod) {
+                                    resvTag = ' (IFS ' + p.reservesPeriod + ')';
+                                } else if (p.reservesSource && !p.reservesSource.startsWith('World Bank') && p.reservesSource !== 'IMF IFS') {
+                                    // NIR override (BCRA, TCMB, CBE, SBP, ...)
+                                    resvTag = ' — NIR · ' + p.reservesSource;
+                                }
+                                lines.push('Reserves: ' + _emFormatUsd(p.reserves) + resvTag);
+                                let stTag = '';
+                                if (p.stDebtYear) {
+                                    const srcHint = p.stDebtSource && p.stDebtSource !== 'World Bank WDI'
+                                        ? ', ' + p.stDebtSource.replace('World Bank ', '')
+                                        : '';
+                                    stTag = ' (' + p.stDebtYear + srcHint + ')';
+                                }
+                                lines.push('ST Ext Debt: ' + _emFormatUsd(p.stDebt) + stTag);
+                                const gdpTag = p.gdpSource && p.gdpSource !== 'World Bank' && p.gdpYear
+                                    ? ' (' + p.gdpSource + ' ' + p.gdpYear + ')'
+                                    : (p.gdpYear ? ' (' + p.gdpYear + ')' : '');
+                                lines.push('GDP: ' + _emFormatUsd(p.gdp) + gdpTag + '  ·  As of: ' + (p.year || '—'));
+                                return lines;
+                            },
+                        },
+                    },
+                    datalabelsShim: false,
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: 'Foreign Reserves / Short-Term External Debt (%)',
+                            color: '#9ca3af',
+                            font: { size: 11 },
+                        },
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            callback: v => v + '%',
+                        },
+                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        min: xAxisMin,
+                        max: 1600,  // 1500% clip + 100 buffer for labels
+                    },
+                    y: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: 'Basic Balance (C/A + Net FDI), % GDP',
+                            color: '#9ca3af',
+                            font: { size: 11 },
+                        },
+                        ticks: {
+                            color: '#6b7280',
+                            font: { size: 10 },
+                            callback: v => v + '%',
+                        },
+                        grid: {
+                            color: ctx2 => (ctx2.tick.value === 0 ? 'rgba(148,163,184,0.6)' : 'rgba(55,65,81,0.3)'),
+                            lineWidth: ctx2 => (ctx2.tick.value === 0 ? 1.2 : 1),
+                        },
+                    },
+                },
+            },
+            plugins: [_emLabelsPlugin()],
+        }));
+
+        // Table rows — sorted by GDP descending
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            thead.innerHTML =
+                '<tr>' +
+                '<th>Country</th>' +
+                '<th>EM</th>' +
+                '<th>Year</th>' +
+                '<th>Basic Bal. (% GDP)</th>' +
+                '<th>C/A (% GDP)</th>' +
+                '<th>Net FDI (% GDP)</th>' +
+                '<th>Reserves / ST Debt</th>' +
+                '<th>Reserves</th>' +
+                '<th>ST Ext. Debt</th>' +
+                '<th>GDP</th>' +
+                '</tr>';
+            const rows = selected
+                .map(i => allCountries[i])
+                .filter(Boolean)
+                .sort((a, b) => (b.gdp_usd || 0) - (a.gdp_usd || 0));
+            tbody.innerHTML = rows.map(r => {
+                const ratio = r.reserves_to_st_debt_pct;
+                return '<tr>' +
+                    '<td>' + (r.name || r.iso3) + '</td>' +
+                    '<td>' + (r.is_em ? 'Yes' : '—') + '</td>' +
+                    '<td>' + (r.year || '—') + '</td>' +
+                    '<td>' + (r.basic_balance_pct_gdp != null ? r.basic_balance_pct_gdp.toFixed(2) + '%' : '—') + '</td>' +
+                    '<td>' + (r.ca_pct_gdp != null ? r.ca_pct_gdp.toFixed(2) + '%' : '—') + '</td>' +
+                    '<td>' + (r.fdi_pct_gdp != null ? r.fdi_pct_gdp.toFixed(2) + '%' : '—') + '</td>' +
+                    '<td>' + (ratio != null ? ratio.toFixed(0) + '%' : '—') + '</td>' +
+                    '<td>' + _emFormatUsd(r.reserves_usd) + '</td>' +
+                    '<td>' + _emFormatUsd(r.st_debt_usd) + '</td>' +
+                    '<td>' + _emFormatUsd(r.gdp_usd) + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        // Meta
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            const m = data.meta || {};
+            const parts = [];
+            if (m.source) parts.push(m.source);
+            parts.push(plottable.length + ' countries plotted');
+            if (plottableNoRatio.length > 0) parts.push(plottableNoRatio.length + ' at chart edge (no ST debt data)');
+            if (missing > 0) parts.push(missing + ' selected w/o basic balance');
+            if (m.latest_data_year) parts.push('Latest year: ' + m.latest_data_year);
+            if (m.last_updated) parts.push('Updated: ' + m.last_updated);
+            metaEl.textContent = parts.join(' · ');
+        }
+
+        // Empty-state banner — surfaces backend state (vs. silent blank chart)
+        if (plottable.length === 0) {
+            const m = data.meta || {};
+            const totalCountries = Object.keys(allCountries).length;
+            let reason;
+            if (totalCountries === 0) {
+                const errs = m.fetch_errors
+                    ? ' (' + Object.entries(m.fetch_errors).map(([k, v]) => k + ': ' + v).join('; ') + ')'
+                    : '';
+                reason = 'World Bank fetch is still warming up or failed' + errs +
+                    '. Wait ~15–30 seconds and refresh — data caches for 24 h after first load.';
+            } else if (selected.length === 0) {
+                reason = 'No countries selected. Pick a universe or open "Custom Selection".';
+            } else {
+                reason = selected.length + ' countries selected but none have the required World Bank series for this year.';
+            }
+            const container = document.querySelector('.em-vuln-chart-container');
+            if (container && !container.querySelector('.em-vuln-empty-banner')) {
+                const banner = document.createElement('div');
+                banner.className = 'em-vuln-empty-banner';
+                banner.innerHTML = '<strong>No data to plot.</strong><br><span>' + reason + '</span>' +
+                    '<br><button type="button" class="em-vuln-btn" id="em-vuln-retry" style="margin-top:10px;">Retry</button>';
+                container.appendChild(banner);
+                const btn = banner.querySelector('#em-vuln-retry');
+                if (btn) btn.addEventListener('click', () => {
+                    PD.clearCache(ds.api);
+                    loadAndRender();
+                });
+            }
+        }
+    }
+
+    function _emBindExtraControls(ds, data) {
+        // Show/hide custom picker when universe = custom
+        const wrap = document.getElementById('em-vuln-picker-wrap');
+        if (!wrap) return;
+        const mode = state.emUniverse || 'em40';
+        wrap.style.display = mode === 'custom' ? '' : 'none';
+
+        if (mode !== 'custom') return;
+
+        // Seed state.countries with defaults the first time the picker opens,
+        // but never override a deliberate empty list (the Clear button).
+        if (!state.emCustomTouched && (!state.countries || state.countries.length === 0)) {
+            state.countries = (data.default_em_countries || []).slice();
+        }
+
+        const grid = document.getElementById('em-vuln-picker');
+        if (!grid) return;
+
+        const allCountries = data.countries || {};
+        const sorted = Object.values(allCountries)
+            .slice()
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        function renderPicker(filter) {
+            const f = (filter || '').toLowerCase().trim();
+            const selected = new Set(state.countries);
+            grid.innerHTML = sorted
+                .filter(c => !f || (c.name || '').toLowerCase().includes(f) || c.iso3.toLowerCase().includes(f))
+                .map(c => {
+                    const checked = selected.has(c.iso3) ? 'checked' : '';
+                    const tag = c.is_em ? '<span class="em-vuln-em-tag">EM</span>' : '';
+                    return '<label class="em-vuln-opt"><input type="checkbox" value="' + c.iso3 + '" ' + checked + '>' +
+                        '<span class="em-vuln-opt-name">' + (c.name || c.iso3) + '</span>' + tag + '</label>';
+                }).join('');
+        }
+
+        renderPicker('');
+
+        grid.addEventListener('change', (e) => {
+            const t = e.target;
+            if (!t || t.tagName !== 'INPUT') return;
+            const iso = t.value;
+            const set = new Set(state.countries);
+            if (t.checked) set.add(iso); else set.delete(iso);
+            state.countries = Array.from(set);
+            state.emCustomTouched = true;
+            PD.pushState();
+            renderCurrentDataset();
+        });
+
+        const search = document.getElementById('em-vuln-search');
+        if (search) search.addEventListener('input', e => renderPicker(e.target.value));
+
+        const bSelAll = document.getElementById('em-vuln-selall');
+        const bEm = document.getElementById('em-vuln-selem');
+        const bClr = document.getElementById('em-vuln-selclear');
+        if (bSelAll) bSelAll.addEventListener('click', () => {
+            state.countries = Object.keys(allCountries);
+            state.emCustomTouched = true;
+            PD.pushState();
+            renderCurrentDataset();
+        });
+        if (bEm) bEm.addEventListener('click', () => {
+            state.countries = (data.default_em_countries || []).slice();
+            state.emCustomTouched = true;
+            PD.pushState();
+            renderCurrentDataset();
+        });
+        if (bClr) bClr.addEventListener('click', () => {
+            state.countries = [];
+            state.emCustomTouched = true;
+            PD.pushState();
+            renderCurrentDataset();
+        });
+    }
+
+    function _emLabelsPlugin() {
+        // Draws an ISO3 label centered on every bubble when it's big enough.
+        return {
+            id: 'emBubbleLabels',
+            afterDatasetsDraw(chart) {
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+                chart.data.datasets.forEach((dataset, dsi) => {
+                    const meta = chart.getDatasetMeta(dsi);
+                    meta.data.forEach((el, i) => {
+                        const pt = dataset.data[i];
+                        if (!pt || !pt.iso) return;
+                        if (el.options.radius < 10) return;
+                        ctx.fillText(pt.iso, el.x, el.y);
+                    });
+                });
+                ctx.restore();
+            },
+        };
+    }
+
+    // ══════════════════════════════════════════════════════
+    // Methodology modal — per-commodity white paper viewer
+    // ══════════════════════════════════════════════════════
+
+    // Minimal markdown renderer covering what our white papers use:
+    // # / ## / ### headers, paragraphs, bulleted lists, **bold**, *italic*,
+    // `inline code`, blockquotes, links, and horizontal rules. No table
+    // support (not needed for the commodity notes).
+    function renderMarkdown(md) {
+        const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const inline = s => s
+            .replace(/`([^`]+)`/g, (_, t) => '<code>' + esc(t) + '</code>')
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+        const lines = md.replace(/\r\n/g, '\n').split('\n');
+        const out = [];
+        let inList = false;
+        let inQuote = false;
+        let para = [];
+        const flushPara = () => {
+            if (para.length) {
+                out.push('<p>' + inline(para.join(' ')) + '</p>');
+                para = [];
+            }
+        };
+        const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+        const closeQuote = () => { if (inQuote) { out.push('</blockquote>'); inQuote = false; } };
+
+        for (let raw of lines) {
+            const line = raw.trimEnd();
+            if (!line.trim()) { flushPara(); closeList(); closeQuote(); continue; }
+
+            let m;
+            if ((m = line.match(/^(#{1,6})\s+(.+)$/))) {
+                flushPara(); closeList(); closeQuote();
+                const level = m[1].length;
+                out.push('<h' + level + '>' + inline(m[2]) + '</h' + level + '>');
+                continue;
+            }
+            if (/^(---|\*\*\*|___)$/.test(line.trim())) {
+                flushPara(); closeList(); closeQuote();
+                out.push('<hr>');
+                continue;
+            }
+            if ((m = line.match(/^\s*[-*]\s+(.+)$/))) {
+                flushPara(); closeQuote();
+                if (!inList) { out.push('<ul>'); inList = true; }
+                out.push('<li>' + inline(m[1]) + '</li>');
+                continue;
+            }
+            if ((m = line.match(/^\s*>\s?(.*)$/))) {
+                flushPara(); closeList();
+                if (!inQuote) { out.push('<blockquote>'); inQuote = true; }
+                out.push(inline(m[1] || ''));
+                continue;
+            }
+            para.push(line.trim());
+        }
+        flushPara(); closeList(); closeQuote();
+        return out.join('\n');
+    }
+
+    function openMethodology(commodity) {
+        let overlay = document.getElementById('methodology-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'methodology-overlay';
+            overlay.className = 'methodology-overlay';
+            overlay.innerHTML =
+                '<div class="methodology-modal">' +
+                  '<div class="methodology-header">' +
+                    '<span class="methodology-title" id="methodology-title">Methodology</span>' +
+                    '<button class="methodology-close" id="methodology-close" aria-label="Close">&times;</button>' +
+                  '</div>' +
+                  '<div class="methodology-body" id="methodology-body">Loading…</div>' +
+                '</div>';
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', e => {
+                if (e.target === overlay) closeMethodology();
+            });
+            document.getElementById('methodology-close').addEventListener('click', closeMethodology);
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && overlay.style.display !== 'none') closeMethodology();
+            });
+        }
+        overlay.style.display = 'flex';
+        document.getElementById('methodology-title').textContent = commodity + ' — Methodology';
+        const body = document.getElementById('methodology-body');
+        body.innerHTML = '<div class="methodology-loading">Loading…</div>';
+
+        fetch('/api/forecasts/methodology/' + encodeURIComponent(commodity))
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(j => {
+                body.innerHTML = renderMarkdown(j.markdown || '');
+            })
+            .catch(err => {
+                body.innerHTML = '<p style="color:var(--text-muted)">Methodology unavailable (' + err + ').</p>';
+            });
+    }
+    function closeMethodology() {
+        const overlay = document.getElementById('methodology-overlay');
+        if (overlay) overlay.style.display = 'none';
+    }
+    window.openMethodology = openMethodology;
+
+
+    // ══════════════════════════════════════════════════════
+    // Scenario builder — interactive shock sliders per commodity
+    // ══════════════════════════════════════════════════════
+
+    // In-memory per-commodity scenario state. Schema:
+    //   { shocks: {id: magnitude}, catalogue: [...], lastForecast: {...} }
+    const scenarioState = {};
+
+    // Debounced per-commodity fetch so quick slider drags coalesce.
+    const scenarioDebouncers = {};
+
+    function scenarioLocalKey(commodity) {
+        return 'parra.scenario.' + commodity;
+    }
+
+    function loadScenarioFromStorage(commodity) {
+        try {
+            const raw = localStorage.getItem(scenarioLocalKey(commodity));
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return (parsed && parsed.shocks && typeof parsed.shocks === 'object') ? parsed : null;
+        } catch (_) { return null; }
+    }
+
+    function saveScenarioToStorage(commodity, shocks) {
+        try {
+            const hasAny = Object.values(shocks || {}).some(v => Number(v) !== 0);
+            if (!hasAny) {
+                localStorage.removeItem(scenarioLocalKey(commodity));
+                return;
+            }
+            localStorage.setItem(scenarioLocalKey(commodity), JSON.stringify({
+                shocks: shocks, saved_at: new Date().toISOString()
+            }));
+        } catch (_) { /* ignore quota / private-mode errors */ }
+    }
+
+    function scenarioFromUrl(commodity) {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const enc = params.get('scenario');
+            if (!enc) return null;
+            const parsed = JSON.parse(atob(enc.replace(/-/g, '+').replace(/_/g, '/')));
+            if (parsed && parsed.commodity === commodity && parsed.shocks) {
+                return { shocks: parsed.shocks };
+            }
+        } catch (_) { /* ignore bad base64 */ }
+        return null;
+    }
+
+    function scenarioBuildShareUrl(commodity, shocks) {
+        const hasAny = Object.values(shocks || {}).some(v => Number(v) !== 0);
+        const url = new URL(window.location.href);
+        if (!hasAny) {
+            url.searchParams.delete('scenario');
+        } else {
+            const json = JSON.stringify({ commodity: commodity, shocks: shocks });
+            const enc = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            url.searchParams.set('scenario', enc);
+        }
+        return url.toString();
+    }
+
+    function collectShocksArray(state) {
+        return Object.entries(state.shocks || {})
+            .filter(([_, v]) => Number(v) !== 0)
+            .map(([id, v]) => ({ id: id, magnitude: Number(v) }));
+    }
+
+    // ── Chart overlay ─────────────────────────────────────────────────
+
+    // Adds / refreshes three overlay datasets on the commodity chart:
+    // scenario p2.5, p50, p97.5. Removes them cleanly when shocks reset.
+    const SCENARIO_DATASET_PREFIX = '_scenario:';
+
+    function removeScenarioDatasets() {
+        const chart = PD.charts.main;
+        if (!chart || !chart.data) return;
+        chart.data.datasets = chart.data.datasets.filter(
+            ds => !(ds.label && ds.label.indexOf(SCENARIO_DATASET_PREFIX) === 0)
+        );
+        try { chart.update('none'); } catch (_) { chart.update(); }
+    }
+
+    function applyScenarioToChart(commodityName, scenarioForecast) {
+        const chart = PD.charts.main;
+        if (!chart || !chart.data) return;
+
+        // Remove any prior scenario overlays
+        chart.data.datasets = chart.data.datasets.filter(
+            ds => !(ds.label && ds.label.indexOf(SCENARIO_DATASET_PREFIX) === 0)
+        );
+        if (!scenarioForecast) {
+            try { chart.update('none'); } catch (_) { chart.update(); }
+            return;
+        }
+
+        const labels = chart.data.labels || [];
+        // Scenario forecast is keyed Q+1..Q+4; its entries carry a `label` like 'Q3 2026'.
+        // Map to the chart's x-axis by walking forecast-typed labels in order.
+        const forecastQuarterKeys = ['Q+1', 'Q+2', 'Q+3', 'Q+4'];
+        const scenarioQuarters = forecastQuarterKeys
+            .map(k => scenarioForecast[k])
+            .filter(Boolean);
+        // Identify chart indices that correspond to forecast quarters (the last N).
+        const nForecasts = scenarioQuarters.length;
+        const forecastIndices = labels.slice(-nForecasts).map((_, i) => labels.length - nForecasts + i);
+
+        const medianData = new Array(labels.length).fill(null);
+        const lowData    = new Array(labels.length).fill(null);
+        const highData   = new Array(labels.length).fill(null);
+        forecastIndices.forEach((idx, i) => {
+            const q = scenarioQuarters[i];
+            if (!q) return;
+            medianData[idx] = q.median;
+            lowData[idx]    = q.p2_5;
+            highData[idx]   = q.p97_5;
+        });
+        // Anchor line at the last non-forecast point so it's visually continuous
+        const anchorIdx = (labels.length - nForecasts) - 1;
+        if (anchorIdx >= 0 && chart.data.datasets.length > 0) {
+            const baseline = chart.data.datasets.find(ds => ds.label === 'Historical') || chart.data.datasets[0];
+            if (baseline && baseline.data && baseline.data[anchorIdx] != null) {
+                medianData[anchorIdx] = baseline.data[anchorIdx];
+                lowData[anchorIdx]    = baseline.data[anchorIdx];
+                highData[anchorIdx]   = baseline.data[anchorIdx];
+            }
+        }
+
+        const purple = '#a78bfa';
+        chart.data.datasets.push({
+            label: SCENARIO_DATASET_PREFIX + 'p97.5',
+            data: highData,
+            borderColor: purple + '88', borderWidth: 1, borderDash: [4, 4],
+            fill: false, pointRadius: 0, pointHitRadius: 6, tension: 0.3, spanGaps: true,
+        });
+        chart.data.datasets.push({
+            label: SCENARIO_DATASET_PREFIX + 'median',
+            data: medianData,
+            borderColor: purple, backgroundColor: purple + '22', borderWidth: 3,
+            fill: false, pointRadius: 5, pointHitRadius: 8,
+            pointBackgroundColor: purple, pointBorderColor: purple,
+            tension: 0.3, spanGaps: true,
+        });
+        chart.data.datasets.push({
+            label: SCENARIO_DATASET_PREFIX + 'p2.5',
+            data: lowData,
+            borderColor: purple + '88', borderWidth: 1, borderDash: [4, 4],
+            fill: '-2', backgroundColor: purple + '18',
+            pointRadius: 0, pointHitRadius: 6, tension: 0.3, spanGaps: true,
+        });
+        try { chart.update('none'); } catch (_) { chart.update(); }
+    }
+
+    // ── API plumbing ─────────────────────────────────────────────────
+
+    function fetchCatalogue(commodity) {
+        const url = '/api/forecasts/shocks/' + encodeURIComponent(commodity);
+        const cached = PD.getCached(url);
+        if (cached) return Promise.resolve(cached);
+        return fetch(url).then(r => r.json()).then(j => {
+            PD.setCached(url, j);
+            return j;
+        });
+    }
+
+    function postScenario(commodity, shocks) {
+        return fetch('/api/forecasts/scenario', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ commodity: commodity, shocks: shocks }),
+        }).then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j)));
+    }
+
+    function scheduleScenarioUpdate(commodity) {
+        if (scenarioDebouncers[commodity]) clearTimeout(scenarioDebouncers[commodity]);
+        scenarioDebouncers[commodity] = setTimeout(() => {
+            runScenarioUpdate(commodity);
+        }, 250);
+    }
+
+    function runScenarioUpdate(commodity) {
+        const state = scenarioState[commodity];
+        if (!state) return;
+        const shocks = collectShocksArray(state);
+        const container = document.getElementById('panel-scenario-container');
+        const statusEl = container ? container.querySelector('.scenario-status') : null;
+
+        if (shocks.length === 0) {
+            // No shocks active → clear overlay
+            applyScenarioToChart(commodity, null);
+            state.lastForecast = null;
+            saveScenarioToStorage(commodity, {});
+            if (statusEl) statusEl.textContent = 'Baseline forecast (no shocks applied).';
+            updateShareButton(commodity);
+            return;
+        }
+
+        if (statusEl) statusEl.textContent = 'Computing scenario…';
+        postScenario(commodity, shocks)
+            .then(j => {
+                state.lastForecast = j.forecast;
+                applyScenarioToChart(commodity, j.forecast);
+                saveScenarioToStorage(commodity, state.shocks);
+                updateShareButton(commodity);
+                if (statusEl) {
+                    const names = shocks.map(s => s.id + '=' + s.magnitude).join(', ');
+                    statusEl.textContent = 'Active: ' + names;
+                }
+            })
+            .catch(err => {
+                if (statusEl) statusEl.textContent = 'Scenario failed: ' +
+                    (err && err.error ? err.error : 'network error');
+            });
+    }
+
+    function updateShareButton(commodity) {
+        const btn = document.getElementById('scenario-share-btn');
+        if (!btn) return;
+        const state = scenarioState[commodity] || { shocks: {} };
+        const anyActive = Object.values(state.shocks).some(v => Number(v) !== 0);
+        btn.disabled = !anyActive;
+        btn.textContent = anyActive ? 'Copy share link' : 'No shocks to share';
+    }
+
+    // ── Slider rendering ─────────────────────────────────────────────
+
+    function renderSlider(shock, currentValue) {
+        const safeId = 'scn-' + shock.id.replace(/[^a-z0-9]/gi, '-');
+        const v = currentValue != null ? currentValue : (shock.default || 0);
+        return (
+            '<div class="scenario-row" data-shock-id="' + shock.id + '">' +
+              '<div class="scenario-row-head">' +
+                '<label for="' + safeId + '"><strong>' + shock.name + '</strong>' +
+                  '<span class="scenario-unit">' + (shock.unit || '') + '</span>' +
+                '</label>' +
+                '<output class="scenario-value" id="' + safeId + '-out">' + v + '</output>' +
+              '</div>' +
+              '<input type="range" id="' + safeId + '" ' +
+                    'min="' + shock.min + '" max="' + shock.max + '" ' +
+                    'step="' + shock.step + '" value="' + v + '" ' +
+                    'data-shock-id="' + shock.id + '">' +
+              '<div class="scenario-note">' + (shock.note || '') + '</div>' +
+            '</div>'
+        );
+    }
+
+    function renderScenarioPanelHtml(commodity, catalogue, state) {
+        if (!catalogue || !catalogue.length) {
+            return '<div class="scenario-empty">No scenario levers defined for ' + commodity + ' yet.</div>';
+        }
+        const sliders = catalogue.map(s => renderSlider(s, state.shocks[s.id])).join('');
+        return (
+            '<div class="scenario-panel-header">' +
+              '<div class="scenario-title">What-if scenario</div>' +
+              '<div class="scenario-actions">' +
+                '<button class="scenario-btn-ghost" id="scenario-reset-btn">Reset</button>' +
+                '<button class="scenario-btn-ghost" id="scenario-share-btn" disabled>No shocks to share</button>' +
+                '<button class="scenario-btn-ghost" id="scenario-close-btn">Close ×</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="scenario-status">Baseline forecast (no shocks applied).</div>' +
+            '<div class="scenario-grid">' + sliders + '</div>' +
+            '<div class="scenario-footer">Shocks apply an elasticity-based price multiplier with ' +
+              'geometric per-quarter decay. Purple band on the chart is the scenario forecast (p2.5/p50/p97.5).</div>'
+        );
+    }
+
+    function attachScenarioHandlers(commodity) {
+        const container = document.getElementById('panel-scenario-container');
+        if (!container) return;
+        const state = scenarioState[commodity];
+
+        container.querySelectorAll('input[type="range"]').forEach(input => {
+            const shockId = input.dataset.shockId;
+            const out = container.querySelector('#' + input.id + '-out');
+            input.addEventListener('input', () => {
+                const val = Number(input.value);
+                if (out) out.textContent = val;
+                state.shocks[shockId] = val;
+                scheduleScenarioUpdate(commodity);
+            });
+        });
+
+        const resetBtn = container.querySelector('#scenario-reset-btn');
+        if (resetBtn) resetBtn.addEventListener('click', () => {
+            state.shocks = {};
+            container.querySelectorAll('input[type="range"]').forEach(inp => {
+                const sid = inp.dataset.shockId;
+                const spec = state.catalogue.find(s => s.id === sid);
+                const def = spec ? (spec.default || 0) : 0;
+                inp.value = def;
+                const out = container.querySelector('#' + inp.id + '-out');
+                if (out) out.textContent = def;
+            });
+            runScenarioUpdate(commodity);
+        });
+
+        const shareBtn = container.querySelector('#scenario-share-btn');
+        if (shareBtn) shareBtn.addEventListener('click', () => {
+            const url = scenarioBuildShareUrl(commodity, state.shocks);
+            navigator.clipboard.writeText(url).then(() => {
+                shareBtn.textContent = 'Copied!';
+                setTimeout(() => updateShareButton(commodity), 1500);
+            }).catch(() => {
+                shareBtn.textContent = 'Copy failed';
+                setTimeout(() => updateShareButton(commodity), 1500);
+            });
+        });
+
+        const closeBtn = container.querySelector('#scenario-close-btn');
+        if (closeBtn) closeBtn.addEventListener('click', () => {
+            container.innerHTML = '';
+            removeScenarioDatasets();
+        });
+    }
+
+    function toggleScenarioPanel(commodity) {
+        const container = document.getElementById('panel-scenario-container');
+        if (!container) return;
+        // If already open for this commodity, close it
+        if (container.dataset.commodity === commodity && container.childElementCount > 0) {
+            container.innerHTML = '';
+            container.removeAttribute('data-commodity');
+            removeScenarioDatasets();
+            return;
+        }
+
+        container.innerHTML = '<div class="scenario-loading">Loading scenario levers…</div>';
+        container.dataset.commodity = commodity;
+
+        // Initial state: URL > localStorage > empty
+        const fromUrl     = scenarioFromUrl(commodity);
+        const fromStorage = loadScenarioFromStorage(commodity);
+        const initialShocks = (fromUrl && fromUrl.shocks) || (fromStorage && fromStorage.shocks) || {};
+
+        fetchCatalogue(commodity).then(j => {
+            const catalogue = (j && j.shocks) || [];
+            scenarioState[commodity] = {
+                shocks: Object.assign({}, initialShocks),
+                catalogue: catalogue,
+                lastForecast: null,
+            };
+            container.innerHTML = renderScenarioPanelHtml(commodity, catalogue, scenarioState[commodity]);
+            attachScenarioHandlers(commodity);
+            if (Object.values(scenarioState[commodity].shocks).some(v => Number(v) !== 0)) {
+                runScenarioUpdate(commodity);
+            } else {
+                updateShareButton(commodity);
+            }
+        }).catch(() => {
+            container.innerHTML = '<div class="scenario-empty">Failed to load scenario levers.</div>';
+        });
+    }
+
+    window.toggleScenarioPanel = toggleScenarioPanel;
+
+    // ══════════════════════════════════════════════════════
     // US TRADE QUARTERLY RENDERER (FRED / BEA NIPA)
     // ══════════════════════════════════════════════════════
 
     function _tradeQSortKey(d) {
-        // "2024-Q3" -> 20243
         const parts = d.split('-Q');
         return parseInt(parts[0]) * 10 + parseInt(parts[1]);
     }
@@ -3620,7 +4787,6 @@
     }
 
     function _tradeQoQ(points) {
-        // points are already sorted chronologically
         return points.map((p, i) => {
             const prev = i > 0 ? points[i - 1].value : null;
             const qoq = (prev != null && prev !== 0) ? ((p.value - prev) / Math.abs(prev)) * 100 : null;
@@ -3637,25 +4803,13 @@
         const rangeYears = state.range === 'all' ? null : parseInt(state.range);
         const currentYear = new Date().getFullYear();
 
-        // Colors + series ordering
         const seriesOrder = [
             { key: 'exports',      color: '#10b981', dash: []    },
             { key: 'imports',      color: '#ef4444', dash: []    },
             { key: 'net_exports',  color: '#3b82f6', dash: [4,3] },
         ];
-        const pctSeriesOrder = [
-            { key: 'exports_pct',  color: '#10b981', dash: []    },
-            { key: 'imports_pct',  color: '#ef4444', dash: []    },
-        ];
-
-        // For "level" view of $B we show exports / imports / net exports.
-        // For "% of GDP" (implicit when view=level on the pct series) we also
-        // show the pct series. To keep the control simple, we split the chart
-        // into: $B levels OR YoY%/QoQ% of the $B levels. The pct-of-GDP series
-        // get their own small chart below.
         const useSeries = seriesOrder;
 
-        // Transform points according to view
         function pointsFor(key) {
             const s = allSeries[key];
             if (!s || !s.points) return [];
@@ -3674,7 +4828,6 @@
             return pts;
         }
 
-        // Union of quarter labels across selected series for a shared x-axis
         const allLabels = new Set();
         useSeries.forEach(s => pointsFor(s.key).forEach(p => allLabels.add(p.date)));
         const labels = [...allLabels].sort((a, b) => _tradeQSortKey(a) - _tradeQSortKey(b));
@@ -3698,7 +4851,6 @@
             };
         });
 
-        // Summary cards — latest values
         const summary = document.getElementById('panel-summary');
         if (summary) {
             const latest = (key) => {
@@ -3707,7 +4859,7 @@
                 const last = s.points[s.points.length - 1];
                 return { value: last.value, date: last.date };
             };
-            const fmt = (v) => v == null ? '—' : (v >= 0 ? '' : '') + '$' + v.toLocaleString(undefined, { maximumFractionDigits: 1 }) + 'B';
+            const fmt = (v) => v == null ? '—' : '$' + v.toLocaleString(undefined, { maximumFractionDigits: 1 }) + 'B';
             const exp = latest('exports');
             const imp = latest('imports');
             const net = latest('net_exports');
@@ -3744,7 +4896,6 @@
             `;
         }
 
-        // Chart
         PD.destroyChart('main');
         const canvasEl = document.getElementById('panel-chart');
         if (!canvasEl) return;
@@ -3799,7 +4950,6 @@
             }
         }));
 
-        // Table — last 24 quarters, one column per series
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
@@ -3838,7 +4988,6 @@
             tbody.innerHTML = rows;
         }
 
-        // Meta
         const metaEl = document.getElementById('panel-meta');
         if (metaEl) {
             const meta = data.meta || {};
@@ -3867,15 +5016,12 @@
         const panel = document.getElementById('active-panel');
         if (!panel) return;
 
-        const currencies = data.currencies || [];
         const countries = data.countries || {};
-        const meta = data.meta || {};
 
         const sortedCountries = Object.entries(countries)
             .map(([iso, c]) => ({ iso, name: c.name || iso }))
             .sort((a, b) => a.name.localeCompare(b.name));
 
-        // Pick a sensible default if nothing already selected
         if (!_currencyDebtSelectedIso || !countries[_currencyDebtSelectedIso]) {
             const preferred = ['BRA', 'IND', 'IDN', 'TUR', 'MEX', 'NGA', 'ZAF', 'ARG', 'PAK', 'EGY'];
             _currencyDebtSelectedIso = preferred.find(iso => countries[iso]) || (sortedCountries[0] && sortedCountries[0].iso);
@@ -3935,7 +5081,6 @@
         const latestYear = country.latest_year;
         const latest = country.latest || {};
 
-        // Summary: top 3 currency shares in latest year
         const sortedLatest = currencies
             .map(c => ({ ...c, value: latest[c.key] }))
             .filter(c => c.value != null)
@@ -3966,7 +5111,6 @@
             `;
         }
 
-        // Stacked bar chart: currency mix over time
         PD.destroyChart('main');
         const canvasEl = document.getElementById('panel-chart');
         if (!canvasEl) return;
@@ -4037,7 +5181,6 @@
             }
         }));
 
-        // Table: last 10 years × currencies
         const thead = document.getElementById('panel-thead');
         const tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
@@ -4068,7 +5211,6 @@
             tbody.innerHTML = rows;
         }
 
-        // Meta line
         const metaEl = document.getElementById('panel-meta');
         if (metaEl) {
             const m = data.meta || {};

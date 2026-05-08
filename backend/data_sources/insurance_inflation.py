@@ -50,7 +50,7 @@ ONS_SERIES = {
     'uk_dental':         {'cdid': 'L53Z', 'dataset': 'mm23', 'label': 'UK CPIH: Dental Services',                'color': '#fdba74', 'category': 'medical'},
     # Legal
     'uk_sppi_legal':     {'cdid': 'HSGL', 'dataset': 'sppi', 'label': 'UK SPPI: Legal Services',                 'color': '#f59e0b', 'category': 'legal'},
-    'uk_awe_prof':       {'cdid': 'K5EC', 'dataset': 'emp',  'label': 'UK AWE: Professional & Scientific',       'color': '#eab308', 'category': 'legal'},
+    'uk_awe_prof':       {'cdid': 'K5EC', 'dataset': 'emp',  'label': 'UK AWE: Prof, Scientific & Technical (legal proxy)', 'color': '#eab308', 'category': 'legal', 'approximate': True},
     # Insurance
     'uk_awe_finance':    {'cdid': 'K58I', 'dataset': 'emp',  'label': 'UK AWE: Finance & Insurance',             'color': '#a855f7', 'category': 'insurance'},
     # Bodily Injury
@@ -97,9 +97,10 @@ EU_PPI_SERIES = {
 }
 
 # Construction — quarterly (unit=PCH_Q4 = YoY quarterly change)
+# Dataset sts_copi_q covers CPA_F41001_X_410014: Residential buildings excl residences for communities
 EU_CONSTRUCTION = {
-    'eu_cci_cost':  {'indic': 'COST',    'label': 'EU CCI: Construction Cost Index',         'color': '#f97316', 'category': 'fire_allied'},
-    'eu_cppi':      {'indic': 'PRC_PRR', 'label': 'EU CPPI: Residential Building Prices',   'color': '#fb923c', 'category': 'fire_allied'},
+    'eu_cci_res':   {'indic': 'COST',    'label': 'EU CCI: Residential Buildings (excl Communities)',   'color': '#f97316', 'category': 'fire_allied'},
+    'eu_cppi_res':  {'indic': 'PRC_PRR', 'label': 'EU CPPI: Residential Buildings (excl Communities)', 'color': '#fb923c', 'category': 'fire_allied'},
 }
 
 # Labour Cost Index — quarterly
@@ -109,6 +110,9 @@ EU_LCI = {
     'eu_lci_construction':  {'nace': 'F',   'label': 'EU LCI: Construction',                   'color': '#c084fc', 'category': 'fire_allied'},
     'eu_lci_transport':     {'nace': 'H',   'label': 'EU LCI: Transport & Storage',            'color': '#d8b4fe', 'category': 'auto_physical'},
     'eu_lci_prof_services': {'nace': 'M',   'label': 'EU LCI: Professional & Scientific Svcs', 'color': '#fbbf24', 'category': 'legal'},
+    'eu_lci_industry':      {'nace': 'B-E', 'label': 'EU LCI: Industry',                      'color': '#64748b', 'category': 'bodily_injury'},
+    'eu_lci_construction_bi': {'nace': 'F', 'label': 'EU LCI: Construction',                   'color': '#94a3b8', 'category': 'bodily_injury'},
+    'eu_lci_services':      {'nace': 'G-N', 'label': 'EU LCI: Services',                      'color': '#cbd5e1', 'category': 'bodily_injury'},
 }
 
 # ── US BLS series ────────────────────────────────────────────────────────────
@@ -394,17 +398,17 @@ def _parse_eurostat_jsonstat(resp_json, series_map, dimension_key):
 
     num_times = len(time_dim)
 
-    # Build reverse map: code → series_key
-    code_to_key = {}
+    # Build reverse map: code → [series_key, ...] (supports duplicate codes)
+    code_to_keys = {}
     for key, info in series_map.items():
         code = info.get('coicop') or info.get('nace') or info.get('indic')
         if code:
-            code_to_key[code] = key
+            code_to_keys.setdefault(code, []).append(key)
 
     result = {}
     for code, code_pos in code_dim.items():
-        series_key = code_to_key.get(code)
-        if not series_key:
+        series_keys = code_to_keys.get(code, [])
+        if not series_keys:
             continue
 
         points = []
@@ -431,7 +435,8 @@ def _parse_eurostat_jsonstat(resp_json, series_map, dimension_key):
 
         points.sort(key=lambda p: (p['year'], p['month']))
         if points:
-            result[series_key] = points
+            for series_key in series_keys:
+                result[series_key] = [dict(p) for p in points]
 
     return result
 
@@ -480,7 +485,7 @@ def _fetch_eurostat_ppi():
 def _fetch_eurostat_construction():
     """Fetch EU27 construction price indices (quarterly)."""
     indics = '&'.join(f'indic_bt={info["indic"]}' for info in EU_CONSTRUCTION.values())
-    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=PCH_Q4&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
+    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=PCH_SM&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
         if resp.status_code == 200:
@@ -492,8 +497,9 @@ def _fetch_eurostat_construction():
 
 def _fetch_eurostat_lci():
     """Fetch EU27 Labour Cost Index (quarterly)."""
-    naces = '&'.join(f'nace_r2={info["nace"]}' for info in EU_LCI.values())
-    url = f'{EUROSTAT_BASE}/lc_lci_r2_q?geo=EU27_2020&s_adj=SCA&lcstruct=D1_D4_MD5&unit=PCH_Q4&freq=Q&sinceTimePeriod=2000-Q1&{naces}'
+    unique_naces = sorted(set(info['nace'] for info in EU_LCI.values()))
+    naces = '&'.join(f'nace_r2={n}' for n in unique_naces)
+    url = f'{EUROSTAT_BASE}/lc_lci_r2_q?geo=EU27_2020&s_adj=SCA&lcstruct=D1_D4_MD5&unit=PCH_SM&freq=Q&sinceTimePeriod=2000-Q1&{naces}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
         if resp.status_code == 200:
@@ -510,7 +516,13 @@ def _fetch_eurostat_lci():
 CONSTRUCTION_OPI_URL = 'https://www.ons.gov.uk/file?uri=/businessindustryandtrade/constructionindustry/datasets/interimconstructionoutputpriceindices/current/bulletindataset9.xlsx'
 
 def _fetch_construction_opi():
-    """Download ONS Construction OPI Excel and extract new work + R&M indices."""
+    """Download ONS Construction OPI Excel and extract new work + R&M indices.
+
+    The ONS file has monthly data on the 'All construction' sheet with columns
+    for 'All new work' and 'All repair and maintenance' index values.
+    Time periods are formatted as '2014 Jan', then 'Feb', 'Mar', etc.
+    (Only the first month of each year shows the year.)
+    """
     try:
         from openpyxl import load_workbook
 
@@ -520,65 +532,88 @@ def _fetch_construction_opi():
             return {}, {}
 
         wb = load_workbook(io.BytesIO(resp.content), data_only=True)
-        result = {}
 
-        # Try to find the data sheet — ONS names vary
+        # Find the 'All construction' sheet (has both new work + R&M columns)
         target_sheet = None
         for name in wb.sheetnames:
-            if 'data' in name.lower() or 'table' in name.lower() or 'index' in name.lower():
+            if 'all construction' in name.lower():
                 target_sheet = wb[name]
                 break
         if not target_sheet:
+            # Fallback: look for data/table/index sheet
+            for name in wb.sheetnames:
+                if 'data' in name.lower() or 'table' in name.lower() or 'index' in name.lower():
+                    target_sheet = wb[name]
+                    break
+        if not target_sheet:
             target_sheet = wb[wb.sheetnames[0]]
 
-        # Parse: look for "All New Work" and "All Repair and Maintenance" columns
-        # This is fragile — ONS may change layout. We do best-effort.
         ws = target_sheet
         header_row = None
         new_col = None
         repair_col = None
 
+        # Find header row with 'All new work' and 'All repair and maintenance'
         for row in ws.iter_rows(min_row=1, max_row=20, values_only=False):
             for cell in row:
-                val = str(cell.value or '').lower()
-                if 'all new work' in val:
+                val = str(cell.value or '').lower().replace('\n', ' ')
+                if 'all new work' in val and 'index' in val:
                     new_col = cell.column
                     header_row = cell.row
-                elif 'repair' in val and 'maintenance' in val:
+                elif 'all repair and maintenance' in val and 'index' in val:
                     repair_col = cell.column
-                    header_row = cell.row
+                    if not header_row:
+                        header_row = cell.row
 
         if not header_row:
             logger.warning("Construction OPI: could not find header row")
+            wb.close()
             return {}, {}
 
-        # Parse data rows (quarterly: "2024 Q1" format in first column)
+        # Parse monthly data rows
+        # Format: first row of year = "2014 Jan", subsequent months = "Feb", "Mar", etc.
+        month_names = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+        }
         new_points = []
         repair_points = []
-        q_map = {'Q1': 3, 'Q2': 6, 'Q3': 9, 'Q4': 12}
+        current_year = None
 
         for row in ws.iter_rows(min_row=header_row + 1, max_row=ws.max_row, values_only=False):
-            period_val = str(row[0].value or '')
-            parts = period_val.strip().split()
-            if len(parts) < 2 or parts[1] not in q_map:
+            period_val = str(row[0].value or '').strip()
+            if not period_val:
                 continue
-            try:
-                year = int(parts[0])
-                quarter = parts[1]
-                month = q_map[quarter]
-            except ValueError:
+
+            parts = period_val.split()
+            month = None
+
+            if len(parts) >= 2:
+                # "2014 Jan" format — year + month
+                try:
+                    current_year = int(parts[0])
+                    month = month_names.get(parts[1].lower()[:3])
+                except ValueError:
+                    continue
+            elif len(parts) == 1:
+                # "Feb" format — month only, use current_year
+                month = month_names.get(parts[0].lower()[:3])
+
+            if month is None or current_year is None:
                 continue
+
+            date_str = f'{current_year}-{str(month).zfill(2)}'
 
             if new_col:
                 try:
                     val = float(row[new_col - 1].value)
-                    new_points.append({'year': year, 'month': month, 'quarter': quarter, 'value': val, 'date': f'{year}-{quarter}'})
+                    new_points.append({'year': current_year, 'month': month, 'value': val, 'date': date_str})
                 except (ValueError, TypeError):
                     pass
             if repair_col:
                 try:
                     val = float(row[repair_col - 1].value)
-                    repair_points.append({'year': year, 'month': month, 'quarter': quarter, 'value': val, 'date': f'{year}-{quarter}'})
+                    repair_points.append({'year': current_year, 'month': month, 'value': val, 'date': date_str})
                 except (ValueError, TypeError):
                     pass
 
@@ -587,9 +622,11 @@ def _fetch_construction_opi():
         if new_points:
             raw_result['uk_opi_new'] = new_points
             yoy_result['uk_opi_new'] = _compute_yoy(new_points)
+            logger.info(f"Construction OPI: {len(new_points)} New Work points, {len(yoy_result.get('uk_opi_new', []))} YoY")
         if repair_points:
             raw_result['uk_opi_repair'] = repair_points
             yoy_result['uk_opi_repair'] = _compute_yoy(repair_points)
+            logger.info(f"Construction OPI: {len(repair_points)} R&M points, {len(yoy_result.get('uk_opi_repair', []))} YoY")
 
         wb.close()
         return yoy_result, raw_result
@@ -645,9 +682,9 @@ def _fetch_eurostat_ppi_index():
 
 
 def _fetch_eurostat_construction_index():
-    """Fetch EU27 construction quarterly index (2020=100)."""
+    """Fetch EU27 construction quarterly index (2021=100)."""
     indics = '&'.join(f'indic_bt={info["indic"]}' for info in EU_CONSTRUCTION.values())
-    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=I20&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
+    url = f'{EUROSTAT_BASE}/sts_copi_q?geo=EU27_2020&s_adj=NSA&unit=I21&freq=Q&sinceTimePeriod=2000-Q1&{indics}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
         if resp.status_code == 200:
@@ -659,7 +696,8 @@ def _fetch_eurostat_construction_index():
 
 def _fetch_eurostat_lci_index():
     """Fetch EU27 LCI quarterly index (2020=100)."""
-    naces = '&'.join(f'nace_r2={info["nace"]}' for info in EU_LCI.values())
+    unique_naces = sorted(set(info['nace'] for info in EU_LCI.values()))
+    naces = '&'.join(f'nace_r2={n}' for n in unique_naces)
     url = f'{EUROSTAT_BASE}/lc_lci_r2_q?geo=EU27_2020&s_adj=SCA&lcstruct=D1_D4_MD5&unit=I20&freq=Q&sinceTimePeriod=2000-Q1&{naces}'
     try:
         resp = requests.get(url, timeout=30, headers={'User-Agent': USER_AGENT})
@@ -806,7 +844,7 @@ def _fetch_all():
 
     for key, info in all_defs.items():
         source = 'BLS' if key.startswith('us_') else ('ONS' if key.startswith('uk_') else 'Eurostat')
-        freq = 'Q' if key in EU_CONSTRUCTION or key in EU_LCI or key in ('uk_opi_new', 'uk_opi_repair') or key == 'uk_sppi_legal' else 'M'
+        freq = 'Q' if key in EU_CONSTRUCTION or key in EU_LCI or key == 'uk_sppi_legal' else 'M'
         meta = {
             'label': info.get('label', key),
             'color': info.get('color', '#94a3b8'),
@@ -817,16 +855,33 @@ def _fetch_all():
             meta['approximate'] = True
         series_meta[key] = meta
 
-    # Update category map with construction OPI
+    # Update category map with construction OPI — insert with UK series (before EU)
     cats = {k: dict(v) for k, v in CATEGORY_MAP.items()}
-    if 'uk_opi_new' in all_series:
-        cats['fire_allied']['series'].append('uk_opi_new')
-    if 'uk_opi_repair' in all_series:
-        cats['fire_allied']['series'].append('uk_opi_repair')
+    fa = cats['fire_allied']['series']
+    # Find insertion point: after last uk_ series in fire_allied
+    insert_idx = 0
+    for i, s in enumerate(fa):
+        if s.startswith('uk_'):
+            insert_idx = i + 1
+    opi_keys = [k for k in ('uk_opi_new', 'uk_opi_repair') if k in all_series]
+    for j, k in enumerate(opi_keys):
+        fa.insert(insert_idx + j, k)
 
-    # Filter to only include series that actually have data
+    # Filter to only include series that actually have data, ordered UK → EU → US
+    def _region_key(s):
+        if s.startswith('uk_'):
+            return 0
+        elif s.startswith('eu_') or s.startswith('nl_') or s.startswith('it_') or s.startswith('de_') or s.startswith('fr_'):
+            return 1
+        elif s.startswith('us_'):
+            return 2
+        return 3
+
     for cat_key, cat_info in cats.items():
-        cat_info['series'] = [s for s in cat_info['series'] if s in all_series]
+        cat_info['series'] = sorted(
+            [s for s in cat_info['series'] if s in all_series],
+            key=_region_key,
+        )
 
     return {
         'series': all_series,

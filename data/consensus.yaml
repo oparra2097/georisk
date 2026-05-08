@@ -1,0 +1,470 @@
+# data/consensus.yaml
+#
+# Manually maintained bank-consensus commodity forecasts.
+#
+# !!! ILLUSTRATIVE SEED VALUES ONLY !!!
+# Replace with actual published quarterly forecasts from Goldman Sachs,
+# J.P. Morgan, UBS, Morgan Stanley, Citi, etc. when new research drops.
+# Bank research is paywalled — paste numbers in by hand from the PDFs/emails.
+#
+# Schema:
+#   <Commodity Name>:
+#     - source: "Goldman Sachs"
+#       published: YYYY-MM-DD     # report publication date
+#       note: "Commodities Weekly - citation"
+#       unit: "$/bbl"              # optional, informational
+#       quarters:                  # forward quarterly forecasts
+#         Q2_2026: 78
+#         Q3_2026: 82
+#         Q4_2026: 80
+#         Q1_2027: 78
+#       fy:                        # optional calendar-year forecasts
+#         2026: 80
+#         2027: 75
+#
+# Commodity names MUST match those in commodities_forecast.COMMODITIES
+# (WTI Crude, Brent Crude, Natural Gas (HH), TTF Gas, Gold, Silver,
+#  Platinum, Copper, Aluminum, Cocoa, Wheat, Soybeans, Coffee).
+#
+# As-of date (spot snapshot these forecasts are anchored against): 2026-04-22
+# ─────────────────────────────────────────────────────────────────────────────
+
+WTI Crude:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — Commodities Weekly placeholder"
+    unit: "$/bbl"
+    quarters:
+      Q2_2026: 72
+      Q3_2026: 76
+      Q4_2026: 74
+      Q1_2027: 71
+    fy:
+      2026: 72
+      2027: 70
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — Global Commodities Research placeholder"
+    unit: "$/bbl"
+    quarters:
+      Q2_2026: 70
+      Q3_2026: 73
+      Q4_2026: 71
+      Q1_2027: 68
+    fy:
+      2026: 70
+      2027: 67
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — UBS CIO Monthly placeholder"
+    unit: "$/bbl"
+    quarters:
+      Q2_2026: 69
+      Q3_2026: 72
+      Q4_2026: 70
+    fy:
+      2026: 69
+
+Brent Crude:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — replace with real Commodities Weekly numbers"
+    unit: "$/bbl"
+    quarters:
+      Q2_2026: 78
+      Q3_2026: 82
+      Q4_2026: 80
+      Q1_2027: 77
+    fy:
+      2026: 78
+      2027: 75
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — Global Commodities Research placeholder"
+    unit: "$/bbl"
+    quarters:
+      Q2_2026: 75
+      Q3_2026: 78
+      Q4_2026: 76
+      Q1_2027: 73
+    fy:
+      2026: 75
+      2027: 72
+  - source: "Morgan Stanley"
+    published: 2026-04-12
+    note: "ILLUSTRATIVE — Global Oil Outlook placeholder"
+    unit: "$/bbl"
+    quarters:
+      Q2_2026: 74
+      Q3_2026: 77
+      Q4_2026: 75
+    fy:
+      2026: 74
+
+Natural Gas (HH):
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/MMBtu"
+    quarters:
+      Q2_2026: 3.60
+      Q3_2026: 3.90
+      Q4_2026: 4.20
+      Q1_2027: 4.00
+    fy:
+      2026: 3.85
+      2027: 4.10
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/MMBtu"
+    quarters:
+      Q2_2026: 3.50
+      Q3_2026: 3.80
+      Q4_2026: 4.00
+    fy:
+      2026: 3.75
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/MMBtu"
+    quarters:
+      Q2_2026: 3.70
+      Q3_2026: 4.00
+      Q4_2026: 4.30
+    fy:
+      2026: 3.90
+
+TTF Gas:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — European Gas Weekly placeholder"
+    unit: "€/MWh"
+    quarters:
+      Q2_2026: 66
+      Q3_2026: 70
+      Q4_2026: 74
+      Q1_2027: 72
+    fy:
+      2026: 69
+      2027: 66
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "€/MWh"
+    quarters:
+      Q2_2026: 64
+      Q3_2026: 68
+      Q4_2026: 72
+    fy:
+      2026: 67
+  - source: "Morgan Stanley"
+    published: 2026-04-12
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "€/MWh"
+    quarters:
+      Q2_2026: 65
+      Q3_2026: 69
+      Q4_2026: 73
+    fy:
+      2026: 68
+
+Gold:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — Precious Metals Weekly placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 4300
+      Q3_2026: 4450
+      Q4_2026: 4600
+      Q1_2027: 4650
+    fy:
+      2026: 4350
+      2027: 4700
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 4250
+      Q3_2026: 4350
+      Q4_2026: 4450
+    fy:
+      2026: 4275
+      2027: 4500
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 4200
+      Q3_2026: 4300
+      Q4_2026: 4400
+    fy:
+      2026: 4250
+
+Silver:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 53
+      Q3_2026: 55
+      Q4_2026: 58
+    fy:
+      2026: 54
+      2027: 60
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 51
+      Q3_2026: 53
+      Q4_2026: 55
+    fy:
+      2026: 52
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 52
+      Q3_2026: 54
+      Q4_2026: 56
+    fy:
+      2026: 53
+
+Platinum:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 1320
+      Q3_2026: 1360
+      Q4_2026: 1400
+    fy:
+      2026: 1340
+      2027: 1420
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 1290
+      Q3_2026: 1310
+      Q4_2026: 1340
+    fy:
+      2026: 1300
+  - source: "Morgan Stanley"
+    published: 2026-04-12
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/troy oz"
+    quarters:
+      Q2_2026: 1310
+      Q3_2026: 1340
+      Q4_2026: 1370
+    fy:
+      2026: 1320
+
+Copper:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — Metals Weekly placeholder"
+    unit: "$/lb"
+    quarters:
+      Q2_2026: 4.95
+      Q3_2026: 5.10
+      Q4_2026: 5.25
+      Q1_2027: 5.30
+    fy:
+      2026: 5.05
+      2027: 5.40
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/lb"
+    quarters:
+      Q2_2026: 4.85
+      Q3_2026: 4.95
+      Q4_2026: 5.05
+    fy:
+      2026: 4.92
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/lb"
+    quarters:
+      Q2_2026: 4.80
+      Q3_2026: 4.90
+      Q4_2026: 5.00
+    fy:
+      2026: 4.88
+
+Aluminum:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/MT"
+    quarters:
+      Q2_2026: 2650
+      Q3_2026: 2720
+      Q4_2026: 2800
+    fy:
+      2026: 2700
+      2027: 2850
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/MT"
+    quarters:
+      Q2_2026: 2600
+      Q3_2026: 2660
+      Q4_2026: 2720
+    fy:
+      2026: 2640
+  - source: "Morgan Stanley"
+    published: 2026-04-12
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/MT"
+    quarters:
+      Q2_2026: 2620
+      Q3_2026: 2680
+      Q4_2026: 2750
+    fy:
+      2026: 2670
+
+Cocoa:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — Softs Weekly placeholder"
+    unit: "$/MT"
+    quarters:
+      Q2_2026: 3050
+      Q3_2026: 2950
+      Q4_2026: 2850
+    fy:
+      2026: 2950
+      2027: 2800
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/MT"
+    quarters:
+      Q2_2026: 3100
+      Q3_2026: 3000
+      Q4_2026: 2900
+    fy:
+      2026: 3000
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "$/MT"
+    quarters:
+      Q2_2026: 2980
+      Q3_2026: 2880
+      Q4_2026: 2800
+    fy:
+      2026: 2920
+
+Wheat:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — Grains Weekly placeholder"
+    unit: "¢/bu"
+    quarters:
+      Q2_2026: 625
+      Q3_2026: 640
+      Q4_2026: 650
+    fy:
+      2026: 630
+      2027: 660
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "¢/bu"
+    quarters:
+      Q2_2026: 615
+      Q3_2026: 625
+      Q4_2026: 635
+    fy:
+      2026: 620
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "¢/bu"
+    quarters:
+      Q2_2026: 620
+      Q3_2026: 630
+      Q4_2026: 640
+    fy:
+      2026: 625
+
+Soybeans:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — Grains Weekly placeholder"
+    unit: "¢/bu"
+    quarters:
+      Q2_2026: 1190
+      Q3_2026: 1210
+      Q4_2026: 1230
+    fy:
+      2026: 1200
+      2027: 1250
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "¢/bu"
+    quarters:
+      Q2_2026: 1175
+      Q3_2026: 1195
+      Q4_2026: 1215
+    fy:
+      2026: 1185
+  - source: "Morgan Stanley"
+    published: 2026-04-12
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "¢/bu"
+    quarters:
+      Q2_2026: 1185
+      Q3_2026: 1205
+      Q4_2026: 1220
+    fy:
+      2026: 1195
+
+Coffee:
+  - source: "Goldman Sachs"
+    published: 2026-04-10
+    note: "ILLUSTRATIVE — Softs Weekly placeholder"
+    unit: "¢/lb"
+    quarters:
+      Q2_2026: 310
+      Q3_2026: 300
+      Q4_2026: 290
+    fy:
+      2026: 302
+      2027: 285
+  - source: "J.P. Morgan"
+    published: 2026-04-05
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "¢/lb"
+    quarters:
+      Q2_2026: 305
+      Q3_2026: 295
+      Q4_2026: 285
+    fy:
+      2026: 298
+  - source: "UBS"
+    published: 2026-04-15
+    note: "ILLUSTRATIVE — placeholder"
+    unit: "¢/lb"
+    quarters:
+      Q2_2026: 308
+      Q3_2026: 298
+      Q4_2026: 288
+    fy:
+      2026: 300

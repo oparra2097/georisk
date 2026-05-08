@@ -61,27 +61,21 @@ def fetch_headlines_for_country(country_alpha2, page_size=100):
         logger.debug("NewsAPI daily budget exhausted — skipping request")
         return []
 
-    code = country_alpha2.lower()
     articles = []
 
     try:
-        if code in NEWSAPI_SUPPORTED:
-            url = f'{Config.NEWSAPI_BASE_URL}/top-headlines'
-            params = {
-                'country': code,
-                'pageSize': page_size,
-                'apiKey': key
-            }
-        else:
-            country_name = iso_alpha2_to_name(country_alpha2)
-            url = f'{Config.NEWSAPI_BASE_URL}/everything'
-            params = {
-                'q': f'"{country_name}"',
-                'language': 'en',
-                'sortBy': 'publishedAt',
-                'pageSize': page_size,
-                'apiKey': key
-            }
+        # Always use /everything with a quoted country-name query.
+        # /top-headlines?country= filters by publisher origin, not topic,
+        # which contaminates the feed with unrelated international news.
+        country_name = iso_alpha2_to_name(country_alpha2)
+        url = f'{Config.NEWSAPI_BASE_URL}/everything'
+        params = {
+            'q': f'"{country_name}"',
+            'language': 'en',
+            'sortBy': 'publishedAt',
+            'pageSize': page_size,
+            'apiKey': key
+        }
 
         resp = requests.get(url, params=params, timeout=10)
         if resp.status_code == 200:

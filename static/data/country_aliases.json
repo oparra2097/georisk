@@ -1,0 +1,3033 @@
+{
+  "AF": {
+    "name": "Afghanistan",
+    "aliases": [
+      "Mazar-e Sharif",
+      "Afghanistan",
+      "Pashtun",
+      "Taliban",
+      "Afghan",
+      "Herat",
+      "Kabul"
+    ],
+    "cities": [
+      "Kabul",
+      "Herat",
+      "Mazar-e Sharif"
+    ]
+  },
+  "AL": {
+    "name": "Albania",
+    "aliases": [
+      "Albanian",
+      "Albania",
+      "Durres",
+      "Tirana",
+      "Vlore"
+    ],
+    "cities": [
+      "Tirana",
+      "Durres",
+      "Vlore"
+    ]
+  },
+  "DZ": {
+    "name": "Algeria",
+    "aliases": [
+      "Constantine",
+      "Algerian",
+      "Algeria",
+      "Algiers",
+      "Oran"
+    ],
+    "cities": [
+      "Algiers",
+      "Oran",
+      "Constantine"
+    ]
+  },
+  "AD": {
+    "name": "Andorra",
+    "aliases": [
+      "Andorra la Vella",
+      "les Escaldes",
+      "Andorra"
+    ],
+    "cities": [
+      "Andorra la Vella",
+      "les Escaldes"
+    ]
+  },
+  "AO": {
+    "name": "Angola",
+    "aliases": [
+      "Lubango",
+      "Angola",
+      "Huambo",
+      "Luanda"
+    ],
+    "cities": [
+      "Luanda",
+      "Lubango",
+      "Huambo"
+    ]
+  },
+  "AG": {
+    "name": "Antigua and Barbuda",
+    "aliases": [
+      "Antigua and Barbuda",
+      "Saint John's"
+    ],
+    "cities": [
+      "Saint John's"
+    ]
+  },
+  "AR": {
+    "name": "Argentina",
+    "aliases": [
+      "Buenos Aires",
+      "Argentinian",
+      "Argentina",
+      "Argentine",
+      "Kirchner",
+      "Cordoba",
+      "Rosario",
+      "Milei"
+    ],
+    "cities": [
+      "Buenos Aires",
+      "Cordoba",
+      "Rosario"
+    ]
+  },
+  "AM": {
+    "name": "Armenia",
+    "aliases": [
+      "Malatia-Sebastia",
+      "Shengavit",
+      "Armenian",
+      "Armenia",
+      "Yerevan"
+    ],
+    "cities": [
+      "Yerevan",
+      "Malatia-Sebastia",
+      "Shengavit"
+    ]
+  },
+  "AU": {
+    "name": "Australia",
+    "aliases": [
+      "Australian",
+      "Australia",
+      "Melbourne",
+      "Brisbane",
+      "Canberra",
+      "Sydney"
+    ],
+    "cities": [
+      "Sydney",
+      "Melbourne",
+      "Brisbane"
+    ]
+  },
+  "AT": {
+    "name": "Austria",
+    "aliases": [
+      "Austrian",
+      "Austria",
+      "Vienna",
+      "Graz",
+      "Linz"
+    ],
+    "cities": [
+      "Vienna",
+      "Graz",
+      "Linz"
+    ]
+  },
+  "AZ": {
+    "name": "Azerbaijan",
+    "aliases": [
+      "Azerbaijani",
+      "Azerbaijan",
+      "Sumqayit",
+      "Aliyev",
+      "Azeri",
+      "Ganja",
+      "Baku"
+    ],
+    "cities": [
+      "Baku",
+      "Sumqayit",
+      "Ganja"
+    ]
+  },
+  "BS": {
+    "name": "Bahamas",
+    "aliases": [
+      "Freeport",
+      "Bahamas",
+      "Lucaya",
+      "Nassau"
+    ],
+    "cities": [
+      "Nassau",
+      "Lucaya",
+      "Freeport"
+    ]
+  },
+  "BH": {
+    "name": "Bahrain",
+    "aliases": [
+      "Madinat Hamad",
+      "Al Muharraq",
+      "Bahraini",
+      "Bahrain",
+      "Manama"
+    ],
+    "cities": [
+      "Al Muharraq",
+      "Manama",
+      "Madinat Hamad"
+    ]
+  },
+  "BD": {
+    "name": "Bangladesh",
+    "aliases": [
+      "Bangladeshi",
+      "Bangladesh",
+      "Chattogram",
+      "Gazipur",
+      "Hasina",
+      "Dhaka"
+    ],
+    "cities": [
+      "Dhaka",
+      "Chattogram",
+      "Gazipur"
+    ]
+  },
+  "BB": {
+    "name": "Barbados",
+    "aliases": [
+      "Bridgetown",
+      "Barbados"
+    ],
+    "cities": [
+      "Bridgetown"
+    ]
+  },
+  "BY": {
+    "name": "Belarus",
+    "aliases": [
+      "Belorussian",
+      "Belarusian",
+      "Lukashenko",
+      "Belarus",
+      "Homyel'",
+      "Hrodna",
+      "Minsk"
+    ],
+    "cities": [
+      "Minsk",
+      "Homyel'",
+      "Hrodna"
+    ]
+  },
+  "BE": {
+    "name": "Belgium",
+    "aliases": [
+      "Antwerpen",
+      "Brussels",
+      "Belgian",
+      "Belgium",
+      "Gent"
+    ],
+    "cities": [
+      "Brussels",
+      "Antwerpen",
+      "Gent"
+    ]
+  },
+  "BZ": {
+    "name": "Belize",
+    "aliases": [
+      "Belize City",
+      "Orange Walk",
+      "San Pedro",
+      "Belize"
+    ],
+    "cities": [
+      "Belize City",
+      "San Pedro",
+      "Orange Walk"
+    ]
+  },
+  "BJ": {
+    "name": "Benin",
+    "aliases": [
+      "Abomey-Calavi",
+      "Porto-Novo",
+      "Cotonou",
+      "Benin"
+    ],
+    "cities": [
+      "Cotonou",
+      "Abomey-Calavi",
+      "Porto-Novo"
+    ]
+  },
+  "BT": {
+    "name": "Bhutan",
+    "aliases": [
+      "Phuntsholing",
+      "Thimphu",
+      "Tsirang",
+      "Bhutan"
+    ],
+    "cities": [
+      "Thimphu",
+      "Phuntsholing",
+      "Tsirang"
+    ]
+  },
+  "BO": {
+    "name": "Bolivia",
+    "aliases": [
+      "Santa Cruz de la Sierra",
+      "Cochabamba",
+      "Bolivian",
+      "Bolivia",
+      "La Paz",
+      "Sucre"
+    ],
+    "cities": [
+      "La Paz",
+      "Santa Cruz de la Sierra",
+      "Cochabamba"
+    ]
+  },
+  "BA": {
+    "name": "Bosnia and Herzegovina",
+    "aliases": [
+      "Bosnia and Herzegovina",
+      "Herzegovinian",
+      "Banja Luka",
+      "Sarajevo",
+      "Bosnian",
+      "Bosnia",
+      "Zenica"
+    ],
+    "cities": [
+      "Sarajevo",
+      "Banja Luka",
+      "Zenica"
+    ]
+  },
+  "BW": {
+    "name": "Botswana",
+    "aliases": [
+      "Mogoditshane",
+      "Francistown",
+      "Botswana",
+      "Gaborone"
+    ],
+    "cities": [
+      "Gaborone",
+      "Francistown",
+      "Mogoditshane"
+    ]
+  },
+  "BR": {
+    "name": "Brazil",
+    "aliases": [
+      "Belo Horizonte",
+      "Rio de Janeiro",
+      "Bolsonaro",
+      "Brazilian",
+      "Petrobras",
+      "Sao Paulo",
+      "Brasilia",
+      "Brasil",
+      "Brazil",
+      "Lula"
+    ],
+    "cities": [
+      "Sao Paulo",
+      "Rio de Janeiro",
+      "Belo Horizonte"
+    ]
+  },
+  "BN": {
+    "name": "Brunei",
+    "aliases": [
+      "Bandar Seri Begawan",
+      "Sengkurong",
+      "Mentiri",
+      "Brunei"
+    ],
+    "cities": [
+      "Bandar Seri Begawan",
+      "Sengkurong",
+      "Mentiri"
+    ]
+  },
+  "BG": {
+    "name": "Bulgaria",
+    "aliases": [
+      "Bulgarian",
+      "Bulgaria",
+      "Plovdiv",
+      "Sofia",
+      "Varna"
+    ],
+    "cities": [
+      "Sofia",
+      "Plovdiv",
+      "Varna"
+    ]
+  },
+  "BF": {
+    "name": "Burkina Faso",
+    "aliases": [
+      "Bobo-Dioulasso",
+      "Burkina Faso",
+      "Ouagadougou",
+      "Burkinabe",
+      "Koudougou",
+      "Burkina"
+    ],
+    "cities": [
+      "Ouagadougou",
+      "Bobo-Dioulasso",
+      "Koudougou"
+    ]
+  },
+  "BI": {
+    "name": "Burundi",
+    "aliases": [
+      "Bujumbura",
+      "Burundian",
+      "Burundi",
+      "Gitega",
+      "Ngozi"
+    ],
+    "cities": [
+      "Bujumbura",
+      "Gitega",
+      "Ngozi"
+    ]
+  },
+  "CV": {
+    "name": "Cabo Verde",
+    "aliases": [
+      "Cabo Verde",
+      "Espargos",
+      "Mindelo",
+      "Praia"
+    ],
+    "cities": [
+      "Praia",
+      "Mindelo",
+      "Espargos"
+    ]
+  },
+  "KH": {
+    "name": "Cambodia",
+    "aliases": [
+      "Phnom Penh",
+      "Cambodian",
+      "Siem Reap",
+      "Cambodia",
+      "Hun Sen",
+      "Khmer",
+      "Takeo"
+    ],
+    "cities": [
+      "Phnom Penh",
+      "Takeo",
+      "Siem Reap"
+    ]
+  },
+  "CM": {
+    "name": "Cameroon",
+    "aliases": [
+      "Cameroonian",
+      "Cameroon",
+      "Bamenda",
+      "Yaounde",
+      "Douala",
+      "Biya"
+    ],
+    "cities": [
+      "Douala",
+      "Yaounde",
+      "Bamenda"
+    ]
+  },
+  "CA": {
+    "name": "Canada",
+    "aliases": [
+      "Canadian",
+      "Montreal",
+      "Calgary",
+      "Toronto",
+      "Trudeau",
+      "Canada",
+      "Ottawa"
+    ],
+    "cities": [
+      "Toronto",
+      "Montreal",
+      "Calgary"
+    ]
+  },
+  "CF": {
+    "name": "Central African Republic",
+    "aliases": [
+      "Central African Republic",
+      "Central African",
+      "Bangui",
+      "Begoua",
+      "Bimbo",
+      "CAR"
+    ],
+    "cities": [
+      "Bangui",
+      "Bimbo",
+      "Begoua"
+    ],
+    "exclude_unless": {
+      "CAR": [
+        "Central African",
+        "Bangui",
+        "Touadera"
+      ]
+    }
+  },
+  "TD": {
+    "name": "Chad",
+    "aliases": [
+      "N'Djamena",
+      "Ndjamena",
+      "Chadian",
+      "Moundou",
+      "Abeche",
+      "Chad",
+      "Deby"
+    ],
+    "cities": [
+      "N'Djamena",
+      "Moundou",
+      "Abeche"
+    ]
+  },
+  "CL": {
+    "name": "Chile",
+    "aliases": [
+      "Puente Alto",
+      "Santiago",
+      "Chilean",
+      "Pinera",
+      "Boric",
+      "Chile",
+      "Maipu"
+    ],
+    "cities": [
+      "Santiago",
+      "Puente Alto",
+      "Maipu"
+    ]
+  },
+  "CN": {
+    "name": "China",
+    "aliases": [
+      "Xi Jinping",
+      "Hong Kong",
+      "Shanghai",
+      "Shenzhen",
+      "Beijing",
+      "Chinese",
+      "China",
+      "CCP",
+      "PRC"
+    ],
+    "cities": [
+      "Shanghai",
+      "Beijing",
+      "Shenzhen"
+    ],
+    "exclude_unless": {
+      "Xi": [
+        "China",
+        "Chinese",
+        "Beijing"
+      ]
+    }
+  },
+  "CO": {
+    "name": "Colombia",
+    "aliases": [
+      "Colombian",
+      "Colombia",
+      "Medellin",
+      "Bogota",
+      "Petro",
+      "Cali",
+      "FARC",
+      "ELN"
+    ],
+    "cities": [
+      "Bogota",
+      "Cali",
+      "Medellin"
+    ]
+  },
+  "KM": {
+    "name": "Comoros",
+    "aliases": [
+      "Moutsamoudou",
+      "Comoros",
+      "Fomboni",
+      "Moroni"
+    ],
+    "cities": [
+      "Moroni",
+      "Moutsamoudou",
+      "Fomboni"
+    ]
+  },
+  "CG": {
+    "name": "Congo",
+    "aliases": [
+      "Republic of Congo",
+      "Sassou Nguesso",
+      "Pointe-Noire",
+      "Brazzaville",
+      "Dolisie"
+    ],
+    "cities": [
+      "Brazzaville",
+      "Pointe-Noire",
+      "Dolisie"
+    ]
+  },
+  "CD": {
+    "name": "Congo (Democratic Republic)",
+    "aliases": [
+      "Democratic Republic of the Congo",
+      "Congo (Democratic Republic)",
+      "Lubumbashi",
+      "Mbuji-Mayi",
+      "Tshisekedi",
+      "Congolese",
+      "DR Congo",
+      "Kinshasa",
+      "Goma",
+      "DRC"
+    ],
+    "cities": [
+      "Kinshasa",
+      "Lubumbashi",
+      "Mbuji-Mayi"
+    ]
+  },
+  "CR": {
+    "name": "Costa Rica",
+    "aliases": [
+      "San Francisco",
+      "Costa Rican",
+      "Costa Rica",
+      "San Jose",
+      "Limon"
+    ],
+    "cities": [
+      "San Jose",
+      "Limon",
+      "San Francisco"
+    ]
+  },
+  "HR": {
+    "name": "Croatia",
+    "aliases": [
+      "Croatian",
+      "Croatia",
+      "Rijeka",
+      "Zagreb",
+      "Split"
+    ],
+    "cities": [
+      "Zagreb",
+      "Split",
+      "Rijeka"
+    ]
+  },
+  "CU": {
+    "name": "Cuba",
+    "aliases": [
+      "Santiago de Cuba",
+      "Diaz-Canel",
+      "Camagueey",
+      "Havana",
+      "Cuban",
+      "Cuba"
+    ],
+    "cities": [
+      "Havana",
+      "Santiago de Cuba",
+      "Camagueey"
+    ]
+  },
+  "CY": {
+    "name": "Cyprus",
+    "aliases": [
+      "Limassol",
+      "Cypriot",
+      "Larnaca",
+      "Nicosia",
+      "Cyprus"
+    ],
+    "cities": [
+      "Nicosia",
+      "Limassol",
+      "Larnaca"
+    ]
+  },
+  "CZ": {
+    "name": "Czechia",
+    "aliases": [
+      "Czechia",
+      "Ostrava",
+      "Prague",
+      "Czech",
+      "Brno"
+    ],
+    "cities": [
+      "Prague",
+      "Brno",
+      "Ostrava"
+    ]
+  },
+  "DK": {
+    "name": "Denmark",
+    "aliases": [
+      "Copenhagen",
+      "Denmark",
+      "Danish",
+      "Odense",
+      "Arhus"
+    ],
+    "cities": [
+      "Copenhagen",
+      "Arhus",
+      "Odense"
+    ]
+  },
+  "DJ": {
+    "name": "Djibouti",
+    "aliases": [
+      "Djibouti City",
+      "Djiboutian",
+      "Ali Sabih",
+      "Djibouti",
+      "Dikhil"
+    ],
+    "cities": [
+      "Djibouti",
+      "Ali Sabih",
+      "Dikhil"
+    ]
+  },
+  "DM": {
+    "name": "Dominica",
+    "aliases": [
+      "Dominica",
+      "Roseau"
+    ],
+    "cities": [
+      "Roseau"
+    ]
+  },
+  "DO": {
+    "name": "Dominican Republic",
+    "aliases": [
+      "Santiago de los Caballeros",
+      "Santo Domingo Oeste",
+      "Dominican Republic",
+      "Santo Domingo",
+      "Dominican"
+    ],
+    "cities": [
+      "Santo Domingo",
+      "Santiago de los Caballeros",
+      "Santo Domingo Oeste"
+    ]
+  },
+  "EC": {
+    "name": "Ecuador",
+    "aliases": [
+      "Ecuadorian",
+      "Guayaquil",
+      "Ecuador",
+      "Cuenca",
+      "Noboa",
+      "Quito"
+    ],
+    "cities": [
+      "Quito",
+      "Guayaquil",
+      "Cuenca"
+    ]
+  },
+  "EG": {
+    "name": "Egypt",
+    "aliases": [
+      "Alexandria",
+      "Egyptian",
+      "Cairo",
+      "Egypt",
+      "Giza",
+      "Sisi"
+    ],
+    "cities": [
+      "Cairo",
+      "Alexandria",
+      "Giza"
+    ]
+  },
+  "SV": {
+    "name": "El Salvador",
+    "aliases": [
+      "San Salvador",
+      "El Salvador",
+      "Salvadoran",
+      "San Miguel",
+      "Soyapango",
+      "Bukele"
+    ],
+    "cities": [
+      "San Salvador",
+      "Soyapango",
+      "San Miguel"
+    ]
+  },
+  "GQ": {
+    "name": "Equatorial Guinea",
+    "aliases": [
+      "Equatorial Guinean",
+      "Equatorial Guinea",
+      "Ebebiyin",
+      "Malabo",
+      "Bata"
+    ],
+    "cities": [
+      "Bata",
+      "Malabo",
+      "Ebebiyin"
+    ]
+  },
+  "ER": {
+    "name": "Eritrea",
+    "aliases": [
+      "Eritrean",
+      "Afwerki",
+      "Eritrea",
+      "Asmara",
+      "Himora",
+      "Keren"
+    ],
+    "cities": [
+      "Asmara",
+      "Keren",
+      "Himora"
+    ]
+  },
+  "EE": {
+    "name": "Estonia",
+    "aliases": [
+      "Estonian",
+      "Estonia",
+      "Tallinn",
+      "Narva",
+      "Tartu"
+    ],
+    "cities": [
+      "Tallinn",
+      "Tartu",
+      "Narva"
+    ]
+  },
+  "SZ": {
+    "name": "Eswatini",
+    "aliases": [
+      "Eswatini",
+      "Lobamba",
+      "Manzini",
+      "Mbabane"
+    ],
+    "cities": [
+      "Manzini",
+      "Mbabane",
+      "Lobamba"
+    ]
+  },
+  "ET": {
+    "name": "Ethiopia",
+    "aliases": [
+      "Addis Ababa",
+      "Ethiopian",
+      "Ethiopia",
+      "Amhara",
+      "Gonder",
+      "Jijiga",
+      "Tigray",
+      "Oromo",
+      "Abiy"
+    ],
+    "cities": [
+      "Addis Ababa",
+      "Jijiga",
+      "Gonder"
+    ]
+  },
+  "FJ": {
+    "name": "Fiji",
+    "aliases": [
+      "Lautoka",
+      "Nasinu",
+      "Fiji",
+      "Suva"
+    ],
+    "cities": [
+      "Nasinu",
+      "Suva",
+      "Lautoka"
+    ]
+  },
+  "FI": {
+    "name": "Finland",
+    "aliases": [
+      "Helsinki",
+      "Finland",
+      "Finnish",
+      "Tampere",
+      "Espoo"
+    ],
+    "cities": [
+      "Helsinki",
+      "Espoo",
+      "Tampere"
+    ]
+  },
+  "FR": {
+    "name": "France",
+    "aliases": [
+      "Marseille",
+      "Elysee",
+      "France",
+      "French",
+      "Macron",
+      "Paris",
+      "Lyon"
+    ],
+    "cities": [
+      "Paris",
+      "Marseille",
+      "Lyon"
+    ]
+  },
+  "GA": {
+    "name": "Gabon",
+    "aliases": [
+      "Franceville",
+      "Port-Gentil",
+      "Libreville",
+      "Gabon"
+    ],
+    "cities": [
+      "Libreville",
+      "Port-Gentil",
+      "Franceville"
+    ]
+  },
+  "GM": {
+    "name": "Gambia",
+    "aliases": [
+      "Bununka Kunda",
+      "Serekunda",
+      "Brikama",
+      "Gambia"
+    ],
+    "cities": [
+      "Serekunda",
+      "Brikama",
+      "Bununka Kunda"
+    ]
+  },
+  "GE": {
+    "name": "Georgia",
+    "aliases": [
+      "South Ossetia",
+      "Abkhazia",
+      "Georgian",
+      "Georgia",
+      "Kutaisi",
+      "Tbilisi",
+      "Batumi"
+    ],
+    "cities": [
+      "Tbilisi",
+      "Batumi",
+      "Kutaisi"
+    ],
+    "exclude_unless": {
+      "Georgia": [
+        "Tbilisi",
+        "Abkhazia",
+        "Ossetia",
+        "Caucasus",
+        "Russian",
+        "Saakashvili",
+        "Ivanishvili"
+      ]
+    }
+  },
+  "DE": {
+    "name": "Germany",
+    "aliases": [
+      "Bundestag",
+      "Germany",
+      "Hamburg",
+      "Berlin",
+      "German",
+      "Munich",
+      "Scholz",
+      "Merz"
+    ],
+    "cities": [
+      "Berlin",
+      "Hamburg",
+      "Munich"
+    ]
+  },
+  "GH": {
+    "name": "Ghana",
+    "aliases": [
+      "Ghanaian",
+      "Kumasi",
+      "Tamale",
+      "Accra",
+      "Ghana"
+    ],
+    "cities": [
+      "Kumasi",
+      "Accra",
+      "Tamale"
+    ]
+  },
+  "GR": {
+    "name": "Greece",
+    "aliases": [
+      "Thessaloniki",
+      "Mitsotakis",
+      "Athens",
+      "Greece",
+      "Greek",
+      "Patra"
+    ],
+    "cities": [
+      "Athens",
+      "Thessaloniki",
+      "Patra"
+    ]
+  },
+  "GD": {
+    "name": "Grenada",
+    "aliases": [
+      "Saint George's",
+      "Grenada"
+    ],
+    "cities": [
+      "Saint George's"
+    ]
+  },
+  "GT": {
+    "name": "Guatemala",
+    "aliases": [
+      "Guatemala City",
+      "Villa Nueva",
+      "Guatemalan",
+      "Guatemala",
+      "Arevalo",
+      "Mixco"
+    ],
+    "cities": [
+      "Guatemala City",
+      "Villa Nueva",
+      "Mixco"
+    ]
+  },
+  "GN": {
+    "name": "Guinea",
+    "aliases": [
+      "Camayenne",
+      "Nzerekore",
+      "Conakry",
+      "Guinean"
+    ],
+    "cities": [
+      "Conakry",
+      "Camayenne",
+      "Nzerekore"
+    ],
+    "exclude_unless": {
+      "Guinea": [
+        "Conakry",
+        "Guinean",
+        "West Africa"
+      ]
+    }
+  },
+  "GW": {
+    "name": "Guinea-Bissau",
+    "aliases": [
+      "Bissau-Guinean",
+      "Guinea-Bissau",
+      "Bafata",
+      "Bissau",
+      "Gabu"
+    ],
+    "cities": [
+      "Bissau",
+      "Gabu",
+      "Bafata"
+    ]
+  },
+  "GY": {
+    "name": "Guyana",
+    "aliases": [
+      "New Amsterdam",
+      "Georgetown",
+      "Guyana",
+      "Linden"
+    ],
+    "cities": [
+      "Georgetown",
+      "Linden",
+      "New Amsterdam"
+    ]
+  },
+  "HT": {
+    "name": "Haiti",
+    "aliases": [
+      "Port-au-Prince",
+      "Cap-Haitien",
+      "Carrefour",
+      "Haitian",
+      "Delmas",
+      "Haiti"
+    ],
+    "cities": [
+      "Port-au-Prince",
+      "Carrefour",
+      "Delmas"
+    ]
+  },
+  "HN": {
+    "name": "Honduras",
+    "aliases": [
+      "San Pedro Sula",
+      "Tegucigalpa",
+      "Honduran",
+      "Honduras",
+      "La Ceiba",
+      "Castro"
+    ],
+    "cities": [
+      "Tegucigalpa",
+      "San Pedro Sula",
+      "La Ceiba"
+    ]
+  },
+  "HU": {
+    "name": "Hungary",
+    "aliases": [
+      "Hungarian",
+      "Budapest",
+      "Hungary",
+      "Orban",
+      "Buda",
+      "Pest"
+    ],
+    "cities": [
+      "Budapest",
+      "Pest",
+      "Buda"
+    ]
+  },
+  "IS": {
+    "name": "Iceland",
+    "aliases": [
+      "Hafnarfjoerdur",
+      "Icelandic",
+      "Kopavogur",
+      "Reykjavik",
+      "Iceland"
+    ],
+    "cities": [
+      "Reykjavik",
+      "Kopavogur",
+      "Hafnarfjoerdur"
+    ]
+  },
+  "IN": {
+    "name": "India",
+    "aliases": [
+      "Bengaluru",
+      "New Delhi",
+      "Indian",
+      "Mumbai",
+      "Delhi",
+      "India",
+      "Modi",
+      "BJP"
+    ],
+    "cities": [
+      "Mumbai",
+      "Delhi",
+      "Bengaluru"
+    ],
+    "exclude_unless": {
+      "Indian": [
+        "India",
+        "Delhi",
+        "Mumbai",
+        "Modi",
+        "Hindu",
+        "Pakistan"
+      ]
+    }
+  },
+  "ID": {
+    "name": "Indonesia",
+    "aliases": [
+      "Indonesian",
+      "Indonesia",
+      "Surabaya",
+      "Jakarta",
+      "Prabowo",
+      "Bekasi",
+      "Jokowi",
+      "Widodo"
+    ],
+    "cities": [
+      "Jakarta",
+      "Surabaya",
+      "Bekasi"
+    ]
+  },
+  "IR": {
+    "name": "Iran",
+    "aliases": [
+      "Pezeshkian",
+      "Ayatollah",
+      "Khamenei",
+      "Iranian",
+      "Isfahan",
+      "Mashhad",
+      "Tehran",
+      "Raisi",
+      "Iran",
+      "IRGC"
+    ],
+    "cities": [
+      "Tehran",
+      "Mashhad",
+      "Isfahan"
+    ]
+  },
+  "IQ": {
+    "name": "Iraq",
+    "aliases": [
+      "Al Basrah al Qadimah",
+      "Al Mawsil al Jadidah",
+      "Kurdistan",
+      "Baghdad",
+      "Iraqi",
+      "Mosul",
+      "Iraq"
+    ],
+    "cities": [
+      "Baghdad",
+      "Al Mawsil al Jadidah",
+      "Al Basrah al Qadimah"
+    ]
+  },
+  "IE": {
+    "name": "Ireland",
+    "aliases": [
+      "South Dublin",
+      "Ireland",
+      "Dublin",
+      "Irish",
+      "Cork"
+    ],
+    "cities": [
+      "Dublin",
+      "South Dublin",
+      "Cork"
+    ]
+  },
+  "IL": {
+    "name": "Israel",
+    "aliases": [
+      "West Jerusalem",
+      "Jerusalem",
+      "Netanyahu",
+      "Tel Aviv",
+      "Israeli",
+      "Knesset",
+      "Israel",
+      "IDF"
+    ],
+    "cities": [
+      "Jerusalem",
+      "Tel Aviv",
+      "West Jerusalem"
+    ]
+  },
+  "IT": {
+    "name": "Italy",
+    "aliases": [
+      "Italian",
+      "Meloni",
+      "Naples",
+      "Italy",
+      "Milan",
+      "Rome"
+    ],
+    "cities": [
+      "Rome",
+      "Milan",
+      "Naples"
+    ]
+  },
+  "CI": {
+    "name": "Ivory Coast",
+    "aliases": [
+      "Cote d'Ivoire",
+      "Yamoussoukro",
+      "Ivory Coast",
+      "Abidjan",
+      "Ivorian",
+      "Bouake",
+      "Abobo"
+    ],
+    "cities": [
+      "Abidjan",
+      "Abobo",
+      "Bouake"
+    ]
+  },
+  "JM": {
+    "name": "Jamaica",
+    "aliases": [
+      "New Kingston",
+      "Spanish Town",
+      "Jamaican",
+      "Kingston",
+      "Jamaica"
+    ],
+    "cities": [
+      "Kingston",
+      "New Kingston",
+      "Spanish Town"
+    ]
+  },
+  "JP": {
+    "name": "Japan",
+    "aliases": [
+      "Japanese",
+      "Yokohama",
+      "Kishida",
+      "Ishiba",
+      "Japan",
+      "Osaka",
+      "Tokyo"
+    ],
+    "cities": [
+      "Tokyo",
+      "Yokohama",
+      "Osaka"
+    ]
+  },
+  "JO": {
+    "name": "Jordan",
+    "aliases": [
+      "Jordanian",
+      "Abdullah",
+      "Jordan",
+      "Amman",
+      "Irbid",
+      "Zarqa"
+    ],
+    "cities": [
+      "Amman",
+      "Zarqa",
+      "Irbid"
+    ]
+  },
+  "KZ": {
+    "name": "Kazakhstan",
+    "aliases": [
+      "Kazakhstan",
+      "Shymkent",
+      "Tokayev",
+      "Aktobe",
+      "Almaty",
+      "Astana",
+      "Kazakh"
+    ],
+    "cities": [
+      "Almaty",
+      "Shymkent",
+      "Aktobe"
+    ]
+  },
+  "KE": {
+    "name": "Kenya",
+    "aliases": [
+      "Kakamega",
+      "Mombasa",
+      "Nairobi",
+      "Kenyan",
+      "Kenya",
+      "Ruto"
+    ],
+    "cities": [
+      "Nairobi",
+      "Kakamega",
+      "Mombasa"
+    ]
+  },
+  "KI": {
+    "name": "Kiribati",
+    "aliases": [
+      "Kiribati",
+      "Tarawa"
+    ],
+    "cities": [
+      "Tarawa"
+    ]
+  },
+  "KP": {
+    "name": "Korea (North)",
+    "aliases": [
+      "Korea (North)",
+      "North Korean",
+      "Kim Jong Un",
+      "North Korea",
+      "Pyongyang",
+      "Hamhung",
+      "Namp'o",
+      "DPRK"
+    ],
+    "cities": [
+      "Pyongyang",
+      "Hamhung",
+      "Namp'o"
+    ]
+  },
+  "KR": {
+    "name": "Korea (South)",
+    "aliases": [
+      "Korea (South)",
+      "South Korean",
+      "South Korea",
+      "Incheon",
+      "Busan",
+      "Seoul",
+      "Yoon",
+      "ROK"
+    ],
+    "cities": [
+      "Seoul",
+      "Busan",
+      "Incheon"
+    ]
+  },
+  "KW": {
+    "name": "Kuwait",
+    "aliases": [
+      "As Salimiyah",
+      "Kuwait City",
+      "Al Ahmadi",
+      "Hawalli",
+      "Kuwaiti",
+      "Kuwait"
+    ],
+    "cities": [
+      "Al Ahmadi",
+      "Hawalli",
+      "As Salimiyah"
+    ]
+  },
+  "KG": {
+    "name": "Kyrgyzstan",
+    "aliases": [
+      "Kyrgyzstan",
+      "Bishkek",
+      "Kyrgyz",
+      "Manas",
+      "Osh"
+    ],
+    "cities": [
+      "Bishkek",
+      "Osh",
+      "Manas"
+    ]
+  },
+  "LA": {
+    "name": "Laos",
+    "aliases": [
+      "Savannakhet",
+      "Vientiane",
+      "Laotian",
+      "Pakse",
+      "Laos",
+      "Lao"
+    ],
+    "cities": [
+      "Vientiane",
+      "Savannakhet",
+      "Pakse"
+    ],
+    "exclude_unless": {
+      "LA": [
+        "Laos",
+        "Laotian",
+        "Vientiane",
+        "Mekong"
+      ]
+    }
+  },
+  "LV": {
+    "name": "Latvia",
+    "aliases": [
+      "Daugavpils",
+      "Latvian",
+      "Liepaja",
+      "Latvia",
+      "Riga"
+    ],
+    "cities": [
+      "Riga",
+      "Daugavpils",
+      "Liepaja"
+    ]
+  },
+  "LB": {
+    "name": "Lebanon",
+    "aliases": [
+      "Ra's Bayrut",
+      "Hezbollah",
+      "Nasrallah",
+      "Lebanese",
+      "Lebanon",
+      "Tripoli",
+      "Beirut",
+      "Aoun"
+    ],
+    "cities": [
+      "Beirut",
+      "Ra's Bayrut",
+      "Tripoli"
+    ]
+  },
+  "LS": {
+    "name": "Lesotho",
+    "aliases": [
+      "Mohale's Hoek",
+      "Maputsoe",
+      "Lesotho",
+      "Maseru"
+    ],
+    "cities": [
+      "Maseru",
+      "Maputsoe",
+      "Mohale's Hoek"
+    ]
+  },
+  "LR": {
+    "name": "Liberia",
+    "aliases": [
+      "Buchanan",
+      "Liberian",
+      "Monrovia",
+      "Gbarnga",
+      "Liberia"
+    ],
+    "cities": [
+      "Monrovia",
+      "Gbarnga",
+      "Buchanan"
+    ]
+  },
+  "LY": {
+    "name": "Libya",
+    "aliases": [
+      "Benghazi",
+      "Misratah",
+      "Tripoli",
+      "Haftar",
+      "Libyan",
+      "Libya",
+      "LNA"
+    ],
+    "cities": [
+      "Tripoli",
+      "Benghazi",
+      "Misratah"
+    ]
+  },
+  "LI": {
+    "name": "Liechtenstein",
+    "aliases": [
+      "Liechtenstein",
+      "Vaduz"
+    ],
+    "cities": [
+      "Vaduz"
+    ]
+  },
+  "LT": {
+    "name": "Lithuania",
+    "aliases": [
+      "Lithuanian",
+      "Lithuania",
+      "Klaipeda",
+      "Vilnius",
+      "Kaunas"
+    ],
+    "cities": [
+      "Vilnius",
+      "Kaunas",
+      "Klaipeda"
+    ]
+  },
+  "LU": {
+    "name": "Luxembourg",
+    "aliases": [
+      "Esch-sur-Alzette",
+      "Luxembourg City",
+      "Luxembourgish",
+      "Luxembourg",
+      "Dudelange"
+    ],
+    "cities": [
+      "Luxembourg",
+      "Esch-sur-Alzette",
+      "Dudelange"
+    ]
+  },
+  "MG": {
+    "name": "Madagascar",
+    "aliases": [
+      "Antananarivo",
+      "Madagascar",
+      "Antsirabe",
+      "Toamasina",
+      "Malagasy"
+    ],
+    "cities": [
+      "Antananarivo",
+      "Toamasina",
+      "Antsirabe"
+    ]
+  },
+  "MW": {
+    "name": "Malawi",
+    "aliases": [
+      "Blantyre",
+      "Lilongwe",
+      "Malawian",
+      "Malawi",
+      "Mzuzu"
+    ],
+    "cities": [
+      "Lilongwe",
+      "Blantyre",
+      "Mzuzu"
+    ]
+  },
+  "MY": {
+    "name": "Malaysia",
+    "aliases": [
+      "Kampung Baru Subang",
+      "Kuala Lumpur",
+      "Johor Bahru",
+      "Malaysian",
+      "Putrajaya",
+      "Malaysia"
+    ],
+    "cities": [
+      "Kuala Lumpur",
+      "Johor Bahru",
+      "Kampung Baru Subang"
+    ]
+  },
+  "MV": {
+    "name": "Maldives",
+    "aliases": [
+      "Maldives",
+      "Male"
+    ],
+    "cities": [
+      "Male"
+    ]
+  },
+  "ML": {
+    "name": "Mali",
+    "aliases": [
+      "Koutiala",
+      "Sikasso",
+      "Bamako",
+      "Malian",
+      "Goita",
+      "Mali"
+    ],
+    "cities": [
+      "Bamako",
+      "Sikasso",
+      "Koutiala"
+    ]
+  },
+  "MT": {
+    "name": "Malta",
+    "aliases": [
+      "San Pawl il-Bahar",
+      "Birkirkara",
+      "Malta",
+      "Mosta"
+    ],
+    "cities": [
+      "San Pawl il-Bahar",
+      "Birkirkara",
+      "Mosta"
+    ]
+  },
+  "MR": {
+    "name": "Mauritania",
+    "aliases": [
+      "Mauritania",
+      "Nouadhibou",
+      "Nouakchott",
+      "Kiffa"
+    ],
+    "cities": [
+      "Nouakchott",
+      "Nouadhibou",
+      "Kiffa"
+    ]
+  },
+  "MU": {
+    "name": "Mauritius",
+    "aliases": [
+      "Beau Bassin-Rose Hill",
+      "Port Louis",
+      "Mauritius",
+      "Vacoas"
+    ],
+    "cities": [
+      "Port Louis",
+      "Vacoas",
+      "Beau Bassin-Rose Hill"
+    ]
+  },
+  "MX": {
+    "name": "Mexico",
+    "aliases": [
+      "Lopez Obrador",
+      "Mexico City",
+      "Iztapalapa",
+      "Sheinbaum",
+      "Mexican",
+      "Tijuana",
+      "Mexico",
+      "AMLO"
+    ],
+    "cities": [
+      "Mexico City",
+      "Tijuana",
+      "Iztapalapa"
+    ]
+  },
+  "MD": {
+    "name": "Moldova",
+    "aliases": [
+      "Transnistria",
+      "Chisinau",
+      "Moldovan",
+      "Tiraspol",
+      "Moldova",
+      "Balti",
+      "Sandu"
+    ],
+    "cities": [
+      "Chisinau",
+      "Tiraspol",
+      "Balti"
+    ]
+  },
+  "MC": {
+    "name": "Monaco",
+    "aliases": [
+      "Monte-Carlo",
+      "Monaco"
+    ],
+    "cities": [
+      "Monaco",
+      "Monte-Carlo"
+    ]
+  },
+  "MN": {
+    "name": "Mongolia",
+    "aliases": [
+      "Ulaanbaatar",
+      "Ulan Bator",
+      "Mongolian",
+      "Mongolia",
+      "Erdenet",
+      "Darhan"
+    ],
+    "cities": [
+      "Ulan Bator",
+      "Erdenet",
+      "Darhan"
+    ]
+  },
+  "ME": {
+    "name": "Montenegro",
+    "aliases": [
+      "Herceg Novi",
+      "Montenegrin",
+      "Montenegro",
+      "Podgorica",
+      "Niksic"
+    ],
+    "cities": [
+      "Podgorica",
+      "Niksic",
+      "Herceg Novi"
+    ]
+  },
+  "MA": {
+    "name": "Morocco",
+    "aliases": [
+      "Mohammed VI",
+      "Casablanca",
+      "Moroccan",
+      "Morocco",
+      "Rabat",
+      "Fes"
+    ],
+    "cities": [
+      "Casablanca",
+      "Rabat",
+      "Fes"
+    ]
+  },
+  "MZ": {
+    "name": "Mozambique",
+    "aliases": [
+      "Cabo Delgado",
+      "Mozambican",
+      "Mozambique",
+      "Nampula",
+      "Maputo",
+      "Matola"
+    ],
+    "cities": [
+      "Maputo",
+      "Matola",
+      "Nampula"
+    ]
+  },
+  "MM": {
+    "name": "Myanmar",
+    "aliases": [
+      "Min Aung Hlaing",
+      "Nay Pyi Taw",
+      "Naypyidaw",
+      "Mandalay",
+      "Rohingya",
+      "Burmese",
+      "Myanmar",
+      "Rangoon",
+      "Yangon",
+      "Burma"
+    ],
+    "cities": [
+      "Yangon",
+      "Mandalay",
+      "Nay Pyi Taw"
+    ]
+  },
+  "NA": {
+    "name": "Namibia",
+    "aliases": [
+      "Walvis Bay",
+      "Namibian",
+      "Windhoek",
+      "Namibia",
+      "Rundu"
+    ],
+    "cities": [
+      "Windhoek",
+      "Rundu",
+      "Walvis Bay"
+    ]
+  },
+  "NP": {
+    "name": "Nepal",
+    "aliases": [
+      "Bharatpur",
+      "Kathmandu",
+      "Nepalese",
+      "Pokhara",
+      "Nepali",
+      "Nepal"
+    ],
+    "cities": [
+      "Kathmandu",
+      "Pokhara",
+      "Bharatpur"
+    ]
+  },
+  "NL": {
+    "name": "Netherlands",
+    "aliases": [
+      "Netherlands",
+      "Amsterdam",
+      "Rotterdam",
+      "The Hague",
+      "Dutch"
+    ],
+    "cities": [
+      "Rotterdam",
+      "Amsterdam",
+      "The Hague"
+    ]
+  },
+  "NZ": {
+    "name": "New Zealand",
+    "aliases": [
+      "New Zealander",
+      "Christchurch",
+      "New Zealand",
+      "Wellington",
+      "Auckland",
+      "Kiwi"
+    ],
+    "cities": [
+      "Auckland",
+      "Christchurch",
+      "Wellington"
+    ]
+  },
+  "NI": {
+    "name": "Nicaragua",
+    "aliases": [
+      "Nicaraguan",
+      "Nicaragua",
+      "Managua",
+      "Masaya",
+      "Ortega",
+      "Leon"
+    ],
+    "cities": [
+      "Managua",
+      "Leon",
+      "Masaya"
+    ]
+  },
+  "NE": {
+    "name": "Niger",
+    "aliases": [
+      "Nigerien",
+      "Maradi",
+      "Niamey",
+      "Zinder",
+      "Niger"
+    ],
+    "cities": [
+      "Niamey",
+      "Maradi",
+      "Zinder"
+    ],
+    "exclude_unless": {
+      "Niger": [
+        "Niamey",
+        "Nigerien",
+        "Tchiani",
+        "Bazoum"
+      ]
+    }
+  },
+  "NG": {
+    "name": "Nigeria",
+    "aliases": [
+      "Boko Haram",
+      "Nigerian",
+      "Nigeria",
+      "Ibadan",
+      "Tinubu",
+      "Abuja",
+      "Lagos",
+      "Kano"
+    ],
+    "cities": [
+      "Lagos",
+      "Kano",
+      "Ibadan"
+    ],
+    "exclude_unless": {
+      "Nigeria": [
+        "Nigerian",
+        "Abuja",
+        "Lagos",
+        "Tinubu",
+        "Boko Haram"
+      ]
+    }
+  },
+  "MK": {
+    "name": "North Macedonia",
+    "aliases": [
+      "North Macedonia",
+      "Macedonian",
+      "Kumanovo",
+      "Prilep",
+      "Skopje"
+    ],
+    "cities": [
+      "Skopje",
+      "Kumanovo",
+      "Prilep"
+    ]
+  },
+  "NO": {
+    "name": "Norway",
+    "aliases": [
+      "Norwegian",
+      "Trondheim",
+      "Bergen",
+      "Norway",
+      "Oslo"
+    ],
+    "cities": [
+      "Oslo",
+      "Bergen",
+      "Trondheim"
+    ]
+  },
+  "OM": {
+    "name": "Oman",
+    "aliases": [
+      "Bawshar",
+      "Muscat",
+      "Omani",
+      "Oman",
+      "Seeb"
+    ],
+    "cities": [
+      "Muscat",
+      "Seeb",
+      "Bawshar"
+    ]
+  },
+  "PK": {
+    "name": "Pakistan",
+    "aliases": [
+      "Imran Khan",
+      "Islamabad",
+      "Pakistani",
+      "Pakistan",
+      "Peshawar",
+      "Karachi",
+      "Lahore",
+      "Sharif",
+      "ISI"
+    ],
+    "cities": [
+      "Lahore",
+      "Karachi",
+      "Peshawar"
+    ]
+  },
+  "PA": {
+    "name": "Panama",
+    "aliases": [
+      "San Miguelito",
+      "Panama City",
+      "Panamanian",
+      "Juan Diaz",
+      "Panama"
+    ],
+    "cities": [
+      "Panama",
+      "San Miguelito",
+      "Juan Diaz"
+    ]
+  },
+  "PG": {
+    "name": "Papua New Guinea",
+    "aliases": [
+      "Papua New Guinean",
+      "Papua New Guinea",
+      "Port Moresby",
+      "Arawa",
+      "Lae"
+    ],
+    "cities": [
+      "Port Moresby",
+      "Lae",
+      "Arawa"
+    ]
+  },
+  "PY": {
+    "name": "Paraguay",
+    "aliases": [
+      "Ciudad del Este",
+      "San Lorenzo",
+      "Paraguayan",
+      "Asuncion",
+      "Paraguay"
+    ],
+    "cities": [
+      "Asuncion",
+      "Ciudad del Este",
+      "San Lorenzo"
+    ]
+  },
+  "PE": {
+    "name": "Peru",
+    "aliases": [
+      "Arequipa",
+      "Boluarte",
+      "Peruvian",
+      "Callao",
+      "Lima",
+      "Peru"
+    ],
+    "cities": [
+      "Lima",
+      "Callao",
+      "Arequipa"
+    ]
+  },
+  "PH": {
+    "name": "Philippines",
+    "aliases": [
+      "Philippines",
+      "Quezon City",
+      "Philippine",
+      "Caloocan",
+      "Filipino",
+      "Duterte",
+      "Manila",
+      "Marcos",
+      "Davao"
+    ],
+    "cities": [
+      "Quezon City",
+      "Davao",
+      "Caloocan"
+    ]
+  },
+  "PL": {
+    "name": "Poland",
+    "aliases": [
+      "Wroclaw",
+      "Krakow",
+      "Poland",
+      "Polish",
+      "Warsaw",
+      "Duda",
+      "Tusk"
+    ],
+    "cities": [
+      "Warsaw",
+      "Krakow",
+      "Wroclaw"
+    ]
+  },
+  "PT": {
+    "name": "Portugal",
+    "aliases": [
+      "Portuguese",
+      "Portugal",
+      "Lisbon",
+      "Braga",
+      "Porto"
+    ],
+    "cities": [
+      "Lisbon",
+      "Porto",
+      "Braga"
+    ]
+  },
+  "QA": {
+    "name": "Qatar",
+    "aliases": [
+      "Ar Rayyan",
+      "Lusail",
+      "Qatari",
+      "Qatar",
+      "Doha"
+    ],
+    "cities": [
+      "Doha",
+      "Ar Rayyan",
+      "Lusail"
+    ]
+  },
+  "RO": {
+    "name": "Romania",
+    "aliases": [
+      "Bucharest",
+      "Romanian",
+      "Sector 3",
+      "Romania",
+      "Iasi"
+    ],
+    "cities": [
+      "Bucharest",
+      "Sector 3",
+      "Iasi"
+    ]
+  },
+  "RU": {
+    "name": "Russia",
+    "aliases": [
+      "Saint Petersburg",
+      "St Petersburg",
+      "Kaliningrad",
+      "Novosibirsk",
+      "Kremlin",
+      "Russian",
+      "Moscow",
+      "Russia",
+      "Putin"
+    ],
+    "cities": [
+      "Moscow",
+      "Saint Petersburg",
+      "Novosibirsk"
+    ]
+  },
+  "RW": {
+    "name": "Rwanda",
+    "aliases": [
+      "Gisenyi",
+      "Musanze",
+      "Rwandan",
+      "Kagame",
+      "Kigali",
+      "Rwanda"
+    ],
+    "cities": [
+      "Kigali",
+      "Gisenyi",
+      "Musanze"
+    ]
+  },
+  "LC": {
+    "name": "Saint Lucia",
+    "aliases": [
+      "Saint Lucia",
+      "Gros Islet",
+      "Castries"
+    ],
+    "cities": [
+      "Gros Islet",
+      "Castries"
+    ]
+  },
+  "WS": {
+    "name": "Samoa",
+    "aliases": [
+      "Samoa",
+      "Apia"
+    ],
+    "cities": [
+      "Apia"
+    ]
+  },
+  "SA": {
+    "name": "Saudi Arabia",
+    "aliases": [
+      "Mohammed bin Salman",
+      "Saudi Arabia",
+      "Wahhabi",
+      "Jeddah",
+      "Makkah",
+      "Riyadh",
+      "Saudi",
+      "MBS"
+    ],
+    "cities": [
+      "Jeddah",
+      "Riyadh",
+      "Makkah"
+    ]
+  },
+  "SN": {
+    "name": "Senegal",
+    "aliases": [
+      "Senegalese",
+      "Senegal",
+      "Pikine",
+      "Dakar",
+      "Touba",
+      "Faye"
+    ],
+    "cities": [
+      "Dakar",
+      "Touba",
+      "Pikine"
+    ]
+  },
+  "RS": {
+    "name": "Serbia",
+    "aliases": [
+      "Belgrade",
+      "Novi Sad",
+      "Serbian",
+      "Serbia",
+      "Vucic",
+      "Nis"
+    ],
+    "cities": [
+      "Belgrade",
+      "Nis",
+      "Novi Sad"
+    ]
+  },
+  "SL": {
+    "name": "Sierra Leone",
+    "aliases": [
+      "Sierra Leonean",
+      "Sierra Leone",
+      "Freetown",
+      "Kenema"
+    ],
+    "cities": [
+      "Freetown",
+      "Bo",
+      "Kenema"
+    ]
+  },
+  "SG": {
+    "name": "Singapore",
+    "aliases": [
+      "Bedok New Town",
+      "Singapore City",
+      "Singaporean",
+      "Singapore",
+      "Ulu Bedok"
+    ],
+    "cities": [
+      "Singapore",
+      "Ulu Bedok",
+      "Bedok New Town"
+    ]
+  },
+  "SK": {
+    "name": "Slovakia",
+    "aliases": [
+      "Bratislava",
+      "Petrzalka",
+      "Slovakia",
+      "Kosice",
+      "Slovak",
+      "Fico"
+    ],
+    "cities": [
+      "Bratislava",
+      "Kosice",
+      "Petrzalka"
+    ]
+  },
+  "SI": {
+    "name": "Slovenia",
+    "aliases": [
+      "Ljubljana",
+      "Slovenian",
+      "Slovenia",
+      "Maribor",
+      "Celje"
+    ],
+    "cities": [
+      "Ljubljana",
+      "Maribor",
+      "Celje"
+    ]
+  },
+  "SB": {
+    "name": "Solomon Islands",
+    "aliases": [
+      "Solomon Islands",
+      "Panatina",
+      "Honiara",
+      "Nggosi"
+    ],
+    "cities": [
+      "Honiara",
+      "Panatina",
+      "Nggosi"
+    ]
+  },
+  "SO": {
+    "name": "Somalia",
+    "aliases": [
+      "Al-Shabaab",
+      "Somaliland",
+      "Mogadishu",
+      "Hargeysa",
+      "Puntland",
+      "Shabaab",
+      "Somalia",
+      "Borama",
+      "Somali"
+    ],
+    "cities": [
+      "Mogadishu",
+      "Borama",
+      "Hargeysa"
+    ]
+  },
+  "ZA": {
+    "name": "South Africa",
+    "aliases": [
+      "South African",
+      "Johannesburg",
+      "South Africa",
+      "Cape Town",
+      "Ramaphosa",
+      "Pretoria",
+      "Durban",
+      "ANC"
+    ],
+    "cities": [
+      "Johannesburg",
+      "Cape Town",
+      "Durban"
+    ]
+  },
+  "SS": {
+    "name": "South Sudan",
+    "aliases": [
+      "South Sudanese",
+      "Riek Machar",
+      "South Sudan",
+      "Salva Kiir",
+      "SPLM-IO",
+      "Winejok",
+      "Machar",
+      "Juba",
+      "Kiir",
+      "SPLA",
+      "SPLM",
+      "Yei"
+    ],
+    "cities": [
+      "Juba",
+      "Winejok",
+      "Yei"
+    ]
+  },
+  "ES": {
+    "name": "Spain",
+    "aliases": [
+      "Barcelona",
+      "Valencia",
+      "Sanchez",
+      "Spanish",
+      "Madrid",
+      "Spain"
+    ],
+    "cities": [
+      "Madrid",
+      "Barcelona",
+      "Valencia"
+    ]
+  },
+  "LK": {
+    "name": "Sri Lanka",
+    "aliases": [
+      "Dehiwala-Mount Lavinia",
+      "Dissanayake",
+      "Maharagama",
+      "Sri Lankan",
+      "Sri Lanka",
+      "Colombo"
+    ],
+    "cities": [
+      "Colombo",
+      "Dehiwala-Mount Lavinia",
+      "Maharagama"
+    ]
+  },
+  "SD": {
+    "name": "Sudan",
+    "aliases": [
+      "Khartoum North",
+      "Khartoum",
+      "Omdurman",
+      "Sudanese",
+      "Hemedti",
+      "Burhan",
+      "Darfur",
+      "Sudan",
+      "RSF"
+    ],
+    "cities": [
+      "Khartoum",
+      "Omdurman",
+      "Khartoum North"
+    ],
+    "exclude_unless": {
+      "Sudan": [
+        "Sudanese",
+        "Khartoum",
+        "Darfur",
+        "RSF",
+        "Hemedti",
+        "Burhan"
+      ]
+    }
+  },
+  "SR": {
+    "name": "Suriname",
+    "aliases": [
+      "Blauwgrond",
+      "Paramaribo",
+      "Suriname",
+      "Latour"
+    ],
+    "cities": [
+      "Paramaribo",
+      "Blauwgrond",
+      "Latour"
+    ]
+  },
+  "SE": {
+    "name": "Sweden",
+    "aliases": [
+      "Goeteborg",
+      "Stockholm",
+      "Swedish",
+      "Malmoe",
+      "Sweden"
+    ],
+    "cities": [
+      "Stockholm",
+      "Goeteborg",
+      "Malmoe"
+    ]
+  },
+  "CH": {
+    "name": "Switzerland",
+    "aliases": [
+      "Switzerland",
+      "Zuerich",
+      "Geneva",
+      "Geneve",
+      "Zurich",
+      "Basel",
+      "Swiss",
+      "Bern"
+    ],
+    "cities": [
+      "Zuerich",
+      "Geneve",
+      "Basel"
+    ]
+  },
+  "SY": {
+    "name": "Syria",
+    "aliases": [
+      "Damascus",
+      "Aleppo",
+      "Syrian",
+      "Assad",
+      "Syria",
+      "Homs",
+      "SDF"
+    ],
+    "cities": [
+      "Aleppo",
+      "Damascus",
+      "Homs"
+    ]
+  },
+  "TW": {
+    "name": "Taiwan",
+    "aliases": [
+      "New Taipei City",
+      "Lai Ching-te",
+      "Tsai Ing-wen",
+      "Taiwanese",
+      "Taichung",
+      "Taipei",
+      "Taiwan",
+      "DPP",
+      "KMT",
+      "ROC"
+    ],
+    "cities": [
+      "Taipei",
+      "New Taipei City",
+      "Taichung"
+    ],
+    "exclude_unless": {
+      "Taiwan": [
+        "Taiwanese",
+        "Taipei",
+        "PRC",
+        "China",
+        "cross-strait"
+      ]
+    }
+  },
+  "TJ": {
+    "name": "Tajikistan",
+    "aliases": [
+      "Istaravshan",
+      "Tajikistan",
+      "Dushanbe",
+      "Isfara",
+      "Tajik"
+    ],
+    "cities": [
+      "Dushanbe",
+      "Isfara",
+      "Istaravshan"
+    ]
+  },
+  "TZ": {
+    "name": "Tanzania",
+    "aliases": [
+      "Dar es Salaam",
+      "Tanzanian",
+      "Tanzania",
+      "Dodoma",
+      "Mwanza"
+    ],
+    "cities": [
+      "Dar es Salaam",
+      "Mwanza",
+      "Dodoma"
+    ]
+  },
+  "TH": {
+    "name": "Thailand",
+    "aliases": [
+      "Mueang Nonthaburi",
+      "Samut Prakan",
+      "Paetongtarn",
+      "Shinawatra",
+      "Thailand",
+      "Bangkok",
+      "Thai"
+    ],
+    "cities": [
+      "Bangkok",
+      "Samut Prakan",
+      "Mueang Nonthaburi"
+    ]
+  },
+  "TL": {
+    "name": "Timor-Leste",
+    "aliases": [
+      "Timor-Leste",
+      "East Timor",
+      "Timorese",
+      "Maliana",
+      "Dili",
+      "Suai"
+    ],
+    "cities": [
+      "Dili",
+      "Maliana",
+      "Suai"
+    ]
+  },
+  "TG": {
+    "name": "Togo",
+    "aliases": [
+      "Togolese",
+      "Sokode",
+      "Kara",
+      "Lome",
+      "Togo"
+    ],
+    "cities": [
+      "Lome",
+      "Sokode",
+      "Kara"
+    ]
+  },
+  "TO": {
+    "name": "Tonga",
+    "aliases": [
+      "Nuku'alofa",
+      "Tonga"
+    ],
+    "cities": [
+      "Nuku'alofa"
+    ]
+  },
+  "TT": {
+    "name": "Trinidad and Tobago",
+    "aliases": [
+      "Trinidad and Tobago",
+      "San Fernando",
+      "Chaguanas",
+      "Mon Repos"
+    ],
+    "cities": [
+      "Chaguanas",
+      "Mon Repos",
+      "San Fernando"
+    ]
+  },
+  "TN": {
+    "name": "Tunisia",
+    "aliases": [
+      "Tunisian",
+      "Tunisia",
+      "Sousse",
+      "Saied",
+      "Tunis",
+      "Sfax"
+    ],
+    "cities": [
+      "Tunis",
+      "Sfax",
+      "Sousse"
+    ]
+  },
+  "TR": {
+    "name": "Turkey",
+    "aliases": [
+      "Istanbul",
+      "Erdogan",
+      "Turkish",
+      "Turkiye",
+      "Ankara",
+      "Turkey",
+      "Bursa"
+    ],
+    "cities": [
+      "Istanbul",
+      "Ankara",
+      "Bursa"
+    ]
+  },
+  "TM": {
+    "name": "Turkmenistan",
+    "aliases": [
+      "Tuerkmenabat",
+      "Turkmenistan",
+      "Ashgabat",
+      "Dasoguz",
+      "Turkmen"
+    ],
+    "cities": [
+      "Ashgabat",
+      "Tuerkmenabat",
+      "Dasoguz"
+    ]
+  },
+  "UG": {
+    "name": "Uganda",
+    "aliases": [
+      "Museveni",
+      "Kampala",
+      "Nansana",
+      "Ugandan",
+      "Uganda",
+      "Kira"
+    ],
+    "cities": [
+      "Kampala",
+      "Nansana",
+      "Kira"
+    ]
+  },
+  "UA": {
+    "name": "Ukraine",
+    "aliases": [
+      "Ukrainian",
+      "Zelenskyy",
+      "Mariupol",
+      "Zelensky",
+      "Donetsk",
+      "Kharkiv",
+      "Luhansk",
+      "Ukraine",
+      "Crimea",
+      "Donbas",
+      "Odesa",
+      "Kiev",
+      "Kyiv"
+    ],
+    "cities": [
+      "Kyiv",
+      "Kharkiv",
+      "Odesa"
+    ]
+  },
+  "AE": {
+    "name": "United Arab Emirates",
+    "aliases": [
+      "United Arab Emirates",
+      "Abu Dhabi",
+      "Emirati",
+      "Sharjah",
+      "Dubai",
+      "MBZ",
+      "UAE"
+    ],
+    "cities": [
+      "Dubai",
+      "Abu Dhabi",
+      "Sharjah"
+    ]
+  },
+  "GB": {
+    "name": "United Kingdom",
+    "aliases": [
+      "United Kingdom",
+      "Westminster",
+      "Birmingham",
+      "British",
+      "Glasgow",
+      "Starmer",
+      "London",
+      "Sunak"
+    ],
+    "cities": [
+      "London",
+      "Birmingham",
+      "Glasgow"
+    ]
+  },
+  "US": {
+    "name": "United States",
+    "aliases": [
+      "New York City",
+      "United States",
+      "Los Angeles",
+      "White House",
+      "Washington",
+      "American",
+      "Brooklyn",
+      "Congress",
+      "Pentagon",
+      "Harris",
+      "Biden",
+      "Trump",
+      "U.S.",
+      "USA"
+    ],
+    "cities": [
+      "New York City",
+      "Los Angeles",
+      "Brooklyn"
+    ],
+    "exclude_unless": {
+      "America": [
+        "American",
+        "U.S.",
+        "USA",
+        "Washington",
+        "Biden",
+        "Trump"
+      ]
+    }
+  },
+  "UY": {
+    "name": "Uruguay",
+    "aliases": [
+      "Montevideo",
+      "Uruguayan",
+      "Paysandu",
+      "Uruguay",
+      "Salto"
+    ],
+    "cities": [
+      "Montevideo",
+      "Salto",
+      "Paysandu"
+    ]
+  },
+  "UZ": {
+    "name": "Uzbekistan",
+    "aliases": [
+      "Uzbekistan",
+      "Namangan",
+      "Tashkent",
+      "Andijon",
+      "Uzbek"
+    ],
+    "cities": [
+      "Tashkent",
+      "Andijon",
+      "Namangan"
+    ]
+  },
+  "VU": {
+    "name": "Vanuatu",
+    "aliases": [
+      "Port-Vila",
+      "Vanuatu"
+    ],
+    "cities": [
+      "Port-Vila"
+    ]
+  },
+  "VE": {
+    "name": "Venezuela",
+    "aliases": [
+      "Venezuelan",
+      "Maracaibo",
+      "Venezuela",
+      "Valencia",
+      "Caracas",
+      "Guaido",
+      "Maduro"
+    ],
+    "cities": [
+      "Caracas",
+      "Maracaibo",
+      "Valencia"
+    ]
+  },
+  "VN": {
+    "name": "Vietnam",
+    "aliases": [
+      "Ho Chi Minh City",
+      "Vietnamese",
+      "Haiphong",
+      "Vietnam",
+      "Saigon",
+      "Hanoi"
+    ],
+    "cities": [
+      "Ho Chi Minh City",
+      "Hanoi",
+      "Haiphong"
+    ]
+  },
+  "YE": {
+    "name": "Yemen",
+    "aliases": [
+      "Houthis",
+      "Houthi",
+      "Yemeni",
+      "Sanaa",
+      "Yemen",
+      "Aden",
+      "Taiz"
+    ],
+    "cities": [
+      "Sanaa",
+      "Aden",
+      "Taiz"
+    ]
+  },
+  "ZM": {
+    "name": "Zambia",
+    "aliases": [
+      "Hichilema",
+      "Zambian",
+      "Lusaka",
+      "Zambia",
+      "Kitwe",
+      "Ndola"
+    ],
+    "cities": [
+      "Lusaka",
+      "Kitwe",
+      "Ndola"
+    ]
+  },
+  "ZW": {
+    "name": "Zimbabwe",
+    "aliases": [
+      "Chitungwiza",
+      "Zimbabwean",
+      "Mnangagwa",
+      "Bulawayo",
+      "Zimbabwe",
+      "Harare"
+    ],
+    "cities": [
+      "Harare",
+      "Bulawayo",
+      "Chitungwiza"
+    ]
+  },
+  "PS": {
+    "name": "Palestine",
+    "aliases": [
+      "East Jerusalem",
+      "Palestinian",
+      "Gaza Strip",
+      "Khan Yunis",
+      "Palestine",
+      "West Bank",
+      "Ramallah",
+      "Hamas",
+      "Gaza",
+      "PLO"
+    ],
+    "cities": [
+      "East Jerusalem",
+      "Gaza",
+      "Khan Yunis"
+    ]
+  },
+  "XK": {
+    "name": "Kosovo",
+    "aliases": [
+      "Mitrovice",
+      "Pristina",
+      "Prizren",
+      "Kosovo"
+    ],
+    "cities": [
+      "Pristina",
+      "Prizren",
+      "Mitrovice"
+    ]
+  },
+  "EH": {
+    "name": "Western Sahara",
+    "aliases": [
+      "Western Sahara",
+      "Boujdour",
+      "Laayoune",
+      "Dakhla"
+    ],
+    "cities": [
+      "Laayoune",
+      "Dakhla",
+      "Boujdour"
+    ]
+  }
+}

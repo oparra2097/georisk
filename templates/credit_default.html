@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Sovereign Credit Default — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/credit_default.css">
+{% endblock %}
+
+{% block content %}
+<div class="cd-page">
+
+  <header class="cd-header">
+    <div class="cd-header-text">
+      <h1 class="cd-title">Sovereign Credit Default</h1>
+      <p class="cd-subtitle">
+        Probability-of-default and internal credit rating for ~190 sovereigns,
+        built from IMF&nbsp;WEO + World&nbsp;Bank macro/external/fiscal indicators
+        and a shadow-debt overlay. Rated on the Parra 1–10 scale (1 strongest,
+        10 in default) with side-by-side comparison to S&amp;P / Moody's / Fitch.
+      </p>
+    </div>
+    <div class="cd-status">
+      <div class="cd-status-item">
+        <span class="cd-status-label">As of</span>
+        <span class="cd-status-value" id="cd-as-of">—</span>
+      </div>
+      <div class="cd-status-item">
+        <span class="cd-status-label">Countries</span>
+        <span class="cd-status-value" id="cd-country-count">—</span>
+      </div>
+      <div class="cd-status-item">
+        <span class="cd-status-label">Avg PD&nbsp;1y</span>
+        <span class="cd-status-value" id="cd-avg-pd">—</span>
+      </div>
+      <div class="cd-status-item">
+        <span class="cd-status-label">In default</span>
+        <span class="cd-status-value" id="cd-in-default">—</span>
+      </div>
+      <a href="/api/credit-default/export" class="cd-export-btn" title="Download Excel">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export
+      </a>
+    </div>
+  </header>
+
+  <div class="cd-toolbar">
+    <input type="search" id="cd-search" placeholder="Search country or ISO3…" autocomplete="off">
+    <select id="cd-region-filter">
+      <option value="">All regions</option>
+    </select>
+    <div class="cd-toggle-group" role="tablist">
+      <button class="cd-toggle active" data-grade="all">All</button>
+      <button class="cd-toggle" data-grade="ig">Investment grade</button>
+      <button class="cd-toggle" data-grade="hy">High yield</button>
+      <button class="cd-toggle" data-grade="distressed">Distressed</button>
+    </div>
+    <span class="cd-spacer"></span>
+    <button id="cd-methodology-btn" class="cd-link-btn">Methodology</button>
+  </div>
+
+  <div class="cd-grid">
+    <section class="cd-table-wrap" aria-label="Sovereign credit table">
+      <table class="cd-table" id="cd-table">
+        <thead>
+          <tr>
+            <th data-sort="name" class="sortable">Country</th>
+            <th data-sort="region" class="sortable">Region</th>
+            <th data-sort="pm_notch" class="sortable" title="Fitted-model rating (logit / GBM)">PM Rating</th>
+            <th data-sort="composite_pm_notch" class="sortable" title="Transparent z-score reference score">Composite</th>
+            <th data-sort="agency_sp" class="sortable">S&amp;P</th>
+            <th data-sort="agency_moodys" class="sortable">Moody's</th>
+            <th data-sort="agency_fitch" class="sortable">Fitch</th>
+            <th data-sort="notch_delta_sp" class="sortable num" title="PM minus S&amp;P; positive = PM is harsher">Δ vs S&amp;P</th>
+            <th data-sort="pd_1y" class="sortable num">PD 1y</th>
+            <th data-sort="pd_3y" class="sortable num">PD 3y</th>
+            <th data-sort="pd_5y" class="sortable num">PD 5y</th>
+            <th data-sort="shadow_debt_gap_pp" class="sortable num" title="Shadow debt gap (estimated − official, % GDP)">Shadow gap</th>
+          </tr>
+        </thead>
+        <tbody id="cd-tbody">
+          <tr><td colspan="12" class="cd-loading">Loading sovereigns…</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <aside class="cd-panel" id="cd-panel">
+      <div class="cd-panel-empty">
+        <p>Select a country to see contributing indicators, model rating, agency comparison, and shadow-debt overlay.</p>
+      </div>
+
+      <div class="cd-panel-content" hidden>
+        <header class="cd-panel-header">
+          <h2 id="cd-panel-name">—</h2>
+          <span id="cd-panel-region" class="cd-panel-region">—</span>
+        </header>
+
+        <div class="cd-rating-row cd-rating-row--five">
+          <div class="cd-rating-card cd-rating-card--pm">
+            <span class="cd-rating-label">PM Model</span>
+            <span class="cd-rating-value" id="cd-panel-pm-notch">—</span>
+            <span class="cd-rating-meta" id="cd-panel-pm-grade">—</span>
+          </div>
+          <div class="cd-rating-card cd-rating-card--composite">
+            <span class="cd-rating-label">Composite</span>
+            <span class="cd-rating-value" id="cd-panel-composite">—</span>
+            <span class="cd-rating-meta" id="cd-panel-composite-meta">—</span>
+          </div>
+          <div class="cd-rating-card">
+            <span class="cd-rating-label">S&amp;P</span>
+            <span class="cd-rating-value" id="cd-panel-sp">—</span>
+            <span class="cd-rating-meta" id="cd-panel-sp-outlook"></span>
+          </div>
+          <div class="cd-rating-card">
+            <span class="cd-rating-label">Moody's</span>
+            <span class="cd-rating-value" id="cd-panel-moodys">—</span>
+            <span class="cd-rating-meta" id="cd-panel-moodys-outlook"></span>
+          </div>
+          <div class="cd-rating-card">
+            <span class="cd-rating-label">Fitch</span>
+            <span class="cd-rating-value" id="cd-panel-fitch">—</span>
+            <span class="cd-rating-meta" id="cd-panel-fitch-outlook"></span>
+          </div>
+        </div>
+
+        <div class="cd-pd-row">
+          <div class="cd-pd-cell">
+            <span class="cd-pd-label">PD 1y</span>
+            <span class="cd-pd-value" id="cd-panel-pd1">—</span>
+          </div>
+          <div class="cd-pd-cell">
+            <span class="cd-pd-label">PD 3y</span>
+            <span class="cd-pd-value" id="cd-panel-pd3">—</span>
+          </div>
+          <div class="cd-pd-cell">
+            <span class="cd-pd-label">PD 5y</span>
+            <span class="cd-pd-value" id="cd-panel-pd5">—</span>
+          </div>
+          <div class="cd-pd-cell">
+            <span class="cd-pd-label">Composite score</span>
+            <span class="cd-pd-value" id="cd-panel-score">—</span>
+          </div>
+        </div>
+
+        <section class="cd-section">
+          <h3>Shadow debt overlay</h3>
+          <div class="cd-shadow-grid">
+            <div><span>Official debt</span><b id="cd-panel-official">—</b></div>
+            <div><span>Estimated debt</span><b id="cd-panel-estimated">—</b></div>
+            <div><span>Gap (pp)</span><b id="cd-panel-gap">—</b></div>
+            <div><span>Risk tier</span><b id="cd-panel-tier">—</b></div>
+          </div>
+        </section>
+
+        <section class="cd-section">
+          <h3>Tier 1 contributing indicators</h3>
+          <div id="cd-panel-contributions" class="cd-contrib"></div>
+          <p class="cd-section-note">Bar = weight × signed z-score (red = adds risk, green = reduces risk).</p>
+        </section>
+
+        <section class="cd-section">
+          <h3>Historical PD vs default events</h3>
+          <div class="cd-history-chart">
+            <canvas id="cd-panel-history"></canvas>
+            <p class="cd-history-empty" id="cd-panel-history-empty" hidden>
+              No fitted history available for this country.
+            </p>
+          </div>
+          <p class="cd-section-note">
+            Blue line = model PD 1y applied to each year's macro panel.
+            Red bands = years inside a CRAG default / restructuring event.
+            Use this to back-test whether the model would have flagged the
+            country before its actual default.
+          </p>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <dialog id="cd-methodology-dialog" class="cd-dialog">
+    <article>
+      <header>
+        <h3>Methodology</h3>
+        <button class="cd-dialog-close" aria-label="Close">&times;</button>
+      </header>
+      <div class="cd-method-body">
+        <p>
+          The Parra Macro sovereign credit model produces a 1–10 internal rating
+          (with +/− on the 2–6 grades) and a probability of default at 1, 3 and
+          5 year horizons. <b>1</b> is the strongest credit; <b>10</b> means in
+          default.
+        </p>
+        <p>
+          The composite score is a weighted blend of robust z-scores across the
+          indicator panel: gross debt, fiscal balance, interest/revenue, current
+          account, import cover, short-term debt/reserves, external debt/GNI,
+          GDP growth, inflation, GDP per capita, and the World Bank governance
+          index. The shadow-debt gap (estimated minus official, from our
+          sovereign_debt overlay) feeds in as an extra risk indicator. Sign is
+          flipped for "higher is better" indicators so every contribution is
+          measured as risk.
+        </p>
+        <p>
+          The composite is logistic-squashed onto 0–100 and bucketed to the
+          1–10 notch ladder. PD figures by bucket are placeholders calibrated
+          to long-run historical sovereign default frequencies — replace with
+          empirical hazards once the default-event panel is wired (see backend
+          README).
+        </p>
+        <p class="cd-method-data">
+          Data: IMF WEO via datamapper API, World Bank WDI/IDS, plus the
+          static sovereign_debt overlay. Refresh: 6h cache. Agency ratings are
+          loaded from <code>data/agency_ratings.csv</code> for display only —
+          they are never used as a fitting target.
+        </p>
+      </div>
+    </article>
+  </dialog>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="/static/js/credit_default.js"></script>
+{% endblock %}

@@ -61,29 +61,20 @@ def fetch_headlines_for_country(country_alpha2, max_articles=10):
         logger.debug("GNews daily budget exhausted — skipping request")
         return []
 
-    code = country_alpha2.lower()
     articles = []
 
     try:
-        if code in GNEWS_SUPPORTED:
-            # Use top-headlines with country filter
-            params = {
-                'apikey': key,
-                'country': code,
-                'lang': 'en',
-                'max': max_articles,
-            }
-            url = GNEWS_HEADLINES_URL
-        else:
-            # Fallback: search by country name
-            country_name = iso_alpha2_to_name(country_alpha2)
-            params = {
-                'apikey': key,
-                'q': country_name,
-                'lang': 'en',
-                'max': max_articles,
-            }
-            url = GNEWS_SEARCH_URL
+        # Always use search with a quoted country-name query.
+        # top-headlines?country= filters by publisher origin, not topic,
+        # so it returned unrelated international news for most countries.
+        country_name = iso_alpha2_to_name(country_alpha2)
+        params = {
+            'apikey': key,
+            'q': f'"{country_name}"',
+            'lang': 'en',
+            'max': max_articles,
+        }
+        url = GNEWS_SEARCH_URL
 
         resp = requests.get(url, params=params, timeout=12)
         if resp.status_code == 200:
