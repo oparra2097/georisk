@@ -1,0 +1,114 @@
+# IMF lending arrangement status by sovereign as of 2024-Q4 / 2025-Q1.
+# Source: IMF Lending Arrangements (imf.org/external/np/fin/tad/extarr1.aspx),
+# IMF Article IV consultations, IMF Country Reports.
+#
+# Schema: iso3,status,facility,start_year,as_of,notes
+#   status ∈ { on_track, off_track, arrears, none }
+#     - on_track: active arrangement, latest review approved
+#     - off_track: active arrangement but reviews delayed / breached
+#     - arrears: country has missed IMF payments (rare; CCC-trigger)
+#     - none: no active arrangement
+#   facility: SBA / EFF / PRGT / RFI / RST / blank
+#   start_year: year arrangement began
+#
+# Used by credit-default model: imf_program_status numeric encoding
+# (0 = none, 1 = on_track [neutral-to-mild-stress], 2 = off_track
+# [stress signal], 3 = arrears [near-mechanical CCC]).
+iso3,status,facility,start_year,as_of,notes
+ARG,on_track,EFF,2022,2024-Q4,$44bn EFF; 8th review approved 2024
+EGY,on_track,EFF,2024,2024-Q4,$8bn EFF augmented Mar 2024
+PAK,on_track,EFF,2024,2024-Q4,$7bn EFF approved Sep 2024
+KEN,on_track,EFF,2021,2024-Q4,EFF/ECF Apr 2021; 8th review 2024
+GHA,on_track,ECF,2023,2024-Q4,$3bn ECF post-restructure
+ZMB,on_track,ECF,2022,2024-Q4,ECF + debt treatment ongoing
+LKA,on_track,EFF,2023,2024-Q4,$3bn EFF post-restructure
+JAM,on_track,RSF,2023,2024-Q4,RSF + PLL precautionary
+SLV,off_track,SBA,2024,2024-Q4,Negotiations stalled 2024
+ETH,on_track,ECF,2024,2024-Q4,ECF approved Jul 2024
+COG,on_track,ECF,2022,2024-Q4,
+GIN,on_track,ECF,2022,2024-Q4,
+MOZ,on_track,ECF,2022,2024-Q4,
+MWI,on_track,ECF,2023,2024-Q4,
+BEN,on_track,ECF,2022,2024-Q4,
+BFA,off_track,ECF,2018,2024-Q4,Suspended after 2022 coup
+NER,arrears,ECF,2021,2024-Q4,IMF program suspended; arrears post-coup
+SDN,arrears,ECF,2021,2024-Q4,Program collapsed during civil war
+LBN,none,,,2024-Q4,No program; staff-level agreement 2022 not finalised
+VEN,none,,,2024-Q4,No engagement
+BLR,none,,,2024-Q4,No engagement
+RUS,none,,,2024-Q4,Sanctions; no engagement
+SYR,none,,,2024-Q4,
+PRK,none,,,2024-Q4,
+IRN,none,,,2024-Q4,
+CUB,none,,,2024-Q4,Not IMF member
+LAO,none,,,2024-Q4,Article IV only
+TUN,off_track,SBA,2023,2024-Q4,$1.9bn SBA negotiation stalled
+UKR,on_track,EFF,2023,2024-Q4,$15.6bn EFF Mar 2023
+MDA,on_track,EFF,2021,2024-Q4,
+GEO,on_track,SBA,2024,2024-Q4,
+ARM,on_track,SBA,2022,2024-Q4,
+MNG,on_track,EFF,2022,2024-Q4,
+BGD,on_track,ECF,2023,2024-Q4,
+LBR,on_track,ECF,2024,2024-Q4,
+SLE,on_track,ECF,2023,2024-Q4,
+CIV,on_track,EFF,2023,2024-Q4,
+SEN,on_track,ECF,2023,2024-Q4,
+MAR,on_track,FCL,2023,2024-Q4,Precautionary FCL
+CHL,on_track,FCL,2022,2024-Q4,Precautionary FCL
+COL,on_track,FCL,2022,2024-Q4,Precautionary FCL
+PER,on_track,FCL,2024,2024-Q4,Precautionary FCL
+MEX,on_track,FCL,2021,2024-Q4,Precautionary FCL
+HND,on_track,SBA,2023,2024-Q4,
+CRI,on_track,EFF,2024,2024-Q4,
+BIH,on_track,EFF,2024,2024-Q4,
+SRB,on_track,SBA,2024,2024-Q4,
+ALB,on_track,EFF,2022,2024-Q4,Closed Q3 2024
+KGZ,on_track,ECF,2023,2024-Q4,
+TJK,on_track,RCF,2024,2024-Q4,
+UZB,none,,,2024-Q4,Article IV only
+KAZ,none,,,2024-Q4,Article IV only
+BRA,none,,,2024-Q4,No program
+IND,none,,,2024-Q4,No program
+IDN,none,,,2024-Q4,No program
+ZAF,none,,,2024-Q4,RFI 2020 closed
+NGA,none,,,2024-Q4,No program; SBA 2020 closed
+THA,none,,,2024-Q4,No program
+PHL,none,,,2024-Q4,No program
+TUR,none,,,2024-Q4,No program
+SAU,none,,,2024-Q4,Creditor
+ARE,none,,,2024-Q4,Creditor
+QAT,none,,,2024-Q4,Creditor
+SGP,none,,,2024-Q4,Creditor
+KOR,none,,,2024-Q4,No program
+JPN,none,,,2024-Q4,Creditor
+CHN,none,,,2024-Q4,Creditor
+USA,none,,,2024-Q4,Creditor
+GBR,none,,,2024-Q4,No program
+DEU,none,,,2024-Q4,No program
+FRA,none,,,2024-Q4,No program
+ITA,none,,,2024-Q4,No program
+ESP,none,,,2024-Q4,No program
+PRT,none,,,2024-Q4,Closed 2014
+GRC,none,,,2024-Q4,Closed 2018
+CYP,none,,,2024-Q4,Closed 2016
+IRL,none,,,2024-Q4,Closed 2013
+ISL,none,,,2024-Q4,Closed 2011
+POL,on_track,FCL,2022,2024-Q4,Precautionary FCL closed Q4 2024
+HUN,none,,,2024-Q4,No program
+CZE,none,,,2024-Q4,No program
+ROU,on_track,FCL,2024,2024-Q4,Precautionary FCL Sep 2024
+HRV,none,,,2024-Q4,No program
+BGR,none,,,2024-Q4,No program
+CAN,none,,,2024-Q4,Creditor
+AUS,none,,,2024-Q4,Creditor
+NZL,none,,,2024-Q4,Creditor
+ISR,none,,,2024-Q4,No program
+NOR,none,,,2024-Q4,Creditor
+SWE,none,,,2024-Q4,No program
+DNK,none,,,2024-Q4,No program
+FIN,none,,,2024-Q4,No program
+NLD,none,,,2024-Q4,Creditor
+BEL,none,,,2024-Q4,No program
+AUT,none,,,2024-Q4,No program
+CHE,none,,,2024-Q4,Creditor
+LUX,none,,,2024-Q4,Creditor

@@ -167,13 +167,20 @@ def _apply_agency_anchor_pull(country: Dict, agency: Dict) -> None:
     delta = int(model_num) - int(consensus)
     if abs(delta) < 3:
         return
-    # Halfway pull (round toward agency).
+    # Halfway pull (round toward agency), then strict ±2 cap on the
+    # post-pull gap regardless of how far the raw model sits from
+    # the agency. Without the symmetric cap, halfway-pull from a
+    # large gap (e.g. CHN raw BB- vs A+ → delta+8) lands at +4 — the
+    # earlier asymmetric clamp prevented overshoot but didn't
+    # enforce ±2 on the harsh side. raw_pm_notch is preserved so the
+    # underlying model output is still visible on the country detail
+    # panel.
     if delta < 0:
         pulled = int(model_num) + ((-delta) // 2)
-        pulled = min(pulled, int(consensus) + 2)  # never go below agency-2
     else:
         pulled = int(model_num) - (delta // 2)
-        pulled = max(pulled, int(consensus) - 2)  # never go above agency+2
+    # Clamp to [consensus-2, consensus+2] — strict ±2 cap.
+    pulled = max(int(consensus) - 2, min(int(consensus) + 2, pulled))
     pulled = max(1, min(20, pulled))
     if pulled == int(model_num):
         return

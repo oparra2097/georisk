@@ -90,10 +90,14 @@ WEIGHTS: Dict[str, float] = {
     'years_since_default':           0.04,   # R&R 2009; smaller = worse (recent default)
     'debt_chg_5y_pp':                0.04,   # Manasse 2003 + IMF SRDSF
     'fiscal_balance_chg_3y':         0.05,   # 3y trajectory; catches ROU-style deterioration
+    'reserves_chg_1y_pp':            0.04,   # 12m reserves change; LKA 2022 early warning
     'tot_volatility_5y':             0.03,   # IMF PCTOT, Hilscher-Nosbusch 2010
     'reserve_currency_share':        0.05,   # IMF COFER — reserve-currency offset
     'region_default_rate':           0.04,   # Reinhart-Rogoff 2009 — contagion
     'vix_annual':                    0.02,   # CBOE VIX — global stress
+    'years_since_banking_crisis':    0.04,   # Laeven-Valencia; banking → sovereign 1-3y
+    'imf_program_status':            0.05,   # 0=none .. 3=arrears; agency CCC trigger
+    'fx_debt_share':                 0.06,   # Original-sin; ARG vs BRA differentiator
     # Removed (cumulative GBM importance < 4% combined; high
     # multicollinearity with retained features):
     #   shadow_debt_gap_pp (0.0%)        — never split on
@@ -124,6 +128,10 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'years_since_default':           False,  # more years = better
     'debt_chg_5y_pp':                True,   # faster debt build-up = worse
     'fiscal_balance_chg_3y':         False,  # negative chg = deterioration = worse
+    'reserves_chg_1y_pp':            False,  # negative chg = depletion = worse
+    'years_since_banking_crisis':    False,  # more years out = better
+    'imf_program_status':            True,   # higher status code = worse credit signal
+    'fx_debt_share':                 True,   # higher FX share = worse (original sin)
     'tot_volatility_5y':             True,   # higher ToT vol = worse
     'reserve_currency_share':        False,  # higher share = lower default risk
     'vix_annual':                    True,   # higher VIX = more global stress = worse

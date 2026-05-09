@@ -1,0 +1,126 @@
+# Foreign-currency-denominated central government debt as % of total
+# central government debt, latest available (2023-2024 vintage).
+# Sources: BIS WS_GDD (Global Debt Database), IMF QPSD (Quarterly
+# Public Sector Debt), IMF Article IV staff reports, national debt
+# management offices.
+#
+# Used by credit-default model: fx_debt_share. The single biggest
+# signal separating "stressed but local-currency-funded" sovereigns
+# (BRA ~5%, COL ~30%) from "FX-original-sin" sovereigns
+# (ARG ~70%, LKA ~50%, EGY ~40%) where currency depreciation
+# directly inflates the real debt burden.
+#
+# Schema: iso3,fx_debt_pct,as_of,notes
+iso3,fx_debt_pct,as_of,notes
+ARG,72.0,2024,Original sin; mostly USD-denominated
+LBN,68.0,2023,Eurobonds in default since 2020
+GHA,52.0,2024,Eurobonds restructured 2024; FX share dropping
+ZMB,55.0,2024,Eurobond + bilateral; restructured 2024
+LKA,48.0,2024,Restructured 2024; was 60% pre-default
+PAK,42.0,2024,IMF + bilateral
+EGY,38.0,2024,Eurobonds + multilateral
+TUR,55.0,2024,Lira deposit-shift program reduced share
+BLR,57.0,2022,Pre-sanctions
+RUS,15.0,2024,Sanctions cut FX issuance
+UKR,55.0,2024,War financing + IFI
+ETH,48.0,2024,Eurobond restructure ongoing
+SLV,38.0,2024,USD-dollarised; foreign holdings
+TUN,55.0,2023,Eurobond rollover risk
+KEN,52.0,2024,Eurobond + Chinese loans
+NGA,38.0,2024,
+AGO,57.0,2024,Oil-revenue FX collateralisation
+MOZ,55.0,2024,Restructured 2019
+COG,82.0,2024,Heavy CFA + FX
+SDN,75.0,2024,Pre-default; HIPC stalled
+BGD,42.0,2024,
+LAO,72.0,2024,
+MMR,38.0,2023,Sanctions
+SUR,68.0,2024,Restructured 2023
+JAM,42.0,2024,Improving; FX share has fallen from 60% over 2010s
+DOM,52.0,2024,
+ECU,55.0,2024,USD-dollarised
+BOL,42.0,2024,
+PRY,32.0,2024,
+URY,46.0,2024,
+COL,32.0,2024,
+PER,38.0,2024,
+CRI,32.0,2024,
+PAN,86.0,2024,USD-dollarised
+GTM,38.0,2024,
+HND,42.0,2024,
+CHL,18.0,2024,Mostly local; pension funds anchor
+BRA,5.0,2024,Famous low-FX issuer
+MEX,15.0,2024,Mostly UDIBONOs / fixed-rate local
+IND,3.0,2024,Domestic market dominant
+IDN,28.0,2024,
+PHL,28.0,2024,
+THA,2.0,2024,
+MYS,3.0,2024,
+VNM,28.0,2024,
+CHN,2.0,2024,Local market dominant
+KOR,1.0,2024,
+JPN,0.5,2024,
+TWN,0.0,2024,
+SGP,0.0,2024,Net creditor; Singapore Government Securities
+HKG,0.0,2024,
+ARE,2.0,2024,Sovereign wealth offsets
+SAU,5.0,2024,Sovereign wealth offsets
+QAT,2.0,2024,
+KWT,0.0,2024,
+OMN,42.0,2024,
+BHR,68.0,2024,
+JOR,52.0,2024,
+ISR,15.0,2024,
+ZAF,8.0,2024,Local-currency dominant
+MAR,32.0,2024,
+EGY,38.0,2024,
+BWA,12.0,2024,
+NAM,15.0,2024,
+USA,0.0,2024,Reserve issuer
+GBR,3.0,2024,
+DEU,0.0,2024,Eurozone
+FRA,0.0,2024,Eurozone
+ITA,0.0,2024,Eurozone
+ESP,0.0,2024,Eurozone
+NLD,0.0,2024,Eurozone
+BEL,0.0,2024,Eurozone
+AUT,0.0,2024,Eurozone
+PRT,0.0,2024,Eurozone
+GRC,0.0,2024,Eurozone
+IRL,0.0,2024,Eurozone
+FIN,0.0,2024,Eurozone
+LUX,0.0,2024,Eurozone
+EST,0.0,2024,Eurozone
+LVA,0.0,2024,Eurozone
+LTU,0.0,2024,Eurozone
+SVK,0.0,2024,Eurozone
+SVN,0.0,2024,Eurozone
+MLT,0.0,2024,Eurozone
+CYP,0.0,2024,Eurozone
+HRV,0.0,2024,Eurozone (joined 2023)
+CHE,2.0,2024,Reserve currency
+SWE,5.0,2024,
+DNK,5.0,2024,
+NOR,3.0,2024,Sovereign wealth offsets
+ISL,15.0,2024,
+POL,22.0,2024,
+HUN,28.0,2024,
+CZE,12.0,2024,
+ROU,52.0,2024,Romania has notable FX share for an EU member
+BGR,52.0,2024,Currency board
+ALB,52.0,2024,
+MKD,42.0,2024,
+SRB,68.0,2024,Heavy euro-denomination
+BIH,75.0,2024,Currency board
+MDA,72.0,2024,
+GEO,75.0,2024,
+ARM,55.0,2024,
+AZE,38.0,2024,Sovereign wealth offsets
+KAZ,28.0,2024,Sovereign wealth offsets
+UZB,52.0,2024,
+KGZ,72.0,2024,
+TJK,82.0,2024,
+MNG,68.0,2024,
+CAN,2.0,2024,Reserve currency
+AUS,3.0,2024,
+NZL,3.0,2024,

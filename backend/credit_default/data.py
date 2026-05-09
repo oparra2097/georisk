@@ -380,6 +380,50 @@ def get_history_panel(years_back: int = 25):
         df = df.sort_values(['iso3', 'year']).reset_index(drop=True)
         df['fiscal_balance_chg_3y'] = df.groupby('iso3')['fiscal_balance_pct_gdp'].diff(3)
 
+    # 1-year reserves-depletion (months-of-imports basis). Sri Lanka
+    # 2021-2022 went from ~7 months of imports to <1 month before
+    # default; the level alone (>1 month) didn't flag the speed of
+    # the drop. NEGATIVE diff = depletion = worse risk.
+    if 'reserves_to_imports_months' in df.columns:
+        df = df.sort_values(['iso3', 'year']).reset_index(drop=True)
+        df['reserves_chg_1y_pp'] = df.groupby('iso3')['reserves_to_imports_months'].diff(1)
+
+    # Years since most-recent systemic banking crisis (L-V 2020,
+    # extended). Reinhart-Rogoff: banking crisis precedes sovereign
+    # default by 1-3 years on average (Asia 1997, GFC 2008, EM
+    # twin-crises 2022). Capped at 25y; missing → no recent crisis.
+    try:
+        from backend.credit_default import banking_crises as _bc
+        ysbc = _bc.years_since_banking_crisis()
+        df['years_since_banking_crisis'] = df.apply(
+            lambda r: ysbc.get((r['iso3'], int(r['year'])), 25),
+            axis=1,
+        )
+    except Exception as e:
+        print(f'[credit_default.data] banking-crisis feature failed: {e}')
+
+    # IMF program status (latest snapshot, broadcast across years).
+    # Numeric: 0=none, 1=on_track, 2=off_track, 3=arrears. Higher =
+    # more credit stress; agencies use this directly as a near-
+    # mechanical CCC trigger.
+    try:
+        from backend.credit_default import imf_programs as _imf
+        prog = _imf.status_by_iso()
+        df['imf_program_status'] = df['iso3'].map(prog).fillna(0).astype(float)
+    except Exception as e:
+        print(f'[credit_default.data] IMF program feature failed: {e}')
+
+    # % FX-denominated central-government debt (latest snapshot).
+    # Original-sin signal — distinguishes ARG (~70% FX) from BRA (~5%).
+    # Treated as a slow-moving country characteristic; same value
+    # across all panel years.
+    try:
+        from backend.credit_default import fx_debt as _fxd
+        fx = _fxd.fx_debt_share()
+        df['fx_debt_share'] = df['iso3'].map(fx).fillna(0.0).astype(float)
+    except Exception as e:
+        print(f'[credit_default.data] FX-debt-share feature failed: {e}')
+
     # 3. Terms-of-trade volatility (IMF PCTOT, Hilscher-Nosbusch 2010):
     #    5y rolling std-dev of log changes in commodity export-to-import
     #    price ratio. Best fundamental beyond debt and reserves for
@@ -788,7 +832,9 @@ def get_panel(force_refresh: bool = False) -> Dict:
                 'debt_chg_5y_pp', 'tot_volatility_5y',
                 'fiscal_balance_chg_3y', 'years_since_default',
                 'default_count_25y', 'reer_overvaluation_pct',
-                'gdp_per_capita_ppp_log',
+                'gdp_per_capita_ppp_log', 'reserves_chg_1y_pp',
+                'years_since_banking_crisis', 'imf_program_status',
+                'fx_debt_share',
             ]
             _derived_cols = [c for c in _derived_cols if c in _hist.columns]
             for iso3, g in _hist.groupby('iso3'):
