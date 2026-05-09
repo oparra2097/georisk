@@ -185,6 +185,11 @@ def create_app():
     def credit_default():
         return render_template('credit_default.html', active_page='credit-default')
 
+    @app.route('/labor-market')
+    @social_or_login_required
+    def labor_market():
+        return render_template('labor_market.html', active_page='labor-market')
+
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
     init_scheduler(app)

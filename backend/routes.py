@@ -15,6 +15,12 @@ from backend.data_sources.eurostat_hicp import get_eurostat_cpi_data, get_eurost
 from backend.data_sources.substack_feed import get_substack_posts
 from backend.data_sources.commodities_forecast import get_forecast_data
 from backend.data_sources.gdp_nowcast import get_gdp_nowcast
+from backend.data_sources.bls_employment import (
+    get_bls_employment_data, clear_bls_employment_cache,
+)
+from backend.data_sources.labor_nowcast import (
+    get_labor_nowcast, clear_cache as clear_labor_nowcast_cache,
+)
 from backend.data_sources.imf_weo import get_weo_data
 from backend.data_sources.world_bank import get_wb_data
 from backend.data_sources.trade_quarterly import get_us_trade_quarterly
@@ -638,6 +644,167 @@ def gdp_nowcast_refresh():
         gnmod._cached_result = data
         gnmod._cached_at = _time.time()
     return jsonify(data)
+
+
+# ── Labor Market (BLS actuals + in-house nowcast) ──────────────────────
+
+@api_bp.route('/labor-market/us')
+def labor_market_us():
+    """Combined payload: BLS payrolls + unemployment + bridge-model nowcast."""
+    bls = get_bls_employment_data()
+    nowcast = get_labor_nowcast()
+    return jsonify({'bls': bls, 'nowcast': nowcast})
+
+
+@api_bp.route('/labor-market/us/refresh', methods=['POST'])
+def labor_market_us_refresh():
+    """Clear BLS + FRED + bridge-model caches and recompute on next request."""
+    clear_bls_employment_cache()
+    clear_labor_nowcast_cache()
+    # Drop FRED so the bridge model picks up the latest indicator vintage.
+    from backend.data_sources.fred_client import clear_cache as clear_fred
+    clear_fred()
+    return jsonify({'status': 'ok', 'message': 'Labor market caches cleared'})
+
+
+@api_bp.route('/labor-market/us/export')
+def labor_market_us_export():
+    """Excel export of BLS series + the bridge-model track record."""
+    return _export_labor_market_excel(get_bls_employment_data(), get_labor_nowcast())
+
+
+def _export_labor_market_excel(bls_data, nowcast_data):
+    """Generate a multi-sheet Excel: payrolls, unemployment, track record."""
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    thin = Side(style='thin', color='D1D5DB')
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    wb = Workbook()
+    first = True
+
+    series = (bls_data or {}).get('series', {})
+    categories = (bls_data or {}).get('categories', {})
+    units = (bls_data or {}).get('units', {})
+    meta = (bls_data or {}).get('meta', {})
+
+    # ── BLS payrolls + unemployment sheets ──────────────────────────
+    for key in ('payrolls', 'unemployment'):
+        points = series.get(key, [])
+        label = categories.get(key, key)
+        unit = units.get(key, '')
+        if not points:
+            continue
+        if first:
+            ws = wb.active
+            ws.title = label[:31]
+            first = False
+        else:
+            ws = wb.create_sheet(label[:31])
+
+        ws.cell(row=1, column=1, value=f'US Labor Market: {label}').font = Font(bold=True, size=13)
+        if meta.get('source'):
+            ws.cell(row=2, column=1, value=meta['source']).font = Font(italic=True, size=9, color='6B7280')
+
+        headers = ['Date', f'Value ({unit})', 'MoM Δ', 'YoY %']
+        for col, h in enumerate(headers, 1):
+            c = ws.cell(row=4, column=col, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = Alignment(horizontal='center')
+            c.border = box
+
+        row = 5
+        for pt in reversed(points):
+            ws.cell(row=row, column=1, value=pt.get('date', '')).border = box
+            ws.cell(row=row, column=2, value=pt.get('value')).number_format = '#,##0.000'
+            ws.cell(row=row, column=3, value=pt.get('mom_change')).number_format = '#,##0.0;[Red]-#,##0.0'
+            ws.cell(row=row, column=4, value=pt.get('yoy_change')).number_format = '0.00'
+            for col in range(1, 5):
+                ws.cell(row=row, column=col).border = box
+                ws.cell(row=row, column=col).alignment = Alignment(horizontal='center')
+            row += 1
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 18
+        ws.column_dimensions['C'].width = 14
+        ws.column_dimensions['D'].width = 12
+        ws.freeze_panes = 'A5'
+
+    # ── Track record (BLS vs in-house estimate) ─────────────────────
+    track = (nowcast_data or {}).get('payroll_track_full') or []
+    ur_track = (nowcast_data or {}).get('unrate_track_full') or []
+
+    if track:
+        ws = wb.create_sheet('Payroll Track Record') if not first else wb.active
+        if first:
+            ws.title = 'Payroll Track Record'
+            first = False
+        ws.cell(row=1, column=1, value='Monthly Payroll Change — BLS Actual vs Bridge-Model Estimate').font = Font(bold=True, size=13)
+        ws.cell(row=2, column=1, value='Units: thousands of jobs').font = Font(italic=True, size=9, color='6B7280')
+        for col, h in enumerate(['Month', 'BLS Actual', 'Estimate', 'Error'], 1):
+            c = ws.cell(row=4, column=col, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = Alignment(horizontal='center')
+            c.border = box
+        for i, r in enumerate(reversed(track)):
+            row = 5 + i
+            ws.cell(row=row, column=1, value=r.get('month'))
+            ws.cell(row=row, column=2, value=r.get('actual_change')).number_format = '#,##0.0;[Red]-#,##0.0'
+            ws.cell(row=row, column=3, value=r.get('estimate_change')).number_format = '#,##0.0;[Red]-#,##0.0'
+            ws.cell(row=row, column=4, value=r.get('error')).number_format = '#,##0.0;[Red]-#,##0.0'
+            for col in range(1, 5):
+                ws.cell(row=row, column=col).border = box
+                ws.cell(row=row, column=col).alignment = Alignment(horizontal='center')
+        for col in 'ABCD':
+            ws.column_dimensions[col].width = 14
+        ws.freeze_panes = 'A5'
+
+    if ur_track:
+        ws = wb.create_sheet('Unemployment Track Record') if not first else wb.active
+        if first:
+            ws.title = 'Unemployment Track Record'
+            first = False
+        ws.cell(row=1, column=1, value='Monthly Δ Unemployment Rate — BLS Actual vs Bridge-Model Estimate').font = Font(bold=True, size=13)
+        ws.cell(row=2, column=1, value='Units: percentage points').font = Font(italic=True, size=9, color='6B7280')
+        for col, h in enumerate(['Month', 'BLS Actual', 'Estimate', 'Error'], 1):
+            c = ws.cell(row=4, column=col, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = Alignment(horizontal='center')
+            c.border = box
+        for i, r in enumerate(reversed(ur_track)):
+            row = 5 + i
+            ws.cell(row=row, column=1, value=r.get('month'))
+            ws.cell(row=row, column=2, value=r.get('actual_change')).number_format = '0.00;[Red]-0.00'
+            ws.cell(row=row, column=3, value=r.get('estimate_change')).number_format = '0.00;[Red]-0.00'
+            ws.cell(row=row, column=4, value=r.get('error')).number_format = '0.00;[Red]-0.00'
+            for col in range(1, 5):
+                ws.cell(row=row, column=col).border = box
+                ws.cell(row=row, column=col).alignment = Alignment(horizontal='center')
+        for col in 'ABCD':
+            ws.column_dimensions[col].width = 14
+        ws.freeze_panes = 'A5'
+
+    if first:
+        ws = wb.active
+        ws.title = 'No Data'
+        ws.cell(row=1, column=1, value='No labor-market data available.')
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'us_labor_market_{today}.xlsx',
+    )
 
 
 @api_bp.route('/forecasts/export')

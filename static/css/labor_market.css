@@ -1,0 +1,217 @@
+/* US Labor Market dashboard styles ─────────────────────────────────────
+ *
+ * Mirrors the dark theme + typography scale used by credit_default.css
+ * (var(--bg-primary), var(--text-primary)) so the page slots in
+ * visually with the rest of the Models suite.
+ */
+
+.lm-page {
+  --lm-bg:        var(--bg-primary,    #0a0e1a);
+  --lm-surface:   var(--bg-secondary,  #111827);
+  --lm-surface-2: #1a2035;
+  --lm-border:    var(--border,        #1f2937);
+  --lm-border-strong: #2a3245;
+  --lm-text:      var(--text-primary,  #e5e7eb);
+  --lm-text-dim:  var(--text-secondary,#9ca3af);
+  --lm-text-mute: var(--text-muted,    #6b7280);
+  --lm-accent:    var(--accent,        #3b82f6);
+  --lm-good:      #10b981;
+  --lm-bad:       #ef4444;
+  --lm-warn:      #f59e0b;
+
+  --lm-fs-xs: 10px;
+  --lm-fs-sm: 12px;
+  --lm-fs-md: 14px;
+  --lm-fs-lg: 20px;
+  --lm-fs-xl: 32px;
+
+  margin: 0;
+  padding: 28px max(24px, calc((100vw - 1200px) / 2)) 64px;
+  background: var(--lm-bg);
+  color: var(--lm-text);
+  font-variant-numeric: tabular-nums;
+  min-height: calc(100vh - 60px);
+}
+
+/* Header --------------------------------------------------------- */
+.lm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--lm-border);
+}
+.lm-header-text { max-width: 720px; }
+.lm-title {
+  font-size: 28px; font-weight: 700; margin: 0 0 6px;
+  color: var(--lm-text); letter-spacing: -0.02em;
+}
+.lm-subtitle {
+  font-size: var(--lm-fs-md); color: var(--lm-text-dim);
+  line-height: 1.55; margin: 0;
+}
+.lm-status { display: flex; gap: 12px; flex-wrap: wrap; }
+.lm-status-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 14px; background: var(--lm-surface-2);
+  border: 1px solid var(--lm-border); border-radius: 8px; min-width: 96px;
+}
+.lm-status-label {
+  font-size: var(--lm-fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--lm-text-mute); font-weight: 600;
+}
+.lm-status-value {
+  font-size: var(--lm-fs-lg); font-weight: 600; color: var(--lm-text);
+}
+.lm-export-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; background: var(--lm-accent); color: #fff;
+  border-radius: 8px; text-decoration: none; font-size: var(--lm-fs-sm);
+  font-weight: 600; transition: filter 0.1s ease;
+}
+.lm-export-btn:hover { filter: brightness(1.1); }
+
+/* Summary cards -------------------------------------------------- */
+.lm-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.lm-summary-card {
+  background: var(--lm-surface);
+  border: 1px solid var(--lm-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.lm-summary-label {
+  font-size: var(--lm-fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--lm-text-mute); font-weight: 600;
+}
+.lm-summary-value {
+  font-size: 22px; font-weight: 700; color: var(--lm-text);
+}
+.lm-summary-meta {
+  font-size: var(--lm-fs-xs); color: var(--lm-text-mute);
+}
+
+/* Toolbar -------------------------------------------------------- */
+.lm-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.lm-toggle-group {
+  display: flex; border: 1px solid var(--lm-border-strong);
+  border-radius: 6px; overflow: hidden;
+}
+.lm-toggle {
+  height: 34px; padding: 0 14px; font-size: var(--lm-fs-sm); font-weight: 500;
+  background: var(--lm-surface); color: var(--lm-text-dim);
+  border: 0; border-right: 1px solid var(--lm-border);
+  cursor: pointer; transition: background 0.1s, color 0.1s;
+}
+.lm-toggle:last-child { border-right: 0; }
+.lm-toggle:hover { background: var(--lm-surface-2); color: var(--lm-text); }
+.lm-toggle.active { background: var(--lm-accent); color: #fff; }
+.lm-spacer { flex: 1; }
+.lm-link-btn {
+  height: 34px; padding: 0 12px; font-size: var(--lm-fs-sm); font-weight: 500;
+  background: transparent; border: 1px solid var(--lm-border-strong);
+  border-radius: 6px; color: var(--lm-text-dim); cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.lm-link-btn:hover { background: var(--lm-surface-2); color: var(--lm-text); }
+.lm-link-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* Chart sections ------------------------------------------------- */
+.lm-chart-section {
+  background: var(--lm-surface);
+  border: 1px solid var(--lm-border);
+  border-radius: 10px;
+  padding: 18px 20px 8px;
+  margin-bottom: 20px;
+}
+.lm-chart-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  flex-wrap: wrap; gap: 12px;
+  margin-bottom: 12px;
+}
+.lm-chart-header h2 {
+  margin: 0; font-size: 16px; font-weight: 600; color: var(--lm-text);
+  letter-spacing: -0.01em;
+}
+.lm-chart-wrap {
+  position: relative;
+  height: 360px;
+}
+.lm-legend {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  font-size: var(--lm-fs-sm); color: var(--lm-text-dim);
+}
+.lm-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.lm-legend-swatch {
+  display: inline-block; width: 14px; height: 10px; border-radius: 2px;
+}
+.lm-legend-swatch.lm-legend-line { height: 3px; border-radius: 1px; }
+
+/* Track record --------------------------------------------------- */
+.lm-track-section {
+  background: var(--lm-surface);
+  border: 1px solid var(--lm-border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+.lm-section-note {
+  font-size: var(--lm-fs-sm); color: var(--lm-text-mute);
+  margin: 0 0 14px; max-width: 720px; line-height: 1.5;
+}
+.lm-track-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+.lm-track-col h3 {
+  font-size: var(--lm-fs-sm); text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--lm-text-mute); margin: 0 0 8px;
+}
+.lm-track-table, .lm-indicators-table {
+  width: 100%; border-collapse: collapse;
+  font-size: var(--lm-fs-sm); color: var(--lm-text);
+}
+.lm-track-table th, .lm-indicators-table th {
+  text-align: left; font-weight: 600; color: var(--lm-text-mute);
+  padding: 6px 8px; border-bottom: 1px solid var(--lm-border);
+  font-size: var(--lm-fs-xs); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.lm-track-table td, .lm-indicators-table td {
+  padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.lm-track-table th.num, .lm-track-table td.num,
+.lm-indicators-table th.num, .lm-indicators-table td.num {
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.lm-track-table tr:hover td { background: rgba(255,255,255,0.02); }
+.lm-pos { color: var(--lm-good); }
+.lm-neg { color: var(--lm-bad); }
+
+/* Indicators panel ---------------------------------------------- */
+.lm-indicators-section {
+  background: var(--lm-surface);
+  border: 1px solid var(--lm-border);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.lm-indicators-section h2 {
+  margin: 0 0 6px; font-size: 16px; font-weight: 600; color: var(--lm-text);
+}
+
+/* Mobile -------------------------------------------------------- */
+@media (max-width: 720px) {
+  .lm-page { padding: 20px 16px 48px; }
+  .lm-header { flex-direction: column; }
+  .lm-status { width: 100%; }
+  .lm-chart-wrap { height: 280px; }
+}
