@@ -144,6 +144,16 @@ def sec_csv():
     )
 
 
+@data_centers_bp.route('/admin/sec/merge', methods=['POST'])
+@_require_admin
+def sec_merge():
+    """Pull every REIT 10-K, map property tables to facilities-schema rows,
+    and append new rows to data/datacenter_facilities.csv (skip duplicates
+    by name). Atomic swap with .bak; cache rebuilt on success."""
+    from backend.data_centers import sec_edgar
+    return jsonify(sec_edgar.merge_into_facilities())
+
+
 @data_centers_bp.route('/admin/iso/preview', methods=['POST'])
 @_require_admin
 def iso_preview():

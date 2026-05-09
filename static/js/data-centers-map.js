@@ -234,6 +234,50 @@ const DataCenterMap = {
       }
     });
 
+    const secMergeBtn = document.getElementById('sec-merge-btn');
+    if (secMergeBtn) secMergeBtn.addEventListener('click', async () => {
+      const out = document.getElementById('sec-result');
+      secMergeBtn.disabled = true;
+      secMergeBtn.textContent = 'merging…';
+      out.textContent = 'pulling 10-Ks + merging into facilities CSV (10–30 sec)…';
+      try {
+        const r = await fetch('/api/data-centers/admin/sec/merge', { method: 'POST' });
+        const j = await r.json();
+        if (!j.ok) {
+          out.innerHTML = `<span style="color:#b91c1c;">merge failed: ${j.error || `HTTP ${r.status}`}</span>`;
+          return;
+        }
+        const lines = [];
+        const reitLines = Object.entries(j.reit_status).map(([t, s]) => {
+          if (!s.ok) return `<span style="color:#b91c1c;">${t} ✗ ${s.error || 'error'}</span>`;
+          return `<span style="color:#15803d;">${t} ✓ ${s.tables_found || 0} table(s) · ${s.total_rows || 0} rows · 10-K ${s.filed_date}</span>`;
+        }).join(' · ');
+        lines.push(`<div style="margin-bottom:6px;">${reitLines}</div>`);
+        lines.push(`<div style="font-weight:600;">${j.added} added · ${j.skipped} skipped (already in CSV) · ${j.pulled} parsed total</div>`);
+        if (j.preview_added.length) {
+          lines.push('<details style="margin-top:6px;"><summary style="cursor:pointer;color:#6b7280;">show added facilities</summary><ul style="margin:6px 0 0 16px;padding:0;">'
+            + j.preview_added.map(p =>
+                `<li>${p.name} <span style="color:#6b7280;">· ${p.market} · ${Math.round(p.mw)} MW · conf=${p.confidence}</span></li>`).join('')
+            + '</ul></details>');
+        }
+        if (j.preview_skipped.length) {
+          lines.push('<details style="margin-top:4px;"><summary style="cursor:pointer;color:#6b7280;">show skipped (existing) facilities</summary><ul style="margin:6px 0 0 16px;padding:0;color:#9ca3af;">'
+            + j.preview_skipped.map(n => `<li>${n}</li>`).join('') + '</ul></details>');
+        }
+        out.innerHTML = lines.join('');
+        // Refresh the dashboard so the new facilities show up immediately.
+        await this.loadData();
+        this.render();
+        this.applyScenario();
+        this.refreshFreshness();
+      } catch (e) {
+        out.innerHTML = `<span style="color:#b91c1c;">merge error: ${e.message}</span>`;
+      } finally {
+        secMergeBtn.disabled = false;
+        secMergeBtn.textContent = 'Auto-merge into facilities';
+      }
+    });
+
     const secCsvBtn = document.getElementById('sec-csv-btn');
     if (secCsvBtn) secCsvBtn.addEventListener('click', async () => {
       secCsvBtn.disabled = true;
