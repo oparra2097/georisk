@@ -398,7 +398,95 @@ def get_history_panel(years_back: int = 25):
     # debt/GDP without crediting the offsetting structural advantage.
     df['reserve_currency_share'] = df['iso3'].map(_RESERVE_CURRENCY_SHARE).fillna(0.0)
 
+    # 6. VIX as a global financial-stress regressor — Hilscher-Nosbusch
+    # 2010 and Bussière-Fratzscher 2006: global risk-aversion lifts
+    # sovereign default probabilities materially above what country
+    # fundamentals alone predict (esp. for EM in 2008/2020). Same value
+    # applies to every country in a given year.
+    try:
+        from backend.data_sources import vix_history
+        vix_by_year = vix_history.get_vix_annual_mean()
+        df['vix_annual'] = df['year'].map(vix_by_year).astype(float)
+    except Exception as e:
+        print(f'[credit_default.data] VIX fetch failed: {e}')
+
+    # 7. External liquidity ratio (S&P-style proxy). True S&P ELR is
+    # gross external financing needs ÷ (current-account receipts +
+    # usable reserves); we don't have GDP-USD or CAR-USD, so we
+    # combine the two stress signals we DO have into a single index:
+    #   pressure = ST_debt_pct_reserves + max(0, -CA_pct_gdp)·10
+    #   cushion  = max(1, reserves_to_imports_months)
+    #   ELR      = pressure / cushion
+    # Higher = more refinancing pressure relative to reserves.
+    if {'short_term_debt_pct_reserves', 'current_account_pct_gdp',
+            'reserves_to_imports_months'}.issubset(df.columns):
+        st_pressure = df['short_term_debt_pct_reserves'].fillna(0.0)
+        ca_def = (-df['current_account_pct_gdp']).clip(lower=0).fillna(0.0)
+        cushion = df['reserves_to_imports_months'].clip(lower=1).fillna(1.0)
+        df['external_liquidity_ratio'] = (st_pressure + ca_def * 10.0) / cushion
+
+    # 8. Regional contagion — % of countries in the same region in an
+    # active CRAG default spell that year. Captures Reinhart-Rogoff
+    # 2009's clustering finding: defaults in nearby economies are a
+    # leading indicator of own-country default risk independent of
+    # macros (LatAm 1980s, Asia 1997, eurozone 2010).
+    try:
+        from backend.credit_default import defaults as _cd_def
+        region_by_iso = _build_region_lookup()
+        in_def_yrs = _cd_def.in_default_years_by_country(include_distress=False)
+        # Pre-build {region: set(iso3)} and {(year, region): n_in_default}.
+        region_pop: Dict[str, set] = {}
+        for iso, reg in region_by_iso.items():
+            if reg:
+                region_pop.setdefault(reg, set()).add(iso)
+
+        contagion_cache: Dict[Tuple[int, str], float] = {}
+
+        def _contagion(iso3_, year_):
+            reg = region_by_iso.get(iso3_)
+            if not reg:
+                return 0.0
+            key = (int(year_), reg)
+            if key in contagion_cache:
+                return contagion_cache[key]
+            pop = region_pop.get(reg) or set()
+            if not pop:
+                contagion_cache[key] = 0.0
+                return 0.0
+            in_def = sum(
+                1 for o_iso in pop
+                if int(year_) in in_def_yrs.get(o_iso, set())
+            )
+            rate = in_def / len(pop)
+            contagion_cache[key] = rate
+            return rate
+
+        df['region_default_rate'] = df.apply(
+            lambda r: _contagion(r['iso3'], r['year']),
+            axis=1,
+        )
+    except Exception as e:
+        print(f'[credit_default.data] regional-contagion build failed: {e}')
+
     return df
+
+
+def _build_region_lookup() -> Dict[str, str]:
+    """``{iso3: region}`` from the sovereign-debt overlay. Cached at
+    module level so we don't re-read the JSON on every history-panel
+    rebuild."""
+    global _REGION_LOOKUP_CACHE
+    cached = globals().get('_REGION_LOOKUP_CACHE')
+    if cached is not None:
+        return cached
+    payload = get_sovereign_debt_data() or {}
+    out = {iso: (blk.get('region') or '')
+           for iso, blk in (payload.get('countries') or {}).items()}
+    globals()['_REGION_LOOKUP_CACHE'] = out
+    return out
+
+
+_REGION_LOOKUP_CACHE: Optional[Dict[str, str]] = None
 
 
 # IMF COFER 2024Q4 (released March 2025): allocated global FX reserves
@@ -656,6 +744,38 @@ def get_panel(force_refresh: bool = False) -> Dict:
             per_indicator[name] = {}
             per_indicator_periods[name] = {}
 
+    # Latest VIX annual mean — applied uniformly to every country at
+    # scoring time. See get_history_panel for the cross-section.
+    try:
+        from backend.data_sources import vix_history
+        vix_by_year = vix_history.get_vix_annual_mean()
+        _vix_latest = float(vix_by_year[max(vix_by_year)]) if vix_by_year else 0.0
+    except Exception as e:
+        print(f'[credit_default.data] VIX latest fetch failed: {e}')
+        _vix_latest = 0.0
+
+    # Latest regional-contagion rate per country: share of regional
+    # peers currently inside an active CRAG hard-default spell.
+    _region_contagion_now: Dict[str, float] = {}
+    try:
+        from backend.credit_default import defaults as _cd_def_now
+        cur_yr = time.localtime().tm_year
+        in_def = _cd_def_now.in_default_years_by_country(include_distress=False)
+        regions = _build_region_lookup()
+        # {region: countries_in_region}
+        region_pop: Dict[str, set] = {}
+        for iso, reg in regions.items():
+            if reg:
+                region_pop.setdefault(reg, set()).add(iso)
+        for iso, reg in regions.items():
+            pop = region_pop.get(reg) or set()
+            if not pop:
+                continue
+            n_def = sum(1 for o in pop if cur_yr in in_def.get(o, set()))
+            _region_contagion_now[iso] = n_def / len(pop)
+    except Exception as e:
+        print(f'[credit_default.data] regional-contagion (live) failed: {e}')
+
     # 2. Sovereign-debt overlay (already on disk as static JSON)
     debt_payload = get_sovereign_debt_data() or {}
     debt_countries = debt_payload.get('countries') or {}
@@ -703,6 +823,18 @@ def get_panel(force_refresh: bool = False) -> Dict:
         # logit-discount per country (USA / JPN / GBR / CHE / eurozone /
         # CAD / AUD / CNY).
         ind_values['reserve_currency_share'] = _RESERVE_CURRENCY_SHARE.get(iso3, 0.0)
+        ind_values['vix_annual'] = _vix_latest
+        ind_values['region_default_rate'] = _region_contagion_now.get(iso3, 0.0)
+        # Same ELR formula as get_history_panel, computed on the
+        # live-cross-section indicator values.
+        st_pr = ind_values.get('short_term_debt_pct_reserves') or 0.0
+        ca_pg = ind_values.get('current_account_pct_gdp') or 0.0
+        rim = ind_values.get('reserves_to_imports_months') or 1.0
+        if rim < 1.0:
+            rim = 1.0
+        ind_values['external_liquidity_ratio'] = (
+            st_pr + max(0.0, -ca_pg) * 10.0
+        ) / rim
         countries_out[iso3] = {
             'iso3': iso3,
             'name': name_lookup.get(iso3, iso3),

@@ -85,6 +85,9 @@ WEIGHTS: Dict[str, float] = {
     'tot_volatility_5y':             0.04,   # IMF PCTOT, Hilscher-Nosbusch 2010
     'reer_overvaluation_pct':        0.03,   # BIS WS_EER, IMF SRDSF
     'reserve_currency_share':        0.06,   # IMF COFER 2024Q4 — reserve-currency offset
+    'vix_annual':                    0.03,   # CBOE VIX — global financial-stress regressor
+    'region_default_rate':           0.04,   # Reinhart-Rogoff 2009 — regional contagion
+    'external_liquidity_ratio':      0.04,   # S&P-style external financing pressure
 }
 
 # How each weight maps onto the directionality of the risk contribution.
@@ -114,6 +117,9 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'tot_volatility_5y':             True,   # higher ToT vol = worse
     'reer_overvaluation_pct':        True,   # over-valued REER = worse
     'reserve_currency_share':        False,  # higher share = lower default risk
+    'vix_annual':                    True,   # higher VIX = more global stress = worse
+    'region_default_rate':           True,   # more regional defaults = worse contagion
+    'external_liquidity_ratio':      True,   # higher pressure / lower cushion = worse
 }
 
 # Hard caps on individual indicator z-scores so a single outlier (e.g. Lebanon
