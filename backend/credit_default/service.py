@@ -225,6 +225,40 @@ def get_country_history(iso3: str, horizon_years: int = 1,
         return None
     sub = sub.sort_values('year')
 
+    # In-default years per (iso3, year): if the country was inside an
+    # active CRAG hard-default spell that period, the historical PD on
+    # the chart should pin to 100% / sp_equiv=D — same semantics as the
+    # dashboard table's currently-defaulted override, just applied
+    # year-by-year instead of only at the latest cross-section.
+    # Restricted to event_type ∈ {default, restructuring} so that
+    # long-tail open `arrears` events don't mark every subsequent year
+    # as defaulted. For *open* spells we only count those that started
+    # within the recency window — CRAG sometimes leaves legacy
+    # restructurings open without an end-year (e.g. GHA 1970 bank-loan
+    # restructuring), which would otherwise sweep every subsequent
+    # year into the default band.
+    import time as _t
+    _cur_yr_chart = _t.localtime().tm_year
+    # Wider window for the history chart than the dashboard's
+    # currently-defaulted check (4y) — we want every recent open
+    # default visible as a red band, not just last-4y onsets.
+    _open_recency = 12
+    in_default_yrs: set = set()
+    for ev in cd_defaults.load_events(include_distress=False):
+        if ev.get('iso3') != iso3:
+            continue
+        if ev.get('event_type') not in {'default', 'restructuring'}:
+            continue
+        start = ev.get('start_year')
+        if start is None:
+            continue
+        end = ev.get('end_year')
+        if end is None:
+            if int(start) < _cur_yr_chart - _open_recency:
+                continue
+            end = _cur_yr_chart
+        in_default_yrs.update(range(int(start), int(end) + 1))
+
     import math
     history = []
     for _, row in sub.iterrows():
@@ -299,9 +333,14 @@ def get_country_history(iso3: str, horizon_years: int = 1,
         except OverflowError:
             model_pd = 0.0 if adj < 0 else 1.0
         score = 100.0 * model_pd
+        period_year = int(row['year'])
+        in_default_now = period_year in in_default_yrs
         rating = rating_model._letter_and_pd(
-            score, defaulted=False, calibrated_buckets=cal_buckets,
+            score, defaulted=in_default_now, calibrated_buckets=cal_buckets,
         )
+        if in_default_now:
+            model_pd = 1.0
+            score = 100.0
         record = {
             'year': int(row['year']),
             'model_pd': round(model_pd, 5),

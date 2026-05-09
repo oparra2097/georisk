@@ -209,7 +209,7 @@ def build_training_panel_quarterly(years_back: int = 25,
         'horizon_quarters': horizon_quarters,
         'n_obs': int(len(X_std)),
         'n_events': int(y.sum()),
-        'iso_quarters': df[['iso3', 'year', 'quarter']].reset_index(drop=True),
+        'iso_quarters': df[['iso3', 'year', 'quarter', 'in_default_quarter']].reset_index(drop=True),
     }
     return X_std, y, feature_names, meta
 
@@ -579,6 +579,20 @@ def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
 
     pd_calibration = _calibrate_pd_buckets(proba, y.values)
 
+    # Bucket calibration for the quarterly path. The annual fit uses
+    # this to align display sp_equiv with the agency CDF; without it,
+    # the dashboard's quarterly chart maps low quarterly PDs (5-15%)
+    # to AAA via the hand-set RATING_BUCKETS, which is wrong. Use the
+    # year-equivalent horizon to pick the right sensitivity multiplier.
+    years_eq = max(1, int(round(horizon_quarters / 4)))
+    iso_years_for_calib = meta['iso_quarters'].rename(
+        columns={'in_default_quarter': 'in_default_year'}
+    )
+    rating_buckets = _calibrate_rating_buckets(
+        iso_years_for_calib, proba, horizon_years=years_eq,
+        class_balance_log_odds=pd_log_odds_shift,
+    )
+
     importance_signed: Dict[str, float] = {}
     for f, imp in importance.items():
         s = +1.0 if SCAFFOLD_HIGHER_IS_WORSE.get(f, True) else -1.0
@@ -600,6 +614,7 @@ def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
         'scaler': meta['scaler'],
         'medians': meta['medians'],
         'pd_calibration': pd_calibration,
+        'rating_buckets': rating_buckets,
         'auc_in_sample': auc,
         'auc_oos': oos.get('auc'),
         'brier_oos': oos.get('brier'),
