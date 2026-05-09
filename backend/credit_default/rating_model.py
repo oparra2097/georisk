@@ -70,7 +70,12 @@ WEIGHTS: Dict[str, float] = {
     # ── Real economy ──
     'real_gdp_growth':               0.06,
     'inflation':                     0.04,
-    'gdp_per_capita_ppp':            0.04,
+    # Log GDP per capita PPP. Raw GDP/cap spans $500-$130k (250x);
+    # log compresses both tails so 1 unit ≈ 2.7x ratio. Down-weighted
+    # to 0.02 from 0.04 — agencies use GDP/cap to *bound* the rating
+    # ceiling, not as a continuous driver. GBM also gets
+    # max_features='sqrt' so no single feature dominates splits.
+    'gdp_per_capita_ppp_log':        0.02,
     # ── Governance (slimmed) — keep rule_of_law, govt_effectiveness,
     # political_stability, control_of_corruption as the independent
     # set. Dropped regulatory_quality / voice_accountability
@@ -111,7 +116,7 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'external_debt_pct_gni':         True,
     'real_gdp_growth':               False,
     'inflation':                     True,
-    'gdp_per_capita_ppp':            False,
+    'gdp_per_capita_ppp_log':        False,  # log-transformed; higher = richer = lower risk
     'rule_of_law':                   False,
     'control_of_corruption':         False,
     'govt_effectiveness':            False,

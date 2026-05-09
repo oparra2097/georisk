@@ -361,6 +361,15 @@ def get_history_panel(years_back: int = 25):
         df = df.sort_values(['iso3', 'year']).reset_index(drop=True)
         df['debt_chg_5y_pp'] = df.groupby('iso3')['gross_debt_pct_gdp'].diff(5)
 
+    # Log GDP per capita PPP. Values span $500 to $130k (250x range);
+    # raw standardization compresses both tails. Agencies (S&P, Moody's,
+    # Fitch SRM) all use log(GDP/cap) so 1 unit ≈ 2.7x income ratio,
+    # which behaves linearly on the rating ladder.
+    if 'gdp_per_capita_ppp' in df.columns:
+        import numpy as _np
+        gdp_pos = df['gdp_per_capita_ppp'].clip(lower=100)  # guard nonpositive
+        df['gdp_per_capita_ppp_log'] = _np.log(gdp_pos)
+
     # Fiscal-balance trajectory (3-year change). Captures
     # deterioration in primary balance even when the level itself
     # isn't yet alarming — Romania case: balance −2.4% (2022) →
@@ -779,6 +788,7 @@ def get_panel(force_refresh: bool = False) -> Dict:
                 'debt_chg_5y_pp', 'tot_volatility_5y',
                 'fiscal_balance_chg_3y', 'years_since_default',
                 'default_count_25y', 'reer_overvaluation_pct',
+                'gdp_per_capita_ppp_log',
             ]
             _derived_cols = [c for c in _derived_cols if c in _hist.columns]
             for iso3, g in _hist.groupby('iso3'):

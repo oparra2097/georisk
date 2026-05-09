@@ -382,6 +382,11 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
     model = GradientBoostingClassifier(
         n_estimators=n_estimators, max_depth=max_depth,
         learning_rate=learning_rate, subsample=0.8,
+        # max_features='sqrt' picks ~sqrt(n_features) candidates per
+        # split, preventing any single dominant feature (previously
+        # gdp_per_capita_ppp at 27% importance) from being chosen at
+        # every split level. Spreads importance more evenly.
+        max_features='sqrt',
         random_state=42, min_samples_leaf=20,
     )
     model.fit(X.values, y.values, sample_weight=sample_weight)
@@ -551,6 +556,11 @@ def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
     model = GradientBoostingClassifier(
         n_estimators=n_estimators, max_depth=max_depth,
         learning_rate=learning_rate, subsample=0.8,
+        # max_features='sqrt' picks ~sqrt(n_features) candidates per
+        # split, preventing any single dominant feature (previously
+        # gdp_per_capita_ppp at 27% importance) from being chosen at
+        # every split level. Spreads importance more evenly.
+        max_features='sqrt',
         random_state=42, min_samples_leaf=20,
     )
     model.fit(X.values, y.values, sample_weight=sample_weight)
