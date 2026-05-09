@@ -3,50 +3,52 @@
   "cadence": "quarterly",
   "horizon_quarters": 12,
   "feature_importance": {
-    "gross_debt_pct_gdp": 0.008533018422271698,
-    "fiscal_balance_pct_gdp": 0.0052588911283768525,
-    "interest_pct_revenue": 0.0030659510012678304,
-    "current_account_pct_gdp": 0.005227982469685699,
-    "reserves_to_imports_months": 0.007965182932528214,
-    "short_term_debt_pct_reserves": 0.0010748505107928575,
-    "external_debt_pct_gni": 0.0050974333876499635,
-    "external_liquidity_ratio": 0.0014717423238841177,
-    "real_gdp_growth": 0.002061895795406521,
-    "inflation": 0.002249487480088419,
-    "gdp_per_capita_ppp": 0.0455517944800234,
-    "rule_of_law": 0.002549500839130703,
-    "govt_effectiveness": 0.006510133062156642,
-    "political_stability": 0.006770450255599613,
-    "control_of_corruption": 0.0026720306861773404,
-    "years_since_default": 0.015313919715711454,
-    "debt_chg_5y_pp": 0.0010537389064074975,
-    "tot_volatility_5y": 0.0018319920109880039,
-    "reserve_currency_share": 0.0013588253998569444,
-    "region_default_rate": 0.010097683552225156,
-    "vix_annual": 0.0007965646435422081
+    "gross_debt_pct_gdp": 0.007364394291879362,
+    "fiscal_balance_pct_gdp": 0.004269655316390897,
+    "interest_pct_revenue": 0.002917852302834767,
+    "current_account_pct_gdp": 0.006177915776063858,
+    "reserves_to_imports_months": 0.006902478737280981,
+    "short_term_debt_pct_reserves": 0.0011559254209876136,
+    "external_debt_pct_gni": 0.003876312792578207,
+    "external_liquidity_ratio": 0.001414636227690913,
+    "real_gdp_growth": 0.0018887679407366465,
+    "inflation": 0.0019826431500114205,
+    "gdp_per_capita_ppp": 0.04157732066374629,
+    "rule_of_law": 0.0013638223420077145,
+    "govt_effectiveness": 0.005611788262735296,
+    "political_stability": 0.005669516595689372,
+    "control_of_corruption": 0.0026167595534930753,
+    "years_since_default": 0.016375868337749133,
+    "debt_chg_5y_pp": 0.0008685345790936827,
+    "fiscal_balance_chg_3y": 0.0017616983050778412,
+    "tot_volatility_5y": 0.0018379604044081788,
+    "reserve_currency_share": 0.001145741056044991,
+    "region_default_rate": 0.009385114522040916,
+    "vix_annual": 0.0007133055553298461
   },
   "coefficients": {
-    "gross_debt_pct_gdp": 0.008533018422271698,
-    "fiscal_balance_pct_gdp": -0.0052588911283768525,
-    "interest_pct_revenue": 0.0030659510012678304,
-    "current_account_pct_gdp": -0.005227982469685699,
-    "reserves_to_imports_months": -0.007965182932528214,
-    "short_term_debt_pct_reserves": 0.0010748505107928575,
-    "external_debt_pct_gni": 0.0050974333876499635,
-    "external_liquidity_ratio": 0.0014717423238841177,
-    "real_gdp_growth": -0.002061895795406521,
-    "inflation": 0.002249487480088419,
-    "gdp_per_capita_ppp": -0.0455517944800234,
-    "rule_of_law": -0.002549500839130703,
-    "govt_effectiveness": -0.006510133062156642,
-    "political_stability": -0.006770450255599613,
-    "control_of_corruption": -0.0026720306861773404,
-    "years_since_default": -0.015313919715711454,
-    "debt_chg_5y_pp": 0.0010537389064074975,
-    "tot_volatility_5y": 0.0018319920109880039,
-    "reserve_currency_share": -0.0013588253998569444,
-    "region_default_rate": 0.010097683552225156,
-    "vix_annual": 0.0007965646435422081
+    "gross_debt_pct_gdp": 0.007364394291879362,
+    "fiscal_balance_pct_gdp": -0.004269655316390897,
+    "interest_pct_revenue": 0.002917852302834767,
+    "current_account_pct_gdp": -0.006177915776063858,
+    "reserves_to_imports_months": -0.006902478737280981,
+    "short_term_debt_pct_reserves": 0.0011559254209876136,
+    "external_debt_pct_gni": 0.003876312792578207,
+    "external_liquidity_ratio": 0.001414636227690913,
+    "real_gdp_growth": -0.0018887679407366465,
+    "inflation": 0.0019826431500114205,
+    "gdp_per_capita_ppp": -0.04157732066374629,
+    "rule_of_law": -0.0013638223420077145,
+    "govt_effectiveness": -0.005611788262735296,
+    "political_stability": -0.005669516595689372,
+    "control_of_corruption": -0.0026167595534930753,
+    "years_since_default": -0.016375868337749133,
+    "debt_chg_5y_pp": 0.0008685345790936827,
+    "fiscal_balance_chg_3y": -0.0017616983050778412,
+    "tot_volatility_5y": 0.0018379604044081788,
+    "reserve_currency_share": -0.001145741056044991,
+    "region_default_rate": 0.009385114522040916,
+    "vix_annual": 0.0007133055553298461
   },
   "intercept": 0.0,
   "class_balance_log_odds": -2.3656834328313585,
@@ -119,6 +121,10 @@
       "mean": 2.302399774138905,
       "std": 14.724262834883943
     },
+    "fiscal_balance_chg_3y": {
+      "mean": -0.1513551665725579,
+      "std": 5.951289853452049
+    },
     "tot_volatility_5y": {
       "mean": 0.10574853688677388,
       "std": 0.0648536239244011
@@ -154,6 +160,7 @@
     "control_of_corruption": 0.4780849,
     "years_since_default": 100.0,
     "debt_chg_5y_pp": 2.5999999999999996,
+    "fiscal_balance_chg_3y": 0.1499999999999999,
     "tot_volatility_5y": 0.09462930331108518,
     "reserve_currency_share": 0.0,
     "region_default_rate": 0.22727272727272727,
@@ -162,163 +169,163 @@
   "pd_calibration": [
     {
       "bucket": 1,
-      "score_lo": 0.001301295616778394,
-      "score_hi": 0.005608328950135001,
+      "score_lo": 0.0015669854079548183,
+      "score_hi": 0.005751860639598274,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 2,
-      "score_lo": 0.005630151795773397,
-      "score_hi": 0.007498860397731583,
+      "score_lo": 0.005760680014201796,
+      "score_hi": 0.007458180076455168,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 3,
-      "score_lo": 0.007527707477690202,
-      "score_hi": 0.009790174931645641,
+      "score_lo": 0.007477808020370225,
+      "score_hi": 0.009629011307550367,
       "pd_empirical": 0.0,
       "n_obs": 709,
       "n_events": 0
     },
     {
       "bucket": 4,
-      "score_lo": 0.009790174931645641,
-      "score_hi": 0.012710131513749381,
+      "score_lo": 0.009629011307550367,
+      "score_hi": 0.012571377313191643,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 5,
-      "score_lo": 0.012710131513749381,
-      "score_hi": 0.016592443903222932,
+      "score_lo": 0.012571377313191643,
+      "score_hi": 0.016412832400597724,
       "pd_empirical": 0.0,
       "n_obs": 709,
       "n_events": 0
     },
     {
       "bucket": 6,
-      "score_lo": 0.016592443903222932,
-      "score_hi": 0.02077298959133677,
+      "score_lo": 0.016412832400597724,
+      "score_hi": 0.021334695074557215,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 7,
-      "score_lo": 0.020782542378270912,
-      "score_hi": 0.025085624187889594,
+      "score_lo": 0.021385349570238407,
+      "score_hi": 0.025975573614858284,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 8,
-      "score_lo": 0.02511693923431968,
-      "score_hi": 0.031207986566113916,
+      "score_lo": 0.025975573614858284,
+      "score_hi": 0.031853297781019724,
       "pd_empirical": 0.0,
       "n_obs": 709,
       "n_events": 0
     },
     {
       "bucket": 9,
-      "score_lo": 0.031207986566113916,
-      "score_hi": 0.036883317728215265,
+      "score_lo": 0.031853297781019724,
+      "score_hi": 0.03760788746243445,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 10,
-      "score_lo": 0.036883317728215265,
-      "score_hi": 0.04661484850219534,
+      "score_lo": 0.03760788746243445,
+      "score_hi": 0.046793752422298364,
       "pd_empirical": 0.0,
       "n_obs": 709,
       "n_events": 0
     },
     {
       "bucket": 11,
-      "score_lo": 0.04675161915838195,
-      "score_hi": 0.0550172767184147,
+      "score_lo": 0.046793752422298364,
+      "score_hi": 0.05323462886913165,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 12,
-      "score_lo": 0.0550172767184147,
-      "score_hi": 0.06474609541361254,
+      "score_lo": 0.05323462886913165,
+      "score_hi": 0.06430263763539573,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 13,
-      "score_lo": 0.06474609541361254,
-      "score_hi": 0.08887075041509655,
+      "score_lo": 0.06430263763539573,
+      "score_hi": 0.09083715906935227,
       "pd_empirical": 0.0,
       "n_obs": 709,
       "n_events": 0
     },
     {
       "bucket": 14,
-      "score_lo": 0.08887075041509655,
-      "score_hi": 0.13583524756731152,
+      "score_lo": 0.09083715906935227,
+      "score_hi": 0.13372627734066045,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 15,
-      "score_lo": 0.13583524756731152,
-      "score_hi": 0.1945773020358007,
+      "score_lo": 0.13393858633854658,
+      "score_hi": 0.1916287130953982,
       "pd_empirical": 0.0,
       "n_obs": 709,
       "n_events": 0
     },
     {
       "bucket": 16,
-      "score_lo": 0.1945773020358007,
-      "score_hi": 0.28285852576420417,
+      "score_lo": 0.1916287130953982,
+      "score_hi": 0.28014014557656103,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 17,
-      "score_lo": 0.28285852576420417,
-      "score_hi": 0.4481092557174537,
+      "score_lo": 0.28014014557656103,
+      "score_hi": 0.43561684813816487,
       "pd_empirical": 0.0,
       "n_obs": 708,
       "n_events": 0
     },
     {
       "bucket": 18,
-      "score_lo": 0.4481092557174537,
-      "score_hi": 0.7039672034764582,
-      "pd_empirical": 0.09026798307475317,
+      "score_lo": 0.43561684813816487,
+      "score_hi": 0.7037423012145892,
+      "pd_empirical": 0.08180535966149506,
       "n_obs": 709,
-      "n_events": 64
+      "n_events": 58
     },
     {
       "bucket": 19,
-      "score_lo": 0.7039672034764582,
-      "score_hi": 0.9040712760996726,
-      "pd_empirical": 0.6652542372881356,
+      "score_lo": 0.7037423012145892,
+      "score_hi": 0.9032165638992007,
+      "pd_empirical": 0.6567796610169492,
       "n_obs": 708,
-      "n_events": 471
+      "n_events": 465
     },
     {
       "bucket": 20,
-      "score_lo": 0.9040712760996726,
-      "score_hi": 0.987784034200937,
-      "pd_empirical": 0.9605077574047954,
+      "score_lo": 0.9032165638992007,
+      "score_hi": 0.98595723604789,
+      "pd_empirical": 0.9774330042313117,
       "n_obs": 709,
-      "n_events": 681
+      "n_events": 693
     }
   ],
   "rating_buckets": {
@@ -329,92 +336,92 @@
       {
         "pm_numeric": 1,
         "max_consensus_num": 1,
-        "max_score": 0.1253
+        "max_score": 0.1378
       },
       {
         "pm_numeric": 2,
         "max_consensus_num": 2,
-        "max_score": 0.1365
+        "max_score": 0.1477
       },
       {
         "pm_numeric": 3,
         "max_consensus_num": 3,
-        "max_score": 0.1755
+        "max_score": 0.1784
       },
       {
         "pm_numeric": 4,
         "max_consensus_num": 4,
-        "max_score": 0.1809
+        "max_score": 0.2014
       },
       {
         "pm_numeric": 5,
         "max_consensus_num": 5,
-        "max_score": 0.2009
+        "max_score": 0.2164
       },
       {
         "pm_numeric": 6,
         "max_consensus_num": 6,
-        "max_score": 0.2086
+        "max_score": 0.2359
       },
       {
         "pm_numeric": 7,
         "max_consensus_num": 7,
-        "max_score": 0.2975
+        "max_score": 0.297
       },
       {
         "pm_numeric": 8,
         "max_consensus_num": 8,
-        "max_score": 0.3152
+        "max_score": 0.3449
       },
       {
         "pm_numeric": 9,
         "max_consensus_num": 9,
-        "max_score": 0.6487
+        "max_score": 0.5361
       },
       {
         "pm_numeric": 10,
         "max_consensus_num": 10,
-        "max_score": 0.9945
+        "max_score": 1.2523
       },
       {
         "pm_numeric": 11,
         "max_consensus_num": 11,
-        "max_score": 2.3599
+        "max_score": 2.1683
       },
       {
         "pm_numeric": 12,
         "max_consensus_num": 12,
-        "max_score": 3.6543
+        "max_score": 3.62
       },
       {
         "pm_numeric": 13,
         "max_consensus_num": 13,
-        "max_score": 42.3689
+        "max_score": 40.5295
       },
       {
         "pm_numeric": 14,
         "max_consensus_num": 14,
-        "max_score": 51.4893
+        "max_score": 49.7904
       },
       {
         "pm_numeric": 15,
         "max_consensus_num": 15,
-        "max_score": 51.5026
+        "max_score": 49.964
       },
       {
         "pm_numeric": 16,
         "max_consensus_num": 16,
-        "max_score": 61.9544
+        "max_score": 63.8219
       },
       {
         "pm_numeric": 17,
         "max_consensus_num": 19,
-        "max_score": 73.5235
+        "max_score": 75.4033
       },
       {
         "pm_numeric": 18,
         "max_consensus_num": 21,
-        "max_score": 74.0176
+        "max_score": 76.2597
       },
       {
         "pm_numeric": 19,
@@ -428,14 +435,14 @@
       }
     ]
   },
-  "auc_in_sample": 0.994995946571958,
-  "auc_oos": 0.8482132710655442,
-  "brier_oos": 0.09596566272932394,
+  "auc_in_sample": 0.9953629392737557,
+  "auc_oos": 0.8519114732671966,
+  "brier_oos": 0.09620097981344138,
   "oos_method": "GroupKFold by iso3 (5 folds)",
   "oos_n_folds": 5,
   "n_obs": 14168,
   "n_events": 1216,
-  "trained_at": "2026-05-09T20:21:12Z",
+  "trained_at": "2026-05-09T20:56:47Z",
   "hyperparams": {
     "n_estimators": 300,
     "max_depth": 3,

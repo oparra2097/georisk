@@ -84,6 +84,7 @@ WEIGHTS: Dict[str, float] = {
     # ── Serial-default + research-driven ──
     'years_since_default':           0.04,   # R&R 2009; smaller = worse (recent default)
     'debt_chg_5y_pp':                0.04,   # Manasse 2003 + IMF SRDSF
+    'fiscal_balance_chg_3y':         0.05,   # 3y trajectory; catches ROU-style deterioration
     'tot_volatility_5y':             0.03,   # IMF PCTOT, Hilscher-Nosbusch 2010
     'reserve_currency_share':        0.05,   # IMF COFER — reserve-currency offset
     'region_default_rate':           0.04,   # Reinhart-Rogoff 2009 — contagion
@@ -117,6 +118,7 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'political_stability':           False,
     'years_since_default':           False,  # more years = better
     'debt_chg_5y_pp':                True,   # faster debt build-up = worse
+    'fiscal_balance_chg_3y':         False,  # negative chg = deterioration = worse
     'tot_volatility_5y':             True,   # higher ToT vol = worse
     'reserve_currency_share':        False,  # higher share = lower default risk
     'vix_annual':                    True,   # higher VIX = more global stress = worse

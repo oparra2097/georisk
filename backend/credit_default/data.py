@@ -361,6 +361,16 @@ def get_history_panel(years_back: int = 25):
         df = df.sort_values(['iso3', 'year']).reset_index(drop=True)
         df['debt_chg_5y_pp'] = df.groupby('iso3')['gross_debt_pct_gdp'].diff(5)
 
+    # Fiscal-balance trajectory (3-year change). Captures
+    # deterioration in primary balance even when the level itself
+    # isn't yet alarming — Romania case: balance −2.4% (2022) →
+    # −7.6% (2025) is a five-percentage-point swing in 3 years that
+    # the snapshot fiscal_balance_pct_gdp doesn't see. NEGATIVE
+    # change = worsening = higher risk.
+    if 'fiscal_balance_pct_gdp' in df.columns:
+        df = df.sort_values(['iso3', 'year']).reset_index(drop=True)
+        df['fiscal_balance_chg_3y'] = df.groupby('iso3')['fiscal_balance_pct_gdp'].diff(3)
+
     # 3. Terms-of-trade volatility (IMF PCTOT, Hilscher-Nosbusch 2010):
     #    5y rolling std-dev of log changes in commodity export-to-import
     #    price ratio. Best fundamental beyond debt and reserves for
@@ -754,6 +764,35 @@ def get_panel(force_refresh: bool = False) -> Dict:
         print(f'[credit_default.data] VIX latest fetch failed: {e}')
         _vix_latest = 0.0
 
+    # Pre-compute latest-year values of features that are derived in
+    # ``get_history_panel`` (debt_chg_5y_pp, tot_volatility_5y,
+    # fiscal_balance_chg_3y, years_since_default, default_count_25y,
+    # reer_overvaluation_pct). Without this, live scoring sees these
+    # as None and the GBM imputes to the panel median — making
+    # countries with deteriorating fiscal/debt trajectories like
+    # Romania score the same as a flat-trajectory country.
+    _derived_latest: Dict[str, Dict[str, float]] = {}
+    try:
+        _hist = get_history_panel()
+        if _hist is not None and not _hist.empty:
+            _derived_cols = [
+                'debt_chg_5y_pp', 'tot_volatility_5y',
+                'fiscal_balance_chg_3y', 'years_since_default',
+                'default_count_25y', 'reer_overvaluation_pct',
+            ]
+            _derived_cols = [c for c in _derived_cols if c in _hist.columns]
+            for iso3, g in _hist.groupby('iso3'):
+                gs = g.sort_values('year')
+                latest_for_iso: Dict[str, float] = {}
+                for col in _derived_cols:
+                    s = gs[col].dropna()
+                    if not s.empty:
+                        latest_for_iso[col] = float(s.iloc[-1])
+                if latest_for_iso:
+                    _derived_latest[iso3] = latest_for_iso
+    except Exception as e:
+        print(f'[credit_default.data] derived-feature latest lookup failed: {e}')
+
     # Latest regional-contagion rate per country: share of regional
     # peers currently inside an active CRAG hard-default spell.
     _region_contagion_now: Dict[str, float] = {}
@@ -825,6 +864,11 @@ def get_panel(force_refresh: bool = False) -> Dict:
         ind_values['reserve_currency_share'] = _RESERVE_CURRENCY_SHARE.get(iso3, 0.0)
         ind_values['vix_annual'] = _vix_latest
         ind_values['region_default_rate'] = _region_contagion_now.get(iso3, 0.0)
+        # Derived features carried forward from the historical panel
+        # (training set computes them; live cross-section also needs
+        # them so the GBM doesn't impute to median).
+        for col, val in (_derived_latest.get(iso3) or {}).items():
+            ind_values[col] = val
         # Same ELR formula as get_history_panel, computed on the
         # live-cross-section indicator values.
         st_pr = ind_values.get('short_term_debt_pct_reserves') or 0.0
