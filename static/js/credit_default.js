@@ -678,6 +678,7 @@
       : rawHorizon;
     const years = h.history.map((r) => r.year);
     const pd = h.history.map((r) => (r.model_pd != null ? r.model_pd * 100 : null));
+    const composite = h.history.map((r) => (r.composite_score != null ? r.composite_score : null));
     const yMin = Math.min(...years);
     const yMax = Math.max(...years);
 
@@ -862,7 +863,23 @@
       spanGaps: true,
       pointRadius: 2,
       fill: true,
+      yAxisID: 'y',
     }];
+    if (composite.some((v) => v != null)) {
+      datasets.push({
+        label: 'Composite z-score (50 = panel median)',
+        data: composite,
+        borderColor: '#f59e0b',
+        backgroundColor: 'transparent',
+        borderDash: [3, 3],
+        borderWidth: 1.5,
+        tension: 0.2,
+        spanGaps: true,
+        pointRadius: 1.5,
+        fill: false,
+        yAxisID: 'yc',
+      });
+    }
     if (agencyLine) {
       const sp = (h.agency || {}).sp;
       const moodys = (h.agency || {}).moodys;
@@ -893,9 +910,19 @@
         scales: {
           y: {
             beginAtZero: true,
+            position: 'left',
             ticks: { callback: (v) => `${v}%`, color: '#9ca3af', font: { size: 10 } },
             title: { display: true, text: `PD ${horizon}y`, color: '#e5e7eb', font: { size: 11 } },
             grid: { color: 'rgba(255, 255, 255, 0.06)' },
+          },
+          yc: {
+            display: composite.some((v) => v != null),
+            position: 'right',
+            min: 0,
+            max: 100,
+            ticks: { color: '#f59e0b', font: { size: 10 } },
+            title: { display: true, text: 'Composite (0-100)', color: '#f59e0b', font: { size: 11 } },
+            grid: { drawOnChartArea: false },
           },
           x: {
             title: { display: true, text: 'Year', color: '#e5e7eb', font: { size: 11 } },

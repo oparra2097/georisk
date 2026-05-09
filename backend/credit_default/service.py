@@ -389,6 +389,50 @@ def get_country_history(iso3: str, horizon_years: int = 1,
         except OverflowError:
             model_pd = 0.0 if adj < 0 else 1.0
         score = 100.0 * model_pd
+
+        # Composite reference score (0-100, weighted-z fundamentals
+        # view, no GBM / no Platt rescale / no reserve-currency shift).
+        # Same formula as rating_model._score_panel: weighted sign·z
+        # sum → sigmoid → log-odds re-mapped onto a 0-100 scale where
+        # 50 ≈ panel median. Useful as a leading-indicator overlay on
+        # the chart: when the composite trajectory diverges from PD
+        # (rising composite, flat PD), fundamentals are deteriorating
+        # ahead of what the GBM can yet pick up.
+        c_w_sum = 0.0
+        c_w_total = 0.0
+        for feat, w in rating_model.WEIGHTS.items():
+            raw = row.get(feat)
+            try:
+                raw_f = float(raw)
+                if raw_f != raw_f:
+                    raw_f = None
+            except (TypeError, ValueError):
+                raw_f = None
+            if raw_f is None:
+                raw_f = medians.get(feat)
+            if raw_f is None:
+                continue
+            sc = scaler.get(feat) or {}
+            mean = float(sc.get('mean', 0.0))
+            std = float(sc.get('std', 1.0)) or 1.0
+            zf = (raw_f - mean) / std
+            if zf > rating_model.Z_CLIP:
+                zf = rating_model.Z_CLIP
+            elif zf < -rating_model.Z_CLIP:
+                zf = -rating_model.Z_CLIP
+            sign = 1.0 if rating_model.HIGHER_IS_WORSE.get(feat, True) else -1.0
+            c_w_sum += float(w) * sign * zf
+            c_w_total += float(w)
+        composite_score = None
+        if c_w_total > 0:
+            c_norm = c_w_sum / c_w_total
+            try:
+                c_pd = 1.0 / (1.0 + math.exp(-c_norm))
+            except OverflowError:
+                c_pd = 0.0 if c_norm < 0 else 1.0
+            c_pd = min(max(c_pd, 1e-6), 1.0 - 1e-6)
+            composite_score = max(0.0, min(100.0, 50.0 + 38.4 * math.log10(c_pd / (1.0 - c_pd))))
+
         period_year = int(row['year'])
         in_default_now = period_year in in_default_yrs
         rating = rating_model._letter_and_pd(
@@ -401,6 +445,7 @@ def get_country_history(iso3: str, horizon_years: int = 1,
             'year': int(row['year']),
             'model_pd': round(model_pd, 5),
             'model_score': round(score, 3),
+            'composite_score': round(composite_score, 2) if composite_score is not None else None,
             'pm_notch': rating['pm_notch'],
             'pm_numeric': rating['pm_numeric'],
             'sp_equiv': rating['sp_equiv'],
