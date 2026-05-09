@@ -554,14 +554,12 @@
           <div class="cd-contrib-label">${escapeHtml(label)}${periodTag}</div>
           <div class="cd-contrib-value">—</div>
           <div class="cd-contrib-bar-track"><div class="cd-contrib-bar missing"></div></div>
-          <div class="cd-contrib-z">no data</div>
         </div>`;
     }
     const ratio = Math.abs(c.contribution) / maxAbs;
     const widthPct = (ratio * 50).toFixed(1);  // half-track from centre
     const cls = c.contribution >= 0 ? 'risk' : 'hedge';
     const valueStr = formatNumber(c.value, 1, units);
-    const zStr = c.z != null ? `z=${c.z.toFixed(1)}` : '';
     return `
       <div class="cd-contrib-row">
         <div class="cd-contrib-label">${escapeHtml(label)}${periodTag}</div>
@@ -569,7 +567,6 @@
         <div class="cd-contrib-bar-track">
           <div class="cd-contrib-bar ${cls}" style="width:${widthPct}%"></div>
         </div>
-        <div class="cd-contrib-z">${zStr}</div>
       </div>
     `;
   }

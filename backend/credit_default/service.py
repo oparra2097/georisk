@@ -110,6 +110,20 @@ def _enrich_with_agencies(scored: Dict) -> Dict:
             continue
         c['agency'] = a
 
+        # ── Agency-anchor pull (Fitch-style Qualitative Overlay) ──
+        # When the model and the consensus agency rating are 3+ notches
+        # apart, pull the headline rating halfway toward the agency,
+        # capped so the post-pull gap is at most ±2 notches. Frontier
+        # sovereigns like ARG/LKA/PAK/GHA/ZMB/ETH/UKR/RUS systematically
+        # rate too lenient out of the macro-only GBM because the panel
+        # is missing FX-debt share, EMBI spreads, IMF-program status,
+        # and gross-financing-needs (see research notes — Fitch SRM,
+        # S&P methodology, IMF SRDSF). The pull is a calibration
+        # overlay, not a signal change: contributions, scores and PDs
+        # are preserved; only the displayed letter / pm_notch shifts.
+        if not c.get('rating', {}).get('defaulted'):
+            _apply_agency_anchor_pull(c, a)
+
         # Compute notch deltas (model rating vs each agency). The rating
         # block now carries its own pm_numeric (1..20) so we map agency
         # letters onto the same scale via the SP/Moody's equivalents.
@@ -122,6 +136,48 @@ def _enrich_with_agencies(scored: Dict) -> Dict:
                 deltas[k] = model_num - num  # positive = model is harsher
         c['rating']['notch_delta'] = deltas
     return scored
+
+
+def _apply_agency_anchor_pull(country: Dict, agency: Dict) -> None:
+    """Pull a 3+ notch model-vs-agency disagreement halfway toward the
+    agency consensus, capped at ±2 notches post-pull. Mutates
+    ``country['rating']`` in place.
+
+    Activation: ``abs(model_num - consensus_num) >= 3``. Inactive when
+    the model is already within 2 notches of the agency, when no agency
+    consensus is available, or when the country has been flagged
+    defaulted (the CRAG override already pinned PM=10/D)."""
+    rating = country.get('rating') or {}
+    model_num = rating.get('pm_numeric')
+    consensus = agency.get('consensus_num')
+    if model_num is None or consensus is None:
+        return
+    delta = int(model_num) - int(consensus)
+    if abs(delta) < 3:
+        return
+    # Halfway pull (round toward agency).
+    if delta < 0:
+        pulled = int(model_num) + ((-delta) // 2)
+        pulled = min(pulled, int(consensus) + 2)  # never go below agency-2
+    else:
+        pulled = int(model_num) - (delta // 2)
+        pulled = max(pulled, int(consensus) - 2)  # never go above agency+2
+    pulled = max(1, min(20, pulled))
+    if pulled == int(model_num):
+        return
+    bucket = next(
+        (b for b in rating_model.RATING_BUCKETS if b[2] == pulled), None,
+    )
+    if not bucket:
+        return
+    rating['pm_notch'] = bucket[1]
+    rating['pm_numeric'] = pulled
+    rating['sp_equiv'] = bucket[3]
+    rating['moodys_equiv'] = bucket[4]
+    rating['is_investment_grade'] = pulled <= rating_model.IG_BOUNDARY_NUMERIC
+    rating['anchor_pull'] = {
+        'from': int(model_num), 'to': pulled, 'consensus': int(consensus),
+    }
 
 
 def get_dashboard(force_refresh: bool = False, cadence: str = 'annual',
