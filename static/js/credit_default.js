@@ -669,7 +669,13 @@
     canvas.style.display = '';
     if (empty) empty.hidden = true;
 
-    const horizon = h.horizon_years || state.historyHorizon || 1;
+    // The API returns ``horizon_years = quarters`` in quarterly mode
+    // (4/12/20). Translate back to display years so the chart label
+    // matches the toggle (1y/3y/5y) regardless of cadence.
+    const rawHorizon = h.horizon_years || state.historyHorizon || 1;
+    const horizon = (h.cadence === 'quarterly')
+      ? Math.max(1, Math.round(rawHorizon / 4))
+      : rawHorizon;
     const years = h.history.map((r) => r.year);
     const pd = h.history.map((r) => (r.model_pd != null ? r.model_pd * 100 : null));
     const yMin = Math.min(...years);
