@@ -57,37 +57,44 @@ def _load_fit_state(horizon_years: int = 1, cadence: str = 'annual'):
 # 15% governance block. Rule of law and institutional quality have
 # robust empirical signal in academic sovereign-default work.
 WEIGHTS: Dict[str, float] = {
-    # Public debt sustainability (43%)
-    'gross_debt_pct_gdp':            0.17,
-    'fiscal_balance_pct_gdp':        0.09,
-    'interest_pct_revenue':          0.11,
-    'shadow_debt_gap_pp':            0.06,   # estimated − official debt/GDP
-    # External vulnerability (29%)
-    'current_account_pct_gdp':       0.08,
-    'reserves_to_imports_months':    0.08,
-    'short_term_debt_pct_reserves':  0.07,
+    # ── Public debt sustainability ──
+    'gross_debt_pct_gdp':            0.18,
+    'fiscal_balance_pct_gdp':        0.10,
+    'interest_pct_revenue':          0.10,
+    # ── External vulnerability ──
+    'current_account_pct_gdp':       0.10,
+    'reserves_to_imports_months':    0.09,
+    'short_term_debt_pct_reserves':  0.08,
     'external_debt_pct_gni':         0.06,
-    # Real economy (13%)
+    'external_liquidity_ratio':      0.05,   # S&P-style external financing pressure
+    # ── Real economy ──
     'real_gdp_growth':               0.06,
     'inflation':                     0.04,
-    'gdp_per_capita_ppp':            0.03,
-    # Governance / institutions (15%) — WGI components, -2.5 .. +2.5 scale
+    'gdp_per_capita_ppp':            0.04,
+    # ── Governance (slimmed) — keep rule_of_law, govt_effectiveness,
+    # political_stability, control_of_corruption as the independent
+    # set. Dropped regulatory_quality / voice_accountability
+    # (correlated, <1% GBM importance each). Rule of law retained as
+    # an explicit user preference — strong driver across our panel
+    # historically (LatAm / SSA distress contexts). ──
     'rule_of_law':                   0.04,
-    'control_of_corruption':         0.03,
     'govt_effectiveness':            0.03,
-    'regulatory_quality':            0.02,
-    'political_stability':           0.02,
-    'voice_accountability':          0.01,
-    # ── Serial-default + debt-velocity features (research-driven) ──
+    'political_stability':           0.03,
+    'control_of_corruption':         0.02,
+    # ── Serial-default + research-driven ──
     'years_since_default':           0.04,   # R&R 2009; smaller = worse (recent default)
-    'default_count_25y':             0.03,   # Cantor-Packer 1996; serial defaulter dummy
-    'debt_chg_5y_pp':                0.05,   # Manasse 2003 + IMF SRDSF; faster build-up = worse
-    'tot_volatility_5y':             0.04,   # IMF PCTOT, Hilscher-Nosbusch 2010
-    'reer_overvaluation_pct':        0.03,   # BIS WS_EER, IMF SRDSF
-    'reserve_currency_share':        0.06,   # IMF COFER 2024Q4 — reserve-currency offset
-    'vix_annual':                    0.03,   # CBOE VIX — global financial-stress regressor
-    'region_default_rate':           0.04,   # Reinhart-Rogoff 2009 — regional contagion
-    'external_liquidity_ratio':      0.04,   # S&P-style external financing pressure
+    'debt_chg_5y_pp':                0.04,   # Manasse 2003 + IMF SRDSF
+    'tot_volatility_5y':             0.03,   # IMF PCTOT, Hilscher-Nosbusch 2010
+    'reserve_currency_share':        0.05,   # IMF COFER — reserve-currency offset
+    'region_default_rate':           0.04,   # Reinhart-Rogoff 2009 — contagion
+    'vix_annual':                    0.02,   # CBOE VIX — global stress
+    # Removed (cumulative GBM importance < 4% combined; high
+    # multicollinearity with retained features):
+    #   shadow_debt_gap_pp (0.0%)        — never split on
+    #   default_count_25y (0.3%)         — duplicate of years_since_default
+    #   regulatory_quality (0.4%)        — duplicate of govt_effectiveness
+    #   reer_overvaluation_pct (0.6%)    — sparse data, weak signal
+    #   voice_accountability (0.9%)      — duplicate of political_stability
 }
 
 # How each weight maps onto the directionality of the risk contribution.
@@ -97,7 +104,6 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'gross_debt_pct_gdp':            True,
     'fiscal_balance_pct_gdp':        False,
     'interest_pct_revenue':          True,
-    'shadow_debt_gap_pp':            True,
     'current_account_pct_gdp':       False,
     'reserves_to_imports_months':    False,
     'short_term_debt_pct_reserves':  True,
@@ -108,14 +114,10 @@ HIGHER_IS_WORSE: Dict[str, bool] = {
     'rule_of_law':                   False,
     'control_of_corruption':         False,
     'govt_effectiveness':            False,
-    'regulatory_quality':            False,
     'political_stability':           False,
-    'voice_accountability':          False,
     'years_since_default':           False,  # more years = better
-    'default_count_25y':             True,   # more defaults = worse
     'debt_chg_5y_pp':                True,   # faster debt build-up = worse
     'tot_volatility_5y':             True,   # higher ToT vol = worse
-    'reer_overvaluation_pct':        True,   # over-valued REER = worse
     'reserve_currency_share':        False,  # higher share = lower default risk
     'vix_annual':                    True,   # higher VIX = more global stress = worse
     'region_default_rate':           True,   # more regional defaults = worse contagion

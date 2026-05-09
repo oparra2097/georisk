@@ -491,6 +491,18 @@
     document.getElementById('cd-panel-pm-grade').textContent =
       (rating.is_investment_grade ? 'IG' :
         (rating.defaulted ? 'In default' : 'HY')) + sourceTag;
+    // Raw model rating (pre-anchor-pull). Show only when the displayed
+    // letter has been pulled — otherwise headline IS the raw model.
+    const rawEl = document.getElementById('cd-panel-pm-raw');
+    if (rawEl) {
+      const pulled = rating.anchor_pull;
+      if (pulled && rating.raw_pm_notch && rating.raw_pm_notch !== rating.pm_notch) {
+        rawEl.textContent = `raw model: ${rating.raw_pm_notch} (${rating.raw_sp_equiv || ''})`;
+        rawEl.hidden = false;
+      } else {
+        rawEl.hidden = true;
+      }
+    }
 
     // Composite reference score on a 0–100 log-odds scale, with HIGHER
     // = higher default risk (0 best, 100 worst). Independent of the

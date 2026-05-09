@@ -143,12 +143,24 @@ def _apply_agency_anchor_pull(country: Dict, agency: Dict) -> None:
     agency consensus, capped at ±2 notches post-pull. Mutates
     ``country['rating']`` in place.
 
-    Activation: ``abs(model_num - consensus_num) >= 3``. Inactive when
-    the model is already within 2 notches of the agency, when no agency
-    consensus is available, or when the country has been flagged
-    defaulted (the CRAG override already pinned PM=10/D)."""
+    Always preserves the pre-pull values as ``raw_pm_notch /
+    raw_pm_numeric / raw_sp_equiv / raw_moodys_equiv`` so the UI can
+    show the un-anchored model output side-by-side with the anchored
+    headline. ``anchor_pull`` carries the same provenance for the
+    cases where we actually pulled.
+
+    Activation: ``abs(model_num - consensus_num) >= 3``. When the gap
+    is < 3 we still snapshot the raw fields; just don't mutate the
+    headline."""
     rating = country.get('rating') or {}
     model_num = rating.get('pm_numeric')
+    # Snapshot the pre-pull rating regardless of whether we pull —
+    # frontend can compare side-by-side.
+    rating['raw_pm_notch'] = rating.get('pm_notch')
+    rating['raw_pm_numeric'] = rating.get('pm_numeric')
+    rating['raw_sp_equiv'] = rating.get('sp_equiv')
+    rating['raw_moodys_equiv'] = rating.get('moodys_equiv')
+
     consensus = agency.get('consensus_num')
     if model_num is None or consensus is None:
         return
@@ -521,6 +533,9 @@ def get_table_rows(cadence: str = 'annual', horizon: int = 1) -> List[Dict]:
             'pm_notch': rating.get('pm_notch'),
             'sp_equiv': rating.get('sp_equiv'),
             'moodys_equiv': rating.get('moodys_equiv'),
+            'raw_pm_notch': rating.get('raw_pm_notch'),
+            'raw_sp_equiv': rating.get('raw_sp_equiv'),
+            'anchor_pull': rating.get('anchor_pull'),
             'source': rating.get('source'),
             'pd_1y': rating.get('pd_1y'),
             'pd_3y': rating.get('pd_3y'),
