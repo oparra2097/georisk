@@ -835,74 +835,92 @@ def _calibrate_rating_buckets(iso_years_df, proba, horizon_years: int,
             latest_score[s] = _to_score(float(proba[i]))
 
     agencies = cd_agencies.get_agency_ratings()
-    pairs: List[Tuple[int, float]] = []
+    # Region lookup for the per-region calibration. Use the live
+    # ``data.get_panel`` region field (sourced from the sovereign-
+    # debt overlay), so calibration regions match scoring regions.
+    try:
+        from backend.credit_default import data as _cd_data
+        panel_now = _cd_data.get_panel() or {}
+        region_by_iso = {
+            iso: (c.get('region') or '')
+            for iso, c in (panel_now.get('countries') or {}).items()
+        }
+    except Exception:
+        region_by_iso = {}
+
+    triples: List[Tuple[int, float, str]] = []
     for s, score in latest_score.items():
         ag = agencies.get(s) or {}
         c = ag.get('consensus_num')
         if c is not None:
-            pairs.append((int(c), float(score)))
+            triples.append((int(c), float(score), region_by_iso.get(s, '') or 'Unknown'))
 
-    if len(pairs) < 30:
+    if len(triples) < 30:
         # Too few overlap points to recalibrate — let rating_model fall
         # back to its hand-set RATING_BUCKETS.
         return None
 
-    consensus_arr = np.array([p[0] for p in pairs], dtype=float)
-    score_arr = np.array([p[1] for p in pairs], dtype=float)
-    n = len(pairs)
+    n_total = len(triples)
 
-    # ── Rank-based bucket calibration ────────────────────────────────
-    # The previous isotonic-regression approach collapsed the AAA
-    # boundary to 0 because the smooth monotone fit averages over
-    # consensus values at the lowest scores; with 9 AAA anchors mixed
-    # in with 80 IG/HY anchors at similar scores, the predicted
-    # consensus at the bottom never falls below 1.5, so no country
-    # ever maps to ORR 1.
-    #
-    # Replace with rank-based percentile matching: for each ORR k,
-    # the bucket boundary is set so that the FRACTION of anchor
-    # countries below the boundary matches the fraction of agencies
-    # rating those countries at consensus_num ≤ max_consensus(k).
-    # That guarantees each bucket has the right share of the anchor
-    # distribution, even when model scores don't perfectly track
-    # agency rank-order.
-    sorted_scores = np.sort(score_arr)
+    def _bucketize(triples_subset: List[Tuple[int, float, str]]) -> Optional[List[Dict]]:
+        if not triples_subset:
+            return None
+        cons = np.array([t[0] for t in triples_subset], dtype=float)
+        scs = np.array([t[1] for t in triples_subset], dtype=float)
+        n = len(triples_subset)
+        sorted_scs = np.sort(scs)
+        rows: List[Dict] = []
+        for orr in range(1, 21):
+            max_c = _PM_ORR_TO_MAX_CONSENSUS_NUM[orr]
+            share = float(np.sum(cons <= max_c)) / n
+            if share <= 0:
+                ms = 0.0
+            elif share >= 1.0:
+                ms = 100.0
+            else:
+                idx = max(0, min(n - 1, int(round(share * n)) - 1))
+                ms = float(sorted_scs[idx])
+            rows.append({
+                'pm_numeric': orr,
+                'max_consensus_num': max_c,
+                'max_score': round(ms, 4),
+            })
+        # SD/D buckets reserved for the explicit ``defaulted`` flag.
+        rows[-1]['max_score'] = 100.0
+        rows[-2]['max_score'] = 100.0
+        prev = -1e9
+        for row in rows:
+            if row['max_score'] < prev:
+                row['max_score'] = prev
+            prev = row['max_score']
+        return rows
 
-    out: List[Dict] = []
-    for orr in range(1, 21):
-        max_c = _PM_ORR_TO_MAX_CONSENSUS_NUM[orr]
-        share = float(np.sum(consensus_arr <= max_c)) / n
-        if share <= 0:
-            ms = 0.0
-        elif share >= 1.0:
-            ms = 100.0
-        else:
-            # Take the score at the (share)-th percentile rank.
-            idx = max(0, min(n - 1, int(round(share * n)) - 1))
-            ms = float(sorted_scores[idx])
-        out.append({
-            'pm_numeric': orr,
-            'max_consensus_num': max_c,
-            'max_score': round(ms, 4),
-        })
+    # ── Global calibration (fallback) ─────────────────────────────────
+    out = _bucketize(triples) or []
 
-    # ORR 20 (D) is reserved for actual defaulters (rating_model
-    # short-circuits via the ``defaulted`` flag); leave its threshold at
-    # the panel ceiling to avoid mass-tagging high-PD non-defaulters.
-    out[-1]['max_score'] = 100.0
-    out[-2]['max_score'] = 100.0  # ORR 19 (SD) — same reason
-
-    # Enforce strict monotonic non-decreasing max_score.
-    prev = -1e9
-    for row in out:
-        if row['max_score'] < prev:
-            row['max_score'] = prev
-        prev = row['max_score']
+    # ── Per-region calibration ────────────────────────────────────────
+    # Fit independent bucket maps for each region with at least
+    # ``MIN_REGION_ANCHORS`` rated countries. Regions below the
+    # threshold (North America, Other, Unknown) fall back to the
+    # global map at scoring time.
+    MIN_REGION_ANCHORS = 10
+    by_region_triples: Dict[str, List[Tuple[int, float, str]]] = {}
+    for t in triples:
+        by_region_triples.setdefault(t[2], []).append(t)
+    by_region_buckets: Dict[str, List[Dict]] = {}
+    for region, subset in by_region_triples.items():
+        if not region or region in ('Unknown', 'Other') or len(subset) < MIN_REGION_ANCHORS:
+            continue
+        rows = _bucketize(subset)
+        if rows:
+            by_region_buckets[region] = rows
 
     return {
         'method': 'isotonic-regression',
         'horizon_years': horizon_years,
-        'n_anchor_countries': n,
+        'n_anchor_countries': n_total,
+        'by_region_anchor_count': {r: len(s) for r, s in by_region_triples.items()},
+        'by_region': by_region_buckets,
         'buckets': out,
     }
 

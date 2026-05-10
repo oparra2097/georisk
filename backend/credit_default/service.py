@@ -274,7 +274,11 @@ def get_country_history(iso3: str, horizon_years: int = 1,
     panel_country = (cd_data.get_panel().get('countries') or {}).get(iso3) or {}
     class_shift += rating_model._reserve_currency_shift(panel_country)
     rb = fit_state.get('rating_buckets') or {}
-    cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
+    cal_global = rb.get('buckets') if isinstance(rb, dict) else rb
+    # Per-region buckets — see rating_model._score_panel for rationale.
+    cal_by_region = (rb.get('by_region') or {}) if isinstance(rb, dict) else {}
+    country_region = panel_country.get('region') or ''
+    cal_buckets = cal_by_region.get(country_region) or cal_global
 
     # If the persisted fit is a GBM with a saved tree-ensemble pickle,
     # score the per-period history through the actual model so the chart

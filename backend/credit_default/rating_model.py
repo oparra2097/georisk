@@ -392,10 +392,12 @@ def score_panel(panel: Dict, horizon_years: int = 1,
     fit_state = _load_fit_state(horizon_years, cadence=cadence)
     use_fit = fit_state is not None and bool(fit_state.get('coefficients'))
     cal_buckets = None
+    cal_by_region: Dict[str, List[Dict]] = {}
     gbm_payload = None
     if use_fit:
         rb = fit_state.get('rating_buckets') or {}
         cal_buckets = rb.get('buckets') if isinstance(rb, dict) else rb
+        cal_by_region = (rb.get('by_region') or {}) if isinstance(rb, dict) else {}
         # Quarterly fits don't generate their own rating_buckets — the
         # PD scale is identical to the annual fit's (both are
         # 100·natural_pd), so reuse the annual calibrated buckets to
@@ -407,6 +409,7 @@ def score_panel(panel: Dict, horizon_years: int = 1,
             if annual_state:
                 ann_rb = annual_state.get('rating_buckets') or {}
                 cal_buckets = ann_rb.get('buckets') if isinstance(ann_rb, dict) else ann_rb
+                cal_by_region = (ann_rb.get('by_region') or {}) if isinstance(ann_rb, dict) else {}
         # If the fit is a GBM and a pickled model is available, score
         # countries through the actual tree ensemble for the displayed
         # PD. The linear-importance fallback we used before flattens
@@ -596,8 +599,17 @@ def score_panel(panel: Dict, horizon_years: int = 1,
             model_score = composite_score
             model_normalized = composite_normalized
 
+        # Per-region bucket calibration. If the country's region has
+        # its own calibrated map (≥10 anchor countries in the fit),
+        # use that; else fall back to the global map. Lets LatAm /
+        # SSA / MENA each get their own model-PD-to-letter mapping
+        # so a "median" model score doesn't get lumped into the same
+        # bucket regardless of regional context.
+        country_region = c.get('region') or ''
+        regional_buckets = cal_by_region.get(country_region) if cal_by_region else None
+        active_buckets = regional_buckets or cal_buckets
         model_rating = _letter_and_pd(
-            model_score, defaulted=defaulted, calibrated_buckets=cal_buckets,
+            model_score, defaulted=defaulted, calibrated_buckets=active_buckets,
         )
         if model_pd is not None and not defaulted:
             # Map quarterly horizon (4/12/20) back to year-equivalent so
