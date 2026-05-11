@@ -12,10 +12,11 @@
     <div class="cd-header-text">
       <h1 class="cd-title">Sovereign Credit Default</h1>
       <p class="cd-subtitle">
-        Probability-of-default and internal credit rating for ~190 sovereigns,
-        built from IMF&nbsp;WEO + World&nbsp;Bank macro/external/fiscal indicators
-        and a shadow-debt overlay. Rated on the Parra 1–10 scale (1 strongest,
-        10 in default) with side-by-side comparison to S&amp;P / Moody's / Fitch.
+        Probability-of-default and forward-looking credit rating for ~190
+        sovereigns, built from IMF&nbsp;WEO + World&nbsp;Bank macro/external/
+        fiscal indicators plus a shadow-debt overlay. Rated on the S&amp;P
+        scale (AAA strongest, D in default) with side-by-side comparison to
+        S&amp;P / Moody's / Fitch.
       </p>
     </div>
     <div class="cd-status">
@@ -73,7 +74,7 @@
       <thead>
         <tr>
           <th data-sort="name" class="sortable">Country</th>
-          <th data-sort="pm_notch" class="sortable" title="Fitted-model rating (logit / GBM)">PM Rating</th>
+          <th data-sort="pm_numeric" class="sortable" title="Fitted-model rating on the S&amp;P scale (AAA strongest, D in default)">Model Rating</th>
           <th data-sort="composite_score" class="sortable num" title="Log-odds reference score: 0 = best credit, 100 = worst (higher = more default risk)">Composite (log)</th>
           <th data-sort="agency_sp" class="sortable">S&amp;P</th>
           <th data-sort="agency_moodys" class="sortable">Moody's</th>
@@ -118,7 +119,7 @@
         <div class="cd-rating-row cd-rating-row--five">
           <div class="cd-rating-card cd-rating-card--pm">
             <span class="cd-rating-label">PM Model</span>
-            <span class="cd-rating-value" id="cd-panel-pm-notch">—</span>
+            <span class="cd-rating-value" id="cd-panel-pm-sp">—</span>
             <span class="cd-rating-meta" id="cd-panel-pm-grade">—</span>
             <span class="cd-rating-raw" id="cd-panel-pm-raw" hidden></span>
           </div>
@@ -226,10 +227,10 @@
       </header>
       <div class="cd-method-body">
         <p>
-          The Parra Macro sovereign credit model produces a 1–10 internal rating
-          (with +/− on the 2–6 grades) and a probability of default at 1, 3 and
-          5 year horizons. <b>1</b> is the strongest credit; <b>10</b> means in
-          default.
+          The Parra Macro sovereign credit model produces a forward-looking
+          rating on the S&amp;P scale (AAA strongest, D in default, with +/−
+          modifiers on AA through CCC) and a probability of default at 1, 3
+          and 5 year horizons.
         </p>
         <p>
           The composite score is a weighted blend of robust z-scores across the
@@ -242,11 +243,11 @@
           measured as risk.
         </p>
         <p>
-          The composite is logistic-squashed onto 0–100 and bucketed to the
-          1–10 notch ladder. PD figures by bucket are placeholders calibrated
-          to long-run historical sovereign default frequencies — replace with
-          empirical hazards once the default-event panel is wired (see backend
-          README).
+          The composite is logistic-squashed onto 0–100 and rank-mapped to
+          letter buckets via per-region calibration against the agency
+          consensus CDF. PD figures are derived from the GBM ensemble and
+          rescaled to the natural sovereign-default base rate over a 25-year
+          panel of CRAG events.
         </p>
         <p class="cd-method-data">
           Data: IMF WEO via datamapper API, World Bank WDI/IDS, plus the

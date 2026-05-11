@@ -272,7 +272,7 @@
   }
 
   function gradeBucket(r) {
-    if (r.defaulted || r.pm_notch === '10') return 'distressed';
+    if (r.defaulted || r.sp_equiv === 'D' || r.sp_equiv === 'SD') return 'distressed';
     if (r.is_investment_grade) return 'ig';
     // PD-band proxy for the HY vs distressed split.
     if (r.pd_1y == null) return 'hy';
@@ -290,7 +290,7 @@
         } else {
           state.sort.key = key;
           state.sort.dir = ['name', 'region', 'agency_sp', 'agency_moodys',
-                            'agency_fitch', 'pm_notch'].includes(key) ? 'asc' : 'desc';
+                            'agency_fitch', 'pm_numeric'].includes(key) ? 'asc' : 'desc';
         }
         // Update aria/visual indicators
         document.querySelectorAll('.cd-table thead th.sortable').forEach((t) => {
@@ -358,29 +358,42 @@
   }
 
   function ratingChipHtml(r) {
-    if (r.defaulted) return '<span class="cd-rating-chip default">10</span>';
-    const notch = r.pm_notch || '';
-    const cls = chipClassForNotch(notch);
-    return `<span class="cd-rating-chip ${cls}">${escapeHtml(notch || '—')}</span>`;
+    if (r.defaulted) return '<span class="cd-rating-chip default">D</span>';
+    const letter = r.sp_equiv || '';
+    const cls = chipClassForLetter(letter);
+    return `<span class="cd-rating-chip ${cls}">${escapeHtml(letter || '—')}</span>`;
   }
 
   function compositeChipHtml(r) {
-    if (r.defaulted) return '<span class="cd-rating-chip default">10</span>';
-    const notch = r.composite_pm_notch || '';
-    const cls = chipClassForNotch(notch);
-    return `<span class="cd-rating-chip ${cls}" title="Composite reference score">${escapeHtml(notch || '—')}</span>`;
+    if (r.defaulted) return '<span class="cd-rating-chip default">D</span>';
+    const letter = r.composite_sp_equiv || r.composite_pm_notch || '';
+    const cls = chipClassForLetter(letter);
+    return `<span class="cd-rating-chip ${cls}" title="Composite reference score">${escapeHtml(letter || '—')}</span>`;
   }
 
-  function chipClassForNotch(notch) {
-    if (!notch) return '';
-    if (notch === '10') return 'default';
-    const wholeStr = notch.replace(/[+-]/g, '');
-    const whole = parseInt(wholeStr, 10);
+  function chipClassForLetter(letter) {
+    // Map an S&P-equivalent letter ('AAA', 'AA+', 'BBB-', 'CCC', 'D')
+    // back to the legacy notch-based chip styling. Internally the
+    // pm_numeric 1..20 ladder still exists for sort and risk-tier
+    // logic; we just don't surface it on screen.
+    if (!letter) return '';
+    if (letter === 'D' || letter === 'SD') return 'default';
+    const SP_TO_NUMERIC = {
+      'AAA': 1,  'AA+': 2,  'AA': 3,   'AA-': 4,
+      'A+':  5,  'A':   6,  'A-': 7,
+      'BBB+':8,  'BBB': 9,  'BBB-':10,
+      'BB+': 11, 'BB':  12, 'BB-': 13,
+      'B+':  14, 'B':   15, 'B-':  16,
+      'CCC+':17, 'CCC': 17, 'CCC-':17,
+      'CC':  18, 'C':   19,
+    };
+    const whole = SP_TO_NUMERIC[letter] || NaN;
     if (isNaN(whole)) return '';
-    if (whole <= 4 && !(whole === 4 && notch === '4-')) return 'ig';
-    if (whole === 4) return 'crossover';   // BBB- straddle
-    if (whole <= 6) return 'hy';
-    return 'distressed';
+    if (whole <= 7) return 'ig';            // AAA through A-
+    if (whole === 10) return 'crossover';   // BBB- straddle to HY
+    if (whole <= 10) return 'ig';           // BBB+/BBB
+    if (whole <= 16) return 'hy';           // BB+ through B-
+    return 'distressed';                    // CCC and below
   }
 
   function notchDeltaHtml(d) {
@@ -467,7 +480,7 @@
     list.innerHTML = matched.map((r) => `
       <li data-iso3="${r.iso3}" role="option">
         <span class="cd-detail-name">${flagEmoji(r.iso3)} ${escapeHtml(r.name || r.iso3)}</span>
-        <span class="cd-detail-rating">${escapeHtml(r.pm_notch || '—')}</span>
+        <span class="cd-detail-rating">${escapeHtml(r.sp_equiv || '—')}</span>
         <span class="cd-detail-pd">${formatPct(r.pd_1y)}</span>
       </li>
     `).join('');
@@ -486,7 +499,7 @@
     document.getElementById('cd-panel-region').textContent = c.region || '';
 
     const rating = c.rating || {};
-    document.getElementById('cd-panel-pm-notch').textContent = rating.pm_notch || '—';
+    document.getElementById('cd-panel-pm-sp').textContent = rating.sp_equiv || '—';
     const sourceTag = rating.source === 'fitted' ? ' · fitted' : ' · composite';
     document.getElementById('cd-panel-pm-grade').textContent =
       (rating.is_investment_grade ? 'IG' :
@@ -496,8 +509,8 @@
     const rawEl = document.getElementById('cd-panel-pm-raw');
     if (rawEl) {
       const pulled = rating.anchor_pull;
-      if (pulled && rating.raw_pm_notch && rating.raw_pm_notch !== rating.pm_notch) {
-        rawEl.textContent = `raw model: ${rating.raw_pm_notch} (${rating.raw_sp_equiv || ''})`;
+      if (pulled && rating.raw_sp_equiv && rating.raw_sp_equiv !== rating.sp_equiv) {
+        rawEl.textContent = `raw model: ${rating.raw_sp_equiv}`;
         rawEl.hidden = false;
       } else {
         rawEl.hidden = true;
