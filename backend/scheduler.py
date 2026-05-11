@@ -140,6 +140,42 @@ def init_scheduler(app):
         )
         logger.info("GDP nowcast scheduled (every 6 hours).")
 
+        # Job 5b: Labor market nowcast refresh every 6 hours.  Same cadence
+        # as GDP — both rely on FRED leading indicators, so we drop the
+        # FRED cache once and recompute each.
+        def _refresh_labor_nowcast():
+            try:
+                from backend.data_sources.bls_employment import (
+                    clear_bls_employment_cache,
+                )
+                from backend.data_sources.labor_nowcast import (
+                    clear_cache as clear_lm_cache, get_labor_nowcast,
+                )
+                clear_bls_employment_cache()
+                clear_lm_cache()
+                data = get_labor_nowcast()
+                if not data.get('error'):
+                    nc = (data.get('nowcast') or {})
+                    logger.info(
+                        f"Labor nowcast refreshed: payroll Δ "
+                        f"{nc.get('payroll_estimate_change')}k for {nc.get('month')}"
+                    )
+                else:
+                    logger.warning(f"Labor nowcast refresh error: {data.get('error')}")
+            except Exception as e:
+                logger.error(f"Labor nowcast refresh failed: {e}")
+
+        scheduler.add_job(
+            func=_refresh_labor_nowcast,
+            trigger='interval',
+            hours=6,
+            id='refresh_labor_nowcast',
+            replace_existing=True,
+            misfire_grace_time=600,
+            max_instances=1,
+        )
+        logger.info("Labor market nowcast scheduled (every 6 hours).")
+
     # Job 6: Data center drift scan once daily at 07:30 UTC.
     def _scan_dc_drift():
         try:
@@ -252,6 +288,26 @@ def init_scheduler(app):
             except Exception as e:
                 logger.error(f"GDP nowcast warmup failed: {e}")
         threading.Thread(target=_warm_gdp_nowcast, daemon=True).start()
+
+        def _warm_labor_nowcast():
+            try:
+                from backend.data_sources.labor_nowcast import get_labor_nowcast
+                from backend.data_sources.bls_employment import get_bls_employment_data
+                # Pull BLS first (24h cache) so the page only ever
+                # fires the FRED-heavy nowcast on cold start.
+                get_bls_employment_data()
+                result = get_labor_nowcast()
+                if result.get('error'):
+                    logger.warning(f"Labor nowcast warmup error: {result.get('error')}")
+                else:
+                    nc = (result.get('nowcast') or {})
+                    logger.info(
+                        f"Labor nowcast cache warmed: Δpay "
+                        f"{nc.get('payroll_estimate_change')}k @ {nc.get('month')}"
+                    )
+            except Exception as e:
+                logger.error(f"Labor nowcast warmup failed: {e}")
+        threading.Thread(target=_warm_labor_nowcast, daemon=True).start()
 
     # Cross-deploy pickle invalidation: every fresh app boot wipes any
     # leftover pickles from an earlier deploy so new code always builds

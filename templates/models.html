@@ -24,6 +24,7 @@
   .model-card.card-hpi::before    { background: #10b981; }
   .model-card.card-dc::before     { background: #f97316; }
   .model-card.card-cd::before     { background: #dc2626; }
+  .model-card.card-lm::before     { background: #0891b2; }
 
   .model-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .model-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0; }
@@ -32,6 +33,7 @@
   .card-hpi .model-icon    { background: #10b98118; color: #10b981; }
   .card-dc .model-icon     { background: #f9731618; color: #f97316; }
   .card-cd .model-icon     { background: #dc262618; color: #dc2626; }
+  .card-lm .model-icon     { background: #0891b218; color: #0891b2; }
 
   .model-name { font-size: 17px; font-weight: 600; margin: 0; color: #111827; }
   .model-tagline { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
@@ -159,6 +161,32 @@
         <div class="model-stat"><span class="num">3</span><span class="lbl">Horizons</span></div>
       </div>
       <span class="model-cta">Open Credit Default <span class="arrow">&rarr;</span></span>
+    </a>
+
+    <!-- US Labor Market -->
+    <a href="/labor-market" class="model-card card-lm">
+      <div class="model-card-top">
+        <div class="model-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 21h18"/>
+            <path d="M5 21V9l4-3 4 3v12"/>
+            <path d="M13 21v-7l4-2 4 2v7"/>
+            <path d="M9 21v-4"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="model-name">US Labor Market</h3>
+          <p class="model-tagline">BLS payrolls + unemployment vs in-house nowcast</p>
+        </div>
+        <span class="model-badge badge-public">Public</span>
+      </div>
+      <p class="model-desc">Monthly nonfarm payroll growth and the U-3 unemployment rate from BLS, set against an in-house bridge-model nowcast built from FRED leading indicators (initial &amp; continued claims, JOLTS openings, manufacturing hours, industrial production, sentiment). Track-record table shows estimate vs print, month by month.</p>
+      <div class="model-stats">
+        <div class="model-stat"><span class="num">2</span><span class="lbl">BLS series</span></div>
+        <div class="model-stat"><span class="num">6</span><span class="lbl">Leading indicators</span></div>
+        <div class="model-stat"><span class="num">6&thinsp;h</span><span class="lbl">Refresh</span></div>
+      </div>
+      <span class="model-cta">Open Labor Market <span class="arrow">&rarr;</span></span>
     </a>
 
     <!-- Data Centers -->
