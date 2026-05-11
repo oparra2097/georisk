@@ -33,14 +33,44 @@ from typing import Dict, List, Optional, Tuple
 
 # Lazy import — fit.py pulls pandas/sklearn which we don't want to load
 # unconditionally on the dashboard request path.
-def _load_fit_state(horizon_years: int = 1, cadence: str = 'annual'):
+def _load_fit_state(horizon_years: int = 1, cadence: str = 'annual',
+                    label_mode: str = 'state'):
     try:
         from backend.credit_default import fit as cd_fit
     except Exception:
         return None
     if cadence == 'quarterly':
+        # Quarterly fits are state-mode only for now.
         return cd_fit.load_state_quarterly(horizon_years)
-    return cd_fit.load_state(horizon_years)
+    return cd_fit.load_state(horizon_years, label_mode=label_mode)
+
+
+def _onset_pd_for_country(indicators, shadow, horizon_years: int):
+    """Score a country through the *onset* GBM (Bloomberg / Moody's
+    CreditEdge-style fresh-onset PD, trained on rows where the country
+    was NOT yet in default). Returns the natural-rate-rescaled PD or
+    None if the onset state file is missing."""
+    state = _load_fit_state(horizon_years, cadence='annual', label_mode='onset')
+    if not state:
+        return None
+    try:
+        from backend.credit_default import fit as cd_fit
+    except Exception:
+        return None
+    loaded = cd_fit.load_gbm_model(horizon_years, label_mode='onset')
+    if not loaded:
+        return None
+    model_obj, features = loaded
+    raw_shift = float(state.get('class_balance_log_odds') or 0.0)
+    shift = _adjusted_shift(raw_shift, horizon_years)
+    pd_val = _score_with_gbm(
+        {'model': model_obj, 'features': features},
+        indicators, shadow,
+        state.get('scaler') or {},
+        state.get('medians') or {},
+        shift,
+    )
+    return pd_val
 
 
 # ── Indicator weights ────────────────────────────────────────────────────
@@ -621,6 +651,18 @@ def score_panel(panel: Dict, horizon_years: int = 1,
             horizon_key = f'pd_{years_eq}y'
             if horizon_key in model_rating:
                 model_rating[horizon_key] = round(model_pd, 4)
+
+        # Fresh-onset PD channel (Bloomberg / Moody's CreditEdge
+        # convention: P(new default starts in next h years | currently
+        # solvent)). Trained on rows where in_default_year == 0.
+        # Annual cadence only — quarterly path doesn't have an onset
+        # fit yet. Returned as pd_onset_{1,3,5}y on the rating block,
+        # alongside the state-PD pd_{1,3,5}y fields.
+        if cadence == 'annual' and not defaulted:
+            for h in (1, 3, 5):
+                onset_pd = _onset_pd_for_country(ind, shadow, h)
+                if onset_pd is not None:
+                    model_rating[f'pd_onset_{h}y'] = round(onset_pd, 4)
 
         # Sort contributions by absolute size for the dashboard waterfall.
         contributions.sort(

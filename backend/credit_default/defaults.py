@@ -199,17 +199,20 @@ def build_label_frame(panel_iso_years: Iterable[Tuple[str, int]],
             'year': year,
             'in_default_year': is_in_default,
         }
-        # Option-C labelling: a row that's CURRENTLY in default is
-        # also positive for every horizon (the spell is ongoing —
-        # default within the next h years is trivially true). Without
-        # this, ongoing defaulters look like non-events to the
-        # trainer and the model has to be tethered at inference time
-        # to compensate. With it, the GBM learns the macro signature
-        # of "in default" and outputs high PD natively.
+        # Two parallel label columns so the fitter can train two
+        # parallel PD channels (see fit.fit_gbm `label_mode`):
+        #   * defaulted_within_{h}y  — STATE: positive if currently
+        #     in default OR new onset within h years. Used for the
+        #     Option-C "in default state at any point" PD.
+        #   * defaulted_onset_{h}y    — ONSET: positive only on NEW
+        #     onset within h years. In-default rows treated as
+        #     "already past onset" and excluded from training by the
+        #     fitter. Matches the Bloomberg / Moody's CreditEdge
+        #     "fresh onset given currently solvent" convention.
         for h in horizons:
-            rec[f'defaulted_within_{h}y'] = max(
-                is_in_default, defaulted_within(starts, year, h),
-            )
+            onset = defaulted_within(starts, year, h)
+            rec[f'defaulted_within_{h}y'] = max(is_in_default, onset)
+            rec[f'defaulted_onset_{h}y'] = int(onset)
         rows.append(rec)
     return pd.DataFrame(rows)
 

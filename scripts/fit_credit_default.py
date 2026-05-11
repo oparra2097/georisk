@@ -66,6 +66,13 @@ def main() -> int:
                         help='Comma-separated horizons in quarters (used when '
                              '--cadence quarterly). "all" maps to 4,12,20 '
                              '(matches 1y/3y/5y).')
+    parser.add_argument('--label-mode', choices=['state', 'onset'],
+                        default='state',
+                        help='state = Option-C (positive if currently in '
+                             'default OR onset within h years); '
+                             'onset = Bloomberg/Moodys CreditEdge convention '
+                             '(positive only on new onset; in-default rows '
+                             'dropped). Onset state files use the _onset suffix.')
     args = parser.parse_args()
 
     if args.cadence == 'quarterly':
@@ -82,7 +89,10 @@ def main() -> int:
                 if est == 'logit':
                     state = cd_fit.fit_logit(horizon_years=h, years_back=args.years_back)
                 else:
-                    state = cd_fit.fit_gbm(horizon_years=h, years_back=args.years_back)
+                    state = cd_fit.fit_gbm(
+                        horizon_years=h, years_back=args.years_back,
+                        label_mode=args.label_mode,
+                    )
             except Exception as e:
                 print(f'[fit] FAILED ({est}, h={h}): {e}')
                 summary[f'{est}_h{h}'] = {'error': str(e)}

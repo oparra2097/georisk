@@ -131,7 +131,7 @@
       })
       .catch((err) => {
         document.getElementById('cd-tbody').innerHTML =
-          `<tr><td colspan="12" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
+          `<tr><td colspan="13" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
       });
   }
 
@@ -305,7 +305,7 @@
   function renderTable() {
     const tbody = document.getElementById('cd-tbody');
     if (!state.filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="12" class="cd-loading">No countries match the current filters.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="13" class="cd-loading">No countries match the current filters.</td></tr>';
       return;
     }
     const html = state.filtered.map((r) => rowHtml(r)).join('');
@@ -333,6 +333,7 @@
         <td class="num">${pdHtml(r.pd_1y)}</td>
         <td class="num">${pdHtml(r.pd_3y)}</td>
         <td class="num">${pdHtml(r.pd_5y)}</td>
+        <td class="num">${pdHtml(r.pd_onset_1y)}</td>
         <td class="num">${formatNumber(r.shadow_debt_gap_pp, 1, 'pp')}</td>
       </tr>
     `;
@@ -538,6 +539,12 @@
     document.getElementById('cd-panel-pd1').textContent = formatPct(rating.pd_1y);
     document.getElementById('cd-panel-pd3').textContent = formatPct(rating.pd_3y);
     document.getElementById('cd-panel-pd5').textContent = formatPct(rating.pd_5y);
+    const onset1El = document.getElementById('cd-panel-onset1');
+    const onset3El = document.getElementById('cd-panel-onset3');
+    const onset5El = document.getElementById('cd-panel-onset5');
+    if (onset1El) onset1El.textContent = formatPct(rating.pd_onset_1y);
+    if (onset3El) onset3El.textContent = formatPct(rating.pd_onset_3y);
+    if (onset5El) onset5El.textContent = formatPct(rating.pd_onset_5y);
     document.getElementById('cd-panel-score').textContent = rating.score != null ? rating.score.toFixed(1) : '—';
 
     const shadow = c.shadow_debt || {};

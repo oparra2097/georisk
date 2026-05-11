@@ -57,8 +57,9 @@ _FIT_DIR = Path(__file__).resolve().parent.parent.parent / 'data' / 'credit_defa
 _FIT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def fit_state_path(horizon_years: int) -> Path:
-    return _FIT_DIR / f'fit_state_h{horizon_years}.json'
+def fit_state_path(horizon_years: int, label_mode: str = 'state') -> Path:
+    suffix = '' if label_mode == 'state' else f'_{label_mode}'
+    return _FIT_DIR / f'fit_state{suffix}_h{horizon_years}.json'
 
 
 def fit_state_path_q(horizon_quarters: int) -> Path:
@@ -68,14 +69,18 @@ def fit_state_path_q(horizon_quarters: int) -> Path:
 # ── Panel construction ──────────────────────────────────────────────────
 
 
-def build_training_panel(years_back: int = 25, horizon_years: int = 1):
+def build_training_panel(years_back: int = 25, horizon_years: int = 1,
+                         label_mode: str = 'state'):
     """Return (X, y, feature_names, meta) ready for a sklearn estimator.
 
-    X is a pandas DataFrame of indicator columns, y a pandas Series of 0/1
-    labels. Rows where the country is *already* in default this year are
-    dropped (predicting "default next year" doesn't apply when you've
-    already missed payments). Rows with all indicators NaN are dropped.
-    Remaining NaNs are median-imputed within column.
+    ``label_mode``:
+      * ``state`` — y = ``defaulted_within_{h}y`` (positive if currently
+        in default OR new onset within h years). All rows kept. This is
+        the Option-C "in default state at any point" PD channel.
+      * ``onset`` — y = ``defaulted_onset_{h}y`` (positive only on NEW
+        onset within h years). Rows where ``in_default_year == 1`` are
+        DROPPED — they're "already past onset" observations. Matches
+        the Bloomberg / Moody's CreditEdge convention.
     """
     try:
         import pandas as pd  # noqa: F401
@@ -102,12 +107,15 @@ def build_training_panel(years_back: int = 25, horizon_years: int = 1):
     )
     df = panel.merge(label_df, on=['iso3', 'year'], how='left')
 
-    # Option-C: keep in-default rows in training. The label frame
-    # marks them as positive (defaulted_within_h = 1 trivially holds
-    # when the spell is ongoing), so the GBM learns the macro
-    # signature of "in default" natively and the dashboard doesn't
-    # need an inference-time override to make LBN / VEN / BLR look
-    # like distressed sovereigns. Pure macro-driven model.
+    if label_mode == 'onset':
+        # Onset PD channel: drop rows currently in default (they're
+        # "already past onset", not observations of fresh onset risk).
+        df = df[df['in_default_year'] != 1].copy()
+        y_col = f'defaulted_onset_{horizon_years}y'
+    else:
+        # State PD channel (default): keep in-default rows, label them
+        # positive — GBM learns the in-default macro signature.
+        y_col = f'defaulted_within_{horizon_years}y'
 
     feature_names = list(SCAFFOLD_WEIGHTS.keys())
     feature_names = [f for f in feature_names if f in df.columns]
@@ -117,7 +125,6 @@ def build_training_panel(years_back: int = 25, horizon_years: int = 1):
     for col in feature_names:
         X[col] = pd.to_numeric(X[col], errors='coerce')
 
-    y_col = f'defaulted_within_{horizon_years}y'
     y = df[y_col].fillna(0).astype(int)
 
     # Drop rows with no indicators at all (typical for tiny states pre-2000).
@@ -354,8 +361,11 @@ def _fit_logit_sign_constrained(X, y, sign_vec):
 
 def fit_gbm(horizon_years: int = 1, years_back: int = 25,
             n_estimators: int = 300, max_depth: int = 3,
-            learning_rate: float = 0.05) -> Dict:
-    X, y, features, meta = build_training_panel(years_back, horizon_years)
+            learning_rate: float = 0.05,
+            label_mode: str = 'state') -> Dict:
+    X, y, features, meta = build_training_panel(
+        years_back, horizon_years, label_mode=label_mode,
+    )
 
     try:
         import numpy as np
@@ -442,13 +452,16 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
     # (no tree interactions = no sensitivity); using the real model
     # restores GBM's non-linear discrimination.
     import pickle
-    model_path = _FIT_DIR / f'fit_model_h{horizon_years}.pkl'
+    model_suffix = '' if label_mode == 'state' else f'_{label_mode}'
+    model_filename = f'fit_model{model_suffix}_h{horizon_years}.pkl'
+    model_path = _FIT_DIR / model_filename
     with open(model_path, 'wb') as f:
         pickle.dump({'model': model, 'features': features}, f)
 
     state = {
         'estimator': 'gbm',
         'horizon_years': horizon_years,
+        'label_mode': label_mode,
         'feature_importance': importance,
         'coefficients': importance_signed,
         'intercept': 0.0,
@@ -470,9 +483,9 @@ def fit_gbm(horizon_years: int = 1, years_back: int = 25,
             'learning_rate': learning_rate,
             'scale_pos_weight': scale_pos_weight,
         },
-        'model_pickle': f'fit_model_h{horizon_years}.pkl',
+        'model_pickle': model_filename,
     }
-    _save_state(state, horizon_years)
+    _save_state(state, horizon_years, label_mode=label_mode)
     return state
 
 
@@ -646,7 +659,7 @@ def fit_gbm_quarterly(horizon_quarters: int = 4, years_back: int = 25,
     return state
 
 
-def load_gbm_model(horizon_years: int):
+def load_gbm_model(horizon_years: int, label_mode: str = 'state'):
     """Load the pickled GBM tree ensemble for live scoring. Returns
     ``(model, feature_names)`` or ``None`` on any failure — including
     sklearn version mismatches between the build environment that
@@ -654,7 +667,8 @@ def load_gbm_model(horizon_years: int):
     Callers must fall back to the linear-importance approximation
     when this returns None."""
     import pickle
-    path = _FIT_DIR / f'fit_model_h{horizon_years}.pkl'
+    suffix = '' if label_mode == 'state' else f'_{label_mode}'
+    path = _FIT_DIR / f'fit_model{suffix}_h{horizon_years}.pkl'
     if not path.exists():
         return None
     try:
@@ -665,7 +679,7 @@ def load_gbm_model(horizon_years: int):
         # AttributeError, ModuleNotFoundError, ImportError on sklearn
         # internal renames; broad catch is intentional so a stale
         # pickle never takes the dashboard down.
-        print(f'[credit_default.fit] load_gbm_model({horizon_years}) failed: {e}')
+        print(f'[credit_default.fit] load_gbm_model({horizon_years}, {label_mode}) failed: {e}')
         return None
 
 
@@ -965,8 +979,9 @@ def _calibrate_pd_buckets(proba, y_true, n_buckets: int = 20) -> List[Dict]:
 # ── Persistence ─────────────────────────────────────────────────────────
 
 
-def _save_state(state: Dict, horizon_years: int) -> None:
-    path = fit_state_path(horizon_years)
+def _save_state(state: Dict, horizon_years: int,
+                label_mode: str = 'state') -> None:
+    path = fit_state_path(horizon_years, label_mode=label_mode)
     # ``iso_years`` snuck in via meta — strip non-JSON-serializable bits.
     serializable = {k: v for k, v in state.items() if k != 'iso_years'}
     with open(path, 'w') as f:
@@ -974,8 +989,8 @@ def _save_state(state: Dict, horizon_years: int) -> None:
     print(f'[credit_default.fit] wrote {path}')
 
 
-def load_state(horizon_years: int = 1) -> Optional[Dict]:
-    path = fit_state_path(horizon_years)
+def load_state(horizon_years: int = 1, label_mode: str = 'state') -> Optional[Dict]:
+    path = fit_state_path(horizon_years, label_mode=label_mode)
     if not path.exists():
         return None
     try:

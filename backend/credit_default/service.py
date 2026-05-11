@@ -457,6 +457,9 @@ def get_table_rows(cadence: str = 'annual', horizon: int = 1) -> List[Dict]:
             'pd_1y': rating.get('pd_1y'),
             'pd_3y': rating.get('pd_3y'),
             'pd_5y': rating.get('pd_5y'),
+            'pd_onset_1y': rating.get('pd_onset_1y'),
+            'pd_onset_3y': rating.get('pd_onset_3y'),
+            'pd_onset_5y': rating.get('pd_onset_5y'),
             'defaulted': rating.get('defaulted', False),
             'is_investment_grade': rating.get('is_investment_grade'),
             # Reference composite score (separate from the fitted model)
