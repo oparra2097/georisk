@@ -25,86 +25,21 @@ _cache_lock = threading.Lock()
 _CACHE_TTL = 6 * 3600
 
 
-_CURRENT_DEFAULT_AGENCY_LETTERS = {'SD', 'D', 'RD'}
-_NON_DEFAULT_AGENCY_LETTERS = {
-    'AAA','AA+','AA','AA-','A+','A','A-','BBB+','BBB','BBB-',
-    'BB+','BB','BB-','B+','B','B-','CCC+','CCC','CCC-','CC',
-}
-# An ISO with an OPEN CRAG ``default`` event that started within this
-# many years is provisionally "in default", but agency-rating evidence
-# overrides. The CRAG release lags real-world restructurings by roughly
-# a year (e.g. GHA/ZMB/LKA restructured Q4 2024 but the 2025 BoC dump
-# still shows their 2022 spells open). Without the agency override
-# those would be force-marked D when agencies have already moved them
-# back to CCC+.
-_CRAG_DEFAULT_RECENCY_YEARS = 4
-
-
-def _currently_defaulted_isos(current_year: Optional[int] = None) -> set:
-    """ISOs with an active hard-default spell as of ``current_year``.
-
-    Restricted to ``event_type='default'`` (not restructuring) AND
-    ``end_year is None`` AND ``start_year ≥ current_year - 4``.
-    ``_enrich_with_agencies`` further filters this against agency
-    letters: if S&P / Fitch already moved the country back to CCC+ or
-    better, it's NOT currently defaulted regardless of CRAG.
-    """
-    if current_year is None:
-        current_year = time.localtime().tm_year
-    cutoff = current_year - _CRAG_DEFAULT_RECENCY_YEARS
-    out: set = set()
-    for ev in cd_defaults.load_events(include_distress=False):
-        if ev.get('end_year') is not None:
-            continue
-        if ev.get('event_type') != 'default':
-            continue
-        start = ev.get('start_year')
-        if start is None or start < cutoff:
-            continue
-        out.add(ev['iso3'])
-    return out
-
-
 def _enrich_with_agencies(scored: Dict) -> Dict:
     agencies = agency_ratings.get_agency_ratings()
     countries = scored.get('countries') or {}
 
-    # Force-mark countries currently inside an active CRAG hard-default
-    # spell (LBN 2020+, GHA 2022+, ZMB 2020+, VEN 2017+, SUR 2020+,
-    # RUS 2022+) as defaulted on the dashboard. The score path itself
-    # only checks `shadow_debt.risk_tier == 'Defaulted'`, which CRAG
-    # events never set — so without this override, currently-defaulting
-    # sovereigns silently get scored as middling-PD non-defaulters.
-    crag_defaulted = _currently_defaulted_isos()
+    # Option-C: no CRAG-default override here. The GBM is now trained
+    # with in-default rows kept (defaulted_within_h = 1 for ongoing
+    # spells), so it learns the in-default macro signature natively
+    # and outputs high PD for LBN / VEN / BLR without external pinning.
+    # CRAG events still feed the model as labels + the features
+    # years_since_default / region_default_rate; here we only attach
+    # agency-rating metadata and the post-hoc anchor pull (UI overlay,
+    # doesn't touch model PD).
 
     for iso3, c in countries.items():
         a = agencies.get(iso3)
-        sp = (a or {}).get('sp')
-        fitch = (a or {}).get('fitch')
-        agency_in_default = bool(
-            sp in _CURRENT_DEFAULT_AGENCY_LETTERS
-            or fitch in _CURRENT_DEFAULT_AGENCY_LETTERS
-        )
-        # Agency override: if S&P / Fitch have moved the country back
-        # to CCC+ or better, the CRAG spell is stale (post-restructure
-        # lag) — don't force-mark them defaulted.
-        agency_cleared = bool(
-            sp in _NON_DEFAULT_AGENCY_LETTERS
-            or fitch in _NON_DEFAULT_AGENCY_LETTERS
-        )
-        crag_says_default = iso3 in crag_defaulted and not agency_cleared
-        if crag_says_default or agency_in_default:
-            rating = c.setdefault('rating', {})
-            rating['defaulted'] = True
-            rating['pd_1y'] = 1.0
-            rating['pd_3y'] = 1.0
-            rating['pd_5y'] = 1.0
-            rating['sp_equiv'] = 'D'
-            rating['moodys_equiv'] = 'D'
-            rating['pm_notch'] = '10'
-            rating['pm_numeric'] = 20
-            rating['is_investment_grade'] = False
-            rating['score'] = 100.0
 
         if not a:
             continue
@@ -307,36 +242,12 @@ def get_country_history(iso3: str, horizon_years: int = 1,
     # In-default years per (iso3, year): if the country was inside an
     # active CRAG hard-default spell that period, the historical PD on
     # the chart should pin to 100% / sp_equiv=D — same semantics as the
-    # dashboard table's currently-defaulted override, just applied
-    # year-by-year instead of only at the latest cross-section.
-    # Restricted to event_type ∈ {default, restructuring} so that
-    # long-tail open `arrears` events don't mark every subsequent year
-    # as defaulted. For *open* spells we only count those that started
-    # within the recency window — CRAG sometimes leaves legacy
-    # restructurings open without an end-year (e.g. GHA 1970 bank-loan
-    # restructuring), which would otherwise sweep every subsequent
-    # year into the default band.
-    import time as _t
-    _cur_yr_chart = _t.localtime().tm_year
-    # Wider window for the history chart than the dashboard's
-    # currently-defaulted check (4y) — we want every recent open
-    # default visible as a red band, not just last-4y onsets.
-    _open_recency = 12
-    in_default_yrs: set = set()
-    for ev in cd_defaults.load_events(include_distress=False):
-        if ev.get('iso3') != iso3:
-            continue
-        if ev.get('event_type') not in {'default', 'restructuring'}:
-            continue
-        start = ev.get('start_year')
-        if start is None:
-            continue
-        end = ev.get('end_year')
-        if end is None:
-            if int(start) < _cur_yr_chart - _open_recency:
-                continue
-            end = _cur_yr_chart
-        in_default_yrs.update(range(int(start), int(end) + 1))
+    # Option-C: no per-year PD pinning on the chart. The trained GBM
+    # learns the in-default macro signature so the model PD itself
+    # rises during a spell, naturally producing the bend on the
+    # chart. CRAG events are still rendered as red default-event
+    # bands by the frontend (default_events payload below) for
+    # context — those are *display* annotations, not score overrides.
 
     import math
     history = []
@@ -456,14 +367,9 @@ def get_country_history(iso3: str, horizon_years: int = 1,
             c_pd = min(max(c_pd, 1e-6), 1.0 - 1e-6)
             composite_score = max(0.0, min(100.0, 50.0 + 38.4 * math.log10(c_pd / (1.0 - c_pd))))
 
-        period_year = int(row['year'])
-        in_default_now = period_year in in_default_yrs
         rating = rating_model._letter_and_pd(
-            score, defaulted=in_default_now, calibrated_buckets=cal_buckets,
+            score, defaulted=False, calibrated_buckets=cal_buckets,
         )
-        if in_default_now:
-            model_pd = 1.0
-            score = 100.0
         record = {
             'year': int(row['year']),
             'model_pd': round(model_pd, 5),

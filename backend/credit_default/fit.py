@@ -102,14 +102,12 @@ def build_training_panel(years_back: int = 25, horizon_years: int = 1):
     )
     df = panel.merge(label_df, on=['iso3', 'year'], how='left')
 
-    # Drop years where the country is currently in default — those are
-    # not "predict next year" rows. The dashboard separately
-    # force-overrides ``defaulted=True`` and ``pd_1y=1.0`` at inference
-    # time for ISOs inside an active CRAG hard-default spell, so the
-    # GBM never has to learn "in-default → in-default-next-year". That
-    # keeps the trained PD distribution centered around onset risk
-    # instead of conflating ongoing-default with next-period onset.
-    df = df[df['in_default_year'] != 1].copy()
+    # Option-C: keep in-default rows in training. The label frame
+    # marks them as positive (defaulted_within_h = 1 trivially holds
+    # when the spell is ongoing), so the GBM learns the macro
+    # signature of "in default" natively and the dashboard doesn't
+    # need an inference-time override to make LBN / VEN / BLR look
+    # like distressed sovereigns. Pure macro-driven model.
 
     feature_names = list(SCAFFOLD_WEIGHTS.keys())
     feature_names = [f for f in feature_names if f in df.columns]
@@ -181,7 +179,7 @@ def build_training_panel_quarterly(years_back: int = 25,
         horizons_quarters=(horizon_quarters,),
     )
     df = panel.merge(label_df, on=['iso3', 'year', 'quarter'], how='left')
-    df = df[df['in_default_quarter'] != 1].copy()
+    # Option-C: keep in-default rows. See fit_gbm annual path.
 
     feature_names = list(SCAFFOLD_WEIGHTS.keys())
     feature_names = [f for f in feature_names if f in df.columns]

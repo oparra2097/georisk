@@ -193,13 +193,23 @@ def build_label_frame(panel_iso_years: Iterable[Tuple[str, int]],
     for iso3, year in panel_iso_years:
         starts = starts_by_iso.get(iso3, set())
         in_def = in_default_by_iso.get(iso3, set())
+        is_in_default = int(year in in_def)
         rec = {
             'iso3': iso3,
             'year': year,
-            'in_default_year': int(year in in_def),
+            'in_default_year': is_in_default,
         }
+        # Option-C labelling: a row that's CURRENTLY in default is
+        # also positive for every horizon (the spell is ongoing —
+        # default within the next h years is trivially true). Without
+        # this, ongoing defaulters look like non-events to the
+        # trainer and the model has to be tethered at inference time
+        # to compensate. With it, the GBM learns the macro signature
+        # of "in default" and outputs high PD natively.
         for h in horizons:
-            rec[f'defaulted_within_{h}y'] = defaulted_within(starts, year, h)
+            rec[f'defaulted_within_{h}y'] = max(
+                is_in_default, defaulted_within(starts, year, h),
+            )
         rows.append(rec)
     return pd.DataFrame(rows)
 
@@ -269,15 +279,19 @@ def build_quarterly_label_frame(
     for iso3, year, quarter in panel_iso_quarters:
         starts = starts_by_iso.get(iso3, set())
         in_def = in_default_by_iso.get(iso3, set())
+        is_in_default = int((int(year), int(quarter)) in in_def)
         rec = {
             'iso3': iso3,
             'year': int(year),
             'quarter': int(quarter),
-            'in_default_quarter': int((int(year), int(quarter)) in in_def),
+            'in_default_quarter': is_in_default,
         }
         for h_q in horizons_quarters:
-            rec[f'defaulted_within_{h_q}q'] = defaulted_within_quarters(
-                starts, int(year), int(quarter), int(h_q),
+            rec[f'defaulted_within_{h_q}q'] = max(
+                is_in_default,
+                defaulted_within_quarters(
+                    starts, int(year), int(quarter), int(h_q),
+                ),
             )
         rows.append(rec)
     return pd.DataFrame(rows)
