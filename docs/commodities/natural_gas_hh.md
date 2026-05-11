@@ -9,17 +9,22 @@ most US LNG exports.
 - **US Dollar Index (DXY)** — indirect channel via LNG export
   competitiveness; stronger dollar → higher LNG cost → softer global pull
   on US cargos → more domestic gas → lower HH.
+- **Henry Hub spot price (FRED: DHHNGSP)** — the EIA-maintained daily
+  Henry Hub spot benchmark, resampled monthly. Spot serves as a leading
+  indicator for the front-month futures contract and dampens divergence
+  between the spot fundamental and the rolling futures roll cost.
 - **WTI Crude price** — cross-commodity driver capturing associated gas
   production from oil-weighted basins (Permian, Eagle Ford). Higher oil
   prices → more shale rig activity → more associated gas → bearish HH.
 - **S&P 500 (^GSPC)** — weak proxy for industrial demand and power burn
   from economic growth.
 
-> Drivers we'd like but don't have a clean free API for: EIA weekly working
-> gas in storage (WASI), cooling / heating degree days from NOAA, LNG
-> feedgas / export capacity utilization. HDD/CDD alone would materially
-> improve winter forecasts — a seasonal dummy in SARIMAX partially
-> compensates but is a weak proxy.
+> Drivers we'd still like but don't yet have wired: EIA weekly working
+> gas in storage (Working Gas in Underground Storage; requires EIA Open
+> Data API v2), cooling / heating degree days (NOAA — FRED's coverage is
+> too sparse to use directly), LNG feedgas / export capacity utilization.
+> HDD/CDD alone would materially improve winter forecasts; the SARIMAX
+> seasonal component is a weak proxy.
 
 ## Structural story
 
@@ -42,10 +47,25 @@ HH is the most volatile liquid commodity in this set. Key dynamics:
 ## Model specification
 
 - SARIMAX(1,0,1) on monthly log-returns of `NG=F` close.
-- Exogenous: DXY log-returns, WTI log-returns, ^GSPC log-returns.
+- Exogenous: DXY log-returns, HH spot log-returns (`DHHNGSP`), WTI
+  log-returns, `^GSPC` log-returns.
 - GARCH(1,1) on residuals — winter regime and storage shocks create
   volatility clustering the GARCH term captures.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
+- Forecasts anchored to the HH futures curve via horizon-weighted
+  shrinkage (see `forward_curve.py`).
+- Scenario shocks (LNG outage, HDD anomaly, US dry-gas production) layer
+  on top via the elasticity catalogue.
+
+## What we don't model yet (and why)
+
+- **EIA Working Gas in Storage** — the single most-watched HH
+  fundamental. Requires EIA Open Data API v2 integration; queued.
+- **NOAA HDD / CDD** — explicit weather signal. Would materially tighten
+  winter Q+1/Q+2 forecasts; NOAA direct adapter needed.
+- **LNG feedgas / export utilization** — currently captured indirectly
+  via the `lng_outage` scenario shock; a continuous driver would help.
+- **VECM on spot + 12M futures** — same as oil; queued for future PR.
 
 ## Consensus benchmarks
 

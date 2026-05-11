@@ -8,6 +8,11 @@ as the reference for approximately two-thirds of global physical oil.
 
 - **US Dollar Index (DXY, FRED: DTWEXBGS)** — same mechanism as WTI; Brent
   is globally dollar-priced.
+- **Weekly U.S. crude inventories (FRED: WCESTUS1)** — shared with WTI;
+  the EIA weekly print drives both benchmarks through the Brent-WTI arb.
+- **CBOE Crude Oil Volatility Index (FRED: OVXCLS)** — implied vol from
+  USO ETF options. Brent realised vol tracks WTI's at >0.9 correlation,
+  so OVX serves as a common forward-looking vol signal.
 - **Geopolitical Risk Index (Caldara & Iacoviello)** — Brent is more
   sensitive to Middle East disruption than WTI because it is the global
   seaborne benchmark; ME export flows move Brent first and WTI only via
@@ -35,9 +40,26 @@ Scenario mapping identical to WTI (Base/Severe/Worst = p50/p90/p97.5).
 ## Model specification
 
 - SARIMAX(1,0,1) on monthly log-returns of `BZ=F` close.
-- Exogenous: DXY log-returns, GPR log-level, WTI log-returns.
-- GARCH(1,1) on residuals.
+- Exogenous: DXY log-returns, U.S. crude inventory log-returns
+  (`WCESTUS1`), OVX log-level, GPR log-level, WTI log-returns.
+- GARCH(1,1) on residuals. OVX enters the SARIMAX mean equation; true
+  GARCH-X on the variance equation is future work.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
+- Forecasts anchored to the Brent futures curve via horizon-weighted
+  shrinkage (see `forward_curve.py`).
+- Scenario shocks (OPEC+ production, ME risk premium, China demand,
+  demand shock) layer on top, framed in the Kilian (2009) / Baumeister
+  & Kilian (2015) supply / aggregate-demand decomposition.
+
+## What we don't model yet (and why)
+
+- **VECM on spot + 12M futures** — same as WTI; literature favours it
+  at 1-3M horizons; queued for future PR.
+- **Brent-WTI spread** as explicit driver — currently absorbed via the
+  WTI cross-commodity term; could be a cleaner standalone exog.
+- **EIA STEO official forecast blend** — requires EIA Open Data API v2.
+- **Dated Brent / forward-curve time-spread signals** — would inform
+  near-term term-structure dynamics not captured by spot-only modelling.
 
 ## Consensus benchmarks
 

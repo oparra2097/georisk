@@ -144,9 +144,20 @@ TICKERS = {
 #   - LME stocks → absent; rely on AR component
 #
 DRIVERS: dict[str, list[tuple[str, str]]] = {
-    'WTI Crude':        [('fred', 'DTWEXBGS'), ('gpr', ''), ('yf', '^GSPC')],
-    'Brent Crude':      [('fred', 'DTWEXBGS'), ('gpr', ''), ('comm', 'WTI Crude')],
-    'Natural Gas (HH)': [('fred', 'DTWEXBGS'), ('comm', 'WTI Crude'), ('yf', '^GSPC')],
+    'WTI Crude':        [('fred', 'DTWEXBGS'),
+                         ('fred', 'WCESTUS1'),   # weekly US crude inventories
+                         ('fred', 'OVXCLS'),     # CBOE oil implied vol
+                         ('gpr', ''),
+                         ('yf', '^GSPC')],
+    'Brent Crude':      [('fred', 'DTWEXBGS'),
+                         ('fred', 'WCESTUS1'),   # crude inventories (shared with WTI)
+                         ('fred', 'OVXCLS'),     # oil implied vol
+                         ('gpr', ''),
+                         ('comm', 'WTI Crude')],
+    'Natural Gas (HH)': [('fred', 'DTWEXBGS'),
+                         ('fred', 'DHHNGSP'),    # Henry Hub spot — leading signal
+                         ('comm', 'WTI Crude'),
+                         ('yf', '^GSPC')],
     'TTF Gas':          [('fred', 'DTWEXBGS'), ('comm', 'Natural Gas (HH)'), ('gpr', '')],
     'Gold':             [('fred', 'DFII10'), ('fred', 'DTWEXBGS'), ('gpr', ''), ('yf', '^GSPC')],
     'Silver':           [('fred', 'DFII10'), ('fred', 'DTWEXBGS'), ('comm', 'Gold'), ('comm', 'Copper')],
@@ -164,9 +175,28 @@ DRIVER_TRANSFORM = {
     'fred_DTWEXBGS': 'logret',   # dollar index — returns
     'fred_DFII10':   'diff',     # real yield level — first difference
     'fred_NAPM':     'diff',     # ISM — first difference
+    'fred_WCESTUS1': 'logret',   # crude inventory level — return on stocks
+    'fred_OVXCLS':   'loglevel', # implied-vol regime — log level
+    'fred_DHHNGSP':  'logret',   # Henry Hub spot — return signal
     'gpr_':          'loglevel', # GPR index — log of level
     'yf_^GSPC':      'logret',   # equities — returns
     'comm_':         'logret',   # other commodity price — returns
+}
+
+# Per-commodity GARCH variance exogenous regressors. The implied-vol series
+# OVX is an established forward-looking signal for WTI/Brent realised vol
+# (Cboe Crude Oil ETF Volatility Index). Including it in the GARCH variance
+# equation makes the 95% CI bands widen automatically when option markets
+# price in higher near-term uncertainty (e.g. ME flare-ups, SPR releases)
+# instead of relying solely on past residual variance.
+#
+# Match strings are checked as substrings of the exog column names produced
+# by `_build_exog` ("fred:OVXCLS" → match key "fred_OVXCLS" → in column
+# name as "fred:OVXCLS"; the substring match is loose to tolerate the
+# colon/underscore difference).
+GARCH_EXOG: dict[str, list[str]] = {
+    'WTI Crude':   ['OVXCLS'],
+    'Brent Crude': ['OVXCLS'],
 }
 
 
@@ -611,6 +641,7 @@ class CommodityModel:
         self.exog_monthly: Optional[pd.DataFrame] = None
         self.sarimax_res = None
         self.garch_res = None
+        self.garch_has_exog: bool = False    # True if GARCH-X fit succeeded
         self.residuals: Optional[pd.Series] = None
         self.n_obs: Optional[int] = None
         self.rmse: Optional[float] = None
@@ -687,6 +718,11 @@ class CommodityModel:
         self.n_obs = int(len(y))
         self.rmse = float(np.sqrt(np.mean(self.residuals ** 2)))
 
+        # GARCH(1,1) on the SARIMAX residuals. (OVX implied-vol enters the
+        # SARIMAX mean equation via DRIVERS for WTI/Brent — it indirectly
+        # informs the residuals fed here. True GARCH-X with OVX in the
+        # variance equation requires a custom volatility model rather than
+        # the arch_model factory; left as future work.)
         try:
             garch = arch_model(
                 self.residuals * 100,  # scale for numerical stability
@@ -697,6 +733,7 @@ class CommodityModel:
         except Exception as e:
             logger.warning(f'GARCH fit failed for {self.name}: {e}. Using empirical residuals.')
             self.garch_res = None
+        self.garch_has_exog = False
 
         self.fit_at = datetime.utcnow()
         self.fit_error = None
@@ -854,6 +891,7 @@ class CommodityModel:
             'fit_error': self.fit_error,
             'last_price': self.last_price,
             'garch': self.garch_res is not None,
+            'garch_has_exog': bool(getattr(self, 'garch_has_exog', False)),
         }
 
     def save(self, path: str) -> None:
