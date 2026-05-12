@@ -1034,6 +1034,7 @@ def get_model_forecast(
     shocks: Optional[list] = None,
     use_forward_curve: bool = True,
     use_long_run_trend: bool = True,
+    use_vecm: bool = True,
 ) -> Optional[dict]:
     """Public entry used by commodities_forecast.py integration.
 
@@ -1049,14 +1050,21 @@ def get_model_forecast(
     If ``use_long_run_trend`` is True (default) and the commodity has a
     trend-anchor spec in ``long_run_trend.TREND_ANCHOR_SPECS`` (currently
     Gold / Silver / Platinum / Copper), the model median is additionally
-    shrunk toward a multi-decade CAGR trend line — so e.g. gold keeps
-    continuing its historical upward drift after a near-term dip instead
-    of extrapolating a flat local slope indefinitely.
+    shrunk toward a multi-decade CAGR trend line.
+
+    If ``use_vecm`` is True (default) and the commodity has a VECM
+    cointegrating-pair spec in ``vecm_model.VECM_SPECS`` (currently WTI /
+    Brent), a separate VECM-based forecast is computed and returned under
+    the ``vecm`` key. The VECM forecast does *not* alter the primary
+    ``forecast`` field here — the forecast-combination layer (Phase 14)
+    will blend SARIMAX, VECM, forward curve and EIA STEO with inverse-
+    RMSE weights once all four signals exist.
 
     Confidence bands widen to encompass both the model envelope and each
-    active anchor. The unmodified model output is preserved alongside
-    under ``model_only``; each anchor is exposed under ``forward_curve``
-    / ``long_run_trend`` for transparency and frontend overlay.
+    active anchor. The unmodified SARIMAX output is preserved under
+    ``model_only``; each anchor / alternative model is exposed under
+    ``forward_curve`` / ``long_run_trend`` / ``vecm`` for transparency
+    and frontend overlay.
     """
     model = get_or_fit(name)
     if model is None:
@@ -1087,11 +1095,21 @@ def get_model_forecast(
         except Exception as exc:
             logger.warning(f'{name}: long-run trend anchor skipped ({exc})')
 
+    vecm_block = None
+    if use_vecm:
+        try:
+            from backend.data_sources import vecm_model
+            if name in vecm_model.VECM_SPECS:
+                vecm_block = vecm_model.get_vecm_forecast(name, h=4)
+        except Exception as exc:
+            logger.warning(f'{name}: VECM forecast skipped ({exc})')
+
     return {
         'forecast': forecast_anchored,
         'model_only': forecast,
         'forward_curve': forward_curve,
         'long_run_trend': long_run_trend,
+        'vecm': vecm_block,
         'nowcast': nowcast_val,
         'summary': model.summary(),
         'exog_columns': list(model.exog_monthly.columns) if model.exog_monthly is not None else [],
