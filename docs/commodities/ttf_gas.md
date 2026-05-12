@@ -46,6 +46,25 @@ above HH + freight. Key dynamics in the current regime:
 - Exogenous: DXY log-returns, HH log-returns, GPR log-level.
 - GARCH(1,1) on residuals; expect wide CIs given regime volatility.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
+- Forecasts anchored to the TTF futures curve via horizon-weighted
+  shrinkage (see `forward_curve.py`).
+- Scenario shocks: Norwegian pipeline outage, Qatar disruption, EU
+  storage anomaly, Russian pipeline restart.
+
+## What we don't model yet (and why)
+
+European-gas-specific fundamentals don't have clean FRED-mirrored series,
+so TTF intentionally has a thinner driver set than WTI / Brent / HH:
+
+- **EU gas storage (AGSI+ from GIE)** — the single most-watched EU
+  fundamental. Public CSV / API; could be wired with a new adapter.
+- **Norwegian Continental Shelf pipeline flows** — proxied via the
+  `norwegian_outage` shock; a continuous driver would be cleaner.
+- **EU HDD / cold-snap anomaly** — winter is the regime driver; NOAA or
+  ECMWF heating-degree-day series needed.
+- **JKM (Japan/Korea Marker)** spread — TTF must clear above JKM +
+  shipping to pull LNG cargos; this competitive marginal-cost signal is
+  missing.
 
 ## Consensus benchmarks
 
