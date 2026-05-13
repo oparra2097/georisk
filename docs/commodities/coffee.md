@@ -15,6 +15,10 @@ supply shocks in 2023-25 drove Arabica prices to multi-decade highs.
   Cerrado Arabica belt; El Niño dries Vietnam's Central Highlands
   Robusta region. 2023-24 El Niño drove the recent Robusta + Arabica
   price spike.
+- **AMO — Atlantic Multidecadal Oscillation (NOAA PSL)** — Atlantic
+  SST regime drives precipitation patterns over Brazil's Cerrado and
+  Nordeste. Slower than ENSO but compounds with it during transition
+  years.
 - **S&P 500 (^GSPC)** — weak proxy for discretionary coffee demand
   (café consumption, specialty) and general risk appetite.
 
@@ -51,7 +55,7 @@ supply make it one of the more volatile softs:
 ## Model specification
 
 - SARIMAX(1,0,1) on monthly log-returns of `KC=F` close (Arabica).
-- Exogenous: DXY log-returns, ENSO ONI level, `^GSPC` log-returns.
+- Exogenous: DXY log-returns, ENSO ONI level, AMO level, `^GSPC` log-returns.
 - GARCH(1,1) on residuals — coffee has significant volatility clustering.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
 
