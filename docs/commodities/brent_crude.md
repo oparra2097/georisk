@@ -51,10 +51,19 @@ Scenario mapping identical to WTI (Base/Severe/Worst = p50/p90/p97.5).
   demand shock) layer on top, framed in the Kilian (2009) / Baumeister
   & Kilian (2015) supply / aggregate-demand decomposition.
 
+## Companion VECM model
+
+Mirrors WTI: a single VECM is fit jointly on monthly log-prices of WTI
+and Brent. The cointegrating relation captures the Trans-Atlantic spread
+mean-reversion; each commodity's forecast is the marginal projection
+from the shared VECM. See `wti_crude.md` for full notes.
+
+The Brent VECM forecast is exposed under `vecm` in `/api/forecasts` and
+will feed the forecast-combination layer alongside SARIMAX, the forward
+curve, and (once wired) EIA STEO.
+
 ## What we don't model yet (and why)
 
-- **VECM on spot + 12M futures** — same as WTI; literature favours it
-  at 1-3M horizons; queued for future PR.
 - **Brent-WTI spread** as explicit driver — currently absorbed via the
   WTI cross-commodity term; could be a cleaner standalone exog.
 - **EIA STEO official forecast blend** — requires EIA Open Data API v2.

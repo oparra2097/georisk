@@ -66,11 +66,31 @@ The scenario mapping reflects the consumer/inflation perspective:
   Kilian (2009) / Baumeister & Kilian (2015) supply / aggregate-demand /
   oil-specific-demand decomposition.
 
+## Companion VECM model
+
+In parallel to the SARIMAX path, a **Vector Error Correction Model** is
+fit jointly on monthly log-prices of WTI and Brent. The two prices share
+a tight cointegrating relationship (one common stochastic trend, transient
+spread mean-reversion via Trans-Atlantic arbitrage). The VECM captures
+that dynamic explicitly: when the spread is wider than its long-run
+equilibrium the error-correction term pulls prices back together.
+
+Per Baumeister & Kilian (2015), VECM consistently outperforms univariate
+ARIMA at 1-3 month horizons for crude oil — exactly the window where the
+SARIMAX drift estimate is least reliable.
+
+The VECM forecast is exposed under `vecm` in `/api/forecasts` so the
+forecast-combination layer (queued) can blend SARIMAX, VECM, the forward
+curve, and EIA STEO using inverse-RMSE weights. Today the primary
+forecast still comes from SARIMAX + curve / trend shrinkage.
+
+Implementation: `backend/data_sources/vecm_model.py`, fit on 15 years of
+monthly closes, cointegration rank chosen via Johansen, deterministic
+trend included in the cointegrating relation, 95% CI by bootstrap
+resampling of in-sample residuals (1000 paths).
+
 ## What we don't model yet (and why)
 
-- **VECM on spot + 12M futures** — Kilian-Baumeister-style cointegrating
-  model that consistently beats SARIMAX at 1-3M oil price horizons in the
-  literature. Adds a second model to the stack; tracked as a future PR.
 - **EIA STEO official forecast blend** — requires an EIA Open Data API
   v2 key (free but operator-registered). World Bank Pink Sheet + manual
   YAML cover the consensus benchmark surface for now.
