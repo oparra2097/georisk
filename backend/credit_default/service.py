@@ -45,20 +45,14 @@ def _enrich_with_agencies(scored: Dict) -> Dict:
             continue
         c['agency'] = a
 
-        # ── Agency-anchor pull (Fitch-style Qualitative Overlay) ──
-        # When the model and the consensus agency rating are 3+ notches
-        # apart, pull the headline rating halfway toward the agency,
-        # capped so the post-pull gap is at most ±2 notches. Frontier
-        # sovereigns like ARG/LKA/PAK/GHA/ZMB/ETH/UKR/RUS systematically
-        # rate too lenient out of the macro-only GBM because the panel
-        # is missing FX-debt share, EMBI spreads, IMF-program status,
-        # and gross-financing-needs (see research notes — Fitch SRM,
-        # S&P methodology, IMF SRDSF). The pull is a calibration
-        # overlay, not a signal change: contributions, scores and PDs
-        # are preserved; only the displayed letter / pm_notch shifts.
-        if not c.get('rating', {}).get('defaulted'):
-            _apply_agency_anchor_pull(c, a)
-
+        # ── Agency-anchor pull DISABLED ──
+        # Pure model output is the headline. The pull was hiding model
+        # biases rather than fixing them (notably the SSA
+        # region_default_rate contamination that made Togo / Benin /
+        # Tanzania look distressed). Agency rating still sits in the
+        # side-by-side column and the notch_delta below tells you when
+        # the model disagrees. To restore the pull, re-enable the
+        # ``_apply_agency_anchor_pull(c, a)`` call here.
         # Compute notch deltas (model rating vs each agency). The rating
         # block now carries its own pm_numeric (1..20) so we map agency
         # letters onto the same scale via the SP/Moody's equivalents.
@@ -100,22 +94,25 @@ def _apply_agency_anchor_pull(country: Dict, agency: Dict) -> None:
     if model_num is None or consensus is None:
         return
     delta = int(model_num) - int(consensus)
-    if abs(delta) < 3:
+    # Threshold lowered from 3 to 2 notches. The model is structurally
+    # biased on low-income SSA / frontier sovereigns (region_default
+    # _rate + years_since_default + low gdp_per_capita combine to push
+    # PD high regardless of macros), so even 2-notch gaps are typically
+    # the model being too harsh rather than a real independent view.
+    # Country detail panel still shows the raw model rating for
+    # transparency.
+    if abs(delta) < 2:
         return
-    # Halfway pull (round toward agency), then strict ±2 cap on the
-    # post-pull gap regardless of how far the raw model sits from
-    # the agency. Without the symmetric cap, halfway-pull from a
-    # large gap (e.g. CHN raw BB- vs A+ → delta+8) lands at +4 — the
-    # earlier asymmetric clamp prevented overshoot but didn't
-    # enforce ±2 on the harsh side. raw_pm_notch is preserved so the
-    # underlying model output is still visible on the country detail
-    # panel.
+    # Halfway pull (round toward agency), then strict ±1 cap on the
+    # post-pull gap. Tighter than the previous ±2 cap because pulling
+    # halfway from a Δ=2 case lands at Δ=1 naturally; the cap kicks in
+    # only on large gaps (CHN raw BB- vs A+ → snap to A-).
     if delta < 0:
         pulled = int(model_num) + ((-delta) // 2)
     else:
-        pulled = int(model_num) - (delta // 2)
-    # Clamp to [consensus-2, consensus+2] — strict ±2 cap.
-    pulled = max(int(consensus) - 2, min(int(consensus) + 2, pulled))
+        pulled = int(model_num) - (delta + 1) // 2  # round up so Δ=2 → 1 notch closer
+    # Clamp to [consensus-1, consensus+1] — strict ±1 cap.
+    pulled = max(int(consensus) - 1, min(int(consensus) + 1, pulled))
     pulled = max(1, min(20, pulled))
     if pulled == int(model_num):
         return
