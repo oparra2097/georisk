@@ -88,3 +88,22 @@ def cusip_pull():
     result = fwp_scraper.pull_all()
     service.build(force=True)
     return jsonify(result)
+
+
+@securitizations_bp.route('/admin/cik/lookup', methods=['POST'])
+@_require_admin
+def cik_lookup():
+    """Look up candidate EDGAR CIKs for an issuer-name search.  Accepts
+    JSON {issuer: "..."} or {issuers: ["...", "..."]} and returns the
+    candidate CIK+name pairs from EDGAR's full-text search.  Admin
+    pastes the resolved CIKs back into datacenter_abs_deals.csv."""
+    from backend.data_centers.securitizations import fwp_scraper
+    body = request.get_json(silent=True) or {}
+    if 'issuers' in body:
+        issuers = body['issuers']
+    elif body.get('issuer'):
+        issuers = [body['issuer']]
+    else:
+        return jsonify({'ok': False, 'error': 'missing issuer or issuers'}), 400
+    results = [fwp_scraper.lookup_cik(name) for name in issuers]
+    return jsonify({'ok': True, 'count': len(results), 'results': results})
