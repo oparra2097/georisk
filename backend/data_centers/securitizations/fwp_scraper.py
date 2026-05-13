@@ -295,3 +295,62 @@ def get_cached_tranches(deal_id: str) -> list[dict]:
     cache = _load_cache()
     e = cache.get(deal_id) or {}
     return e.get('tranches') or [] if e.get('ok') else []
+
+
+# ── Live EDGAR company-name lookup ────────────────────────────────────
+# Helper for admin: paste an issuer name, get back candidate CIKs from
+# EDGAR's full-text search.  Requires an outbound connection to
+# efts.sec.gov; the sandbox doesn't have it, but production does.
+
+def lookup_cik(issuer_name: str, forms: tuple[str, ...] = ('424B5', 'FWP', 'ABS-15G')) -> dict:
+    """Query EDGAR's full-text search for a company name and return
+    candidate (CIK, entity_name) pairs that have filed the relevant forms.
+
+    Note: efts.sec.gov serves a JSON API at
+    https://efts.sec.gov/LATEST/search-index?q=&forms=
+    Each hit has an `entity` field formatted like
+    "Issuer Name CIK0001234567 (Filer)".
+    """
+    q = (issuer_name or '').strip()
+    if not q:
+        return {'ok': False, 'error': 'empty query'}
+    forms_param = ','.join(forms)
+    url = (
+        f'https://efts.sec.gov/LATEST/search-index'
+        f'?q=%22{requests.utils.quote(q)}%22&forms={forms_param}'
+    )
+    r, err = _get(url, timeout=20)
+    if err:
+        return {'ok': False, 'error': err, 'url': url}
+    try:
+        j = r.json()
+    except Exception as e:
+        return {'ok': False, 'error': f'parse JSON: {e}'}
+    hits = j.get('hits', {}).get('hits', []) or []
+    # Each hit may surface entity strings like
+    # "Vantage Data Centers Issuer, LLC  (CIK 0001780199) (Filer)"
+    candidates: dict[str, dict] = {}
+    cik_re = re.compile(r'\bCIK\s*0*(\d{4,10})\b', re.IGNORECASE)
+    for h in hits[:25]:
+        src = h.get('_source', {}) or {}
+        ents = src.get('display_names', []) or src.get('entities', []) or []
+        if isinstance(ents, str):
+            ents = [ents]
+        for ent in ents:
+            m = cik_re.search(str(ent))
+            if not m: continue
+            cik = m.group(1).zfill(10)
+            name = re.sub(r'\s*\(CIK[^)]*\)\s*\(.*?\)', '', str(ent)).strip()
+            candidates.setdefault(cik, {
+                'cik':       cik,
+                'name':      name,
+                'form_hits': set(),
+            })['form_hits'].add(src.get('form'))
+    for v in candidates.values():
+        v['form_hits'] = sorted(x for x in v['form_hits'] if x)
+    return {
+        'ok':         True,
+        'query':      q,
+        'hit_count':  len(hits),
+        'candidates': sorted(candidates.values(), key=lambda c: -len(c['form_hits'])),
+    }
