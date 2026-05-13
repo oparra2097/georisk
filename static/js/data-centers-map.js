@@ -92,10 +92,28 @@ const DataCenterMap = {
 
     await Promise.all([this.loadStates(), this.loadData()]);
     this.render();
+    this.loadSecuritizationsTile();
     if (document.getElementById('admin-block')) {
       this.refreshDriftSignals();
       this.refreshFreshness();
     }
+  },
+
+  async loadSecuritizationsTile() {
+    const tile = document.getElementById('sec-tile');
+    if (!tile) return;
+    try {
+      const r = await fetch('/api/securitizations/summary');
+      if (!r.ok) return;
+      const j = await r.json();
+      const t = j.totals || {};
+      if (!t.deal_count) return;
+      const fmt = v => v == null ? '—' : Math.round(v).toLocaleString();
+      document.getElementById('sec-tile-deals').textContent     = t.deal_count;
+      document.getElementById('sec-tile-issuance').textContent  = '$' + fmt(t.total_size_usd_m);
+      document.getElementById('sec-tile-balance').textContent   = '$' + fmt(t.total_balance_usd_m);
+      tile.style.display = '';
+    } catch (_) { /* swallow */ }
   },
 
   async refreshFreshness() {

@@ -144,6 +144,23 @@
     </div>
   </section>
 
+  <div class="dc-card" id="sec-tile" style="background:#faf5ff;border-color:#e9d5ff;margin-bottom:16px;display:none;">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#7c3aed;font-weight:600;">
+        Structured-finance exposure
+      </div>
+      <div style="font-size:13px;color:#374151;">
+        <strong id="sec-tile-deals">—</strong> public deals tracked ·
+        <strong id="sec-tile-issuance">—</strong> total issued ·
+        <strong id="sec-tile-balance">—</strong> current balance
+        <span style="color:#9ca3af;font-size:11px;margin-left:6px;">($M)</span>
+      </div>
+      <a href="/securitizations" style="margin-left:auto;font-size:12px;color:#7c3aed;text-decoration:none;font-weight:600;">
+        Open securitizations &rarr;
+      </a>
+    </div>
+  </div>
+
   {% if current_user and current_user.is_authenticated and admin_email and current_user.email|lower == admin_email|lower %}
   <details class="dc-card" id="admin-block" style="margin-bottom:16px;border-color:#fde68a;background:#fffbeb;">
     <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#78350f;text-transform:uppercase;letter-spacing:0.04em;">

@@ -8,6 +8,7 @@ data/*
 !data/consensus.yaml
 !data/datacenter_markets.csv
 !data/datacenter_facilities.csv
+!data/datacenter_abs_deals.csv
 !data/agency_ratings.csv
 !data/agency_ratings_history.csv
 !data/sovereign_defaults.csv
