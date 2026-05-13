@@ -38,6 +38,27 @@
   .pill.term_loan          { background: #fee2e2; color: #b91c1c; }
   .pill.unsecured          { background: #f3f4f6; color: #6b7280; }
 
+  .tpill { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 999px;
+            letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+  .tpill.hyperscale { background: #dbeafe; color: #1d4ed8; }
+  .tpill.colocation { background: #d1fae5; color: #065f46; }
+  .tpill.wholesale  { background: #fef3c7; color: #b45309; }
+  .tpill.mixed      { background: #ede9fe; color: #6d28d9; }
+  .tpill.hpc_ai     { background: #fee2e2; color: #b91c1c; }
+  .tpill.empty      { background: #f3f4f6; color: #9ca3af; }
+
+  .fpill { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 3px;
+            letter-spacing: 0.04em; font-weight: 600; }
+  .fpill.retail_colo       { background: #fef3c7; color: #92400e; }
+  .fpill.wholesale         { background: #fed7aa; color: #9a3412; }
+  .fpill.hyperscale_bts    { background: #bfdbfe; color: #1e3a8a; }
+  .fpill.hyperscale_campus { background: #c7d2fe; color: #3730a3; }
+  .fpill.ai_campus         { background: #fbcfe8; color: #9d174d; }
+  .fpill.mixed             { background: #e5e7eb; color: #374151; }
+  .fpill.empty             { background: #f3f4f6; color: #9ca3af; }
+
+  .cusip-cell { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: #6b7280; }
+
   .rating { display: inline-block; padding: 1px 6px; border-radius: 3px; font-weight: 600; font-size: 10px; }
   .rating-AAA, .rating-AAplus, .rating-AA, .rating-AAminus { background: #d1fae5; color: #065f46; }
   .rating-Aplus, .rating-A, .rating-Aminus { background: #dbeafe; color: #1d4ed8; }
@@ -102,15 +123,17 @@
               <th>Deal</th>
               <th>Sponsor</th>
               <th>Type</th>
+              <th>Tenant</th>
+              <th>Facility</th>
               <th>Issued</th>
               <th class="num">Size ($M)</th>
               <th class="num">Balance ($M)</th>
               <th>Rating</th>
+              <th>CUSIP (sr.)</th>
               <th class="num">Coll. MW</th>
-              <th>Tenants</th>
             </tr>
           </thead>
-          <tbody><tr><td colspan="9" class="loading">loading…</td></tr></tbody>
+          <tbody><tr><td colspan="11" class="loading">loading…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -144,6 +167,26 @@
       </div>
 
       <div class="sec-card">
+        <h3>Tenant mix</h3>
+        <table class="sec-table" id="by-tenant-type-table">
+          <thead>
+            <tr><th>Type</th><th class="num">Deals</th><th class="num">Size ($M)</th></tr>
+          </thead>
+          <tbody><tr><td colspan="3" class="loading">loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="sec-card">
+        <h3>Facility mix</h3>
+        <table class="sec-table" id="by-dc-type-table">
+          <thead>
+            <tr><th>Facility</th><th class="num">Deals</th><th class="num">Size ($M)</th></tr>
+          </thead>
+          <tbody><tr><td colspan="3" class="loading">loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="sec-card">
         <h3>Vintage</h3>
         <table class="sec-table" id="by-vintage-table">
           <thead>
@@ -152,6 +195,55 @@
           <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- ── Private-credit panel ──────────────────────────────────────── -->
+  <div class="sec-card" style="margin-top:24px;border-top:3px solid #7c3aed;">
+    <h3 style="display:flex;align-items:center;gap:10px;">
+      Private credit / PE infra exposure
+      <span style="font-size:10px;font-weight:400;color:#9ca3af;text-transform:none;letter-spacing:0;">
+        — non-securitized: BDC schedules + curated parent-level financings
+      </span>
+    </h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;">
+      <div style="background:#faf5ff;padding:8px;border-radius:5px;border:1px solid #e9d5ff;">
+        <div style="font-size:20px;font-weight:600;color:#7c3aed;" id="pc-kpi-rows">—</div>
+        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Total exposures</div>
+      </div>
+      <div style="background:#faf5ff;padding:8px;border-radius:5px;border:1px solid #e9d5ff;">
+        <div style="font-size:20px;font-weight:600;color:#7c3aed;" id="pc-kpi-commitment">—</div>
+        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Commitment ($M)</div>
+      </div>
+      <div style="background:#faf5ff;padding:8px;border-radius:5px;border:1px solid #e9d5ff;">
+        <div style="font-size:20px;font-weight:600;color:#7c3aed;" id="pc-kpi-curated">—</div>
+        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Curated (trade press)</div>
+      </div>
+      <div style="background:#faf5ff;padding:8px;border-radius:5px;border:1px solid #e9d5ff;">
+        <div style="font-size:20px;font-weight:600;color:#7c3aed;" id="pc-kpi-bdc">—</div>
+        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">BDC-disclosed</div>
+      </div>
+    </div>
+    <table class="sec-table" id="pc-table">
+      <thead>
+        <tr>
+          <th>Lender</th>
+          <th>Borrower</th>
+          <th>Deal type</th>
+          <th class="num">Commit. ($M)</th>
+          <th class="num">Outstanding ($M)</th>
+          <th>Source</th>
+          <th>Maturity</th>
+        </tr>
+      </thead>
+      <tbody><tr><td colspan="7" class="loading">loading…</td></tr></tbody>
+    </table>
+    <div style="font-size:10px;color:#9ca3af;margin-top:8px;line-height:1.5;">
+      <strong>Source tiers:</strong>
+      <span style="color:#10b981;">●</span> <code>bdc_filing</code> = pulled from BDC 10-Q Schedule of Investments on SEC EDGAR ·
+      <span style="color:#f59e0b;">●</span> <code>curated</code> = trade press / press release / state-pension LP report.
+      <strong>Coverage gap:</strong> the largest private-credit mandates (Blackstone Credit flagship, KKR Asset-Based Finance, Apollo Origination Partnership main fund)
+      file Form PF, which is non-public — they will not appear here.
     </div>
   </div>
 

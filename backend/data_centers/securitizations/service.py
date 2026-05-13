@@ -41,6 +41,33 @@ TYPE_LABELS = {
     'unsecured':          'Unsecured corporate',
 }
 
+VALID_TENANT_TYPES = {'hyperscale', 'colocation', 'wholesale', 'mixed', 'hpc_ai'}
+TENANT_TYPE_LABELS = {
+    'hyperscale': 'Hyperscale',
+    'colocation': 'Retail colocation',
+    'wholesale':  'Wholesale BTS',
+    'mixed':      'Mixed',
+    'hpc_ai':     'HPC / AI',
+}
+
+# Facility form-factor — what the BUILDING is, distinct from who occupies it.
+VALID_DC_TYPES = {
+    'retail_colo',         # many small enterprise tenants, interconnection-heavy
+    'wholesale',           # multi-tenant wholesale colo (larger suites)
+    'hyperscale_bts',      # single-tenant build-to-suit dedicated facilities
+    'hyperscale_campus',   # multi-building campus for one or more hyperscalers
+    'ai_campus',           # purpose-built AI / GPU training campus
+    'mixed',
+}
+DC_TYPE_LABELS = {
+    'retail_colo':       'Retail colo',
+    'wholesale':         'Wholesale',
+    'hyperscale_bts':    'Hyperscale BTS',
+    'hyperscale_campus': 'Hyperscale campus',
+    'ai_campus':         'AI campus',
+    'mixed':             'Mixed facility',
+}
+
 
 def _to_float(s, default=0.0):
     try: return float(str(s).replace(',', '').strip())
@@ -71,12 +98,23 @@ def _load_csv() -> list[dict[str, Any]]:
             dtype = (r.get('deal_type') or '').strip().lower()
             if dtype not in VALID_TYPES:
                 dtype = 'abs'
+            ttype = (r.get('tenant_type') or '').strip().lower()
+            if ttype not in VALID_TENANT_TYPES:
+                ttype = ''
+            fctype = (r.get('datacenter_type') or '').strip().lower()
+            if fctype not in VALID_DC_TYPES:
+                fctype = ''
             rows.append({
                 'deal_id':      r.get('deal_id', '').strip(),
                 'deal_name':    r.get('deal_name', '').strip(),
                 'sponsor':      r.get('sponsor', '').strip(),
                 'deal_type':    dtype,
                 'deal_type_label': TYPE_LABELS.get(dtype, dtype),
+                'tenant_type':       ttype,
+                'tenant_type_label': TENANT_TYPE_LABELS.get(ttype, ''),
+                'datacenter_type':       fctype,
+                'datacenter_type_label': DC_TYPE_LABELS.get(fctype, ''),
+                'cusip_senior': r.get('cusip_senior', '').strip(),
                 'issue_date':   r.get('issue_date', '').strip(),
                 'vintage':      (r.get('issue_date') or '')[:4],
                 'total_size_usd_m':     _to_float(r.get('total_size_usd_m')),

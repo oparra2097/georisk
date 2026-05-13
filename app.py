@@ -68,6 +68,7 @@ from backend.house_prices.routes import house_prices_bp
 from backend.house_prices.forecast.routes import hpi_forecast_bp
 from backend.data_centers.routes import data_centers_bp
 from backend.data_centers.securitizations.routes import securitizations_bp
+from backend.data_centers.private_credit.routes import private_credit_bp
 from backend.credit_default.routes import credit_default_bp
 
 
@@ -127,6 +128,7 @@ def create_app():
     app.register_blueprint(hpi_forecast_bp, url_prefix='/api/house-prices/forecast')
     app.register_blueprint(data_centers_bp, url_prefix='/api/data-centers')
     app.register_blueprint(securitizations_bp, url_prefix='/api/securitizations')
+    app.register_blueprint(private_credit_bp, url_prefix='/api/private-credit')
     app.register_blueprint(credit_default_bp, url_prefix='/api/credit-default')
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(sharing_bp)  # /og/* routes (public, no auth)

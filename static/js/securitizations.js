@@ -40,24 +40,32 @@ const SecuritizationsPage = {
     const tbody = document.querySelector('#deals-table tbody');
     const deals = this.summary?.deals || [];
     if (!deals.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="loading">no deals loaded — seed pending verification</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="loading">no deals loaded — seed pending verification</td></tr>';
       return;
     }
     tbody.innerHTML = deals.map(d => {
-      const tenants = (d.top_tenants || []).slice(0, 2).join(', ');
       const collMw = (d.collateral_mw_built || 0) + (d.collateral_mw_uc || 0);
+      const tpillCls = d.tenant_type || 'empty';
+      const tpillLbl = d.tenant_type_label || '—';
+      const fpillCls = d.datacenter_type || 'empty';
+      const fpillLbl = d.datacenter_type_label || '—';
+      const cusip = d.cusip_senior
+        ? `<span class="cusip-cell">${d.cusip_senior}</span>`
+        : `<span class="cusip-cell" style="color:#d1d5db;" title="pending EDGAR FWP lookup">pending</span>`;
       return `
         <tr data-deal-id="${d.deal_id}">
           <td><span class="conf-dot conf-${d.confidence || 'medium'}"></span>${d.deal_name}</td>
           <td>${d.sponsor}</td>
           <td><span class="pill ${d.deal_type}">${d.deal_type_label}</span></td>
+          <td><span class="tpill ${tpillCls}">${tpillLbl}</span></td>
+          <td><span class="fpill ${fpillCls}">${fpillLbl}</span></td>
           <td>${d.issue_date || '—'}</td>
           <td class="num">${this.fmtNum(d.total_size_usd_m)}</td>
           <td class="num">${this.fmtNum(d.current_balance_usd_m)}</td>
           <td><span class="rating ${this.ratingClass(d.rating_senior)}">${d.rating_senior || 'NR'}</span>
               <span style="color:#9ca3af;font-size:10px;">${d.rater || ''}</span></td>
+          <td>${cusip}</td>
           <td class="num">${this.fmtNum(collMw)}</td>
-          <td style="color:#374151;font-size:11px;">${tenants}</td>
         </tr>`;
     }).join('');
     tbody.querySelectorAll('tr').forEach(tr => {
@@ -142,4 +150,70 @@ const SecuritizationsPage = {
     const rows = (this.summary?.by_vintage || []).map(r => ({ ...r, mw_built: r.mw_built, mw_uc: r.mw_uc }));
     this._renderBucket('#by-vintage-table', rows, 'vintage');
   },
+
+  _bucketBy(field, label) {
+    const deals = this.summary?.deals || [];
+    const m = new Map();
+    deals.forEach(d => {
+      const k = d[field] || '—';
+      const b = m.get(k) || { [label]: k, deals: 0, size_usd_m: 0 };
+      b.deals++;
+      b.size_usd_m += d.total_size_usd_m || 0;
+      m.set(k, b);
+    });
+    return [...m.values()].sort((a, b) => b.size_usd_m - a.size_usd_m)
+      .map(r => ({ ...r, size_usd_m: Math.round(r.size_usd_m) }));
+  },
+  renderByTenantType() {
+    this._renderBucket('#by-tenant-type-table', this._bucketBy('tenant_type_label', 'tenant_type'), 'tenant_type');
+  },
+  renderByDcType() {
+    this._renderBucket('#by-dc-type-table', this._bucketBy('datacenter_type_label', 'datacenter_type'), 'datacenter_type');
+  },
+
+  async loadPrivateCredit() {
+    try {
+      const r = await fetch('/api/private-credit/summary');
+      if (!r.ok) return;
+      const j = await r.json();
+      const t = j.totals || {};
+      const set = (id, v) => document.getElementById(id).textContent = (v == null ? '—' : Math.round(v).toLocaleString());
+      set('pc-kpi-rows',       t.row_count);
+      set('pc-kpi-commitment', t.total_commitment_usd_m);
+      set('pc-kpi-curated',    t.curated_count);
+      set('pc-kpi-bdc',        t.bdc_count);
+
+      const tbody = document.querySelector('#pc-table tbody');
+      const rows = j.rows || [];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading">no rows loaded</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => {
+        const tierColor = r.source_tier === 'bdc_filing' ? '#10b981' : '#f59e0b';
+        const sourceLabel = r.source_url
+          ? `<a href="${r.source_url}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none;">${r.source_tier}↗</a>`
+          : r.source_tier;
+        return `<tr>
+          <td><span class="conf-dot conf-${r.confidence||'medium'}"></span>${r.lender}
+              <span style="color:#9ca3af;font-size:10px;">· ${r.lender_type_label || ''}</span></td>
+          <td>${r.borrower}</td>
+          <td style="font-size:11px;color:#374151;">${(r.deal_type||'').replace(/_/g,' ')}</td>
+          <td class="num">${this.fmtNum(r.commitment_usd_m)}</td>
+          <td class="num">${this.fmtNum(r.outstanding_usd_m)}</td>
+          <td><span style="color:${tierColor};">●</span> ${sourceLabel}</td>
+          <td style="color:#6b7280;font-size:11px;">${r.maturity_year || '—'}</td>
+        </tr>`;
+      }).join('');
+    } catch (e) { console.error('private-credit fetch failed:', e); }
+  },
+};
+
+// Hook the new renderers into init.
+const __origInit = SecuritizationsPage.init.bind(SecuritizationsPage);
+SecuritizationsPage.init = async function() {
+  await __origInit();
+  this.renderByTenantType();
+  this.renderByDcType();
+  this.loadPrivateCredit();
 };
