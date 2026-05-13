@@ -309,4 +309,97 @@ SecuritizationsPage.init = async function() {
   this.renderByDcType();
   this.loadPrivateCredit();
   document.getElementById('deals-filter-clear')?.addEventListener('click', () => this.filterBySponsor(null));
+  this.wireAdmin();
+};
+
+// ── Admin pipeline: resolve CIKs, then pull CUSIPs + capital stacks ──
+SecuritizationsPage.wireAdmin = function() {
+  const block = document.getElementById('sec-admin-block');
+  if (!block) return;
+  const status = document.getElementById('admin-status');
+  const results = document.getElementById('cik-results');
+  const setStatus = (msg) => { if (status) status.textContent = msg; };
+
+  document.getElementById('btn-cik-resolve')?.addEventListener('click', async () => {
+    setStatus('resolving CIKs…');
+    results.style.display = '';
+    results.innerHTML = '<div style="color:#6b7280;">querying EDGAR full-text search for each missing deal…</div>';
+
+    // Build a list of issuer-name guesses from deals missing edgar_cik.
+    const missing = (this.summary?.deals || []).filter(d => !d.edgar_cik);
+    if (!missing.length) {
+      results.innerHTML = '<div style="color:#10b981;">all 29 deals already have CIKs populated.</div>';
+      setStatus(''); return;
+    }
+    const issuers = missing.map(d => ({
+      deal_id: d.deal_id,
+      // Strip series-number suffix; keep just the issuer LLC name.
+      issuer:  d.deal_name.replace(/,?\s*Series\s+\S.*/i, '').trim(),
+    }));
+    try {
+      const r = await fetch('/api/securitizations/admin/cik/lookup', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ issuers: issuers.map(i => i.issuer) }),
+      });
+      const j = await r.json();
+      if (!j.ok) { setStatus(`error: ${j.error || r.status}`); return; }
+
+      results.innerHTML = j.results.map((res, i) => {
+        const meta = issuers[i];
+        if (!res.ok) {
+          return `<div style="padding:6px 0;border-bottom:1px solid #fde68a;">
+            <strong style="color:#374151;">${meta.deal_id}</strong>
+            <span style="color:#9ca3af;">(${meta.issuer})</span>
+            <span style="color:#dc2626;font-size:10px;">— ${res.error}</span>
+          </div>`;
+        }
+        if (!res.candidates?.length) {
+          return `<div style="padding:6px 0;border-bottom:1px solid #fde68a;">
+            <strong style="color:#374151;">${meta.deal_id}</strong>
+            <span style="color:#9ca3af;">(${meta.issuer})</span>
+            <span style="color:#dc2626;font-size:10px;">— no EDGAR hits</span>
+          </div>`;
+        }
+        const candList = res.candidates.slice(0, 5).map(c => `
+          <button type="button" data-cik="${c.cik}" class="cik-copy-btn"
+            style="margin:2px 4px 2px 0;padding:3px 8px;border:1px solid #d1d5db;background:#fff;border-radius:3px;cursor:pointer;font-family:ui-monospace,monospace;font-size:11px;"
+            title="${c.name} · forms: ${(c.form_hits||[]).join(', ')}">
+            ${c.cik} <span style="color:#9ca3af;">${c.name}</span>
+          </button>`).join('');
+        return `<div style="padding:6px 0;border-bottom:1px solid #fde68a;">
+          <strong style="color:#374151;">${meta.deal_id}</strong>
+          <span style="color:#9ca3af;font-size:10px;">(${meta.issuer})</span>
+          <div style="margin-top:4px;">${candList}</div>
+        </div>`;
+      }).join('');
+      results.querySelectorAll('.cik-copy-btn').forEach(b =>
+        b.addEventListener('click', () => {
+          navigator.clipboard?.writeText(b.dataset.cik);
+          b.style.background = '#d1fae5';
+          setStatus(`copied ${b.dataset.cik} — paste into edgar_cik column for the row above`);
+        }));
+      setStatus(`${j.results.filter(r => r.ok && r.candidates?.length).length}/${issuers.length} resolved with candidates`);
+    } catch (e) {
+      setStatus(`error: ${e.message}`);
+    }
+  });
+
+  document.getElementById('btn-cusip-pull')?.addEventListener('click', async () => {
+    setStatus('pulling FWP filings from EDGAR…');
+    try {
+      const r = await fetch('/api/securitizations/admin/cusip/pull', {method: 'POST'});
+      const j = await r.json();
+      setStatus(`resolved ${j.resolved}/${j.attempted} CUSIPs — refreshing…`);
+      // Refresh the page-level summary so new CUSIPs and tranches show up.
+      await fetch('/api/securitizations/refresh', {method: 'POST'});
+      const s = await fetch('/api/securitizations/summary');
+      this.summary = await s.json();
+      this.renderDealsTable();
+      if (this.selectedDealId) this.selectDeal(this.selectedDealId);
+      setStatus(`pulled ${j.resolved}/${j.attempted} · page refreshed`);
+    } catch (e) {
+      setStatus(`error: ${e.message}`);
+    }
+  });
 };
