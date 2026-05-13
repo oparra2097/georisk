@@ -115,6 +115,7 @@ def _load_csv() -> list[dict[str, Any]]:
                 'datacenter_type':       fctype,
                 'datacenter_type_label': DC_TYPE_LABELS.get(fctype, ''),
                 'cusip_senior': r.get('cusip_senior', '').strip(),
+                'edgar_cik':    r.get('edgar_cik', '').strip(),
                 'issue_date':   r.get('issue_date', '').strip(),
                 'vintage':      (r.get('issue_date') or '')[:4],
                 'total_size_usd_m':     _to_float(r.get('total_size_usd_m')),
@@ -136,14 +137,30 @@ def _load_csv() -> list[dict[str, Any]]:
             })
     # Drop placeholder rows that have no real data.
     rows = [r for r in rows if r['deal_id'] and r['deal_id'] != 'placeholder_seed']
+
+    # Overlay FWP-cache CUSIPs onto rows where the CSV value is blank.
+    try:
+        from backend.data_centers.securitizations import fwp_scraper
+        for r in rows:
+            if not r.get('cusip_senior'):
+                cached = fwp_scraper.get_cached_cusip(r['deal_id'])
+                if cached:
+                    r['cusip_senior'] = cached
+                    r['cusip_source'] = 'edgar_fwp_cache'
+                else:
+                    r['cusip_source'] = None
+            else:
+                r['cusip_source'] = 'manual_csv'
+    except Exception:
+        pass
     return rows
 
 
 def _cross_reference_facilities(deals: list[dict]) -> None:
     """Attach a facility_matches[] list to each deal — facility entries
     from the facilities CSV whose name overlaps with the deal's
-    collateral_facilities list.  Allows the UI to deep-link to facility-
-    level risk scores."""
+    collateral_facilities list.  Also computes a deal-level
+    stranded-risk rollup from the matched facilities."""
     from backend.data_centers import service as facility_service
     if not facility_service._CACHE.get('built'):
         facility_service.build()
@@ -154,8 +171,6 @@ def _cross_reference_facilities(deals: list[dict]) -> None:
         hits = []
         for f in fac_index:
             fname = (f.get('name') or '').lower()
-            # Loose match: either side contains the other as a substring,
-            # or share a distinctive token (>=4 chars).
             if low in fname or fname in low:
                 hits.append(f); continue
             toks_a = {t for t in low.split() if len(t) >= 4}
@@ -179,6 +194,22 @@ def _cross_reference_facilities(deals: list[dict]) -> None:
                         'at_risk_mw':      f.get('at_risk_mw'),
                     })
         d['facility_matches'] = matches
+
+        # MW-weighted average stranded-risk score across matched facilities,
+        # plus total at-risk MW summed.  Both gracefully handle missing data
+        # and unmatched deals (score=None, at_risk_mw=0).
+        scored = [m for m in matches
+                  if m.get('stranded_risk') is not None and (m.get('mw') or 0) > 0]
+        if scored:
+            num   = sum((m['stranded_risk'] or 0) * (m['mw'] or 0) for m in scored)
+            denom = sum(m['mw'] or 0 for m in scored)
+            d['stranded_risk_avg'] = round(num / denom, 1) if denom else None
+        else:
+            d['stranded_risk_avg'] = None
+        d['at_risk_mw_total'] = round(
+            sum(m.get('at_risk_mw') or 0 for m in matches), 1)
+        d['matched_mw_total'] = round(
+            sum(m.get('mw') or 0 for m in matches), 1)
 
 
 def build(force: bool = False) -> dict[str, Any]:
