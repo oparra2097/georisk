@@ -8,6 +8,12 @@ increasingly for biofuel feedstock.
 
 - **US Dollar Index (DXY)** — dollar-priced; inverse correlation on
   global export competitiveness.
+- **ENSO ONI (NOAA CPC Oceanic Niño Index)** — Brazil's Cerrado
+  soybean belt is sharply ENSO-sensitive. La Niña years dry the
+  southern Brazil + Argentine Pampas growing regions; El Niño tends
+  to bring excess rain to southern Brazil but drought to the US
+  Midwest in the prior summer. Sub-seasonal lead helpful for the
+  Jan-Mar South American planting window.
 - **Wheat (`ZW=F`, cross-commodity)** — grain/oilseed complex co-
   movement. Grain-oilseed substitution in feed rations and shared
   planting-acreage competition on US farms.
@@ -48,7 +54,7 @@ driver — drought years (2021-22 Argentina, 2015-16 Brazil) spike prices
 ## Model specification
 
 - SARIMAX(1,0,1) on monthly log-returns of `ZS=F` close.
-- Exogenous: DXY log-returns, Wheat log-returns, ^GSPC log-returns.
+- Exogenous: DXY log-returns, ENSO ONI level, Wheat log-returns, `^GSPC` log-returns.
 - GARCH(1,1) on residuals.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
 

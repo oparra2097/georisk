@@ -10,6 +10,11 @@ buffered by global stocks-to-use dynamics.
 - **US Dollar Index (DXY)** — dollar-priced; inverse correlation. USD
   weakness makes US wheat more competitive vs Black Sea and Australian
   wheat on the export market.
+- **ENSO ONI (NOAA CPC Oceanic Niño Index)** — La Niña years tend to
+  drive drought in the US Plains (HRW wheat) and Argentina (SRW
+  exports); El Niño years bring wet conditions but flooding risk to
+  Australia. Significant 1-3 quarter lag effect on world wheat
+  balance.
 - **Geopolitical Risk Index** — captures the Black Sea (Ukraine / Russia)
   risk premium that became dominant after Feb 2022.
 - **WTI Crude (`CL=F`, cross-commodity)** — energy cost in farming (diesel,
@@ -51,7 +56,7 @@ agronomic specifics.
 ## Model specification
 
 - SARIMAX(1,0,1) on monthly log-returns of `ZW=F` close.
-- Exogenous: DXY log-returns, GPR log-level, WTI log-returns.
+- Exogenous: DXY log-returns, ENSO ONI level, GPR log-level, WTI log-returns.
 - GARCH(1,1) on residuals.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
 

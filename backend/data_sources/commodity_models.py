@@ -164,10 +164,20 @@ DRIVERS: dict[str, list[tuple[str, str]]] = {
     'Platinum':         [('fred', 'DTWEXBGS'), ('comm', 'Gold'), ('fred', 'DFII10')],
     'Copper':           [('fred', 'DTWEXBGS'), ('yf', '^GSPC'), ('fred', 'DFII10')],
     'Aluminum':         [('fred', 'DTWEXBGS'), ('comm', 'Copper'), ('comm', 'Natural Gas (HH)')],
-    'Cocoa':            [('fred', 'DTWEXBGS'), ('yf', '^GSPC')],
-    'Wheat':            [('fred', 'DTWEXBGS'), ('gpr', ''), ('comm', 'WTI Crude')],
-    'Soybeans':         [('fred', 'DTWEXBGS'), ('comm', 'Wheat'), ('yf', '^GSPC')],
-    'Coffee':           [('fred', 'DTWEXBGS'), ('yf', '^GSPC')],
+    'Cocoa':            [('fred', 'DTWEXBGS'),
+                         ('enso', ''),                # NEW: ENSO state — West Africa rainfall
+                         ('yf', '^GSPC')],
+    'Wheat':            [('fred', 'DTWEXBGS'),
+                         ('enso', ''),                # NEW: ENSO — US/EU drought + Australia
+                         ('gpr', ''),
+                         ('comm', 'WTI Crude')],
+    'Soybeans':         [('fred', 'DTWEXBGS'),
+                         ('enso', ''),                # NEW: ENSO — Brazil/Argentina rainfall
+                         ('comm', 'Wheat'),
+                         ('yf', '^GSPC')],
+    'Coffee':           [('fred', 'DTWEXBGS'),
+                         ('enso', ''),                # NEW: ENSO — Brazil drought / Vietnam typhoons
+                         ('yf', '^GSPC')],
 }
 
 # How each driver enters the SARIMAX design matrix
@@ -179,6 +189,7 @@ DRIVER_TRANSFORM = {
     'fred_OVXCLS':   'loglevel', # implied-vol regime — log level
     'fred_DHHNGSP':  'logret',   # Henry Hub spot — return signal
     'gpr_':          'loglevel', # GPR index — log of level
+    'enso_':         'level',    # ENSO ONI — already a signed anomaly (°C), use level
     'yf_^GSPC':      'logret',   # equities — returns
     'comm_':         'logret',   # other commodity price — returns
 }
@@ -513,6 +524,8 @@ class DriverFetcher:
                 series = self._fetch_gpr(start, end)
             elif kind == 'comm':
                 series = self._fetch_yf(TICKERS[key], start, end)
+            elif kind == 'enso':
+                series = self._fetch_enso(start, end)
             else:
                 logger.warning(f'Unknown driver kind: {kind}')
                 return None
@@ -522,6 +535,25 @@ class DriverFetcher:
 
         self._cache[cache_key] = series
         return series
+
+    @staticmethod
+    def _fetch_enso(start: date, end: Optional[date] = None) -> Optional[pd.Series]:
+        """Pull the NOAA CPC Oceanic Niño Index (monthly anomaly, °C)."""
+        try:
+            from backend.data_sources import enso_index
+        except Exception:
+            return None
+        s = enso_index.fetch_oni(start=start, end=end)
+        if s is None or len(s) == 0:
+            return None
+        # Standardise the index to month-end timestamps, matching the rest
+        # of the driver pipeline.
+        s = s.copy()
+        try:
+            s.index = s.index.to_period('M').to_timestamp('M')
+        except Exception:
+            pass
+        return s
 
     @staticmethod
     def _fetch_yf(ticker: str, start: date, end: Optional[date] = None) -> Optional[pd.Series]:
@@ -621,6 +653,10 @@ def _transform(series: pd.Series, kind: str) -> pd.Series:
     if kind == 'loglevel':
         s = series.replace(0, np.nan)
         return np.log(s)
+    if kind == 'level':
+        # Pass through — appropriate for signed-anomaly indices such as
+        # ONI (already mean-zero around the climatology baseline).
+        return series
     return series
 
 

@@ -9,16 +9,18 @@ residuals for years.
 ## Drivers
 
 - **US Dollar Index (DXY)** — dollar-priced, inverse correlation.
+- **ENSO ONI (NOAA CPC Oceanic Niño Index)** — single biggest macro
+  climate driver for West African cocoa. El Niño years drive dry
+  conditions in Ghana + Côte d'Ivoire growing regions; positive ONI
+  readings precede yield-shortfall episodes by 2-6 months. Enters as
+  a signed-anomaly level (°C).
 - **S&P 500 (^GSPC)** — weak proxy for discretionary chocolate demand.
 
-> Drivers we'd like, with real impact on cocoa: West Africa rainfall
-> anomaly (NOAA CHIRPS for Ghana + Côte d'Ivoire growing regions),
-> Harmattan wind intensity (dry season index), black pod disease
-> pressure, swollen shoot virus prevalence, ICCO stocks-to-grindings
-> ratio, grindings volume (quarterly demand indicator). The current
-> driver set is thin because none of these have clean free APIs at
-> monthly frequency. The SARIMAX AR component and seasonal pattern
-> absorb some of the dynamics but badly under-explain cocoa behavior.
+> Drivers we'd still like: NOAA CPC African Rainfall Climatology
+> (ARC2) for Ghana + Côte d'Ivoire — *queued* in Phase 21. Harmattan
+> wind intensity, black pod disease pressure, swollen shoot virus
+> prevalence, ICCO stocks-to-grindings ratio — no clean free APIs;
+> covered indirectly via the scenario shock catalogue.
 
 ## Structural story
 
@@ -49,7 +51,7 @@ the 2023-26 episode illustrates how badly that can bite:
 ## Model specification
 
 - SARIMAX(1,0,1) on monthly log-returns of `CC=F` close.
-- Exogenous: DXY log-returns, ^GSPC log-returns.
+- Exogenous: DXY log-returns, ENSO ONI level, `^GSPC` log-returns.
 - GARCH(1,1) on residuals — cocoa has enormous volatility clustering,
   so GARCH is material here.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
