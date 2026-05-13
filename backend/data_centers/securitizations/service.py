@@ -138,7 +138,7 @@ def _load_csv() -> list[dict[str, Any]]:
     # Drop placeholder rows that have no real data.
     rows = [r for r in rows if r['deal_id'] and r['deal_id'] != 'placeholder_seed']
 
-    # Overlay FWP-cache CUSIPs onto rows where the CSV value is blank.
+    # Overlay FWP-cache CUSIPs and capital-stack tranches onto rows.
     try:
         from backend.data_centers.securitizations import fwp_scraper
         for r in rows:
@@ -151,6 +151,7 @@ def _load_csv() -> list[dict[str, Any]]:
                     r['cusip_source'] = None
             else:
                 r['cusip_source'] = 'manual_csv'
+            r['tranches'] = fwp_scraper.get_cached_tranches(r['deal_id'])
     except Exception:
         pass
     return rows

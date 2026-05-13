@@ -61,6 +61,17 @@ _SENIOR_LABELS = [
     r'Class\s*A',                # fallback
 ]
 
+# Pattern that finds every class label in an FWP tranche table.
+# Matches: "Class A-1", "Class A-1FCF", "Class A-2", "Class B", "Class C", etc.
+_CLASS_LABEL_RE = re.compile(
+    r'Class\s+([A-D](?:-[12](?:FCF)?)?)\b', re.IGNORECASE,
+)
+_RATING_INLINE_RE = re.compile(
+    r'\b(AAA|AA[+-]?|A[+-]?|BBB[+-]?|BB[+-]?|B[+-]?|CCC[+-]?|NR)\b'
+)
+_COUPON_RE = re.compile(r'(\d{1,2}\.\d{1,4})\s*%')
+_SIZE_RE   = re.compile(r'\$\s*([\d,]+(?:\.\d+)?)\s*(?:million|MM|M\b)', re.IGNORECASE)
+
 
 def _get(url: str, timeout: int = 30) -> tuple[Any, str | None]:
     try:
@@ -131,6 +142,52 @@ def find_senior_cusip(html: str) -> dict:
     return {'ok': False, 'reason': 'no senior-label CUSIP found'}
 
 
+def parse_tranche_table(html: str) -> list[dict]:
+    """Extract every tranche we can find in an FWP / 424B5 document.
+
+    Each tranche row contains a class label (Class A-1, Class A-2, Class
+    A-1FCF, Class B, Class C, ...), and within a small window after the
+    label we expect to find a CUSIP, a rating (AAA/AA/A/BBB/BB/B/...), a
+    coupon (e.g., '4.50%'), and a tranche size ('$50 million').  The FWP
+    geometry varies, so we capture each field independently from a 600-
+    char window after the class label and let the admin review."""
+    text = re.sub(r'<[^>]+>', ' ', html)
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    tranches: list[dict] = []
+    seen_classes: set[str] = set()
+    for m in _CLASS_LABEL_RE.finditer(text):
+        cls = m.group(1).upper().replace(' ', '')
+        if cls in seen_classes:
+            continue
+        seen_classes.add(cls)
+
+        window = text[m.end(): m.end() + 600]
+        cusip = _CUSIP_RE.search(window)
+        rating = _RATING_INLINE_RE.search(window)
+        coupon = _COUPON_RE.search(window)
+        size   = _SIZE_RE.search(window)
+
+        # Skip rows that don't look like real tranche-table rows
+        # (no CUSIP AND no rating AND no coupon → probably just a class
+        # reference in prose).
+        if not (cusip or rating or coupon):
+            continue
+
+        tranches.append({
+            'class':   f'Class {cls}',
+            'cusip':   cusip.group(1) if cusip else None,
+            'rating':  rating.group(1) if rating else None,
+            'coupon':  float(coupon.group(1)) if coupon else None,
+            'size_usd_m': (
+                round(float(size.group(1).replace(',', '')), 1)
+                if size else None
+            ),
+            'context': text[max(0, m.start() - 20): m.end() + 200],
+        })
+    return tranches
+
+
 def pull_for_deal(deal: dict) -> dict:
     cik = (deal.get('edgar_cik') or '').strip()
     if not cik:
@@ -149,17 +206,18 @@ def pull_for_deal(deal: dict) -> dict:
                 'cik': cik, 'error': 'no FWP/424B filings found'}
 
     best = None
+    best_tranches: list[dict] = []
     for f in candidates[:30]:  # check most-recent 30 max
         r, err = _get(f['doc_url'], timeout=45)
         if err:
             continue
         html = r.content.decode('utf-8', errors='ignore')
-        # Match the series tag if we have one.
         if series and series.lower() not in html.lower():
             continue
         found = find_senior_cusip(html)
         if found.get('ok'):
             best = {**f, **found, 'series_matched': bool(series)}
+            best_tranches = parse_tranche_table(html)
             break
     if not best:
         return {'ok': False, 'deal_id': deal.get('deal_id'),
@@ -176,6 +234,7 @@ def pull_for_deal(deal: dict) -> dict:
         'doc_url':   best['doc_url'],
         'label_hit': best['label_hit'],
         'context':   best['context'][:300],
+        'tranches':  best_tranches,
     }
 
 
@@ -229,3 +288,10 @@ def get_cached_cusip(deal_id: str) -> str | None:
     cache = _load_cache()
     e = cache.get(deal_id) or {}
     return e.get('cusip') if e.get('ok') else None
+
+
+def get_cached_tranches(deal_id: str) -> list[dict]:
+    """Return the cached capital-stack tranches for a deal, or []."""
+    cache = _load_cache()
+    e = cache.get(deal_id) or {}
+    return e.get('tranches') or [] if e.get('ok') else []

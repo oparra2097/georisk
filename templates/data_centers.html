@@ -159,6 +159,23 @@
         Open securitizations &rarr;
       </a>
     </div>
+    <div id="sec-risk-leaderboard" style="display:none;margin-top:12px;padding-top:12px;border-top:1px dashed #e9d5ff;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#6b21a8;font-weight:600;margin-bottom:6px;">
+        Top deals by at-risk MW (collateral facilities)
+      </div>
+      <table style="width:100%;font-size:11px;border-collapse:collapse;">
+        <thead>
+          <tr style="color:#9ca3af;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e9d5ff;">
+            <th style="text-align:left;padding:3px 4px;font-weight:500;">Deal</th>
+            <th style="text-align:left;padding:3px 4px;font-weight:500;">Sponsor</th>
+            <th style="text-align:right;padding:3px 4px;font-weight:500;">At-risk MW</th>
+            <th style="text-align:right;padding:3px 4px;font-weight:500;">Risk</th>
+            <th style="text-align:right;padding:3px 4px;font-weight:500;">Size $M</th>
+          </tr>
+        </thead>
+        <tbody id="sec-risk-leaderboard-body"></tbody>
+      </table>
+    </div>
   </div>
 
   {% if current_user and current_user.is_authenticated and admin_email and current_user.email|lower == admin_email|lower %}

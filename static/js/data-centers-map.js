@@ -113,6 +113,30 @@ const DataCenterMap = {
       document.getElementById('sec-tile-issuance').textContent  = '$' + fmt(t.total_size_usd_m);
       document.getElementById('sec-tile-balance').textContent   = '$' + fmt(t.total_balance_usd_m);
       tile.style.display = '';
+
+      // Risk leaderboard — top 5 deals by at-risk MW
+      const ranked = (j.deals || [])
+        .filter(d => (d.at_risk_mw_total || 0) > 0)
+        .sort((a, b) => (b.at_risk_mw_total || 0) - (a.at_risk_mw_total || 0))
+        .slice(0, 5);
+      if (ranked.length) {
+        const riskColor = s => s == null ? '#d1d5db'
+                              : s >= 75 ? '#dc2626'
+                              : s >= 50 ? '#f59e0b'
+                              : s >= 25 ? '#facc15' : '#10b981';
+        const body = document.getElementById('sec-risk-leaderboard-body');
+        body.innerHTML = ranked.map(d => `
+          <tr style="border-bottom:1px solid #f3f4f6;">
+            <td style="padding:4px 4px;color:#374151;">${d.deal_name}</td>
+            <td style="padding:4px 4px;color:#6b7280;">${d.sponsor}</td>
+            <td style="padding:4px 4px;text-align:right;font-weight:600;color:#7c3aed;">${fmt(d.at_risk_mw_total)}</td>
+            <td style="padding:4px 4px;text-align:right;">
+              <span style="display:inline-block;padding:1px 5px;border-radius:3px;background:${riskColor(d.stranded_risk_avg)}22;color:${riskColor(d.stranded_risk_avg)};font-weight:600;">${d.stranded_risk_avg != null ? Math.round(d.stranded_risk_avg) : '—'}</span>
+            </td>
+            <td style="padding:4px 4px;text-align:right;color:#6b7280;">${fmt(d.total_size_usd_m)}</td>
+          </tr>`).join('');
+        document.getElementById('sec-risk-leaderboard').style.display = '';
+      }
     } catch (_) { /* swallow */ }
   },
 
