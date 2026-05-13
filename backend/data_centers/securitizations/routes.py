@@ -76,3 +76,15 @@ def kbra_parse():
     if not url:
         return jsonify({'ok': False, 'error': 'missing url'}), 400
     return jsonify(kbra_parser.parse_url(url))
+
+
+@securitizations_bp.route('/admin/cusip/pull', methods=['POST'])
+@_require_admin
+def cusip_pull():
+    """Pull senior-tranche CUSIPs from EDGAR Form FWP / 424B5 filings for
+    every deal that has an edgar_cik tagged.  Persists to a cache and
+    refreshes the in-memory deal index."""
+    from backend.data_centers.securitizations import fwp_scraper
+    result = fwp_scraper.pull_all()
+    service.build(force=True)
+    return jsonify(result)

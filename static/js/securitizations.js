@@ -3,6 +3,7 @@
 const SecuritizationsPage = {
   summary: null,
   selectedDealId: null,
+  sponsorFilter: null,
 
   async init() {
     try {
@@ -36,11 +37,31 @@ const SecuritizationsPage = {
     document.getElementById('kpi-mw-uc').textContent     = this.fmtNum(t.mw_uc_collateral);
   },
 
+  riskColor(score) {
+    if (score == null) return '#d1d5db';
+    if (score >= 75) return '#dc2626';
+    if (score >= 50) return '#f59e0b';
+    if (score >= 25) return '#facc15';
+    return '#10b981';
+  },
+
+  _matchesFilter(d) {
+    if (!this.sponsorFilter) return true;
+    const f = this.sponsorFilter.toLowerCase();
+    const sp = (d.sponsor || '').toLowerCase();
+    const cf = (d.collateral_facilities || []).join(' ').toLowerCase();
+    return sp.includes(f) || cf.includes(f) || f.includes(sp);
+  },
+
   renderDealsTable() {
     const tbody = document.querySelector('#deals-table tbody');
-    const deals = this.summary?.deals || [];
+    let deals = this.summary?.deals || [];
+    if (this.sponsorFilter) deals = deals.filter(d => this._matchesFilter(d));
     if (!deals.length) {
-      tbody.innerHTML = '<tr><td colspan="11" class="loading">no deals loaded — seed pending verification</td></tr>';
+      const msg = this.sponsorFilter
+        ? `no deals match "${this.sponsorFilter}"`
+        : 'no deals loaded — seed pending verification';
+      tbody.innerHTML = `<tr><td colspan="13" class="loading">${msg}</td></tr>`;
       return;
     }
     tbody.innerHTML = deals.map(d => {
@@ -49,9 +70,14 @@ const SecuritizationsPage = {
       const tpillLbl = d.tenant_type_label || '—';
       const fpillCls = d.datacenter_type || 'empty';
       const fpillLbl = d.datacenter_type_label || '—';
+      const cusipTitle = d.cusip_source === 'edgar_fwp_cache' ? 'pulled from EDGAR FWP' : '';
       const cusip = d.cusip_senior
-        ? `<span class="cusip-cell">${d.cusip_senior}</span>`
+        ? `<span class="cusip-cell" title="${cusipTitle}">${d.cusip_senior}</span>`
         : `<span class="cusip-cell" style="color:#d1d5db;" title="pending EDGAR FWP lookup">pending</span>`;
+      const sr = d.stranded_risk_avg;
+      const riskCell = sr == null
+        ? '<span style="color:#d1d5db;">—</span>'
+        : `<span style="display:inline-block;padding:1px 5px;border-radius:3px;background:${this.riskColor(sr)}20;color:${this.riskColor(sr)};font-weight:600;">${sr.toFixed(0)}</span>`;
       return `
         <tr data-deal-id="${d.deal_id}">
           <td><span class="conf-dot conf-${d.confidence || 'medium'}"></span>${d.deal_name}</td>
@@ -66,6 +92,8 @@ const SecuritizationsPage = {
               <span style="color:#9ca3af;font-size:10px;">${d.rater || ''}</span></td>
           <td>${cusip}</td>
           <td class="num">${this.fmtNum(collMw)}</td>
+          <td class="num">${riskCell}</td>
+          <td class="num">${this.fmtNum(d.at_risk_mw_total)}</td>
         </tr>`;
     }).join('');
     tbody.querySelectorAll('tr').forEach(tr => {
@@ -117,6 +145,21 @@ const SecuritizationsPage = {
           Built: ${this.fmtNum(d.collateral_mw_built)} MW · UC: ${this.fmtNum(d.collateral_mw_uc)} MW
         </div>
       </section>
+      ${d.stranded_risk_avg != null ? `
+      <section>
+        <h4>Stranded-risk rollup (matched facilities)</h4>
+        <div style="display:flex;gap:12px;align-items:center;font-size:12px;">
+          <div>
+            <span style="display:inline-block;padding:3px 9px;border-radius:4px;background:${this.riskColor(d.stranded_risk_avg)}22;color:${this.riskColor(d.stranded_risk_avg)};font-weight:700;font-size:14px;">
+              ${d.stranded_risk_avg.toFixed(0)}/100
+            </span>
+          </div>
+          <div style="color:#6b7280;font-size:11px;line-height:1.5;">
+            MW-weighted avg across ${(d.facility_matches || []).length} matched facilities<br>
+            ${this.fmtNum(d.at_risk_mw_total)} at-risk MW · ${this.fmtNum(d.matched_mw_total)} total matched MW
+          </div>
+        </div>
+      </section>` : ''}
       <section>
         <h4>Top tenants ${d.top_tenant_share_pct ? `(top one ${d.top_tenant_share_pct.toFixed(0)}%)` : ''}</h4>
         <div>${tenantChips || '<span style="color:#9ca3af;">not disclosed in seed</span>'}</div>
@@ -171,6 +214,21 @@ const SecuritizationsPage = {
     this._renderBucket('#by-dc-type-table', this._bucketBy('datacenter_type_label', 'datacenter_type'), 'datacenter_type');
   },
 
+  filterBySponsor(name) {
+    this.sponsorFilter = name;
+    const badge = document.getElementById('deals-filter-badge');
+    const nameEl = document.getElementById('deals-filter-name');
+    if (name) {
+      badge.style.display = '';
+      nameEl.textContent = name;
+    } else {
+      badge.style.display = 'none';
+    }
+    this.renderDealsTable();
+    // Scroll the deals table into view so the user sees the filter took effect.
+    document.querySelector('#deals-table')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+  },
+
   async loadPrivateCredit() {
     try {
       const r = await fetch('/api/private-credit/summary');
@@ -194,10 +252,13 @@ const SecuritizationsPage = {
         const sourceLabel = r.source_url
           ? `<a href="${r.source_url}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none;">${r.source_tier}↗</a>`
           : r.source_tier;
+        const borrowerKey = (r.borrower || '').split(/[\s,/]/)[0];
         return `<tr>
           <td><span class="conf-dot conf-${r.confidence||'medium'}"></span>${r.lender}
               <span style="color:#9ca3af;font-size:10px;">· ${r.lender_type_label || ''}</span></td>
-          <td>${r.borrower}</td>
+          <td><a href="#" data-borrower="${borrowerKey}" class="pc-borrower-link"
+                 style="color:#7c3aed;text-decoration:none;border-bottom:1px dotted #c4b5fd;"
+                 title="Show securitized deals also collateralized by ${r.borrower}">${r.borrower}</a></td>
           <td style="font-size:11px;color:#374151;">${(r.deal_type||'').replace(/_/g,' ')}</td>
           <td class="num">${this.fmtNum(r.commitment_usd_m)}</td>
           <td class="num">${this.fmtNum(r.outstanding_usd_m)}</td>
@@ -205,6 +266,12 @@ const SecuritizationsPage = {
           <td style="color:#6b7280;font-size:11px;">${r.maturity_year || '—'}</td>
         </tr>`;
       }).join('');
+      tbody.querySelectorAll('a.pc-borrower-link').forEach(a => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.filterBySponsor(a.dataset.borrower);
+        });
+      });
     } catch (e) { console.error('private-credit fetch failed:', e); }
   },
 };
@@ -216,4 +283,5 @@ SecuritizationsPage.init = async function() {
   this.renderByTenantType();
   this.renderByDcType();
   this.loadPrivateCredit();
+  document.getElementById('deals-filter-clear')?.addEventListener('click', () => this.filterBySponsor(null));
 };

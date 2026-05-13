@@ -116,7 +116,13 @@
   <div class="sec-layout">
     <div>
       <div class="sec-card">
-        <h3>Deals</h3>
+        <h3>
+          Deals
+          <span id="deals-filter-badge" style="display:none;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;margin-left:10px;background:#ede9fe;color:#6d28d9;padding:2px 8px;border-radius:999px;">
+            Filtered: <span id="deals-filter-name"></span>
+            <span id="deals-filter-clear" style="cursor:pointer;font-weight:600;margin-left:4px;">×</span>
+          </span>
+        </h3>
         <table class="sec-table" id="deals-table">
           <thead>
             <tr>
@@ -131,9 +137,11 @@
               <th>Rating</th>
               <th>CUSIP (sr.)</th>
               <th class="num">Coll. MW</th>
+              <th class="num" title="MW-weighted stranded-risk score across matched facilities (0-100)">Risk</th>
+              <th class="num" title="At-risk MW summed across matched facilities">At-risk MW</th>
             </tr>
           </thead>
-          <tbody><tr><td colspan="11" class="loading">loading…</td></tr></tbody>
+          <tbody><tr><td colspan="13" class="loading">loading…</td></tr></tbody>
         </table>
       </div>
     </div>
