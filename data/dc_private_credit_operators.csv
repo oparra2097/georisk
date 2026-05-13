@@ -1,0 +1,25 @@
+operator_id,canonical_name,match_patterns,role,notes
+compass,Compass Datacenters,Compass Datacenters;Compass Data Centers;Compass DC,operator,"Brookfield/Ontario Teachers' portfolio company"
+stack,Stack Infrastructure,Stack Infrastructure;Stack Holdings;STACK Infra,operator,IPI Partners / Blue Owl portfolio
+aligned,Aligned Data Centers,Aligned Data Centers;Aligned Energy;Aligned Holdings,operator,Macquarie / soon BlackRock+MGX
+cologix,Cologix,Cologix Holdings;Cologix Inc;Cologix Canada,operator,Stonepeak portfolio
+flexential,Flexential,Flexential Corp;Flexential Holdings;Flexential Issuer,operator,GI Partners portfolio
+databank,DataBank,DataBank Holdings;DataBank Ltd;DataBank Issuer,operator,DigitalBridge portfolio
+centersquare,Centersquare,Centersquare Holdings;Centersquare Inc;Centersquare Issuer,operator,Stonepeak (ex-Cyxtera) portfolio
+cyrusone,CyrusOne,CyrusOne Inc;CyrusOne LP;CyrusOne Data Centers,operator,KKR / GIP portfolio
+qts,QTS Realty,QTS Realty;QTS Data Centers;QualityTech,operator,Blackstone / CPP Investments portfolio
+switch,Switch Inc,Switch Inc;Switch Ltd;Switch Holdings;Switch Communications,operator,DigitalBridge / IFM portfolio
+vantage,Vantage Data Centers,Vantage Data Centers;Vantage SDC;Vantage Towers Holdings,operator,DigitalBridge / Silver Lake / Public Sector Pension portfolio
+edgeconnex,EdgeConneX,EdgeConneX;Edge ConneX;EdgeCore,operator,EQT Infrastructure portfolio
+stream,Stream Data Centers,Stream Data Centers;Stream DC Holdings,operator,Apollo portfolio
+sabey,Sabey Data Centers,Sabey Data Centers;Sabey Corp,operator,Private
+t5,T5 Data Centers,T5 Data Centers;T5 Facilities,operator,IPI Partners / Quinbrook
+prime_dc,Prime Data Centers,Prime Data Centers;Prime DC Holdings,operator,KKR / Ontario Teachers' portfolio
+nautilus,Nautilus Data Technologies,Nautilus Data Technologies;Nautilus DC,operator,Private
+us_signal,US Signal,US Signal Communications;US Signal Co,operator,Igneo Infrastructure / Apollo
+crusoe,Crusoe Energy / Crusoe AI,Crusoe Energy;Crusoe AI;Crusoe LLC,operator,"Stargate/OpenAI offtake; Blue Owl + Primary Digital JV"
+applied_digital,Applied Digital,Applied Digital Corp;Applied Blockchain,operator,Public (APLD)
+core_scientific,Core Scientific,Core Scientific Inc;Core Scientific Holding,operator,Public (CORZ) HPC/crypto hybrid
+iren,IREN,IREN Ltd;Iris Energy,operator,Public HPC operator
+hut8,Hut 8,Hut 8 Mining;Hut 8 Corp,operator,Public BTC/HPC hybrid
+terawulf,TeraWulf,TeraWulf Inc,operator,Public HPC operator

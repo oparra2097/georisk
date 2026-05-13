@@ -9,6 +9,8 @@ data/*
 !data/datacenter_markets.csv
 !data/datacenter_facilities.csv
 !data/datacenter_abs_deals.csv
+!data/dc_private_credit.csv
+!data/dc_private_credit_operators.csv
 !data/agency_ratings.csv
 !data/agency_ratings_history.csv
 !data/sovereign_defaults.csv
