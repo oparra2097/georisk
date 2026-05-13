@@ -168,11 +168,13 @@ DRIVERS: dict[str, list[tuple[str, str]]] = {
                          ('enso', ''),                # NEW: ENSO state — West Africa rainfall
                          ('yf', '^GSPC')],
     'Wheat':            [('fred', 'DTWEXBGS'),
-                         ('enso', ''),                # NEW: ENSO — US/EU drought + Australia
+                         ('enso', ''),
+                         ('wasde', 'Wheat'),          # NEW: USDA ending stocks (NASS)
                          ('gpr', ''),
                          ('comm', 'WTI Crude')],
     'Soybeans':         [('fred', 'DTWEXBGS'),
-                         ('enso', ''),                # NEW: ENSO — Brazil/Argentina rainfall
+                         ('enso', ''),
+                         ('wasde', 'Soybeans'),       # NEW: USDA ending stocks (NASS)
                          ('comm', 'Wheat'),
                          ('yf', '^GSPC')],
     'Coffee':           [('fred', 'DTWEXBGS'),
@@ -190,6 +192,7 @@ DRIVER_TRANSFORM = {
     'fred_DHHNGSP':  'logret',   # Henry Hub spot — return signal
     'gpr_':          'loglevel', # GPR index — log of level
     'enso_':         'level',    # ENSO ONI — already a signed anomaly (°C), use level
+    'wasde_':        'logret',   # USDA ending stocks — log-return on level
     'yf_^GSPC':      'logret',   # equities — returns
     'comm_':         'logret',   # other commodity price — returns
 }
@@ -526,6 +529,8 @@ class DriverFetcher:
                 series = self._fetch_yf(TICKERS[key], start, end)
             elif kind == 'enso':
                 series = self._fetch_enso(start, end)
+            elif kind == 'wasde':
+                series = self._fetch_wasde(key, start, end)
             else:
                 logger.warning(f'Unknown driver kind: {kind}')
                 return None
@@ -554,6 +559,21 @@ class DriverFetcher:
         except Exception:
             pass
         return s
+
+    @staticmethod
+    def _fetch_wasde(commodity: str, start: date,
+                     end: Optional[date] = None) -> Optional[pd.Series]:
+        """Pull USDA NASS ending-stocks for the given commodity (quarterly
+        prints forward-filled to monthly). Requires USDA_NASS_API_KEY env
+        var — returns None and the SARIMAX exog matrix drops this column
+        if no key is configured.
+        """
+        try:
+            from backend.data_sources import usda_wasde
+        except Exception:
+            return None
+        # The driver key carries the commodity name (e.g. 'Wheat', 'Soybeans')
+        return usda_wasde.fetch_stocks(commodity, start=start, end=end)
 
     @staticmethod
     def _fetch_yf(ticker: str, start: date, end: Optional[date] = None) -> Optional[pd.Series]:
@@ -787,7 +807,14 @@ class CommodityModel:
             raw = fetcher.fetch(kind, key, start, end)
             if raw is None or len(raw) < 24:
                 continue
-            transform_key = f'{kind}_{key}' if kind not in ('comm',) else 'comm_'
+            # 'comm' / 'wasde' carry a commodity name in `key`; we want the
+            # same transform regardless of which commodity, so collapse those
+            # to a key-less form ('comm_' / 'wasde_'). Other kinds keep the
+            # full per-series transform mapping (e.g. fred_DTWEXBGS).
+            if kind in ('comm', 'wasde'):
+                transform_key = f'{kind}_'
+            else:
+                transform_key = f'{kind}_{key}'
             transform = DRIVER_TRANSFORM.get(transform_key, 'logret')
             transformed = _transform(raw, transform).dropna()
             if len(transformed) < 24:

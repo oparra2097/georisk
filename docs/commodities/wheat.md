@@ -15,6 +15,13 @@ buffered by global stocks-to-use dynamics.
   exports); El Niño years bring wet conditions but flooding risk to
   Australia. Significant 1-3 quarter lag effect on world wheat
   balance.
+- **USDA ending stocks (NASS Quick Stats)** — the single most-watched
+  fundamental for grain price moves. Pulled from USDA's quarterly
+  Grain Stocks report (Mar / Jun / Sep / Dec) and forward-filled to
+  monthly. Stocks-to-use ratios at decade lows historically precede
+  price spikes 6-12 months out with empirical correlation ~ -0.55.
+  Requires `USDA_NASS_API_KEY` env var (free registration at
+  https://quickstats.nass.usda.gov/api); fail-soft if unset.
 - **Geopolitical Risk Index** — captures the Black Sea (Ukraine / Russia)
   risk premium that became dominant after Feb 2022.
 - **WTI Crude (`CL=F`, cross-commodity)** — energy cost in farming (diesel,
@@ -56,7 +63,8 @@ agronomic specifics.
 ## Model specification
 
 - SARIMAX(1,0,1) on monthly log-returns of `ZW=F` close.
-- Exogenous: DXY log-returns, ENSO ONI level, GPR log-level, WTI log-returns.
+- Exogenous: DXY log-returns, ENSO ONI level, USDA ending-stocks
+  log-returns, GPR log-level, WTI log-returns.
 - GARCH(1,1) on residuals.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
 
