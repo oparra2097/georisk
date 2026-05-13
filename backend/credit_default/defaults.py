@@ -78,9 +78,19 @@ def load_events(include_distress: bool = False) -> List[Dict]:
     return rows
 
 
+def _filter_hard_defaults(events: List[Dict]) -> List[Dict]:
+    """Strict subset: only ``event_type == 'default'`` (FC bonds or LC
+    debt). Excludes Paris Club rescheduling, bank-loan restructuring,
+    domestic arrears — these are routine in HIPC-era SSA / WAEMU
+    sovereigns and don't represent the kind of default the model
+    should treat as risk-equivalent to LBN-2020 or VEN-2017."""
+    return [ev for ev in events if ev.get('event_type') == 'default']
+
+
 def years_since_last_default(events: Optional[List[Dict]] = None,
                              include_distress: bool = False,
-                             max_years: int = 100) -> Dict[Tuple[str, int], int]:
+                             max_years: int = 100,
+                             strict: bool = True) -> Dict[Tuple[str, int], int]:
     """``{(iso3, year): years_since_last_default_start}``.
 
     Reinhart-Rogoff (2009/2010) document serial-default behaviour: two-
@@ -91,6 +101,8 @@ def years_since_last_default(events: Optional[List[Dict]] = None,
     """
     if events is None:
         events = load_events(include_distress=include_distress)
+    if strict:
+        events = _filter_hard_defaults(events)
     starts_by_iso = default_starts_by_country(events)
     out: Dict[Tuple[str, int], int] = {}
     for iso3, starts in starts_by_iso.items():
@@ -106,12 +118,16 @@ def years_since_last_default(events: Optional[List[Dict]] = None,
 
 def default_count_window(events: Optional[List[Dict]] = None,
                          include_distress: bool = False,
-                         window_years: int = 25) -> Dict[Tuple[str, int], int]:
+                         window_years: int = 25,
+                         strict: bool = True) -> Dict[Tuple[str, int], int]:
     """``{(iso3, year): count of default-onsets in [year-window, year]}``.
     Cantor-Packer (1996) treat default history as a top-3 predictor.
+    Strict mode: only ``event_type='default'`` events are counted.
     """
     if events is None:
         events = load_events(include_distress=include_distress)
+    if strict:
+        events = _filter_hard_defaults(events)
     starts_by_iso = default_starts_by_country(events)
     out: Dict[Tuple[str, int], int] = {}
     for iso3, starts in starts_by_iso.items():

@@ -265,16 +265,28 @@ _RESERVE_CURRENCY_LOGIT_SHIFT = {
     'GBR': -1.6,    # → 2-/AA-   (matches Fitch leg of consensus AA)
     'JPN': -1.0,    # → AA-/A+   (agency A+/A1/A)
     'CHE': -1.6,    # → AAA      (agency AAA)
-    # Tier 1 ─ EUR core (low-debt members, collective ECB credit)
-    'DEU': -1.4, 'NLD': -1.4, 'AUT': -1.2, 'FIN': -1.2, 'LUX': -1.4,
-    # Tier 1 ─ EUR upper-mid (agency AA-/A+)
-    'FRA': -1.0, 'BEL': -1.0, 'IRL': -1.0,
+    # Tier 1 ─ EUR core (low-debt members, collective ECB credit).
+    # Trimmed from -1.4 → -1.0 because at -1.4 the model put FRA / ITA
+    # / HUN / ESP at AAA — agencies have them BBB-AA-. The ECB
+    # backstop is real but isn't a full reserve-currency moat for
+    # high-debt eurozone members. DEU / NLD / LUX still get the
+    # strongest discount.
+    'DEU': -1.2, 'NLD': -1.2, 'LUX': -1.2,
+    'AUT': -0.8, 'FIN': -0.8,
+    # Tier 1 ─ EUR upper-mid — halved from -1.0 → -0.5. FRA at AA-,
+    # BEL/IRL at AA-/AA. The bigger discount was pulling FRA to AAA.
+    'FRA': -0.5, 'BEL': -0.5, 'IRL': -0.5,
     # Tier 1 ─ EUR periphery (let macro features dominate so model
     # differentiates them from the core).
     'ITA':  0.0, 'ESP':  0.0, 'PRT':  0.0, 'GRC':  0.0,
-    # Eurozone smaller members
-    'EST': -0.8, 'LVA': -0.8, 'LTU': -0.8, 'SVK': -0.8, 'SVN': -0.8,
-    'MLT': -0.8, 'CYP':  0.0, 'HRV':  0.0,
+    # Eurozone smaller members — set to 0.0. They're eurozone but
+    # not part of the structural reserve-currency moat (no ECB
+    # systemic backstop on the same scale as core/upper-mid). After
+    # the region_default_rate strict-filter dropped EUR contagion to
+    # near-zero, any nonzero shift pushed them to AAA against agency
+    # A-/A+ ratings.
+    'EST':  0.0, 'LVA':  0.0, 'LTU':  0.0, 'SVK':  0.0, 'SVN':  0.0,
+    'MLT':  0.0, 'CYP':  0.0, 'HRV':  0.0,
     # Tier 3 ─ Anglosphere reserve-adjacent (agency AAA)
     'CAN': -1.6, 'AUS': -1.4, 'NZL': -1.2, 'SGP': -1.0,
     # Minor

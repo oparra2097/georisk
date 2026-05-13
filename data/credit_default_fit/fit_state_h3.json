@@ -1,61 +1,62 @@
 {
   "estimator": "gbm",
   "horizon_years": 3,
+  "label_mode": "state",
   "feature_importance": {
-    "gross_debt_pct_gdp": 0.0049303133809135095,
-    "fiscal_balance_pct_gdp": 0.0013962686882094898,
-    "interest_pct_revenue": 0.0017369862966984174,
-    "current_account_pct_gdp": 0.0020426964816953165,
-    "reserves_to_imports_months": 0.003282604006682166,
-    "short_term_debt_pct_reserves": 0.001011682568668848,
-    "external_debt_pct_gni": 0.0021973738784302975,
-    "external_liquidity_ratio": 0.0018849552693577798,
-    "real_gdp_growth": 0.0006284871549930183,
-    "inflation": 0.000836277793336604,
-    "gdp_per_capita_ppp_log": 0.005409733918005255,
-    "rule_of_law": 0.0017842010272254073,
-    "govt_effectiveness": 0.004218186724161943,
-    "political_stability": 0.0020322581951472073,
-    "control_of_corruption": 0.0022428622154701205,
-    "years_since_default": 0.1472381487349798,
-    "debt_chg_5y_pp": 0.000577606502493011,
-    "fiscal_balance_chg_3y": 0.0006675654569549994,
-    "reserves_chg_1y_pp": 0.0006111752647455892,
-    "tot_volatility_5y": 0.0016077252485260484,
-    "reserve_currency_share": 0.00015849251320685376,
-    "region_default_rate": 0.01501507823546383,
-    "vix_annual": 6.982835386037944e-05,
-    "years_since_banking_crisis": 0.0015238246563943568,
-    "imf_program_status": 0.0007185580053292063,
-    "fx_debt_share": 0.003412499131474833
+    "gross_debt_pct_gdp": 0.009605919781954386,
+    "fiscal_balance_pct_gdp": 0.00253189991521493,
+    "interest_pct_revenue": 0.0026922680164079837,
+    "current_account_pct_gdp": 0.0035496248610892623,
+    "reserves_to_imports_months": 0.005716232702496382,
+    "short_term_debt_pct_reserves": 0.001614822643973779,
+    "external_debt_pct_gni": 0.006128840745955511,
+    "external_liquidity_ratio": 0.0034514602091877842,
+    "real_gdp_growth": 0.0010365181243609189,
+    "inflation": 0.002256167167747081,
+    "gdp_per_capita_ppp_log": 0.02918738338851401,
+    "rule_of_law": 0.00365003808722425,
+    "govt_effectiveness": 0.008301458994318256,
+    "political_stability": 0.0032732100816264985,
+    "control_of_corruption": 0.004194006558590202,
+    "years_since_default": 0.02689028364431866,
+    "debt_chg_5y_pp": 0.0007816459648642748,
+    "fiscal_balance_chg_3y": 0.00027480028184979633,
+    "reserves_chg_1y_pp": 0.0010603839158099594,
+    "tot_volatility_5y": 0.0024850315290603333,
+    "reserve_currency_share": 0.0001803761491706468,
+    "region_default_rate": 0.020883004444717246,
+    "vix_annual": 0.0003403765924914759,
+    "years_since_banking_crisis": 0.0035384565871716235,
+    "imf_program_status": 0.0017317804743618216,
+    "fx_debt_share": 0.00612844644620838
   },
   "coefficients": {
-    "gross_debt_pct_gdp": 0.0049303133809135095,
-    "fiscal_balance_pct_gdp": -0.0013962686882094898,
-    "interest_pct_revenue": 0.0017369862966984174,
-    "current_account_pct_gdp": -0.0020426964816953165,
-    "reserves_to_imports_months": -0.003282604006682166,
-    "short_term_debt_pct_reserves": 0.001011682568668848,
-    "external_debt_pct_gni": 0.0021973738784302975,
-    "external_liquidity_ratio": 0.0018849552693577798,
-    "real_gdp_growth": -0.0006284871549930183,
-    "inflation": 0.000836277793336604,
-    "gdp_per_capita_ppp_log": -0.005409733918005255,
-    "rule_of_law": -0.0017842010272254073,
-    "govt_effectiveness": -0.004218186724161943,
-    "political_stability": -0.0020322581951472073,
-    "control_of_corruption": -0.0022428622154701205,
-    "years_since_default": -0.1472381487349798,
-    "debt_chg_5y_pp": 0.000577606502493011,
-    "fiscal_balance_chg_3y": -0.0006675654569549994,
-    "reserves_chg_1y_pp": -0.0006111752647455892,
-    "tot_volatility_5y": 0.0016077252485260484,
-    "reserve_currency_share": -0.00015849251320685376,
-    "region_default_rate": 0.01501507823546383,
-    "vix_annual": 6.982835386037944e-05,
-    "years_since_banking_crisis": -0.0015238246563943568,
-    "imf_program_status": 0.0007185580053292063,
-    "fx_debt_share": 0.003412499131474833
+    "gross_debt_pct_gdp": 0.009605919781954386,
+    "fiscal_balance_pct_gdp": -0.00253189991521493,
+    "interest_pct_revenue": 0.0026922680164079837,
+    "current_account_pct_gdp": -0.0035496248610892623,
+    "reserves_to_imports_months": -0.005716232702496382,
+    "short_term_debt_pct_reserves": 0.001614822643973779,
+    "external_debt_pct_gni": 0.006128840745955511,
+    "external_liquidity_ratio": 0.0034514602091877842,
+    "real_gdp_growth": -0.0010365181243609189,
+    "inflation": 0.002256167167747081,
+    "gdp_per_capita_ppp_log": -0.02918738338851401,
+    "rule_of_law": -0.00365003808722425,
+    "govt_effectiveness": -0.008301458994318256,
+    "political_stability": -0.0032732100816264985,
+    "control_of_corruption": -0.004194006558590202,
+    "years_since_default": -0.02689028364431866,
+    "debt_chg_5y_pp": 0.0007816459648642748,
+    "fiscal_balance_chg_3y": -0.00027480028184979633,
+    "reserves_chg_1y_pp": -0.0010603839158099594,
+    "tot_volatility_5y": 0.0024850315290603333,
+    "reserve_currency_share": -0.0001803761491706468,
+    "region_default_rate": 0.020883004444717246,
+    "vix_annual": 0.0003403765924914759,
+    "years_since_banking_crisis": -0.0035384565871716235,
+    "imf_program_status": 0.0017317804743618216,
+    "fx_debt_share": 0.00612844644620838
   },
   "intercept": 0.0,
   "class_balance_log_odds": -0.11093501135695277,
@@ -121,8 +122,8 @@
       "std": 0.8170521938960442
     },
     "years_since_default": {
-      "mean": 43.414439374185136,
-      "std": 43.67815363821936
+      "mean": 77.00488917861799,
+      "std": 37.727707685364486
     },
     "debt_chg_5y_pp": {
       "mean": 0.9703715775749665,
@@ -145,24 +146,24 @@
       "std": 6.59683162619168
     },
     "region_default_rate": {
-      "mean": 0.39445751374638627,
-      "std": 0.3023868576582937
+      "mean": 0.05523354685108554,
+      "std": 0.06580540478919948
     },
     "vix_annual": {
-      "mean": 19.710850400181293,
-      "std": 5.867669547406144
+      "mean": 19.708458224257793,
+      "std": 5.867517639556233
     },
     "years_since_banking_crisis": {
       "mean": 21.71267926988266,
       "std": 6.473675029437869
     },
     "imf_program_status": {
-      "mean": 0.211864406779661,
-      "std": 0.49324305951511266
+      "mean": 0.21610169491525424,
+      "std": 0.4956944454999402
     },
     "fx_debt_share": {
-      "mean": 13.502118644067796,
-      "std": 23.24669959296224
+      "mean": 13.650423728813559,
+      "std": 23.271722100763224
     }
   },
   "medians": {
@@ -181,13 +182,13 @@
     "govt_effectiveness": -0.11216,
     "political_stability": 0.0478106,
     "control_of_corruption": -0.2247077999999995,
-    "years_since_default": 18.0,
+    "years_since_default": 100.0,
     "debt_chg_5y_pp": 2.799999999999997,
     "fiscal_balance_chg_3y": 0.09999999999999964,
     "reserves_chg_1y_pp": 0.0013579172974190756,
     "tot_volatility_5y": 0.09718492390643389,
     "reserve_currency_share": 0.0,
-    "region_default_rate": 0.2972972972972973,
+    "region_default_rate": 0.02702702702702703,
     "vix_annual": 17.667408098501987,
     "years_since_banking_crisis": 25.0,
     "imf_program_status": 0.0,
@@ -196,160 +197,160 @@
   "pd_calibration": [
     {
       "bucket": 1,
-      "score_lo": 0.0007865599067729667,
-      "score_hi": 0.006531157872921507,
+      "score_lo": 0.0015738837365852627,
+      "score_hi": 0.011340973008027881,
       "pd_empirical": 0.0,
       "n_obs": 306,
       "n_events": 0
     },
     {
       "bucket": 2,
-      "score_lo": 0.006552959546062357,
-      "score_hi": 0.00920233753669077,
+      "score_lo": 0.011400832797638488,
+      "score_hi": 0.017050310918069377,
       "pd_empirical": 0.0,
       "n_obs": 307,
       "n_events": 0
     },
     {
       "bucket": 3,
-      "score_lo": 0.009212684896458838,
-      "score_hi": 0.013957786322761522,
+      "score_lo": 0.017091831874432275,
+      "score_hi": 0.02974420453126509,
       "pd_empirical": 0.0,
       "n_obs": 307,
       "n_events": 0
     },
     {
       "bucket": 4,
-      "score_lo": 0.01397672695255028,
-      "score_hi": 0.0220055150642715,
+      "score_lo": 0.029764146940293387,
+      "score_hi": 0.05844682166318242,
       "pd_empirical": 0.0,
       "n_obs": 307,
       "n_events": 0
     },
     {
       "bucket": 5,
-      "score_lo": 0.02206285263555533,
-      "score_hi": 0.027905570153302164,
-      "pd_empirical": 0.0,
+      "score_lo": 0.05851726117250337,
+      "score_hi": 0.08788356133034866,
+      "pd_empirical": 0.003257328990228013,
       "n_obs": 307,
-      "n_events": 0
+      "n_events": 1
     },
     {
       "bucket": 6,
-      "score_lo": 0.027920556391803776,
-      "score_hi": 0.035359481285079195,
-      "pd_empirical": 0.006535947712418301,
+      "score_lo": 0.08793012962434289,
+      "score_hi": 0.10902230475711205,
+      "pd_empirical": 0.0,
       "n_obs": 306,
-      "n_events": 2
+      "n_events": 0
     },
     {
       "bucket": 7,
-      "score_lo": 0.035360393075825086,
-      "score_hi": 0.053132901421809195,
-      "pd_empirical": 0.013029315960912053,
-      "n_obs": 307,
-      "n_events": 4
-    },
-    {
-      "bucket": 8,
-      "score_lo": 0.053132901421809195,
-      "score_hi": 0.12990839353411734,
+      "score_lo": 0.10909767635545971,
+      "score_hi": 0.138302782157094,
       "pd_empirical": 0.04234527687296417,
       "n_obs": 307,
       "n_events": 13
     },
     {
-      "bucket": 9,
-      "score_lo": 0.1301924860846531,
-      "score_hi": 0.2844715419916027,
-      "pd_empirical": 0.10097719869706841,
+      "bucket": 8,
+      "score_lo": 0.138302782157094,
+      "score_hi": 0.19700404756257053,
+      "pd_empirical": 0.048859934853420196,
       "n_obs": 307,
-      "n_events": 31
+      "n_events": 15
+    },
+    {
+      "bucket": 9,
+      "score_lo": 0.1973921829576047,
+      "score_hi": 0.3179322883635866,
+      "pd_empirical": 0.1758957654723127,
+      "n_obs": 307,
+      "n_events": 54
     },
     {
       "bucket": 10,
-      "score_lo": 0.28577970467180647,
-      "score_hi": 0.4982340568246744,
-      "pd_empirical": 0.18892508143322476,
+      "score_lo": 0.31795541414099754,
+      "score_hi": 0.464899946195461,
+      "pd_empirical": 0.2768729641693811,
       "n_obs": 307,
-      "n_events": 58
+      "n_events": 85
     },
     {
       "bucket": 11,
-      "score_lo": 0.4982363221177343,
-      "score_hi": 0.6636086522020619,
-      "pd_empirical": 0.5424836601307189,
+      "score_lo": 0.4656824395658552,
+      "score_hi": 0.6086222223643666,
+      "pd_empirical": 0.5849673202614379,
       "n_obs": 306,
-      "n_events": 166
+      "n_events": 179
     },
     {
       "bucket": 12,
-      "score_lo": 0.6638669172003806,
-      "score_hi": 0.7782245589756788,
-      "pd_empirical": 0.7947882736156352,
+      "score_lo": 0.6089056653737125,
+      "score_hi": 0.71592721360772,
+      "pd_empirical": 0.6938110749185668,
       "n_obs": 307,
-      "n_events": 244
+      "n_events": 213
     },
     {
       "bucket": 13,
-      "score_lo": 0.7782501829113263,
-      "score_hi": 0.8485988964327528,
-      "pd_empirical": 0.8925081433224755,
+      "score_lo": 0.7161044781136949,
+      "score_hi": 0.795640932209699,
+      "pd_empirical": 0.8273615635179153,
       "n_obs": 307,
-      "n_events": 274
+      "n_events": 254
     },
     {
       "bucket": 14,
-      "score_lo": 0.8487800015108141,
-      "score_hi": 0.8981663785469566,
-      "pd_empirical": 0.9315960912052117,
+      "score_lo": 0.7962720625936374,
+      "score_hi": 0.8554235359107262,
+      "pd_empirical": 0.8990228013029316,
       "n_obs": 307,
-      "n_events": 286
+      "n_events": 276
     },
     {
       "bucket": 15,
-      "score_lo": 0.8984695691008683,
-      "score_hi": 0.9301051959166876,
-      "pd_empirical": 0.9543973941368078,
+      "score_lo": 0.8555347090180727,
+      "score_hi": 0.8983080786604909,
+      "pd_empirical": 0.9478827361563518,
       "n_obs": 307,
-      "n_events": 293
+      "n_events": 291
     },
     {
       "bucket": 16,
-      "score_lo": 0.9301207848956369,
-      "score_hi": 0.9540775589130888,
-      "pd_empirical": 0.9934640522875817,
+      "score_lo": 0.8983458957152411,
+      "score_hi": 0.9282550323871777,
+      "pd_empirical": 0.9607843137254902,
       "n_obs": 306,
-      "n_events": 304
+      "n_events": 294
     },
     {
       "bucket": 17,
-      "score_lo": 0.9541783827972676,
-      "score_hi": 0.9690314793985552,
+      "score_lo": 0.9284175822494724,
+      "score_hi": 0.95017850216958,
       "pd_empirical": 0.990228013029316,
       "n_obs": 307,
       "n_events": 304
     },
     {
       "bucket": 18,
-      "score_lo": 0.9690884288877221,
-      "score_hi": 0.9794396401212575,
+      "score_lo": 0.9501905428592864,
+      "score_hi": 0.9677942915995811,
       "pd_empirical": 0.993485342019544,
       "n_obs": 307,
       "n_events": 305
     },
     {
       "bucket": 19,
-      "score_lo": 0.9794667477817401,
-      "score_hi": 0.987971867762587,
+      "score_lo": 0.9679331707613585,
+      "score_hi": 0.9821578549031516,
       "pd_empirical": 1.0,
       "n_obs": 307,
       "n_events": 307
     },
     {
       "bucket": 20,
-      "score_lo": 0.9880042788575903,
-      "score_hi": 0.9982124014792187,
+      "score_lo": 0.9821679668189643,
+      "score_hi": 0.9980181125434782,
       "pd_empirical": 1.0,
       "n_obs": 307,
       "n_events": 307
@@ -358,322 +359,18 @@
   "rating_buckets": {
     "method": "isotonic-regression",
     "horizon_years": 3,
-    "n_anchor_countries": 78,
+    "n_anchor_countries": 121,
     "by_region_anchor_count": {
+      "Latin America & Caribbean": 22,
+      "Europe & Central Asia": 42,
+      "Other": 4,
       "Middle East & North Africa": 11,
-      "Europe & Central Asia": 27,
-      "Asia-Pacific": 19,
-      "Latin America & Caribbean": 14,
-      "North America": 2,
-      "Sub-Saharan Africa": 5
+      "Asia-Pacific": 26,
+      "Sub-Saharan Africa": 12,
+      "Unknown": 2,
+      "North America": 2
     },
     "by_region": {
-      "Middle East & North Africa": [
-        {
-          "pm_numeric": 1,
-          "max_consensus_num": 1,
-          "max_score": 0.0
-        },
-        {
-          "pm_numeric": 2,
-          "max_consensus_num": 2,
-          "max_score": 0.0
-        },
-        {
-          "pm_numeric": 3,
-          "max_consensus_num": 3,
-          "max_score": 0.9807
-        },
-        {
-          "pm_numeric": 4,
-          "max_consensus_num": 4,
-          "max_score": 0.9807
-        },
-        {
-          "pm_numeric": 5,
-          "max_consensus_num": 5,
-          "max_score": 1.1163
-        },
-        {
-          "pm_numeric": 6,
-          "max_consensus_num": 6,
-          "max_score": 1.2237
-        },
-        {
-          "pm_numeric": 7,
-          "max_consensus_num": 7,
-          "max_score": 1.2237
-        },
-        {
-          "pm_numeric": 8,
-          "max_consensus_num": 8,
-          "max_score": 1.2237
-        },
-        {
-          "pm_numeric": 9,
-          "max_consensus_num": 9,
-          "max_score": 1.2237
-        },
-        {
-          "pm_numeric": 10,
-          "max_consensus_num": 10,
-          "max_score": 1.2237
-        },
-        {
-          "pm_numeric": 11,
-          "max_consensus_num": 11,
-          "max_score": 2.075
-        },
-        {
-          "pm_numeric": 12,
-          "max_consensus_num": 12,
-          "max_score": 2.075
-        },
-        {
-          "pm_numeric": 13,
-          "max_consensus_num": 13,
-          "max_score": 47.4616
-        },
-        {
-          "pm_numeric": 14,
-          "max_consensus_num": 14,
-          "max_score": 67.3884
-        },
-        {
-          "pm_numeric": 15,
-          "max_consensus_num": 15,
-          "max_score": 67.3884
-        },
-        {
-          "pm_numeric": 16,
-          "max_consensus_num": 16,
-          "max_score": 75.5618
-        },
-        {
-          "pm_numeric": 17,
-          "max_consensus_num": 19,
-          "max_score": 100.0
-        },
-        {
-          "pm_numeric": 18,
-          "max_consensus_num": 21,
-          "max_score": 100.0
-        },
-        {
-          "pm_numeric": 19,
-          "max_consensus_num": 22,
-          "max_score": 100.0
-        },
-        {
-          "pm_numeric": 20,
-          "max_consensus_num": 22,
-          "max_score": 100.0
-        }
-      ],
-      "Europe & Central Asia": [
-        {
-          "pm_numeric": 1,
-          "max_consensus_num": 1,
-          "max_score": 0.7319
-        },
-        {
-          "pm_numeric": 2,
-          "max_consensus_num": 2,
-          "max_score": 0.7319
-        },
-        {
-          "pm_numeric": 3,
-          "max_consensus_num": 3,
-          "max_score": 0.779
-        },
-        {
-          "pm_numeric": 4,
-          "max_consensus_num": 4,
-          "max_score": 0.8173
-        },
-        {
-          "pm_numeric": 5,
-          "max_consensus_num": 5,
-          "max_score": 0.8173
-        },
-        {
-          "pm_numeric": 6,
-          "max_consensus_num": 6,
-          "max_score": 0.8567
-        },
-        {
-          "pm_numeric": 7,
-          "max_consensus_num": 7,
-          "max_score": 1.2875
-        },
-        {
-          "pm_numeric": 8,
-          "max_consensus_num": 8,
-          "max_score": 3.1757
-        },
-        {
-          "pm_numeric": 9,
-          "max_consensus_num": 9,
-          "max_score": 10.5411
-        },
-        {
-          "pm_numeric": 10,
-          "max_consensus_num": 10,
-          "max_score": 18.1949
-        },
-        {
-          "pm_numeric": 11,
-          "max_consensus_num": 11,
-          "max_score": 31.0581
-        },
-        {
-          "pm_numeric": 12,
-          "max_consensus_num": 12,
-          "max_score": 40.8386
-        },
-        {
-          "pm_numeric": 13,
-          "max_consensus_num": 13,
-          "max_score": 48.6327
-        },
-        {
-          "pm_numeric": 14,
-          "max_consensus_num": 14,
-          "max_score": 48.6327
-        },
-        {
-          "pm_numeric": 15,
-          "max_consensus_num": 15,
-          "max_score": 48.6327
-        },
-        {
-          "pm_numeric": 16,
-          "max_consensus_num": 16,
-          "max_score": 48.6327
-        },
-        {
-          "pm_numeric": 17,
-          "max_consensus_num": 19,
-          "max_score": 79.6874
-        },
-        {
-          "pm_numeric": 18,
-          "max_consensus_num": 21,
-          "max_score": 100.0
-        },
-        {
-          "pm_numeric": 19,
-          "max_consensus_num": 22,
-          "max_score": 100.0
-        },
-        {
-          "pm_numeric": 20,
-          "max_consensus_num": 22,
-          "max_score": 100.0
-        }
-      ],
-      "Asia-Pacific": [
-        {
-          "pm_numeric": 1,
-          "max_consensus_num": 1,
-          "max_score": 0.7774
-        },
-        {
-          "pm_numeric": 2,
-          "max_consensus_num": 2,
-          "max_score": 0.7938
-        },
-        {
-          "pm_numeric": 3,
-          "max_consensus_num": 3,
-          "max_score": 1.1007
-        },
-        {
-          "pm_numeric": 4,
-          "max_consensus_num": 4,
-          "max_score": 1.1614
-        },
-        {
-          "pm_numeric": 5,
-          "max_consensus_num": 5,
-          "max_score": 1.4972
-        },
-        {
-          "pm_numeric": 6,
-          "max_consensus_num": 6,
-          "max_score": 1.4972
-        },
-        {
-          "pm_numeric": 7,
-          "max_consensus_num": 7,
-          "max_score": 2.8291
-        },
-        {
-          "pm_numeric": 8,
-          "max_consensus_num": 8,
-          "max_score": 8.2436
-        },
-        {
-          "pm_numeric": 9,
-          "max_consensus_num": 9,
-          "max_score": 21.4972
-        },
-        {
-          "pm_numeric": 10,
-          "max_consensus_num": 10,
-          "max_score": 25.684
-        },
-        {
-          "pm_numeric": 11,
-          "max_consensus_num": 11,
-          "max_score": 27.0492
-        },
-        {
-          "pm_numeric": 12,
-          "max_consensus_num": 12,
-          "max_score": 27.0492
-        },
-        {
-          "pm_numeric": 13,
-          "max_consensus_num": 13,
-          "max_score": 27.0492
-        },
-        {
-          "pm_numeric": 14,
-          "max_consensus_num": 14,
-          "max_score": 54.3329
-        },
-        {
-          "pm_numeric": 15,
-          "max_consensus_num": 15,
-          "max_score": 62.0986
-        },
-        {
-          "pm_numeric": 16,
-          "max_consensus_num": 16,
-          "max_score": 62.0986
-        },
-        {
-          "pm_numeric": 17,
-          "max_consensus_num": 19,
-          "max_score": 100.0
-        },
-        {
-          "pm_numeric": 18,
-          "max_consensus_num": 21,
-          "max_score": 100.0
-        },
-        {
-          "pm_numeric": 19,
-          "max_consensus_num": 22,
-          "max_score": 100.0
-        },
-        {
-          "pm_numeric": 20,
-          "max_consensus_num": 22,
-          "max_score": 100.0
-        }
-      ],
       "Latin America & Caribbean": [
         {
           "pm_numeric": 1,
@@ -703,67 +400,475 @@
         {
           "pm_numeric": 6,
           "max_consensus_num": 6,
-          "max_score": 9.1343
+          "max_score": 10.0683
         },
         {
           "pm_numeric": 7,
           "max_consensus_num": 7,
-          "max_score": 9.1343
+          "max_score": 10.0683
         },
         {
           "pm_numeric": 8,
           "max_consensus_num": 8,
-          "max_score": 12.5883
+          "max_score": 17.0205
         },
         {
           "pm_numeric": 9,
           "max_consensus_num": 9,
-          "max_score": 18.855
+          "max_score": 18.6828
         },
         {
           "pm_numeric": 10,
           "max_consensus_num": 10,
-          "max_score": 18.855
+          "max_score": 18.6828
         },
         {
           "pm_numeric": 11,
           "max_consensus_num": 11,
-          "max_score": 36.0508
+          "max_score": 50.5628
         },
         {
           "pm_numeric": 12,
           "max_consensus_num": 12,
-          "max_score": 75.8791
+          "max_score": 58.8923
         },
         {
           "pm_numeric": 13,
           "max_consensus_num": 13,
-          "max_score": 88.808
+          "max_score": 74.58
         },
         {
           "pm_numeric": 14,
           "max_consensus_num": 14,
-          "max_score": 88.808
+          "max_score": 80.0775
         },
         {
           "pm_numeric": 15,
           "max_consensus_num": 15,
-          "max_score": 88.808
+          "max_score": 80.27
         },
         {
           "pm_numeric": 16,
           "max_consensus_num": 16,
-          "max_score": 93.3099
+          "max_score": 91.8025
         },
         {
           "pm_numeric": 17,
           "max_consensus_num": 19,
-          "max_score": 94.8907
+          "max_score": 96.2661
         },
         {
           "pm_numeric": 18,
           "max_consensus_num": 21,
-          "max_score": 94.8907
+          "max_score": 96.2661
+        },
+        {
+          "pm_numeric": 19,
+          "max_consensus_num": 22,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 20,
+          "max_consensus_num": 22,
+          "max_score": 100.0
+        }
+      ],
+      "Europe & Central Asia": [
+        {
+          "pm_numeric": 1,
+          "max_consensus_num": 1,
+          "max_score": 1.8888
+        },
+        {
+          "pm_numeric": 2,
+          "max_consensus_num": 2,
+          "max_score": 1.9611
+        },
+        {
+          "pm_numeric": 3,
+          "max_consensus_num": 3,
+          "max_score": 1.9672
+        },
+        {
+          "pm_numeric": 4,
+          "max_consensus_num": 4,
+          "max_score": 2.1326
+        },
+        {
+          "pm_numeric": 5,
+          "max_consensus_num": 5,
+          "max_score": 2.3262
+        },
+        {
+          "pm_numeric": 6,
+          "max_consensus_num": 6,
+          "max_score": 2.9506
+        },
+        {
+          "pm_numeric": 7,
+          "max_consensus_num": 7,
+          "max_score": 3.8609
+        },
+        {
+          "pm_numeric": 8,
+          "max_consensus_num": 8,
+          "max_score": 4.2119
+        },
+        {
+          "pm_numeric": 9,
+          "max_consensus_num": 9,
+          "max_score": 15.9199
+        },
+        {
+          "pm_numeric": 10,
+          "max_consensus_num": 10,
+          "max_score": 20.8832
+        },
+        {
+          "pm_numeric": 11,
+          "max_consensus_num": 11,
+          "max_score": 22.3822
+        },
+        {
+          "pm_numeric": 12,
+          "max_consensus_num": 12,
+          "max_score": 25.8875
+        },
+        {
+          "pm_numeric": 13,
+          "max_consensus_num": 13,
+          "max_score": 52.0196
+        },
+        {
+          "pm_numeric": 14,
+          "max_consensus_num": 14,
+          "max_score": 61.6203
+        },
+        {
+          "pm_numeric": 15,
+          "max_consensus_num": 15,
+          "max_score": 61.6203
+        },
+        {
+          "pm_numeric": 16,
+          "max_consensus_num": 16,
+          "max_score": 78.9782
+        },
+        {
+          "pm_numeric": 17,
+          "max_consensus_num": 19,
+          "max_score": 84.1802
+        },
+        {
+          "pm_numeric": 18,
+          "max_consensus_num": 21,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 19,
+          "max_consensus_num": 22,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 20,
+          "max_consensus_num": 22,
+          "max_score": 100.0
+        }
+      ],
+      "Middle East & North Africa": [
+        {
+          "pm_numeric": 1,
+          "max_consensus_num": 1,
+          "max_score": 0.0
+        },
+        {
+          "pm_numeric": 2,
+          "max_consensus_num": 2,
+          "max_score": 0.0
+        },
+        {
+          "pm_numeric": 3,
+          "max_consensus_num": 3,
+          "max_score": 2.1716
+        },
+        {
+          "pm_numeric": 4,
+          "max_consensus_num": 4,
+          "max_score": 2.1716
+        },
+        {
+          "pm_numeric": 5,
+          "max_consensus_num": 5,
+          "max_score": 2.4163
+        },
+        {
+          "pm_numeric": 6,
+          "max_consensus_num": 6,
+          "max_score": 2.578
+        },
+        {
+          "pm_numeric": 7,
+          "max_consensus_num": 7,
+          "max_score": 2.578
+        },
+        {
+          "pm_numeric": 8,
+          "max_consensus_num": 8,
+          "max_score": 2.578
+        },
+        {
+          "pm_numeric": 9,
+          "max_consensus_num": 9,
+          "max_score": 2.578
+        },
+        {
+          "pm_numeric": 10,
+          "max_consensus_num": 10,
+          "max_score": 2.578
+        },
+        {
+          "pm_numeric": 11,
+          "max_consensus_num": 11,
+          "max_score": 5.0828
+        },
+        {
+          "pm_numeric": 12,
+          "max_consensus_num": 12,
+          "max_score": 5.0828
+        },
+        {
+          "pm_numeric": 13,
+          "max_consensus_num": 13,
+          "max_score": 22.3177
+        },
+        {
+          "pm_numeric": 14,
+          "max_consensus_num": 14,
+          "max_score": 62.2541
+        },
+        {
+          "pm_numeric": 15,
+          "max_consensus_num": 15,
+          "max_score": 62.2541
+        },
+        {
+          "pm_numeric": 16,
+          "max_consensus_num": 16,
+          "max_score": 70.5892
+        },
+        {
+          "pm_numeric": 17,
+          "max_consensus_num": 19,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 18,
+          "max_consensus_num": 21,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 19,
+          "max_consensus_num": 22,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 20,
+          "max_consensus_num": 22,
+          "max_score": 100.0
+        }
+      ],
+      "Asia-Pacific": [
+        {
+          "pm_numeric": 1,
+          "max_consensus_num": 1,
+          "max_score": 1.2798
+        },
+        {
+          "pm_numeric": 2,
+          "max_consensus_num": 2,
+          "max_score": 1.2919
+        },
+        {
+          "pm_numeric": 3,
+          "max_consensus_num": 3,
+          "max_score": 1.9114
+        },
+        {
+          "pm_numeric": 4,
+          "max_consensus_num": 4,
+          "max_score": 1.9851
+        },
+        {
+          "pm_numeric": 5,
+          "max_consensus_num": 5,
+          "max_score": 3.463
+        },
+        {
+          "pm_numeric": 6,
+          "max_consensus_num": 6,
+          "max_score": 3.463
+        },
+        {
+          "pm_numeric": 7,
+          "max_consensus_num": 7,
+          "max_score": 7.0227
+        },
+        {
+          "pm_numeric": 8,
+          "max_consensus_num": 8,
+          "max_score": 7.8395
+        },
+        {
+          "pm_numeric": 9,
+          "max_consensus_num": 9,
+          "max_score": 9.7112
+        },
+        {
+          "pm_numeric": 10,
+          "max_consensus_num": 10,
+          "max_score": 10.96
+        },
+        {
+          "pm_numeric": 11,
+          "max_consensus_num": 11,
+          "max_score": 11.9471
+        },
+        {
+          "pm_numeric": 12,
+          "max_consensus_num": 12,
+          "max_score": 11.9471
+        },
+        {
+          "pm_numeric": 13,
+          "max_consensus_num": 13,
+          "max_score": 13.4461
+        },
+        {
+          "pm_numeric": 14,
+          "max_consensus_num": 14,
+          "max_score": 39.0827
+        },
+        {
+          "pm_numeric": 15,
+          "max_consensus_num": 15,
+          "max_score": 60.7505
+        },
+        {
+          "pm_numeric": 16,
+          "max_consensus_num": 16,
+          "max_score": 71.2242
+        },
+        {
+          "pm_numeric": 17,
+          "max_consensus_num": 19,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 18,
+          "max_consensus_num": 21,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 19,
+          "max_consensus_num": 22,
+          "max_score": 100.0
+        },
+        {
+          "pm_numeric": 20,
+          "max_consensus_num": 22,
+          "max_score": 100.0
+        }
+      ],
+      "Sub-Saharan Africa": [
+        {
+          "pm_numeric": 1,
+          "max_consensus_num": 1,
+          "max_score": 0.0
+        },
+        {
+          "pm_numeric": 2,
+          "max_consensus_num": 2,
+          "max_score": 0.0
+        },
+        {
+          "pm_numeric": 3,
+          "max_consensus_num": 3,
+          "max_score": 0.0
+        },
+        {
+          "pm_numeric": 4,
+          "max_consensus_num": 4,
+          "max_score": 0.0
+        },
+        {
+          "pm_numeric": 5,
+          "max_consensus_num": 5,
+          "max_score": 0.0
+        },
+        {
+          "pm_numeric": 6,
+          "max_consensus_num": 6,
+          "max_score": 0.0
+        },
+        {
+          "pm_numeric": 7,
+          "max_consensus_num": 7,
+          "max_score": 35.6738
+        },
+        {
+          "pm_numeric": 8,
+          "max_consensus_num": 8,
+          "max_score": 35.6738
+        },
+        {
+          "pm_numeric": 9,
+          "max_consensus_num": 9,
+          "max_score": 35.6738
+        },
+        {
+          "pm_numeric": 10,
+          "max_consensus_num": 10,
+          "max_score": 38.353
+        },
+        {
+          "pm_numeric": 11,
+          "max_consensus_num": 11,
+          "max_score": 38.353
+        },
+        {
+          "pm_numeric": 12,
+          "max_consensus_num": 12,
+          "max_score": 38.353
+        },
+        {
+          "pm_numeric": 13,
+          "max_consensus_num": 13,
+          "max_score": 70.6647
+        },
+        {
+          "pm_numeric": 14,
+          "max_consensus_num": 14,
+          "max_score": 87.0899
+        },
+        {
+          "pm_numeric": 15,
+          "max_consensus_num": 15,
+          "max_score": 87.4454
+        },
+        {
+          "pm_numeric": 16,
+          "max_consensus_num": 16,
+          "max_score": 92.7913
+        },
+        {
+          "pm_numeric": 17,
+          "max_consensus_num": 19,
+          "max_score": 97.0902
+        },
+        {
+          "pm_numeric": 18,
+          "max_consensus_num": 21,
+          "max_score": 97.0902
         },
         {
           "pm_numeric": 19,
@@ -781,92 +886,92 @@
       {
         "pm_numeric": 1,
         "max_consensus_num": 1,
-        "max_score": 0.779
+        "max_score": 1.5853
       },
       {
         "pm_numeric": 2,
         "max_consensus_num": 2,
-        "max_score": 0.7938
+        "max_score": 1.8888
       },
       {
         "pm_numeric": 3,
         "max_consensus_num": 3,
-        "max_score": 0.9099
+        "max_score": 1.9777
       },
       {
         "pm_numeric": 4,
         "max_consensus_num": 4,
-        "max_score": 1.1007
+        "max_score": 2.15
       },
       {
         "pm_numeric": 5,
         "max_consensus_num": 5,
-        "max_score": 1.1614
+        "max_score": 2.578
       },
       {
         "pm_numeric": 6,
         "max_consensus_num": 6,
-        "max_score": 1.3513
+        "max_score": 3.0945
       },
       {
         "pm_numeric": 7,
         "max_consensus_num": 7,
-        "max_score": 2.075
+        "max_score": 5.0828
       },
       {
         "pm_numeric": 8,
         "max_consensus_num": 8,
-        "max_score": 6.7621
+        "max_score": 8.4793
       },
       {
         "pm_numeric": 9,
         "max_consensus_num": 9,
-        "max_score": 16.049
+        "max_score": 12.8682
       },
       {
         "pm_numeric": 10,
         "max_consensus_num": 10,
-        "max_score": 18.855
+        "max_score": 17.5071
       },
       {
         "pm_numeric": 11,
         "max_consensus_num": 11,
-        "max_score": 36.0508
+        "max_score": 25.8875
       },
       {
         "pm_numeric": 12,
         "max_consensus_num": 12,
-        "max_score": 45.5334
+        "max_score": 38.353
       },
       {
         "pm_numeric": 13,
         "max_consensus_num": 13,
-        "max_score": 55.4695
+        "max_score": 56.9078
       },
       {
         "pm_numeric": 14,
         "max_consensus_num": 14,
-        "max_score": 75.5618
+        "max_score": 71.2242
       },
       {
         "pm_numeric": 15,
         "max_consensus_num": 15,
-        "max_score": 75.8791
+        "max_score": 78.9782
       },
       {
         "pm_numeric": 16,
         "max_consensus_num": 16,
-        "max_score": 86.6486
+        "max_score": 86.8997
       },
       {
         "pm_numeric": 17,
         "max_consensus_num": 19,
-        "max_score": 94.8907
+        "max_score": 97.0902
       },
       {
         "pm_numeric": 18,
         "max_consensus_num": 21,
-        "max_score": 96.3319
+        "max_score": 97.4619
       },
       {
         "pm_numeric": 19,
@@ -880,14 +985,14 @@
       }
     ]
   },
-  "auc_in_sample": 0.9843185392068223,
-  "auc_oos": 0.9373221075177434,
-  "brier_oos": 0.09668439340095727,
+  "auc_in_sample": 0.975045994532661,
+  "auc_oos": 0.9068742783247696,
+  "brier_oos": 0.12217493863834168,
   "oos_method": "GroupKFold by iso3 (5 folds)",
   "oos_n_folds": 5,
   "n_obs": 6136,
   "n_events": 2898,
-  "trained_at": "2026-05-11T14:37:19Z",
+  "trained_at": "2026-05-13T19:22:04Z",
   "hyperparams": {
     "n_estimators": 300,
     "max_depth": 3,

@@ -496,7 +496,16 @@ def get_history_panel(years_back: int = 25):
     try:
         from backend.credit_default import defaults as _cd_def
         region_by_iso = _build_region_lookup()
-        in_def_yrs = _cd_def.in_default_years_by_country(include_distress=False)
+        # Hard-default-only contagion: filter to event_type='default'
+        # before computing in_default_years. Old version pulled in
+        # arrears + restructuring + Paris Club rescheduling, which
+        # made 89% of SSA read as "in default" (HIPC-era WAEMU arrears
+        # are not credit events the model should treat as risk-
+        # equivalent to LBN-2020 or VEN-2017).
+        hard_events = _cd_def._filter_hard_defaults(
+            _cd_def.load_events(include_distress=False)
+        )
+        in_def_yrs = _cd_def.in_default_years_by_country(events=hard_events)
         # Pre-build {region: set(iso3)} and {(year, region): n_in_default}.
         region_pop: Dict[str, set] = {}
         for iso, reg in region_by_iso.items():
@@ -855,7 +864,10 @@ def get_panel(force_refresh: bool = False) -> Dict:
     try:
         from backend.credit_default import defaults as _cd_def_now
         cur_yr = time.localtime().tm_year
-        in_def = _cd_def_now.in_default_years_by_country(include_distress=False)
+        hard_only = _cd_def_now._filter_hard_defaults(
+            _cd_def_now.load_events(include_distress=False)
+        )
+        in_def = _cd_def_now.in_default_years_by_country(events=hard_only)
         regions = _build_region_lookup()
         # {region: countries_in_region}
         region_pop: Dict[str, set] = {}
