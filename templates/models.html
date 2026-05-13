@@ -23,6 +23,7 @@
   .model-card.card-macro::before  { background: #3b82f6; }
   .model-card.card-hpi::before    { background: #10b981; }
   .model-card.card-dc::before     { background: #f97316; }
+  .model-card.card-sec::before    { background: #7c3aed; }
   .model-card.card-cd::before     { background: #dc2626; }
   .model-card.card-lm::before     { background: #0891b2; }
 
@@ -32,6 +33,7 @@
   .card-macro .model-icon  { background: #3b82f618; color: #3b82f6; }
   .card-hpi .model-icon    { background: #10b98118; color: #10b981; }
   .card-dc .model-icon     { background: #f9731618; color: #f97316; }
+  .card-sec .model-icon    { background: #7c3aed18; color: #7c3aed; }
   .card-cd .model-icon     { background: #dc262618; color: #dc2626; }
   .card-lm .model-icon     { background: #0891b218; color: #0891b2; }
 
@@ -215,6 +217,41 @@
       </div>
       <span class="model-cta">Open Data Centers <span class="arrow">&rarr;</span></span>
     </a>
+
+    <!-- Data Center Securitizations -->
+    <a href="/securitizations" class="model-card card-sec">
+      <div class="model-card-top">
+        <div class="model-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 21h18"/>
+            <path d="M5 21V8l7-5 7 5v13"/>
+            <path d="M9 21v-6h6v6"/>
+            <path d="M9 11h6"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="model-name">DC Securitizations</h3>
+          <p class="model-tagline">ABS &middot; CMBS &middot; structured term loans on data centers</p>
+        </div>
+        <span class="model-badge badge-public">Public</span>
+      </div>
+      <p class="model-desc">Public US data center securitization deals — ABS, single-asset CMBS, and term-loan facilities. Each deal cross-links to its collateral buildings on the risk map, so you can see which deals are exposed to which stranded-asset risk.</p>
+      <div class="model-stats">
+        <div class="model-stat"><span class="num" id="sec-card-deals">—</span><span class="lbl">Deals</span></div>
+        <div class="model-stat"><span class="num" id="sec-card-issuance">—</span><span class="lbl">Issued ($M)</span></div>
+        <div class="model-stat"><span class="num">3</span><span class="lbl">Data sources</span></div>
+      </div>
+      <span class="model-cta">Open Securitizations <span class="arrow">&rarr;</span></span>
+    </a>
   </div>
 </div>
+
+<script>
+  fetch('/api/securitizations/summary').then(r => r.json()).then(j => {
+    const t = j.totals || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = Math.round(v).toLocaleString(); };
+    set('sec-card-deals', t.deal_count);
+    set('sec-card-issuance', t.total_size_usd_m);
+  }).catch(() => {});
+</script>
 {% endblock %}
