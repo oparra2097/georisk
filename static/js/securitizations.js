@@ -145,6 +145,31 @@ const SecuritizationsPage = {
           Built: ${this.fmtNum(d.collateral_mw_built)} MW · UC: ${this.fmtNum(d.collateral_mw_uc)} MW
         </div>
       </section>
+      ${(d.tranches && d.tranches.length) ? `
+      <section>
+        <h4>Capital stack <span style="font-size:9px;color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0;">(from EDGAR FWP)</span></h4>
+        <table style="width:100%;font-size:11px;border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:1px solid #e5e7eb;">
+              <th style="text-align:left;padding:3px 4px;color:#6b7280;font-weight:500;">Class</th>
+              <th style="text-align:left;padding:3px 4px;color:#6b7280;font-weight:500;">CUSIP</th>
+              <th style="text-align:left;padding:3px 4px;color:#6b7280;font-weight:500;">Rating</th>
+              <th style="text-align:right;padding:3px 4px;color:#6b7280;font-weight:500;">Cpn %</th>
+              <th style="text-align:right;padding:3px 4px;color:#6b7280;font-weight:500;">Size $M</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.tranches.map(t => `
+              <tr style="border-bottom:1px solid #f3f4f6;">
+                <td style="padding:3px 4px;">${t.class}</td>
+                <td style="padding:3px 4px;font-family:ui-monospace,monospace;">${t.cusip || '—'}</td>
+                <td style="padding:3px 4px;">${t.rating ? `<span class="rating ${this.ratingClass(t.rating)}">${t.rating}</span>` : '—'}</td>
+                <td style="padding:3px 4px;text-align:right;">${t.coupon != null ? t.coupon.toFixed(2) : '—'}</td>
+                <td style="padding:3px 4px;text-align:right;">${t.size_usd_m != null ? this.fmtNum(t.size_usd_m) : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </section>` : ''}
       ${d.stranded_risk_avg != null ? `
       <section>
         <h4>Stranded-risk rollup (matched facilities)</h4>
