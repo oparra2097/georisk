@@ -1,0 +1,23 @@
+# Commodity price forecasts (current + 3M / 6M / 12M).
+# Commodity names must match the column headers used in
+# country_commodity_exposure.csv and the commodity field in
+# sector_commodity_sensitivity.csv.
+#
+# Populate from any source (your own commodities_forecast.py output,
+# Bloomberg consensus, hand-typed scenarios). Numbers below are placeholder
+# levels around early-2026 spot for illustration only.
+commodity,current_price,fcst_3m,fcst_6m,fcst_12m,unit,notes
+brent_crude,75.00,73.00,72.00,68.00,USD/bbl,demand-soft scenario
+wti_crude,72.00,70.00,69.00,65.00,USD/bbl,
+natural_gas_hh,3.50,3.80,4.00,4.20,USD/MMBtu,LNG demand
+ttf_gas,32.00,30.00,28.00,26.00,EUR/MWh,storage refill
+copper,9500.00,9700.00,10000.00,10500.00,USD/t,green-capex bid
+aluminum,2700.00,2750.00,2800.00,2900.00,USD/t,
+gold,2800.00,2850.00,2900.00,2950.00,USD/oz,reserve diversification
+silver,32.00,33.00,34.00,35.00,USD/oz,
+platinum,1000.00,1020.00,1050.00,1100.00,USD/oz,
+wheat,5.50,5.40,5.30,5.20,USD/bu,supply ample
+soybeans,11.00,11.20,11.50,11.80,USD/bu,SA crush demand
+corn,4.50,4.40,4.30,4.20,USD/bu,
+cocoa,9000.00,8500.00,8000.00,7500.00,USD/t,normalization
+coffee,3.00,2.90,2.80,2.75,USD/lb,

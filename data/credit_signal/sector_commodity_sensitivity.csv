@@ -1,0 +1,48 @@
+# Per-sector sensitivity to each commodity, expressed as PD-notch change
+# per 10% price move.
+#   Positive beta: sector benefits from price up (producers).
+#   Negative beta: sector hurt by price up (consumers / margin squeezed).
+#   Zero beta:     sector mostly insensitive (or already country-driven).
+#
+# A beta of 0.30 + a +10% forecast => PD multiplier of 1.5^(-0.30) = 0.87
+# (~13% PD reduction). Two notches of move ~doubles or halves PD.
+#
+# Seed values below are illustrative; replace with your house calibration.
+sector,commodity,beta
+Oil_Gas,brent_crude,0.35
+Oil_Gas,wti_crude,0.30
+Oil_Gas,natural_gas_hh,0.20
+Oil_Gas,ttf_gas,0.15
+Metals_Mining,copper,0.40
+Metals_Mining,aluminum,0.25
+Metals_Mining,gold,0.20
+Metals_Mining,silver,0.10
+Metals_Mining,platinum,0.10
+Agribusiness,wheat,0.30
+Agribusiness,soybeans,0.30
+Agribusiness,corn,0.25
+Agribusiness,cocoa,0.20
+Agribusiness,coffee,0.20
+Utilities,brent_crude,-0.10
+Utilities,natural_gas_hh,-0.20
+Utilities,ttf_gas,-0.25
+Utilities,coal,0.00
+Chemicals,brent_crude,-0.20
+Chemicals,natural_gas_hh,-0.25
+Chemicals,ttf_gas,-0.20
+Transportation,brent_crude,-0.30
+Transportation,wti_crude,-0.25
+Transportation,natural_gas_hh,-0.05
+Manufacturing,copper,-0.10
+Manufacturing,aluminum,-0.10
+Manufacturing,brent_crude,-0.10
+Manufacturing,natural_gas_hh,-0.05
+Financials,brent_crude,0.00
+Financials,gold,0.00
+Consumer,brent_crude,-0.05
+Consumer,wheat,-0.05
+Consumer,corn,-0.05
+Real_Estate,brent_crude,-0.05
+Real_Estate,natural_gas_hh,-0.05
+Sovereign,brent_crude,0.00
+Sovereign,natural_gas_hh,0.00

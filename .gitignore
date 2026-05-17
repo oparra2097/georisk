@@ -20,7 +20,12 @@ data/*
 !data/credit_default_fit/
 !data/credit_default_fit/*.json
 !data/credit_default_fit/*.pkl
+!data/credit_signal/
+!data/credit_signal/*.csv
 
 # Commodity model cache artifacts (regenerated on monthly refit)
 backend/cache/commodity_models/*.pkl
 backend/cache/commodity_models/*.json
+
+# Credit-signal run outputs (regenerated each run)
+outputs/

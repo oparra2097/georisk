@@ -1,0 +1,19 @@
+# Moody's-style sovereign 1-year transition matrix (broad ratings).
+# Rows = current rating; columns = rating in 1 year ("D" = Default).
+# Each row sums to ~1.0. Withdrawn-rating mass renormalized into the
+# rated destinations.
+#
+# DEFAULT VALUES are approximations of Moody's annual "Sovereign Default
+# and Recovery Rates" publication. Replace with the latest table when
+# Moody's publishes its yearly update.
+#
+# If this file is missing, the code falls back to the same values embedded
+# in backend/credit_signal/transition_matrix.py.
+from,Aaa,Aa,A,Baa,Ba,B,Caa-C,D
+Aaa,0.9750,0.0250,0.0000,0.0000,0.0000,0.0000,0.0000,0.0000
+Aa,0.0120,0.9430,0.0440,0.0010,0.0000,0.0000,0.0000,0.0000
+A,0.0000,0.0280,0.9250,0.0460,0.0010,0.0000,0.0000,0.0000
+Baa,0.0000,0.0030,0.0540,0.8920,0.0460,0.0040,0.0010,0.0000
+Ba,0.0000,0.0000,0.0060,0.0610,0.8540,0.0680,0.0080,0.0030
+B,0.0000,0.0000,0.0000,0.0030,0.0520,0.8420,0.0810,0.0220
+Caa-C,0.0000,0.0000,0.0000,0.0000,0.0040,0.0480,0.7580,0.1900
