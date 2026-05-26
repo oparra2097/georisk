@@ -139,7 +139,6 @@ def create_app():
         return render_template('home.html', active_page='home')
 
     @app.route('/georisk')
-    @social_or_login_required
     def georisk():
         return render_template('georisk.html', active_page='georisk')
 
@@ -153,11 +152,11 @@ def create_app():
 
     @app.route('/data')
     @app.route('/data/<path:subpath>')
-    @social_or_login_required
     def data(subpath=None):
-        has_insurance = current_user.has_insurance_access() if current_user.is_authenticated else False
+        authenticated = current_user.is_authenticated if current_user else False
+        has_insurance = current_user.has_insurance_access() if authenticated else False
         return render_template('data.html', active_page='data',
-                               is_authenticated=current_user.is_authenticated,
+                               is_authenticated=authenticated,
                                has_insurance_access=has_insurance)
 
     @app.route('/research')
