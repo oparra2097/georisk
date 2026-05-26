@@ -5,6 +5,12 @@ load_dotenv()
 
 
 class Config:
+    # --- Security ---
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'parra-macro-dev-key-change-in-production')
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+
     # --- API Keys (set as env vars on Render) ---
     NEWSAPI_KEY = os.environ.get('NEWSAPI_KEY', '')
     NEWSDATA_KEY = os.environ.get('NEWSDATA_KEY', '')
@@ -14,6 +20,13 @@ class Config:
     ACLED_PASSWORD = os.environ.get('ACLED_PASSWORD', '')
     ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
     ANTHROPIC_MODEL = 'claude-sonnet-4-20250514'
+    FRED_API_KEY = os.environ.get('FRED_API_KEY', '')
+
+    # --- Email verification (Gmail SMTP) ---
+    SMTP_SERVER = 'smtp.gmail.com'
+    SMTP_PORT = 465
+    SMTP_EMAIL = os.environ.get('SMTP_EMAIL', '')
+    SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')  # Gmail App Password
 
     GDELT_BASE_URL = 'https://api.gdeltproject.org/api/v2/doc/doc'
     NEWSAPI_BASE_URL = 'https://newsapi.org/v2'
@@ -40,14 +53,14 @@ class Config:
     # --- Multi-provider regional assignment ---
     # Each region is assigned a news API provider to spread request budget.
     #
-    # NewsAPI.org  (100 req/day): AMERICAS (10 countries, ~11 req/cycle)
+    # NewsAPI.org  (100 req/day): AMERICAS (11 countries, ~12 req/cycle)
     # NewsData.io  (200 req/day): EUROPE + MENA  (20 countries, ~20 req/cycle)
     # GNews API    (100 req/day): AFRICA + ASIA_PAC (20 countries, ~20 req/cycle)
     #
-    # GDELT (unlimited) runs for ALL 50 countries every 15 min — no key needed.
+    # GDELT (unlimited) runs for ALL 51 countries every 15 min — no key needed.
 
     REGIONS = {
-        'AMERICAS': ['US', 'BR', 'MX', 'CO', 'VE', 'CU', 'CA', 'AR', 'CL', 'PE'],
+        'AMERICAS': ['US', 'BR', 'MX', 'CO', 'VE', 'CU', 'CA', 'AR', 'CL', 'PE', 'EC'],
         'EUROPE':   ['GB', 'FR', 'DE', 'TR', 'UA', 'RU', 'GE', 'BY', 'PL', 'IT'],
         'MENA':     ['IL', 'PS', 'IR', 'IQ', 'SY', 'SA', 'YE', 'LY', 'EG', 'LB'],
         'AFRICA':   ['NG', 'CD', 'SD', 'SS', 'SO', 'ET', 'ML', 'BF', 'KE', 'ZA'],
