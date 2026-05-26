@@ -44,6 +44,7 @@
     text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
   }
   .badge-public     { background: #d1fae5; color: #065f46; }
+  .badge-login      { background: #dbeafe; color: #1e40af; }
   .badge-restricted { background: #fef3c7; color: #78350f; }
 
   .model-desc { font-size: 13px; color: #4b5563; line-height: 1.55; margin: 0 0 16px; flex-grow: 1; }
@@ -154,7 +155,7 @@
           <h3 class="model-name">Sovereign Credit Default</h3>
           <p class="model-tagline">PD &amp; rating &middot; macro-only &middot; agency comparison</p>
         </div>
-        <span class="model-badge badge-public">Public</span>
+        <span class="model-badge badge-login">Login Required</span>
       </div>
       <p class="model-desc">Probability of default and 1–10 internal credit rating for ~190 sovereigns. Trained on macro/external/fiscal indicators (IMF WEO + World Bank) plus a shadow-debt overlay, fit against historical sovereign default events. Logistic regression and gradient boost; PD calibrated empirically.</p>
       <div class="model-stats">
@@ -180,7 +181,7 @@
           <h3 class="model-name">US Labor Market</h3>
           <p class="model-tagline">BLS payrolls + unemployment vs in-house nowcast</p>
         </div>
-        <span class="model-badge badge-public">Public</span>
+        <span class="model-badge badge-login">Login Required</span>
       </div>
       <p class="model-desc">Monthly nonfarm payroll growth and the U-3 unemployment rate from BLS, set against an in-house bridge-model nowcast built from FRED leading indicators (initial &amp; continued claims, JOLTS openings, manufacturing hours, industrial production, sentiment). Track-record table shows estimate vs print, month by month.</p>
       <div class="model-stats">
@@ -207,7 +208,7 @@
           <h3 class="model-name">Data Center Risk Map</h3>
           <p class="model-tagline">CBRE-tier markets &middot; built / UC / planned MW</p>
         </div>
-        <span class="model-badge badge-public">Public</span>
+        <span class="model-badge badge-login">Login Required</span>
       </div>
       <p class="model-desc">US wholesale data center markets classified by CBRE's primary / secondary / emerging tiers. Maps concentration of installed capacity and flags overbuild risk via the unleased share of under-construction MW relative to the installed base.</p>
       <div class="model-stats">
@@ -233,7 +234,7 @@
           <h3 class="model-name">DC Securitizations</h3>
           <p class="model-tagline">ABS &middot; CMBS &middot; structured term loans on data centers</p>
         </div>
-        <span class="model-badge badge-public">Public</span>
+        <span class="model-badge badge-login">Login Required</span>
       </div>
       <p class="model-desc">Public US data center securitization deals — ABS, single-asset CMBS, and term-loan facilities. Each deal cross-links to its collateral buildings on the risk map, so you can see which deals are exposed to which stranded-asset risk.</p>
       <div class="model-stats">
