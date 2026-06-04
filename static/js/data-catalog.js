@@ -198,14 +198,14 @@ window.ParraData.CATALOG = {
                 {
                     id: 'cofer',
                     label: 'Central Bank Reserves',
-                    source: 'IMF IRFCL',
-                    sourceDetail: 'International Reserves & Foreign Currency Liquidity (Monthly)',
+                    source: 'IMF IRFCL · World Gold Council',
+                    sourceDetail: 'International Reserves & Foreign Currency Liquidity (Monthly); gold from the IMF direct gold series (World Gold Council methodology)',
                     api: '/api/cofer',
                     exportUrl: '/api/cofer/export',
                     type: 'cofer',
                     controls: ['region', 'reserve-type'],
                     subviews: [],
-                    searchTerms: ['reserves', 'COFER', 'central bank', 'FX', 'foreign exchange', 'gold reserves', 'IMF'],
+                    searchTerms: ['reserves', 'COFER', 'central bank', 'FX', 'foreign exchange', 'gold reserves', 'gold tonnes', 'World Gold Council', 'WGC', 'IMF'],
                 },
                 {
                     id: 'cofer-nowcast',

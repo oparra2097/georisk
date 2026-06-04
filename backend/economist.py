@@ -116,7 +116,7 @@ TOOLS = [
     },
     {
         "name": "get_central_bank_reserves",
-        "description": "Get IMF COFER data on central bank reserves by country — total reserves, FX reserves, and gold reserves over time. Useful for analyzing reserve accumulation trends and de-dollarization.",
+        "description": "Get IMF data on central bank reserves by country — total reserves, FX reserves, gold reserves (gold_reserves = USD market value; gold_tonnes = direct fine-troy-ounce volume in metric tonnes, World Gold Council / IMF methodology) over time. Useful for analyzing reserve accumulation trends, central-bank gold buying, and de-dollarization.",
         "input_schema": {
             "type": "object",
             "properties": {},
@@ -293,7 +293,7 @@ def _execute_tool(name, input_data):
                     trim = len(data["years"]) - 5
                     data["years"] = data["years"][trim:]
                     for c in data.get("countries", []):
-                        for field in ["total_reserves", "fx_reserves", "gold_reserves"]:
+                        for field in ["total_reserves", "fx_reserves", "gold_reserves", "gold_tonnes"]:
                             if field in c and isinstance(c[field], list):
                                 c[field] = c[field][trim:]
                 if "countries" in data:

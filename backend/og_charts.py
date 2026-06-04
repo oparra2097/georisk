@@ -209,11 +209,14 @@ def _fetch_cofer_country(cat, ds, sv, qs) -> Optional[ChartData]:
 
     rtype = (qs.get("type") or "total").lower()
     field_map = {
-        "total": ("total_reserves", "Total Reserves"),
-        "fx":    ("fx_reserves",    "FX Reserves"),
-        "gold":  ("gold_reserves",  "Gold Reserves"),
+        "total":    ("total_reserves", "Total Reserves",          "usd"),
+        "fx":       ("fx_reserves",    "FX Reserves",             "usd"),
+        # 'gold' is the direct gold *tonnage* (World Gold Council / IMF);
+        # 'gold_usd' is the gold market value in USD billions.
+        "gold":     ("gold_tonnes",    "Gold Reserves (tonnes)",  "tonnes"),
+        "gold_usd": ("gold_reserves",  "Gold Reserves",           "usd"),
     }
-    field_key, type_label = field_map.get(rtype, field_map["total"])
+    field_key, type_label, unit = field_map.get(rtype, field_map["total"])
 
     # Sum across reporting countries to get a "World" aggregate
     n = len(years)
@@ -231,11 +234,13 @@ def _fetch_cofer_country(cat, ds, sv, qs) -> Optional[ChartData]:
         return None
 
     latest_v = series[-1][1]
+    is_gold = rtype in ("gold", "gold_usd")
+    headline = (f"{latest_v:,.0f} t" if unit == "tonnes" else _fmt_usd_b(latest_v))
     return ChartData(
         title=f"World {type_label}",
         subtitle="Official central-bank reserves, summed across reporting countries.",
-        source="IMF COFER",
-        headline_value=_fmt_usd_b(latest_v),
+        source=("World Gold Council · IMF" if is_gold else "IMF COFER"),
+        headline_value=headline,
         headline_label=f"Latest · {years[int(series[-1][0])]}",
         points=series,
         x_label_first=str(years[int(series[0][0])]),

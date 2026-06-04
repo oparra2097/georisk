@@ -367,7 +367,8 @@
             html += '<select id="ctrl-reserve-type" class="data-select">' +
                 '<option value="total"' + (state.reserveType === 'total' ? ' selected' : '') + '>Total Reserves</option>' +
                 '<option value="fx"' + (state.reserveType === 'fx' ? ' selected' : '') + '>FX Reserves</option>' +
-                '<option value="gold"' + (state.reserveType === 'gold' ? ' selected' : '') + '>Gold Reserves</option>' +
+                '<option value="gold"' + (state.reserveType === 'gold' ? ' selected' : '') + '>Gold (tonnes)</option>' +
+                '<option value="gold_usd"' + (state.reserveType === 'gold_usd' ? ' selected' : '') + '>Gold ($B)</option>' +
                 '</select>';
         }
         if (ds.controls.includes('ins-region')) {
@@ -650,10 +651,41 @@
         let countries = data.countries || [];
         const regionMembers = data.region_members || {};
 
-        if (state.region === 'World') countries = countries.slice(0, 20);
-        else {
+        // Reserve-type → series + unit formatting. 'gold' is now the
+        // direct gold *tonnage* (World Gold Council / IMF), 'gold_usd' is
+        // the gold market value in USD billions.
+        const isTonnes = state.reserveType === 'gold';
+        const isGold = state.reserveType === 'gold' || state.reserveType === 'gold_usd';
+        function seriesFor(c) {
+            if (state.reserveType === 'fx') return c.fx_reserves;
+            if (state.reserveType === 'gold') return c.gold_tonnes || [];
+            if (state.reserveType === 'gold_usd') return c.gold_reserves;
+            return c.total_reserves;
+        }
+        function latestVal(c) {
+            const a = seriesFor(c) || [];
+            for (let i = a.length - 1; i >= 0; i--) if (a[i] != null) return a[i];
+            return -Infinity;
+        }
+        function fmtVal(v) {
+            if (v == null) return 'N/A';
+            return isTonnes
+                ? Math.round(v).toLocaleString() + ' t'
+                : '$' + v.toFixed(1) + 'B';
+        }
+
+        if (state.region === 'World') {
+            // For gold views, rank by gold (US/Germany/Italy/France lead),
+            // not by total reserves — otherwise big gold holders with
+            // modest total reserves (Italy, France) fall outside the top 20.
+            if (isGold) {
+                countries = countries.slice().sort((a, b) => latestVal(b) - latestVal(a));
+            }
+            countries = countries.slice(0, 20);
+        } else {
             const members = regionMembers[state.region] || [];
             countries = countries.filter(c => members.includes(c.iso3));
+            if (isGold) countries.sort((a, b) => latestVal(b) - latestVal(a));
         }
 
         // Chart
@@ -663,10 +695,7 @@
         const ctx = canvasEl.getContext('2d');
 
         const datasets = countries.map((c, i) => {
-            let values;
-            if (state.reserveType === 'fx') values = c.fx_reserves;
-            else if (state.reserveType === 'gold') values = c.gold_reserves;
-            else values = c.total_reserves;
+            let values = seriesFor(c);
             return {
                 label: c.name,
                 data: values.map(v => v != null ? v : null),
@@ -685,9 +714,11 @@
                 tooltip: (ctx) => {
                     const val = ctx.parsed.y;
                     if (val == null) return ctx.dataset.label + ': N/A';
-                    return ctx.dataset.label + ': $' + val.toFixed(1) + 'B';
+                    return ctx.dataset.label + ': ' + fmtVal(val);
                 },
-                yCallback: (val) => '$' + val.toLocaleString() + 'B',
+                yCallback: (val) => isTonnes
+                    ? val.toLocaleString() + ' t'
+                    : '$' + val.toLocaleString() + 'B',
                 xCallback: function(value, index) {
                     const label = years[index] || '';
                     if (label.endsWith('-01')) return label.slice(0, 4);
@@ -712,14 +743,11 @@
 
             let rows = '';
             for (const c of countries) {
-                let values;
-                if (state.reserveType === 'fx') values = c.fx_reserves;
-                else if (state.reserveType === 'gold') values = c.gold_reserves;
-                else values = c.total_reserves;
+                const values = seriesFor(c);
                 rows += '<tr><td>' + c.name + '</td>';
                 for (let i = years.length - 1; i >= tableStart; i--) {
                     const v = values[i];
-                    rows += v == null ? '<td>\u2014</td>' : '<td>$' + v.toFixed(1) + 'B</td>';
+                    rows += v == null ? '<td>\u2014</td>' : '<td>' + fmtVal(v) + '</td>';
                 }
                 rows += '</tr>';
             }
@@ -731,6 +759,10 @@
         if (metaEl) {
             const meta = data.meta || {};
             const parts = [];
+            const goldView = state.reserveType === 'gold' || state.reserveType === 'gold_usd';
+            // For gold, lead with the World Gold Council / IMF attribution
+            // (the direct gold series), then the reserves source.
+            if (goldView && meta.gold_attribution) parts.push(meta.gold_attribution);
             if (meta.source) parts.push(meta.source);
             if (meta.frequency) parts.push(meta.frequency);
             if (meta.year_range) parts.push(meta.year_range);

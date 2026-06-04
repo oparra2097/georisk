@@ -2241,9 +2241,13 @@ def export_reserves_excel():
     ws2 = wb.create_sheet('FX Reserves')
     _write_reserves_sheet(ws2, years, countries, 'fx_reserves')
 
-    # Sheet 3: Gold Reserves
-    ws3 = wb.create_sheet('Gold Reserves')
+    # Sheet 3: Gold Reserves (USD market value)
+    ws3 = wb.create_sheet('Gold Reserves ($B)')
     _write_reserves_sheet(ws3, years, countries, 'gold_reserves')
+
+    # Sheet 4: Gold Reserves (tonnes) — direct IMF/WGC volume series
+    ws4 = wb.create_sheet('Gold Reserves (tonnes)')
+    _write_reserves_sheet(ws4, years, countries, 'gold_tonnes')
 
     output = BytesIO()
     wb.save(output)
