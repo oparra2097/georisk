@@ -295,16 +295,39 @@ def _detect_oz_scale(gold_oz_by_country):
     return 1e6          # millions of ounces (USA ~261)
 
 
+def _get_spot_gold_usd_per_oz():
+    """Latest spot gold price (USD per fine troy ounce) from market data.
+
+    The IMF ``RAFAGOLD_USD`` value series is reported at the *book* /
+    official price (~$48/oz), not market — so it understates the market
+    value of gold reserves by ~70×. We instead value the directly-reported
+    gold *volume* at the live spot price (yfinance GC=F). Returns None on
+    failure, in which case the USD-value view is left blank rather than
+    wrong.
+    """
+    try:
+        from backend.data_sources.market_data import get_market_data
+        md = get_market_data() or {}
+        for m in md.get('markets', []):
+            if m.get('symbol') == 'GC=F' and m.get('price'):
+                return float(m['price'])
+    except Exception as e:
+        logger.warning(f"spot gold price fetch failed: {e}")
+    return None
+
+
 def _build_reserves_result(total_by_country, fx_by_country, source_label,
-                           gold_by_country=None, gold_oz_by_country=None,
+                           gold_oz_by_country=None, spot_gold_per_oz=None,
                            frequency='Monthly'):
     """Assemble the unified reserves payload from parsed country dicts.
 
     ``total_by_country`` / ``fx_by_country`` are mappings of
-    ``{iso: {period: value_in_usd_millions}}``. Gold is supplied
-    DIRECTLY (never derived as total − FX):
-      - ``gold_by_country``    — gold market value, ``{iso: {period: usd_millions}}``
+    ``{iso: {period: value_in_usd_millions}}``. Gold is supplied as a
+    direct *volume* series and valued at market:
       - ``gold_oz_by_country`` — gold volume, ``{iso: {period: fine_troy_oz}}``
+      - ``spot_gold_per_oz``   — live spot price; the USD-value series is
+        ``tonnes × oz/tonne × spot``. We never derive gold as total − FX
+        and never use the IMF book-valued gold series.
 
     Returns the standard result dict consumed by /api/cofer, or ``None`` if
     there is no usable data.
@@ -312,7 +335,6 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
     if not total_by_country:
         return None
 
-    gold_by_country = gold_by_country or {}
     gold_oz_by_country = gold_oz_by_country or {}
     oz_scale = _detect_oz_scale(gold_oz_by_country)
 
@@ -375,7 +397,6 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
 
         total_data = total_by_country.get(code, {})
         fx_data = fx_by_country.get(code, {})
-        gold_data = gold_by_country.get(code, {})
         gold_oz_data = gold_oz_by_country.get(code, {})
 
         total_values = []
@@ -387,8 +408,7 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
         for i, period in enumerate(periods):
             total_b = _usd_millions_to_billions(total_data.get(period))
             fx_b = _usd_millions_to_billions(fx_data.get(period))
-            gold_b = _usd_millions_to_billions(gold_data.get(period))
-            # Direct gold volume → metric tonnes.
+            # Direct gold volume → metric tonnes, then market value in USD$B.
             tonnes = None
             raw_oz = gold_oz_data.get(period)
             if raw_oz is not None:
@@ -398,9 +418,12 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
                         tonnes = round(ozf * oz_scale / TROY_OZ_PER_TONNE, 2)
                 except (ValueError, TypeError):
                     tonnes = None
+            gold_b = None
+            if tonnes is not None and spot_gold_per_oz:
+                gold_b = round(tonnes * TROY_OZ_PER_TONNE * spot_gold_per_oz / 1e9, 2)
             total_values.append(total_b)
             fx_values.append(fx_b)
-            gold_values.append(gold_b if (gold_b is not None and gold_b > 0) else None)
+            gold_values.append(gold_b)
             gold_tonnes.append(tonnes)
             if total_b is not None:
                 latest_real_idx = i
@@ -430,8 +453,13 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
                         arr[i] = last_val
         _capped_fill(total_values)
         _capped_fill(fx_values)
-        _capped_fill(gold_values)
-        _capped_fill(gold_tonnes)
+        # Gold gets a SHORTER carry (3 months). A central bank that hasn't
+        # reported gold in a while (e.g. China lags IMF IFS by ~a year)
+        # should show its line *end* at the last real report, not be
+        # painted flat to today as if it were current data — that flat
+        # carry is exactly what reads as "stale, same all the way back".
+        _capped_fill(gold_values, max_gap=3)
+        _capped_fill(gold_tonnes, max_gap=3)
 
         latest_real_period = periods[latest_real_idx]
 
@@ -475,8 +503,9 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
             'frequency': frequency,
             'country_count': len(countries),
             'period_range': f'{periods[0]} to {periods[-1]}',
-            'gold_source': 'IMF IFS/IRFCL direct gold (RAFAGOLD)',
+            'gold_source': 'IMF IFS gold volume (RAFAGOLDV_OZT); value = volume × spot',
             'gold_attribution': 'World Gold Council · IMF',
+            'gold_spot_usd_per_oz': spot_gold_per_oz,
             'gold_tonnes_coverage': gold_tonnes_countries,
             'gold_usd_coverage': gold_usd_countries,
         }
@@ -1491,10 +1520,11 @@ def _fetch_reserves():
     gaps that IRFCL doesn't cover.
     """
     # ── Fetch both sources in sequence ──────────────────────────────
-    # Gold is fetched DIRECTLY (RAFAGOLD_USD value + RAFAGOLDV_OZT volume),
-    # not derived as total − FX. ``ifs_gold`` is USD millions; ``ifs_goldv``
-    # is raw fine troy ounces (scale auto-detected in the builder).
-    ifs_total, ifs_fx, ifs_gold, ifs_goldv = {}, {}, {}, {}
+    # Gold is taken DIRECTLY from the reported volume series
+    # (RAFAGOLDV_OZT, fine troy ounces) — never derived as total − FX, and
+    # never from the IMF book-valued RAFAGOLD_USD (which is ~$48/oz, not
+    # market). Market value is computed later as volume × spot.
+    ifs_total, ifs_fx, ifs_goldv = {}, {}, {}
     try:
         ifs_docs_total = _fetch_ifs_indicator('RAFA_USD')
         ifs_docs_fx = _fetch_ifs_indicator('RAXG_USD')
@@ -1505,7 +1535,6 @@ def _fetch_reserves():
             logger.warning("RAXG_USD returned 0 docs, trying RAXGFX_USD fallback")
             ifs_docs_fx = _fetch_ifs_indicator('RAXGFX_USD')
 
-        ifs_docs_gold = _fetch_ifs_indicator(IFS_GOLD_VALUE)    # gold value, USD millions
         ifs_docs_goldv = _fetch_ifs_indicator(IFS_GOLD_VOLUME)  # gold volume, fine troy oz
 
         def _parse_ifs(docs):
@@ -1524,32 +1553,25 @@ def _fetch_reserves():
 
         ifs_total = _parse_ifs(ifs_docs_total)
         ifs_fx = _parse_ifs(ifs_docs_fx)
-        ifs_gold = _parse_ifs(ifs_docs_gold)
         ifs_goldv = _parse_ifs(ifs_docs_goldv)
         logger.info(
-            "DBnomics IFS loaded: total=%d, fx=%d, gold$=%d, gold_oz=%d countries",
-            len(ifs_total), len(ifs_fx), len(ifs_gold), len(ifs_goldv),
+            "DBnomics IFS loaded: total=%d, fx=%d, gold_oz=%d countries",
+            len(ifs_total), len(ifs_fx), len(ifs_goldv),
         )
     except Exception as e:
         logger.warning(f"DBnomics IFS fetch failed: {e}")
 
-    irfcl_total, irfcl_fx, irfcl_gold = {}, {}, {}
+    irfcl_total, irfcl_fx = {}, {}
     try:
         total_doc = _fetch_imf_data_indicator('RAFA_USD')
         fx_doc = _fetch_imf_data_indicator('RAFAFX_USD')
-        # Best-effort direct gold value from the live api.imf.org overlay.
-        # The new DSD uses row-number codes, so RAFAGOLD_USD may not match;
-        # if it returns nothing we simply lean on the IFS gold series.
-        gold_doc = _fetch_imf_data_indicator('RAFAGOLD_USD')
         if total_doc:
             irfcl_total = _parse_imf_sdmx_series(total_doc)
         if fx_doc:
             irfcl_fx = _parse_imf_sdmx_series(fx_doc)
-        if gold_doc:
-            irfcl_gold = _parse_imf_sdmx_series(gold_doc)
         logger.info(
-            "IMF IRFCL loaded: total=%d, fx=%d, gold$=%d countries",
-            len(irfcl_total), len(irfcl_fx), len(irfcl_gold),
+            "IMF IRFCL loaded: total=%d, fx=%d countries",
+            len(irfcl_total), len(irfcl_fx),
         )
     except Exception as e:
         logger.warning(f"IMF IRFCL fetch failed: {e}")
@@ -1579,11 +1601,9 @@ def _fetch_reserves():
 
     ifs_total_n = _normalize(ifs_total)
     ifs_fx_n = _normalize(ifs_fx)
-    ifs_gold_n = _normalize(ifs_gold)
     ifs_goldv_n = _normalize(ifs_goldv)
     irfcl_total_n = _normalize(irfcl_total)
     irfcl_fx_n = _normalize(irfcl_fx)
-    irfcl_gold_n = _normalize(irfcl_gold)
 
     all_iso3 = set(ifs_total_n) | set(irfcl_total_n)
     if not all_iso3:
@@ -1592,7 +1612,6 @@ def _fetch_reserves():
 
     merged_total = {}
     merged_fx = {}
-    merged_gold = {}    # gold value, USD millions
     merged_goldv = {}   # gold volume, fine troy ounces
 
     for iso3 in all_iso3:
@@ -1621,21 +1640,9 @@ def _fetch_reserves():
         if periods_fx:
             merged_fx[iso3] = periods_fx
 
-        # Gold value (USD millions): IFS backbone, IRFCL overlays the
-        # most-recent months. Both are the same direct gold line, so the
-        # overlay is a clean precedence (newest wins) — no methodology mix.
-        periods_gold = {}
-        if iso3 in ifs_gold_n:
-            periods_gold.update(ifs_gold_n[iso3])
-        if iso3 in irfcl_gold_n:
-            for period, val in irfcl_gold_n[iso3].items():
-                if val is not None and val > 0:
-                    periods_gold[period] = val
-        if periods_gold:
-            merged_gold[iso3] = periods_gold
-
-        # Gold volume (fine troy ounces) — IFS only; this is the
-        # quantity series that's immune to price revaluation.
+        # Gold volume (fine troy ounces) — the directly-reported quantity
+        # series, immune to price revaluation. Market value is computed in
+        # the builder as volume × spot.
         if iso3 in ifs_goldv_n:
             merged_goldv[iso3] = dict(ifs_goldv_n[iso3])
 
@@ -1646,9 +1653,11 @@ def _fetch_reserves():
         source_parts.append('IRFCL')
     source_label = 'IMF ' + '+'.join(source_parts) + ' (merged)'
 
+    spot_gold = _get_spot_gold_usd_per_oz()
+
     result = _build_reserves_result(
         merged_total, merged_fx, source_label,
-        gold_by_country=merged_gold, gold_oz_by_country=merged_goldv,
+        gold_oz_by_country=merged_goldv, spot_gold_per_oz=spot_gold,
     )
     if result:
         logger.info(
@@ -1712,6 +1721,7 @@ def diagnose_fetch():
     # country coverage without scraping server logs.
     sample_periods = []
     stale_countries = []
+    history_sample = []
     if result and result.get('years'):
         years = result['years']
         last3 = years[-3:]
@@ -1752,6 +1762,26 @@ def diagnose_fetch():
                 'gold_tonnes': _last_real(c.get('gold_tonnes')),
             })
 
+        # Gold-tonnage history sample for the big EM *accumulators*. If the
+        # historical values genuinely rise (China ~600t in 2004 → ~2,300t
+        # now), the deep history is real. If they're flat at the current
+        # level all the way back, the volume series is being broadcast and
+        # that's the "same all the way back" bug.
+        sample_marks = ['2004-01', '2009-01', '2014-01', '2019-01', '2024-01']
+        for iso3 in ('CHN', 'RUS', 'POL', 'TUR', 'IND', 'KAZ'):
+            c = next((x for x in countries if x.get('iso3') == iso3), None)
+            if not c:
+                continue
+            tonnes = c.get('gold_tonnes') or []
+            marks = {}
+            for mk in sample_marks:
+                if mk in years:
+                    marks[mk] = tonnes[years.index(mk)] if years.index(mk) < len(tonnes) else None
+            marks['latest_real'] = _last_real(tonnes)
+            history_sample.append({'iso3': iso3, 'name': c.get('name'),
+                                   'latest_real_period': c.get('latest_real_period'),
+                                   'tonnes': marks})
+
     meta = (result or {}).get('meta', {})
     return {
         'attempts': attempts,
@@ -1760,9 +1790,11 @@ def diagnose_fetch():
         'period_range': meta.get('period_range', ''),
         'country_count': len((result or {}).get('countries') or []),
         'gold_source': meta.get('gold_source', ''),
+        'gold_spot_usd_per_oz': meta.get('gold_spot_usd_per_oz'),
         'gold_tonnes_coverage': meta.get('gold_tonnes_coverage', 0),
         'gold_usd_coverage': meta.get('gold_usd_coverage', 0),
         'sample_periods': sample_periods,
         'top15_latest_real': stale_countries,
+        'gold_history_sample': history_sample,
         'today': _dt.date.today().isoformat(),
     }
