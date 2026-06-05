@@ -198,14 +198,14 @@ window.ParraData.CATALOG = {
                 {
                     id: 'cofer',
                     label: 'Central Bank Reserves',
-                    source: 'IMF IRFCL · World Gold Council',
-                    sourceDetail: 'International Reserves & Foreign Currency Liquidity (Monthly); gold from the IMF direct gold series (World Gold Council methodology)',
+                    source: 'IMF · World Gold Council · U.S. Treasury',
+                    sourceDetail: 'IMF IRFCL/IFS reserves (monthly); gold from the IMF direct gold series + WGC/PBoC overlay; gold-vs-Treasury share crossover uses FRED (FDHBFIN) + LBMA gold',
                     api: '/api/cofer',
                     exportUrl: '/api/cofer/export',
                     type: 'cofer',
                     controls: ['region', 'reserve-type'],
                     subviews: [],
-                    searchTerms: ['reserves', 'COFER', 'central bank', 'FX', 'foreign exchange', 'gold reserves', 'gold tonnes', 'World Gold Council', 'WGC', 'IMF'],
+                    searchTerms: ['reserves', 'COFER', 'central bank', 'FX', 'foreign exchange', 'gold reserves', 'gold tonnes', 'gold vs treasuries', 'de-dollarization', 'crossover', 'Sløk', 'World Gold Council', 'WGC', 'IMF'],
                 },
                 {
                     id: 'cofer-nowcast',

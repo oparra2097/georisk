@@ -242,6 +242,21 @@ def get_cofer_nowcast():
     return jsonify(data)
 
 
+@api_bp.route('/cofer/gold-treasury')
+def get_gold_treasury():
+    """Gold vs US-Treasurys share-of-reserves crossover (Sløk/Crescat)."""
+    from backend.data_sources.reserve_composition import get_gold_treasury_crossover
+    return jsonify(get_gold_treasury_crossover())
+
+
+@api_bp.route('/cofer/gold-treasury/refresh', methods=['POST', 'GET'])
+def refresh_gold_treasury():
+    """Force-rebuild the crossover and return a verification diagnostic."""
+    from backend.data_sources.reserve_composition import diagnose_crossover
+    diag = diagnose_crossover()
+    return jsonify({'ok': not diag.get('meta', {}).get('error'), **diag})
+
+
 @api_bp.route('/cpi/us')
 def get_us_cpi():
     """Return US CPI data from BLS (cached 24 hours)."""

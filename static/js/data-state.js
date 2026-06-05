@@ -17,7 +17,7 @@ window.ParraData.state = {
     scenario: 'Base',
     commFreq: 'quarterly',
     region: 'World',
-    reserveType: 'total',
+    reserveType: 'crossover',
     insRegion: 'all',
     countries: [],
     emUniverse: 'em40',
@@ -114,7 +114,7 @@ window.ParraData.buildUrl = function () {
     if (ds.controls.includes('scenario') && state.scenario !== 'Weighted Avg') params.set('scenario', state.scenario);
     if (ds.controls.includes('comm-freq') && state.commFreq !== 'quarterly') params.set('commFreq', state.commFreq);
     if (ds.controls.includes('region') && state.region !== 'World') params.set('region', state.region);
-    if (ds.controls.includes('reserve-type') && state.reserveType !== 'total') params.set('type', state.reserveType);
+    if (ds.controls.includes('reserve-type') && state.reserveType !== 'crossover') params.set('type', state.reserveType);
     if (ds.controls.includes('ins-region') && state.insRegion !== 'all') params.set('insRegion', state.insRegion);
     if (ds.controls.includes('countries') && state.countries.length > 0) params.set('countries', state.countries.join(','));
     if (ds.controls.includes('em-universe') && state.emUniverse && state.emUniverse !== 'em40') params.set('emUniverse', state.emUniverse);

@@ -365,6 +365,7 @@
         }
         if (ds.controls.includes('reserve-type')) {
             html += '<select id="ctrl-reserve-type" class="data-select">' +
+                '<option value="crossover"' + (state.reserveType === 'crossover' ? ' selected' : '') + '>Gold vs US Treasurys</option>' +
                 '<option value="total"' + (state.reserveType === 'total' ? ' selected' : '') + '>Total Reserves</option>' +
                 '<option value="fx"' + (state.reserveType === 'fx' ? ' selected' : '') + '>FX Reserves</option>' +
                 '<option value="gold"' + (state.reserveType === 'gold' ? ' selected' : '') + '>Gold (tonnes)</option>' +
@@ -645,6 +646,14 @@
     }
 
     function renderCofer(ds) {
+        // Gold vs US-Treasurys reserve-share crossover — a global 2-line
+        // view (Sløk/Crescat de-dollarization chart) from a separate
+        // endpoint. Skips the per-country machinery entirely.
+        if (state.reserveType === 'crossover') {
+            renderGoldTreasuryCrossover();
+            return;
+        }
+
         const data = PD.getCached(ds.api);
         if (!data) return;
 
@@ -786,6 +795,123 @@
         }
 
         // Summary not needed for COFER
+        const summary = document.getElementById('panel-summary');
+        if (summary) summary.innerHTML = '';
+    }
+
+    // ══════════════════════════════════════════════════════
+    // GOLD vs US-TREASURYS CROSSOVER (Sløk / Crescat)
+    // ══════════════════════════════════════════════════════
+
+    function renderGoldTreasuryCrossover() {
+        const url = '/api/cofer/gold-treasury';
+        const data = PD.getCached(url);
+        if (!data) {
+            fetchData(url, () => {
+                if (state.reserveType === 'crossover') renderGoldTreasuryCrossover();
+            });
+            return;
+        }
+
+        const periods = data.periods || [];
+        const meta = data.meta || {};
+        const goldColor = '#e0b84c';     // gold
+        const treColor = '#5b8def';      // treasury (Apollo-ish blue)
+
+        if (meta.error || periods.length < 2) {
+            const loadEl = document.getElementById('panel-loading');
+            if (loadEl) loadEl.style.display = 'none';
+            const metaEl = document.getElementById('panel-meta');
+            if (metaEl) {
+                metaEl.innerHTML = '<div style="padding:24px;text-align:center;color:#f59e0b;">'
+                    + 'Crossover data unavailable' + (meta.error ? ': ' + meta.error : '')
+                    + '<div style="color:#64748b;font-size:12px;margin-top:6px;">'
+                    + 'Needs a FRED_API_KEY on the server for the gold-price + Treasury series.</div></div>';
+            }
+            PD.destroyChart('main');
+            return;
+        }
+
+        PD.destroyChart('main');
+        const canvasEl = document.getElementById('panel-chart');
+        if (!canvasEl) return;
+        const ctx = canvasEl.getContext('2d');
+
+        const datasets = [
+            {
+                label: meta.gold_label || 'Gold',
+                data: (data.gold_share || []).map(v => v != null ? v : null),
+                borderColor: goldColor, backgroundColor: 'transparent',
+                borderWidth: 2.5, fill: false, pointRadius: 0, pointHitRadius: 8,
+                tension: 0.3, spanGaps: true,
+            },
+            {
+                label: meta.treasury_label || 'US Treasurys (foreign-held)',
+                data: (data.treasury_share || []).map(v => v != null ? v : null),
+                borderColor: treColor, backgroundColor: 'transparent',
+                borderWidth: 2.5, fill: false, pointRadius: 0, pointHitRadius: 8,
+                tension: 0.3, spanGaps: true,
+            },
+        ];
+
+        PD.setChart('main', new Chart(ctx, {
+            type: 'line',
+            data: { labels: periods, datasets },
+            options: chartOptions({
+                legend: true,
+                tooltip: (c) => {
+                    const v = c.parsed.y;
+                    return c.dataset.label + ': ' + (v == null ? 'N/A' : v.toFixed(1) + '%');
+                },
+                yCallback: (v) => v + '%',
+                xCallback: function (value, index) {
+                    const label = periods[index] || '';
+                    if (label.endsWith('-01')) return label.slice(0, 4);
+                    return null;
+                },
+                beginAtZero: true,
+                maxTicksLimitX: 30,
+            }),
+        }));
+
+        // Takeaway title + crossover callout + source, in the meta strip.
+        const metaEl = document.getElementById('panel-meta');
+        if (metaEl) {
+            const g = meta.latest_gold_share, t = meta.latest_treasury_share;
+            const bits = [];
+            if (g != null && t != null) {
+                bits.push('Gold ' + g.toFixed(1) + '% vs Treasurys ' + t.toFixed(1) + '%');
+            }
+            if (meta.crossover_period) bits.push('crossover ' + meta.crossover_period);
+            if (meta.source) bits.push(meta.source);
+            metaEl.innerHTML =
+                '<div style="font-weight:600;color:#e5e7eb;margin-bottom:4px;">'
+                + (meta.title || 'Gold vs US Treasurys in central-bank reserves') + '</div>'
+                + '<div style="color:#94a3b8;font-size:12px;">' + bits.join(' · ') + '</div>';
+        }
+
+        // Table: last 24 periods of the two shares.
+        const thead = document.getElementById('panel-thead');
+        const tbody = document.getElementById('panel-tbody');
+        if (thead && tbody) {
+            const maxCols = 24;
+            const start = Math.max(0, periods.length - maxCols);
+            let hdr = '<tr><th>Series</th>';
+            for (let i = periods.length - 1; i >= start; i--) hdr += '<th>' + periods[i] + '</th>';
+            thead.innerHTML = hdr + '</tr>';
+            const rowFor = (label, arr) => {
+                let r = '<tr><td>' + label + '</td>';
+                for (let i = periods.length - 1; i >= start; i--) {
+                    const v = (arr || [])[i];
+                    r += v == null ? '<td>—</td>' : '<td>' + v.toFixed(1) + '%</td>';
+                }
+                return r + '</tr>';
+            };
+            tbody.innerHTML = rowFor('Gold', data.gold_share) + rowFor('US Treasurys', data.treasury_share);
+        }
+
+        const loadEl = document.getElementById('panel-loading');
+        if (loadEl) loadEl.style.display = 'none';
         const summary = document.getElementById('panel-summary');
         if (summary) summary.innerHTML = '';
     }
