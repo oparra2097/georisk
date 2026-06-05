@@ -131,6 +131,25 @@ def _world_series_from_cofer():
     return periods, world_gold, world_total
 
 
+def _gold_price_by_month():
+    """Monthly gold price ``{YYYY-MM: usd_per_oz}``.
+
+    Primary: yfinance GC=F (the same source as our live spot — works on
+    Render). Fallback: FRED LBMA. Returns ``(by_month, source)``.
+    """
+    try:
+        from backend.data_sources.market_data import get_gold_monthly_history
+        ymonth = get_gold_monthly_history()
+        if ymonth:
+            return ymonth, 'yfinance GC=F'
+    except Exception as e:
+        logger.warning('yfinance gold history failed: %s', e)
+    fred = _fred_by_month(FRED_GOLD_PM) or _fred_by_month(FRED_GOLD_AM)
+    if fred:
+        return fred, 'FRED LBMA'
+    return {}, None
+
+
 def _build_crossover():
     """Assemble the gold-vs-Treasury share series."""
     try:
@@ -138,15 +157,24 @@ def _build_crossover():
         if not periods:
             return _empty('No reserves data available to aggregate')
 
-        gold_px = _fred_by_month(FRED_GOLD_PM)
-        if not gold_px:
-            gold_px = _fred_by_month(FRED_GOLD_AM)
+        gold_px, gold_src = _gold_price_by_month()
         ust = _fred_by_month(FRED_FOREIGN_UST)
         if not gold_px or not ust:
-            return _empty(
-                'FRED unavailable (need a FRED_API_KEY): '
-                f'gold_px={len(gold_px)} obs, FDHBFIN={len(ust)} obs'
-            )
+            # Be specific so the failure is unambiguous (gold price comes
+            # from yfinance, NOT FRED — only the Treasury series needs the
+            # FRED key).
+            from backend.data_sources.fred_client import _get_api_key
+            key_ok = bool(_get_api_key())
+            reasons = []
+            if not gold_px:
+                reasons.append('gold price unavailable (yfinance GC=F + FRED LBMA both empty)')
+            if not ust:
+                reasons.append(
+                    'FDHBFIN empty — '
+                    + ('FRED key detected but the series returned no rows (rate-limit or series issue)'
+                       if key_ok else 'no FRED_API_KEY detected in the environment')
+                )
+            return _empty('; '.join(reasons))
 
         # Gold price forward-filled to every month; Treasury (quarterly)
         # forward-filled to every month.
@@ -196,7 +224,8 @@ def _build_crossover():
             'treasury_share': treasury_share,
             'meta': {
                 'title': 'Gold has overtaken US Treasurys in central-bank reserves',
-                'source': 'World Gold Council · IMF · U.S. Treasury (FRED) · LBMA',
+                'source': 'World Gold Council · IMF · U.S. Treasury (FRED) · gold price (Yahoo/GC=F)',
+                'gold_price_source': gold_src,
                 'gold_label': 'Gold',
                 'treasury_label': 'US Treasurys (foreign-held)',
                 'crossover_period': crossover_period,
@@ -246,10 +275,29 @@ def diagnose_crossover():
         if p:
             samples[p] = at(p)
 
+    # Source-availability checkpoints so a failure is unambiguous.
+    inputs = {}
+    try:
+        from backend.data_sources.fred_client import _get_api_key
+        inputs['fred_key_detected'] = bool(_get_api_key())
+    except Exception as e:
+        inputs['fred_key_detected'] = f'check failed: {e}'
+    try:
+        gp, gsrc = _gold_price_by_month()
+        inputs['gold_price_obs'] = len(gp)
+        inputs['gold_price_source'] = gsrc
+    except Exception as e:
+        inputs['gold_price_obs'] = f'error: {e}'
+    try:
+        inputs['fdhbfin_obs'] = len(_fred_by_month(FRED_FOREIGN_UST))
+    except Exception as e:
+        inputs['fdhbfin_obs'] = f'error: {e}'
+
     return {
         'meta': data.get('meta', {}),
         'period_range': f'{periods[0]} to {periods[-1]}' if periods else '',
         'point_count': len(periods),
+        'inputs': inputs,
         'samples': samples,
         'today': _dt.date.today().isoformat(),
     }

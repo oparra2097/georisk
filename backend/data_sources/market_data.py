@@ -281,3 +281,32 @@ def _fetch_spread_history(params):
 def get_market_history(symbol, period):
     """Public API: returns cached historical data for a symbol+period."""
     return _history_cache.get(symbol, period)
+
+
+_gold_hist_cache = {'data': None, 'ts': 0.0}
+
+
+def get_gold_monthly_history():
+    """Full monthly gold (GC=F) close history as ``{'YYYY-MM': price_usd_oz}``.
+
+    Sourced from yfinance (COMEX gold futures ≈ spot), which goes back to
+    ~2000 — used to value central-bank gold reserves over history. Cached
+    6h. Returns ``{}`` on failure. This replaces the FRED LBMA gold series
+    (GOLDPMGBD228NLBM), which FRED discontinued, so it returns no rows.
+    """
+    if _gold_hist_cache['data'] is not None and (time.time() - _gold_hist_cache['ts']) < 21600:
+        return _gold_hist_cache['data']
+    _ensure_yfinance()
+    out = {}
+    try:
+        hist = yf.Ticker('GC=F').history(period='max', interval='1mo')
+        if hist is not None and not hist.empty:
+            for d, v in zip(hist.index, hist['Close'].tolist()):
+                if v == v and v:  # not NaN, non-zero
+                    out[d.strftime('%Y-%m')] = round(float(v), 2)
+    except Exception as e:
+        logger.warning(f"gold monthly history fetch failed: {e}")
+    if out:
+        _gold_hist_cache['data'] = out
+        _gold_hist_cache['ts'] = time.time()
+    return out
