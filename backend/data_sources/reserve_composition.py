@@ -38,7 +38,13 @@ TROY_OZ_PER_TONNE = 32150.7466
 # FRED series
 FRED_GOLD_PM = 'GOLDPMGBD228NLBM'   # LBMA Gold Price PM, USD/oz, daily
 FRED_GOLD_AM = 'GOLDAMGBD228NLBM'   # AM fix fallback
-FRED_FOREIGN_UST = 'FDHBFIN'        # Federal Debt Held by Foreign & Intl Investors
+# Foreign-OFFICIAL holdings of US Treasurys (central banks) — this is the
+# series Sløk's "central banks" framing uses, and the one that actually
+# crosses (~$3.8T vs world gold). Total-foreign FDHBFIN (~$8.5T, incl.
+# private) is far larger than world gold value, so it never crosses; we
+# keep it only as a fallback if the official series is unavailable.
+FRED_FOREIGN_OFFICIAL_UST = 'BOGZ1FL263061130Q'  # foreign official, quarterly
+FRED_FOREIGN_UST = 'FDHBFIN'                      # total foreign (fallback)
 
 
 class _CrossoverCache:
@@ -110,20 +116,36 @@ def _world_series_from_cofer():
     if not n or not countries:
         return [], [], []
 
+    def _ffill(arr):
+        """Carry each country's last reported value forward to the end.
+
+        A central bank's gold/reserves don't disappear just because it
+        reported late, so the WORLD aggregate must not collapse at the
+        right edge where only a few countries have posted the newest
+        month. Leading Nones (before a country's first report) stay None.
+        """
+        out = []
+        last = None
+        for i in range(n):
+            v = arr[i] if i < len(arr) else None
+            if v is not None:
+                last = float(v)
+            out.append(last)
+        return out
+
     gold_t = [0.0] * n
     gold_have = [False] * n
     total_b = [0.0] * n
     total_have = [False] * n
     for c in countries:
-        gt = c.get('gold_tonnes') or []
-        tr = c.get('total_reserves') or []
-        for i in range(min(n, len(gt))):
+        gt = _ffill(c.get('gold_tonnes') or [])
+        tr = _ffill(c.get('total_reserves') or [])
+        for i in range(n):
             if gt[i] is not None:
-                gold_t[i] += float(gt[i])
+                gold_t[i] += gt[i]
                 gold_have[i] = True
-        for i in range(min(n, len(tr))):
             if tr[i] is not None:
-                total_b[i] += float(tr[i])
+                total_b[i] += tr[i]
                 total_have[i] = True
 
     world_gold = [gold_t[i] if gold_have[i] else None for i in range(n)]
@@ -158,7 +180,13 @@ def _build_crossover():
             return _empty('No reserves data available to aggregate')
 
         gold_px, gold_src = _gold_price_by_month()
-        ust = _fred_by_month(FRED_FOREIGN_UST)
+        # Foreign-OFFICIAL Treasury holdings (Sløk's "central banks" line);
+        # fall back to total-foreign only if the official series is empty.
+        ust = _fred_by_month(FRED_FOREIGN_OFFICIAL_UST)
+        ust_src = 'FDHBFIN-official (BOGZ1FL263061130Q)'
+        if not ust:
+            ust = _fred_by_month(FRED_FOREIGN_UST)
+            ust_src = 'FDHBFIN total-foreign (fallback)'
         if not gold_px or not ust:
             # Be specific so the failure is unambiguous (gold price comes
             # from yfinance, NOT FRED — only the Treasury series needs the
@@ -170,7 +198,7 @@ def _build_crossover():
                 reasons.append('gold price unavailable (yfinance GC=F + FRED LBMA both empty)')
             if not ust:
                 reasons.append(
-                    'FDHBFIN empty — '
+                    'foreign Treasury holdings empty — '
                     + ('FRED key detected but the series returned no rows (rate-limit or series issue)'
                        if key_ok else 'no FRED_API_KEY detected in the environment')
                 )
@@ -224,8 +252,9 @@ def _build_crossover():
             'treasury_share': treasury_share,
             'meta': {
                 'title': 'Gold has overtaken US Treasurys in central-bank reserves',
-                'source': 'World Gold Council · IMF · U.S. Treasury (FRED) · gold price (Yahoo/GC=F)',
+                'source': 'World Gold Council · IMF · U.S. Treasury (FRED, foreign official) · gold price (Yahoo/GC=F)',
                 'gold_price_source': gold_src,
+                'treasury_source': ust_src,
                 'gold_label': 'Gold',
                 'treasury_label': 'US Treasurys (foreign-held)',
                 'crossover_period': crossover_period,
@@ -289,9 +318,18 @@ def diagnose_crossover():
     except Exception as e:
         inputs['gold_price_obs'] = f'error: {e}'
     try:
-        inputs['fdhbfin_obs'] = len(_fred_by_month(FRED_FOREIGN_UST))
+        inputs['ust_official_obs'] = len(_fred_by_month(FRED_FOREIGN_OFFICIAL_UST))
+        inputs['ust_total_obs'] = len(_fred_by_month(FRED_FOREIGN_UST))
     except Exception as e:
-        inputs['fdhbfin_obs'] = f'error: {e}'
+        inputs['ust_obs'] = f'error: {e}'
+    # World-aggregate sanity at the latest period (should be ~33-36k t, not
+    # a collapsed few-thousand from sparse right-edge coverage).
+    try:
+        per, wg, wt = _world_series_from_cofer()
+        inputs['world_gold_tonnes_latest'] = round(wg[-1], 0) if wg and wg[-1] else None
+        inputs['world_reserves_b_latest'] = round(wt[-1], 0) if wt and wt[-1] else None
+    except Exception as e:
+        inputs['world_aggregate'] = f'error: {e}'
 
     return {
         'meta': data.get('meta', {}),
