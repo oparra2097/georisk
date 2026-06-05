@@ -169,6 +169,41 @@ COUNTRY_COLORS = [
 
 RESERVES_CACHE_FILE = os.path.join(Config.DATA_DIR, 'reserves_cache.json')
 
+# Curated World Gold Council / PBoC overlay (repo-committed, not on the
+# mounted data disk) — extends the latest months where IMF IFS lags.
+_APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+WGC_OVERLAY_FILE = os.path.join(_APP_ROOT, 'static', 'data', 'wgc_gold_overlay.json')
+
+_wgc_overlay_cache = {'data': None, 'loaded': False}
+
+
+def _load_wgc_overlay():
+    """Load the curated WGC/PBoC gold-tonnage overlay.
+
+    Returns ``(tonnes_by_iso3, attribution)`` where tonnes_by_iso3 is
+    ``{iso3: {period: tonnes}}``. Cached after first load; on any error
+    returns ``({}, None)`` so the pipeline simply falls back to IMF-only.
+    """
+    if _wgc_overlay_cache['loaded']:
+        d = _wgc_overlay_cache['data'] or {}
+        return d.get('tonnes', {}), d.get('_attribution')
+    try:
+        with open(WGC_OVERLAY_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        _wgc_overlay_cache['data'] = data
+        _wgc_overlay_cache['loaded'] = True
+        n = sum(len(v) for v in (data.get('tonnes') or {}).values())
+        logger.info("WGC gold overlay loaded: %d countries, %d points",
+                    len(data.get('tonnes') or {}), n)
+        return data.get('tonnes', {}), data.get('_attribution')
+    except FileNotFoundError:
+        _wgc_overlay_cache['loaded'] = True
+        return {}, None
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        logger.warning("Failed to load WGC gold overlay: %s", e)
+        _wgc_overlay_cache['loaded'] = True
+        return {}, None
+
 
 class ReservesCache:
     """File-backed cache for reserves data.
@@ -318,7 +353,7 @@ def _get_spot_gold_usd_per_oz():
 
 def _build_reserves_result(total_by_country, fx_by_country, source_label,
                            gold_oz_by_country=None, spot_gold_per_oz=None,
-                           frequency='Monthly'):
+                           gold_tonnes_override=None, frequency='Monthly'):
     """Assemble the unified reserves payload from parsed country dicts.
 
     ``total_by_country`` / ``fx_by_country`` are mappings of
@@ -328,6 +363,10 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
       - ``spot_gold_per_oz``   — live spot price; the USD-value series is
         ``tonnes × oz/tonne × spot``. We never derive gold as total − FX
         and never use the IMF book-valued gold series.
+      - ``gold_tonnes_override`` — ``{iso3: {period: tonnes}}`` from the
+        World Gold Council / PBoC curated overlay. Takes precedence over
+        the IMF volume series for the months it covers (IMF IFS lags ~a
+        year for China; the PBoC reports monthly).
 
     Returns the standard result dict consumed by /api/cofer, or ``None`` if
     there is no usable data.
@@ -336,6 +375,7 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
         return None
 
     gold_oz_by_country = gold_oz_by_country or {}
+    gold_tonnes_override = gold_tonnes_override or {}
     oz_scale = _detect_oz_scale(gold_oz_by_country)
 
     all_periods = set()
@@ -398,6 +438,7 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
         total_data = total_by_country.get(code, {})
         fx_data = fx_by_country.get(code, {})
         gold_oz_data = gold_oz_by_country.get(code, {})
+        override_data = gold_tonnes_override.get(iso3, {})
 
         total_values = []
         fx_values = []
@@ -408,16 +449,27 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
         for i, period in enumerate(periods):
             total_b = _usd_millions_to_billions(total_data.get(period))
             fx_b = _usd_millions_to_billions(fx_data.get(period))
-            # Direct gold volume → metric tonnes, then market value in USD$B.
+            # Gold tonnage: WGC/PBoC overlay wins where present (fresher
+            # than IMF), else the direct IMF volume series → tonnes.
             tonnes = None
-            raw_oz = gold_oz_data.get(period)
-            if raw_oz is not None:
+            ov = override_data.get(period)
+            if ov is not None:
                 try:
-                    ozf = float(raw_oz)
-                    if ozf == ozf and ozf > 0:  # NaN-safe, drop non-positive
-                        tonnes = round(ozf * oz_scale / TROY_OZ_PER_TONNE, 2)
+                    ovf = float(ov)
+                    if ovf == ovf and ovf > 0:
+                        tonnes = round(ovf, 2)
                 except (ValueError, TypeError):
                     tonnes = None
+            if tonnes is None:
+                raw_oz = gold_oz_data.get(period)
+                if raw_oz is not None:
+                    try:
+                        ozf = float(raw_oz)
+                        if ozf == ozf and ozf > 0:  # NaN-safe, drop non-positive
+                            tonnes = round(ozf * oz_scale / TROY_OZ_PER_TONNE, 2)
+                    except (ValueError, TypeError):
+                        tonnes = None
+            # Market value in USD$B from final tonnage.
             gold_b = None
             if tonnes is not None and spot_gold_per_oz:
                 gold_b = round(tonnes * TROY_OZ_PER_TONNE * spot_gold_per_oz / 1e9, 2)
@@ -1654,11 +1706,17 @@ def _fetch_reserves():
     source_label = 'IMF ' + '+'.join(source_parts) + ' (merged)'
 
     spot_gold = _get_spot_gold_usd_per_oz()
+    wgc_overlay, wgc_attr = _load_wgc_overlay()
 
     result = _build_reserves_result(
         merged_total, merged_fx, source_label,
         gold_oz_by_country=merged_goldv, spot_gold_per_oz=spot_gold,
+        gold_tonnes_override=wgc_overlay,
     )
+    if result and wgc_overlay and wgc_attr:
+        # Reflect the overlay in the gold attribution shown on the chart.
+        result['meta']['gold_attribution'] = wgc_attr
+        result['meta']['gold_overlay_countries'] = sorted(wgc_overlay.keys())
     if result:
         logger.info(
             "Merged reserves: %d months, %d countries, latest %s",
