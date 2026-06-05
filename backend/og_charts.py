@@ -212,41 +212,65 @@ def _fetch_cofer_country(cat, ds, sv, qs) -> Optional[ChartData]:
         "total":    ("total_reserves", "Total Reserves",          "usd"),
         "fx":       ("fx_reserves",    "FX Reserves",             "usd"),
         # 'gold' is the direct gold *tonnage* (World Gold Council / IMF);
-        # 'gold_usd' is the gold market value in USD billions.
+        # 'gold_usd' is the gold market value in USD billions; 'gold_pct'
+        # is gold as a share of total reserves.
         "gold":     ("gold_tonnes",    "Gold Reserves (tonnes)",  "tonnes"),
         "gold_usd": ("gold_reserves",  "Gold Reserves",           "usd"),
+        "gold_pct": ("gold_reserves",  "Gold % of Reserves",      "pct"),
     }
     field_key, type_label, unit = field_map.get(rtype, field_map["total"])
-
-    # Sum across reporting countries to get a "World" aggregate
     n = len(years)
-    totals = [0.0] * n
-    have = [False] * n
-    for c in countries:
-        vals = c.get(field_key) or []
-        for i in range(min(n, len(vals))):
-            v = vals[i]
-            if v is not None:
-                totals[i] += float(v)
-                have[i] = True
-    series = [(float(i), totals[i]) for i in range(n) if have[i]]
+
+    if unit == "pct":
+        # World gold share = Σ gold market value ÷ Σ total reserves × 100
+        # (ratio of sums, not a sum of percentages).
+        gsum = [0.0] * n
+        tsum = [0.0] * n
+        have = [False] * n
+        for c in countries:
+            gv = c.get("gold_reserves") or []
+            tv = c.get("total_reserves") or []
+            for i in range(min(n, len(gv), len(tv))):
+                if gv[i] is not None and tv[i]:
+                    gsum[i] += float(gv[i])
+                    tsum[i] += float(tv[i])
+                    have[i] = True
+        series = [(float(i), gsum[i] / tsum[i] * 100) for i in range(n)
+                  if have[i] and tsum[i] > 0]
+    else:
+        # Sum across reporting countries to get a "World" aggregate
+        totals = [0.0] * n
+        have = [False] * n
+        for c in countries:
+            vals = c.get(field_key) or []
+            for i in range(min(n, len(vals))):
+                v = vals[i]
+                if v is not None:
+                    totals[i] += float(v)
+                    have[i] = True
+        series = [(float(i), totals[i]) for i in range(n) if have[i]]
     if len(series) < 2:
         return None
 
     latest_v = series[-1][1]
-    is_gold = rtype in ("gold", "gold_usd")
-    headline = (f"{latest_v:,.0f} t" if unit == "tonnes" else _fmt_usd_b(latest_v))
+    is_gold = rtype in ("gold", "gold_usd", "gold_pct")
+    if unit == "tonnes":
+        headline = f"{latest_v:,.0f} t"
+    elif unit == "pct":
+        headline = f"{latest_v:.1f}%"
+    else:
+        headline = _fmt_usd_b(latest_v)
     return ChartData(
         title=f"World {type_label}",
-        subtitle="Official central-bank reserves, summed across reporting countries.",
+        subtitle="Official central-bank reserves, aggregated across reporting countries.",
         source=("World Gold Council · IMF" if is_gold else "IMF COFER"),
         headline_value=headline,
         headline_label=f"Latest · {years[int(series[-1][0])]}",
         points=series,
         x_label_first=str(years[int(series[0][0])]),
         x_label_last=str(years[int(series[-1][0])]),
-        y_unit="$B",
-        accent=(218, 165, 32) if rtype == "gold" else (31, 119, 180),
+        y_unit=("%" if unit == "pct" else "$B"),
+        accent=(218, 165, 32) if rtype.startswith("gold") else (31, 119, 180),
     )
 
 

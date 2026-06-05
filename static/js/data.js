@@ -368,6 +368,7 @@
                 '<option value="total"' + (state.reserveType === 'total' ? ' selected' : '') + '>Total Reserves</option>' +
                 '<option value="fx"' + (state.reserveType === 'fx' ? ' selected' : '') + '>FX Reserves</option>' +
                 '<option value="gold"' + (state.reserveType === 'gold' ? ' selected' : '') + '>Gold (tonnes)</option>' +
+                '<option value="gold_pct"' + (state.reserveType === 'gold_pct' ? ' selected' : '') + '>Gold % of reserves</option>' +
                 '<option value="gold_usd"' + (state.reserveType === 'gold_usd' ? ' selected' : '') + '>Gold ($B)</option>' +
                 '</select>';
         }
@@ -651,15 +652,29 @@
         let countries = data.countries || [];
         const regionMembers = data.region_members || {};
 
-        // Reserve-type → series + unit formatting. 'gold' is now the
-        // direct gold *tonnage* (World Gold Council / IMF), 'gold_usd' is
-        // the gold market value in USD billions.
+        // Reserve-type → series + unit formatting. 'gold' is the direct
+        // gold *tonnage* (World Gold Council / IMF), 'gold_usd' is the gold
+        // market value in USD billions, 'gold_pct' is gold as a share of
+        // total reserves (the de-dollarization gauge).
         const isTonnes = state.reserveType === 'gold';
-        const isGold = state.reserveType === 'gold' || state.reserveType === 'gold_usd';
+        const isPct = state.reserveType === 'gold_pct';
+        const isGold = state.reserveType === 'gold' || state.reserveType === 'gold_usd' || isPct;
         function seriesFor(c) {
             if (state.reserveType === 'fx') return c.fx_reserves;
             if (state.reserveType === 'gold') return c.gold_tonnes || [];
             if (state.reserveType === 'gold_usd') return c.gold_reserves;
+            if (state.reserveType === 'gold_pct') {
+                // gold market value ÷ total reserves × 100. Gold can't
+                // exceed total reserves, so a >100% read means a
+                // valuation mismatch — drop it rather than show it.
+                const g = c.gold_reserves || [];
+                const t = c.total_reserves || [];
+                return t.map((tv, i) => {
+                    if (!tv || tv <= 0 || g[i] == null) return null;
+                    const pct = (g[i] / tv) * 100;
+                    return (pct >= 0 && pct <= 100) ? pct : null;
+                });
+            }
             return c.total_reserves;
         }
         function latestVal(c) {
@@ -669,9 +684,9 @@
         }
         function fmtVal(v) {
             if (v == null) return 'N/A';
-            return isTonnes
-                ? Math.round(v).toLocaleString() + ' t'
-                : '$' + v.toFixed(1) + 'B';
+            if (isTonnes) return Math.round(v).toLocaleString() + ' t';
+            if (isPct) return v.toFixed(1) + '%';
+            return '$' + v.toFixed(1) + 'B';
         }
 
         if (state.region === 'World') {
@@ -716,8 +731,8 @@
                     if (val == null) return ctx.dataset.label + ': N/A';
                     return ctx.dataset.label + ': ' + fmtVal(val);
                 },
-                yCallback: (val) => isTonnes
-                    ? val.toLocaleString() + ' t'
+                yCallback: (val) => isTonnes ? val.toLocaleString() + ' t'
+                    : isPct ? val + '%'
                     : '$' + val.toLocaleString() + 'B',
                 xCallback: function(value, index) {
                     const label = years[index] || '';
@@ -759,10 +774,9 @@
         if (metaEl) {
             const meta = data.meta || {};
             const parts = [];
-            const goldView = state.reserveType === 'gold' || state.reserveType === 'gold_usd';
-            // For gold, lead with the World Gold Council / IMF attribution
-            // (the direct gold series), then the reserves source.
-            if (goldView && meta.gold_attribution) parts.push(meta.gold_attribution);
+            // For any gold view, lead with the World Gold Council / IMF
+            // attribution (the direct gold series), then the reserves source.
+            if (isGold && meta.gold_attribution) parts.push(meta.gold_attribution);
             if (meta.source) parts.push(meta.source);
             if (meta.frequency) parts.push(meta.frequency);
             if (meta.year_range) parts.push(meta.year_range);
