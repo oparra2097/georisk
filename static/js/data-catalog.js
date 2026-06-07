@@ -196,7 +196,7 @@ window.ParraData.CATALOG = {
                     searchTerms: ['tariff', 'tariffs', 'Yale', 'Yale Budget Lab', 'trade', 'trade policy', 'effective tariff rate', 'import duty', 'protectionism', 'Trump tariffs', 'liberation day'],
                 },
                 {
-                    id: 'cofer',
+                    id: 'gold-reserves',
                     label: 'Central Bank Reserves',
                     source: 'IMF · World Gold Council · U.S. Treasury',
                     sourceDetail: 'IMF IRFCL/IFS reserves (monthly); gold from the IMF direct gold series + WGC/PBoC overlay; gold-vs-Treasury share crossover uses FRED (FDHBFIN) + LBMA gold',
@@ -719,10 +719,15 @@ window.ParraData.findCategory = function (categoryId) {
     return window.ParraData.CATALOG.categories.find(c => c.id === categoryId) || null;
 };
 
+// Backward-compatible dataset id aliases (old slug -> current slug), so
+// previously-shared links keep working after a rename.
+window.ParraData.DATASET_ALIASES = { 'cofer': 'gold-reserves' };
+
 window.ParraData.findDataset = function (categoryId, datasetId) {
     const cat = window.ParraData.findCategory(categoryId);
     if (!cat) return null;
-    return cat.datasets.find(d => d.id === datasetId) || null;
+    const id = (window.ParraData.DATASET_ALIASES[datasetId]) || datasetId;
+    return cat.datasets.find(d => d.id === id) || null;
 };
 
 window.ParraData.findDatasetGlobal = function (datasetId) {

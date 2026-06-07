@@ -77,6 +77,11 @@ window.ParraData.parseUrl = function () {
     if (parts.length >= 2) state.dataset = decodeURIComponent(parts[1]);
     if (parts.length >= 3) state.subview = decodeURIComponent(parts[2]);
 
+    // Canonicalize legacy dataset slugs (e.g. old /data/trade/cofer links)
+    // to the current id so the URL rewrites cleanly on the next pushState.
+    const aliases = window.ParraData.DATASET_ALIASES || {};
+    if (state.dataset && aliases[state.dataset]) state.dataset = aliases[state.dataset];
+
     // Parse query params
     if (params.has('freq')) state.freq = params.get('freq');
     if (params.has('view')) state.view = params.get('view');
@@ -92,7 +97,7 @@ window.ParraData.parseUrl = function () {
     // Defaults if nothing in URL
     if (!state.category || !state.dataset) {
         state.category = 'trade';
-        state.dataset = 'cofer';
+        state.dataset = 'gold-reserves';
         state.subview = null;
     }
 };

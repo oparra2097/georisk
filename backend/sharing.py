@@ -54,7 +54,8 @@ DATASETS: dict[tuple[str, str], ChartMeta] = {
 
     # Trade & Reserves
     ("trade", "yale-tariff"):      ChartMeta("US Effective Tariff Rate",    "Average effective US tariff rate — policy-driven estimate.",       "Yale Budget Lab"),
-    ("trade", "cofer"):            ChartMeta("Central Bank Reserves",       "Global official foreign exchange reserves by currency.",           "IMF COFER"),
+    ("trade", "gold-reserves"):    ChartMeta("Central Bank Gold Reserves",  "Central-bank gold holdings, gold as a share of reserves, and the gold-vs-US-Treasurys crossover.", "World Gold Council / IMF"),
+    ("trade", "cofer"):            ChartMeta("Central Bank Gold Reserves",  "Central-bank gold holdings, gold as a share of reserves, and the gold-vs-US-Treasurys crossover.", "World Gold Council / IMF"),  # legacy slug alias
     ("trade", "cofer-nowcast"):    ChartMeta("Reserve Currency Composition","Nowcast of global central bank reserve currency allocation.",      "Parra Macro / IMF COFER"),
     ("trade", "em-vulnerability"): ChartMeta("EM External Vulnerability",   "Emerging-market external financing vulnerability indicators.",      "Parra Macro"),
     ("trade", "wb-exports-pct"):   ChartMeta("Exports (% of GDP)",          "Goods and services exports as a share of GDP.",                    "World Bank"),
@@ -423,9 +424,9 @@ def og_preview():
     extra = {k: v for k, v in request.args.items() if k not in ("chart", "cat", "ds", "sv")}
     extra_key = "|".join(f"{k}={v}" for k, v in sorted(extra.items()))
     # Bump the version prefix any time the renderer or fetchers change so
-    # old cached PNGs don't show up after a deploy. v4: real-data fetcher
-    # for commodity forecasts now wired correctly.
-    cache_key = f"v4|{chart}|{cat}|{ds}|{sv}|{extra_key}"
+    # old cached PNGs don't show up after a deploy. v5: gold-vs-Treasurys
+    # crossover OG (2-series renderer) + cofer→gold-reserves slug.
+    cache_key = f"v5|{chart}|{cat}|{ds}|{sv}|{extra_key}"
     cache_file = _cache_path(cache_key)
 
     if not os.path.exists(cache_file):

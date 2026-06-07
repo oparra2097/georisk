@@ -86,7 +86,43 @@
                 }
             });
         });
+
+        // Download-PNG button — exports the current chart canvas as a PNG
+        // with a solid background (canvas is transparent, which looks bad
+        // on light backgrounds like LinkedIn).
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest && e.target.closest('#panel-png-btn');
+            if (!btn) return;
+            e.preventDefault();
+            downloadChartPng();
+        });
     });
+
+    function downloadChartPng() {
+        const canvas = document.getElementById('panel-chart');
+        if (!canvas || !canvas.width) { showShareToast('No chart to download yet'); return; }
+        try {
+            const tmp = document.createElement('canvas');
+            tmp.width = canvas.width;
+            tmp.height = canvas.height;
+            const ctx = tmp.getContext('2d');
+            ctx.fillStyle = '#0f172a';            // slate-900, matches site bg
+            ctx.fillRect(0, 0, tmp.width, tmp.height);
+            ctx.drawImage(canvas, 0, 0);
+            const ds = PD.findDataset(state.category, state.dataset);
+            const base = (ds ? ds.label : 'chart').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+            const view = state.reserveType ? '-' + state.reserveType : '';
+            const a = document.createElement('a');
+            a.href = tmp.toDataURL('image/png');
+            a.download = 'parramacro-' + base + view + '.png';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            showShareToast('PNG downloaded');
+        } catch (err) {
+            showShareToast('PNG export failed');
+        }
+    }
 
     function copyToClipboard(text) {
         if (navigator.clipboard && window.isSecureContext) {
@@ -272,6 +308,13 @@
             '<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>' +
             '</svg><span class="share-btn-label">Share</span></button>';
 
+        const pngBtn =
+            '<button type="button" class="export-btn-data" id="panel-png-btn" title="Download chart as PNG">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+            '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>' +
+            '<path d="M21 15l-5-5L5 21"/>' +
+            '</svg>PNG</button>';
+
         panel.innerHTML = `
             <div class="data-section-header">
                 <div>
@@ -281,6 +324,7 @@
                 <div class="data-controls" id="panel-controls">
                     ${controlsHtml}
                     ${shareBtn}
+                    ${pngBtn}
                     ${exportBtn}
                 </div>
             </div>

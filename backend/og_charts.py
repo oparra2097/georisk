@@ -41,6 +41,13 @@ class ChartData:
     y_unit: str = ""           # appended to axis labels ("%", "$B", etc.)
     accent: tuple[int, int, int] = (239, 68, 68)
     direction_up_is_good: bool = True  # used purely for color choice on YoY change
+    # Optional second series (e.g. the gold-vs-Treasurys crossover). When
+    # present, render_chart_card draws both lines + a compact legend and
+    # skips the single-series filled area.
+    points2: list[tuple[float, float]] = field(default_factory=list)
+    series_label: str = ""
+    series2_label: str = ""
+    accent2: tuple[int, int, int] = (91, 141, 239)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -190,12 +197,60 @@ def _fetch_cofer_nowcast(cat, ds, sv, qs) -> Optional[ChartData]:
 
 # ─── COFER (FX/Gold/Total Reserves by country) ────────────────────────────
 
+def _fetch_cofer_crossover() -> Optional[ChartData]:
+    """OG card for the gold-vs-US-Treasurys reserve-share crossover —
+    matches the data page's default view (two lines)."""
+    try:
+        from backend.data_sources.reserve_composition import get_gold_treasury_crossover
+        d = get_gold_treasury_crossover() or {}
+    except Exception as e:
+        logger.warning("crossover OG fetch failed: %s", e)
+        return None
+    periods = d.get("periods") or []
+    gs = d.get("gold_share") or []
+    ts = d.get("treasury_share") or []
+    meta = d.get("meta") or {}
+    if meta.get("error") or len(periods) < 2:
+        return None
+    gold_pts = [(float(i), gs[i]) for i in range(len(periods)) if i < len(gs) and gs[i] is not None]
+    tre_pts = [(float(i), ts[i]) for i in range(len(periods)) if i < len(ts) and ts[i] is not None]
+    if len(gold_pts) < 2 or len(tre_pts) < 2:
+        return None
+    g = meta.get("latest_gold_share")
+    t = meta.get("latest_treasury_share")
+    xover = meta.get("crossover_period")
+    sub = "Foreign-official gold vs US Treasurys, % of reserves."
+    if xover:
+        sub = f"Gold overtook US Treasurys in {xover}. " + sub
+    return ChartData(
+        title="Gold has overtaken US Treasurys in reserves",
+        subtitle=sub,
+        source="World Gold Council · IMF · U.S. Treasury",
+        headline_value=(f"{g:.1f}%" if g is not None else ""),
+        headline_label=f"Gold share · {periods[-1]}",
+        points=gold_pts,
+        points2=tre_pts,
+        series_label="Gold",
+        series2_label="US Treasurys",
+        x_label_first=periods[0],
+        x_label_last=periods[-1],
+        y_unit="%",
+        accent=(224, 184, 76),       # gold
+        accent2=(91, 141, 239),      # blue
+    )
+
+
 def _fetch_cofer_country(cat, ds, sv, qs) -> Optional[ChartData]:
-    """COFER country-level reserves (chosen via ?type=total|fx|gold).
+    """COFER reserves OG card. ``?type`` selects the view; with no type we
+    render the page's default — the gold-vs-Treasurys crossover.
 
     Calls get_cofer_data() — the same accessor the /api/cofer route uses —
     so if the live page renders, this fetcher has the same data available.
     """
+    rtype = (qs.get("type") or "crossover").lower()
+    if rtype == "crossover":
+        return _fetch_cofer_crossover()
+
     try:
         from backend.data_sources.imf_cofer import get_cofer_data
         d = get_cofer_data() or {}
@@ -207,7 +262,6 @@ def _fetch_cofer_country(cat, ds, sv, qs) -> Optional[ChartData]:
     if not years or not countries:
         return None
 
-    rtype = (qs.get("type") or "total").lower()
     field_map = {
         "total":    ("total_reserves", "Total Reserves",          "usd"),
         "fx":       ("fx_reserves",    "FX Reserves",             "usd"),
@@ -269,7 +323,7 @@ def _fetch_cofer_country(cat, ds, sv, qs) -> Optional[ChartData]:
         points=series,
         x_label_first=str(years[int(series[0][0])]),
         x_label_last=str(years[int(series[-1][0])]),
-        y_unit=("%" if unit == "pct" else "$B"),
+        y_unit=("%" if unit == "pct" else ("t" if unit == "tonnes" else "$B")),
         accent=(218, 165, 32) if rtype.startswith("gold") else (31, 119, 180),
     )
 
@@ -459,7 +513,8 @@ def _fetch_forecast(cat, ds, sv, qs) -> Optional[ChartData]:
 
 FETCHERS: dict[tuple[str, str], Callable] = {
     ("trade", "yale-tariff"):     _fetch_yale_tariff,
-    ("trade", "cofer"):           _fetch_cofer_country,
+    ("trade", "gold-reserves"):   _fetch_cofer_country,
+    ("trade", "cofer"):           _fetch_cofer_country,  # legacy slug alias
     ("trade", "cofer-nowcast"):   _fetch_cofer_nowcast,
     ("prices", "us-cpi"):         _fetch_us_cpi,
     ("prices", "uk-cpi"):         _fetch_uk_cpi,
@@ -587,8 +642,10 @@ def render_chart_card(data: ChartData) -> bytes:
     chart_h = 340
 
     if data.points and len(data.points) >= 2:
-        xs = [p[0] for p in data.points]
-        ys = [p[1] for p in data.points]
+        has2 = bool(data.points2 and len(data.points2) >= 2)
+        all_pts = list(data.points) + (list(data.points2) if has2 else [])
+        xs = [p[0] for p in all_pts]
+        ys = [p[1] for p in all_pts]
         x_min, x_max = min(xs), max(xs)
         y_min, y_max = min(ys), max(ys)
         if x_max == x_min:
@@ -631,19 +688,38 @@ def render_chart_card(data: ChartData) -> bytes:
                        chart_y - 22),
                       data.y_unit, font=unit_font, fill=TEXT_MUTED)
 
-        # Filled area
         line_pts = [to_px(p) for p in data.points]
-        poly = line_pts + [(chart_x + chart_w, chart_y + chart_h),
-                           (chart_x, chart_y + chart_h)]
-        draw.polygon(poly, fill=accent + (38,))
+        if not has2:
+            # Filled area (single-series only)
+            poly = line_pts + [(chart_x + chart_w, chart_y + chart_h),
+                               (chart_x, chart_y + chart_h)]
+            draw.polygon(poly, fill=accent + (38,))
 
-        # Line
+        # Primary line
         draw.line(line_pts, fill=accent, width=4, joint="curve")
-
-        # End-point dot
         ex, ey = line_pts[-1]
         draw.ellipse([(ex - 8, ey - 8), (ex + 8, ey + 8)], fill=accent)
         draw.ellipse([(ex - 4, ey - 4), (ex + 4, ey + 4)], fill=TEXT_PRIMARY)
+
+        if has2:
+            # Second line (e.g. the Treasury share in the crossover)
+            line_pts2 = [to_px(p) for p in data.points2]
+            draw.line(line_pts2, fill=data.accent2, width=4, joint="curve")
+            ex2, ey2 = line_pts2[-1]
+            draw.ellipse([(ex2 - 8, ey2 - 8), (ex2 + 8, ey2 + 8)], fill=data.accent2)
+            draw.ellipse([(ex2 - 4, ey2 - 4), (ex2 + 4, ey2 + 4)], fill=TEXT_PRIMARY)
+
+            # Compact legend (top-right inside the chart panel)
+            leg_font = _load_font(18, bold=True)
+            items = [(data.series_label or "Series 1", accent),
+                     (data.series2_label or "Series 2", data.accent2)]
+            lx = chart_x + chart_w
+            ly = chart_y + 4
+            for lbl, col in reversed(items):
+                tw = draw.textlength(lbl, font=leg_font)
+                draw.text((lx - tw, ly), lbl, font=leg_font, fill=col)
+                draw.line([(lx - tw - 28, ly + 11), (lx - tw - 8, ly + 11)], fill=col, width=4)
+                ly += 26
 
         # X axis labels
         ax_font = _load_font(18)
