@@ -463,7 +463,6 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
 
         total_values = []
         fx_values = []
-        gold_values = []
         gold_tonnes = []
         latest_real_idx = -1
 
@@ -490,13 +489,8 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
                             tonnes = round(ozf * oz_scale / TROY_OZ_PER_TONNE, 2)
                     except (ValueError, TypeError):
                         tonnes = None
-            # Market value in USD$B from final tonnage.
-            gold_b = None
-            if tonnes is not None and spot_gold_per_oz:
-                gold_b = round(tonnes * TROY_OZ_PER_TONNE * spot_gold_per_oz / 1e9, 2)
             total_values.append(total_b)
             fx_values.append(fx_b)
-            gold_values.append(gold_b)
             gold_tonnes.append(tonnes)
             if total_b is not None:
                 latest_real_idx = i
@@ -526,13 +520,25 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
                         arr[i] = last_val
         _capped_fill(total_values)
         _capped_fill(fx_values)
-        # Gold gets a SHORTER carry (3 months). A central bank that hasn't
-        # reported gold in a while (e.g. China lags IMF IFS by ~a year)
-        # should show its line *end* at the last real report, not be
-        # painted flat to today as if it were current data — that flat
-        # carry is exactly what reads as "stale, same all the way back".
-        _capped_fill(gold_values, max_gap=3)
+        # Gold tonnage (direct WGC/IMF series) gets a SHORTER carry (3 mo)
+        # so a laggy reporter's line ends rather than fakes current data.
         _capped_fill(gold_tonnes, max_gap=3)
+
+        # Gold MARKET VALUE (USD$B) and %-of-reserves are computed by
+        # subtraction: total reserves (incl. gold at market) minus FX
+        # reserves (excl. gold) = gold at market, at each period's own
+        # valuation. This is price-consistent across history (no single
+        # current spot applied to 2004 holdings, which had inflated the
+        # value series and saturated gold% near 100%). It's the bottom-up
+        # "gold % by subtracting" approach. Negative residuals (source
+        # methodology mismatch) are dropped rather than shown.
+        gold_values = []
+        for t, f in zip(total_values, fx_values):
+            if t is not None and f is not None:
+                g = round(t - f, 2)
+                gold_values.append(g if g > 0 else None)
+            else:
+                gold_values.append(None)
 
         latest_real_period = periods[latest_real_idx]
 
@@ -576,9 +582,8 @@ def _build_reserves_result(total_by_country, fx_by_country, source_label,
             'frequency': frequency,
             'country_count': len(countries),
             'period_range': f'{periods[0]} to {periods[-1]}',
-            'gold_source': 'IMF IFS gold volume (RAFAGOLDV_OZT); value = volume × spot',
+            'gold_source': 'Tonnes: WGC/IMF direct. Value & %: total − FX (market, per period)',
             'gold_attribution': 'World Gold Council · IMF',
-            'gold_spot_usd_per_oz': spot_gold_per_oz,
             'gold_tonnes_coverage': gold_tonnes_countries,
             'gold_usd_coverage': gold_usd_countries,
         }
@@ -1726,12 +1731,11 @@ def _fetch_reserves():
         source_parts.append('IRFCL')
     source_label = 'IMF ' + '+'.join(source_parts) + ' (merged)'
 
-    spot_gold = _get_spot_gold_usd_per_oz()
     wgc_overlay, wgc_attr = _load_wgc_overlay()
 
     result = _build_reserves_result(
         merged_total, merged_fx, source_label,
-        gold_oz_by_country=merged_goldv, spot_gold_per_oz=spot_gold,
+        gold_oz_by_country=merged_goldv,
         gold_tonnes_override=wgc_overlay,
     )
     if result and wgc_overlay and wgc_attr:

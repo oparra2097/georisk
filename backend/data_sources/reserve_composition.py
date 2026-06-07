@@ -46,6 +46,17 @@ FRED_GOLD_AM = 'GOLDAMGBD228NLBM'   # AM fix fallback
 FRED_FOREIGN_OFFICIAL_UST = 'BOGZ1FL263061130Q'  # foreign official, quarterly
 FRED_FOREIGN_UST = 'FDHBFIN'                      # total foreign (fallback)
 
+# World Gold Council net official-sector gold purchases by year (tonnes),
+# from Gold Demand Trends. This is the FLOW signal — actual buying,
+# independent of the gold-price revaluation that drives the share-of-
+# reserves levels. Recent years (the 1,000t+ regime) are high-confidence;
+# earlier years are WGC's published annual nets. Refresh annually.
+WGC_NET_PURCHASES = {
+    2010: 79, 2011: 481, 2012: 569, 2013: 625, 2014: 584, 2015: 580,
+    2016: 395, 2017: 379, 2018: 656, 2019: 605, 2020: 255, 2021: 463,
+    2022: 1082, 2023: 1037, 2024: 1045, 2025: 863,
+}
+
 
 class _CrossoverCache:
     def __init__(self):

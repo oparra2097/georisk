@@ -730,8 +730,13 @@
             }
             return c.total_reserves;
         }
-        function latestVal(c) {
-            const a = seriesFor(c) || [];
+        // Rank gold views by gold TONNAGE (size), so all of them — tonnes,
+        // $, and % — show the major holders (US, Germany, Italy, France,
+        // China, Russia…). Ranking the % view by its own value instead
+        // surfaces obscure gold-heavy minnows (Lebanon, Cyprus) and makes
+        // the chart an unreadable mess.
+        function goldTonnesLatest(c) {
+            const a = c.gold_tonnes || [];
             for (let i = a.length - 1; i >= 0; i--) if (a[i] != null) return a[i];
             return -Infinity;
         }
@@ -743,17 +748,14 @@
         }
 
         if (state.region === 'World') {
-            // For gold views, rank by gold (US/Germany/Italy/France lead),
-            // not by total reserves — otherwise big gold holders with
-            // modest total reserves (Italy, France) fall outside the top 20.
             if (isGold) {
-                countries = countries.slice().sort((a, b) => latestVal(b) - latestVal(a));
+                countries = countries.slice().sort((a, b) => goldTonnesLatest(b) - goldTonnesLatest(a));
             }
             countries = countries.slice(0, 20);
         } else {
             const members = regionMembers[state.region] || [];
             countries = countries.filter(c => members.includes(c.iso3));
-            if (isGold) countries.sort((a, b) => latestVal(b) - latestVal(a));
+            if (isGold) countries.sort((a, b) => goldTonnesLatest(b) - goldTonnesLatest(a));
         }
 
         // Chart
