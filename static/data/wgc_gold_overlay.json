@@ -1,14 +1,41 @@
 {
-  "_about": "Curated World Gold Council / PBoC overlay for central-bank gold holdings (metric tonnes). Used ONLY to extend the most-recent months where IMF IFS lags. IMF IFS is the backbone for all history; this file overlays fresher reported values on top. Limited extracts used under fair-industry-practice with citation; do not mirror the full WGC dataset here.",
+  "_about": "Curated World Gold Council top-30 central-bank gold holdings (metric tonnes). Bottom-up reference used to drive the gold views for the top holders: WGC supplies clean, current tonnage; IMF IFS supplies the deep history. The loader places each country's `latest_tonnes` at the `_anchor_periods` (gold is sticky, so flat across recent months is accurate for static holders) and overlays `monthly_overrides` for active buyers (China, Poland) where the trajectory matters. Institutions (IMF, ECB, BIS) are intentionally excluded — not central banks / no country code. Taiwan is omitted (not an IMF reporter; would need a fully synthetic series). Limited extracts used under fair-industry-practice with citation.",
   "_attribution": "World Gold Council · PBoC · IMF",
-  "_refresh": "Monthly, ~2nd week. China: take PBoC's monthly headline in million fine troy oz and divide by 32.1507 to get tonnes. Others: only add a country here if WGC is materially fresher than IMF IFS for it.",
+  "_vintage": "WGC / IMF IFS Dec-2025 edition; China to Apr-2026 (PBoC monthly)",
+  "_refresh": "Monthly (~2nd week). Update latest_tonnes from gold.org/goldhub Gold-Reserves-by-Country, and the China/Poland monthly_overrides from PBoC/NBP releases. Add an anchor period when the reserves data advances past the last one.",
   "_updated": "2026-06",
-  "tonnes": {
-    "CHN": {
-      "2025-09": 2303.0,
-      "2025-12": 2306.3,
-      "2026-03": 2313.5,
-      "2026-04": 2322.0
-    }
+  "_anchor_periods": ["2025-09", "2025-12", "2026-03", "2026-04"],
+  "latest_tonnes": {
+    "USA": 8133.5,
+    "DEU": 3350.3,
+    "ITA": 2451.8,
+    "FRA": 2437.0,
+    "RUS": 2329.6,
+    "CHE": 1040.0,
+    "IND": 880.3,
+    "JPN": 846.0,
+    "NLD": 612.5,
+    "TUR": 595.0,
+    "KAZ": 370.0,
+    "PRT": 382.6,
+    "SAU": 323.1,
+    "GBR": 310.3,
+    "LBN": 286.8,
+    "ESP": 281.6,
+    "AUT": 280.0,
+    "THA": 234.5,
+    "BEL": 227.4,
+    "SGP": 220.0,
+    "DZA": 173.6,
+    "PHL": 130.5
+  },
+  "monthly_overrides": {
+    "CHN": {"2025-09": 2303.0, "2025-12": 2306.3, "2026-03": 2313.5, "2026-04": 2322.0},
+    "POL": {"2025-09": 515.0, "2025-12": 550.2, "2026-03": 581.6, "2026-04": 581.6}
+  },
+  "_notes": {
+    "TUR": "WGC flags Turkey: commercial-bank gold deposited at the CBRT inflates the headline; volatile quarter to quarter.",
+    "BRA": "Omitted — WGC aggregator figure (~172t) conflicts with IMF (~130t); left to the IMF series to avoid a discontinuity.",
+    "TWN": "Omitted — Taiwan (~424t) is not an IMF reporter, so it has no IMF backbone to extend."
   }
 }

@@ -178,31 +178,52 @@ _wgc_overlay_cache = {'data': None, 'loaded': False}
 
 
 def _load_wgc_overlay():
-    """Load the curated WGC/PBoC gold-tonnage overlay.
+    """Load the curated WGC/PBoC top-30 gold-tonnage overlay.
 
     Returns ``(tonnes_by_iso3, attribution)`` where tonnes_by_iso3 is
-    ``{iso3: {period: tonnes}}``. Cached after first load; on any error
-    returns ``({}, None)`` so the pipeline simply falls back to IMF-only.
+    ``{iso3: {period: tonnes}}``. The file stores a compact form
+    (``latest_tonnes`` placed at every ``_anchor_periods`` entry, plus
+    per-country ``monthly_overrides`` for active buyers); we expand it
+    here. Cached after first load; on any error returns ``({}, None)`` so
+    the pipeline falls back to IMF-only.
     """
     if _wgc_overlay_cache['loaded']:
-        d = _wgc_overlay_cache['data'] or {}
-        return d.get('tonnes', {}), d.get('_attribution')
+        return _wgc_overlay_cache.get('expanded', {}), _wgc_overlay_cache.get('attr')
     try:
         with open(WGC_OVERLAY_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        _wgc_overlay_cache['data'] = data
-        _wgc_overlay_cache['loaded'] = True
-        n = sum(len(v) for v in (data.get('tonnes') or {}).values())
-        logger.info("WGC gold overlay loaded: %d countries, %d points",
-                    len(data.get('tonnes') or {}), n)
-        return data.get('tonnes', {}), data.get('_attribution')
     except FileNotFoundError:
-        _wgc_overlay_cache['loaded'] = True
+        _wgc_overlay_cache.update({'loaded': True, 'expanded': {}, 'attr': None})
         return {}, None
     except (OSError, ValueError, json.JSONDecodeError) as e:
         logger.warning("Failed to load WGC gold overlay: %s", e)
-        _wgc_overlay_cache['loaded'] = True
+        _wgc_overlay_cache.update({'loaded': True, 'expanded': {}, 'attr': None})
         return {}, None
+
+    expanded = {}
+    # Legacy form: a direct {iso3: {period: tonnes}} under "tonnes".
+    for iso3, pts in (data.get('tonnes') or {}).items():
+        expanded[iso3] = dict(pts)
+    # Compact form: latest_tonnes flat across anchor periods.
+    anchors = data.get('_anchor_periods') or []
+    for iso3, latest in (data.get('latest_tonnes') or {}).items():
+        if latest is None:
+            continue
+        expanded.setdefault(iso3, {})
+        for p in anchors:
+            expanded[iso3][p] = float(latest)
+    # Per-country monthly overrides win over the flat anchors.
+    for iso3, pts in (data.get('monthly_overrides') or {}).items():
+        expanded.setdefault(iso3, {})
+        for p, v in pts.items():
+            if v is not None:
+                expanded[iso3][p] = float(v)
+
+    attr = data.get('_attribution')
+    _wgc_overlay_cache.update({'loaded': True, 'expanded': expanded, 'attr': attr})
+    n = sum(len(v) for v in expanded.values())
+    logger.info("WGC gold overlay loaded: %d countries, %d points", len(expanded), n)
+    return expanded, attr
 
 
 class ReservesCache:
