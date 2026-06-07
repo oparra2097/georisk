@@ -241,6 +241,53 @@
   </details>
   {% endif %}
 
+  <details class="dc-card" id="overlay-block" style="margin-bottom:16px;border-color:#bfdbfe;background:#eff6ff;">
+    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:0.04em;">
+      Private overlay analysis · compare your portfolio against the public map
+    </summary>
+    <div style="margin-top:14px;font-size:12px;color:#374151;">
+      <div style="background:#dbeafe;color:#1e3a8a;border:1px solid #93c5fd;border-radius:5px;padding:8px 10px;margin-bottom:10px;font-size:11px;line-height:1.5;">
+        <strong>Privacy guarantee:</strong> this tool runs entirely in your browser.
+        Your file is parsed by JavaScript locally — nothing is uploaded to the server, written
+        to disk, or logged. Reload the page and your data is gone.
+        Source: <code>/static/js/private-overlay.js</code> (no fetch, no XHR, no postMessage).
+      </div>
+
+      <p style="margin:0 0 10px;color:#4b5563;">
+        Upload a CSV of data centers you track internally. The tool will (1) match each row
+        against the public risk map, (2) report which facilities we don't capture (your
+        coverage gap), and (3) overlay our stranded-risk &amp; securitization data onto
+        your matches.
+      </p>
+
+      <p style="margin:0 0 10px;font-size:11px;color:#6b7280;line-height:1.5;">
+        <strong>Recognized columns</strong> (case-insensitive, header row required):
+        <code>name</code> / <code>facility</code> / <code>building</code> ·
+        <code>city</code> · <code>state</code> ·
+        <code>mw</code> / <code>capacity_mw</code> / <code>critical_load</code> ·
+        <code>operator</code> / <code>sponsor</code> / <code>owner</code> ·
+        <code>tenant</code> · <code>status</code>.
+        Any other columns are ignored.
+      </p>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <input type="file" id="overlay-file" accept=".csv,text/csv"
+               style="font-size:11px;padding:4px;border:1px solid #d1d5db;border-radius:4px;">
+        <button type="button" id="overlay-run"
+                style="padding:6px 12px;border:1px solid #1e40af;background:#dbeafe;color:#1e3a8a;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;" disabled>
+          Run analysis (local)
+        </button>
+        <button type="button" id="overlay-clear"
+                style="padding:6px 12px;border:1px solid #d1d5db;background:#fff;color:#6b7280;border-radius:4px;cursor:pointer;font-size:11px;">
+          Clear from memory
+        </button>
+        <span id="overlay-status" style="font-size:11px;color:#6b7280;"></span>
+      </div>
+
+      <div id="overlay-results" style="display:none;margin-top:14px;"></div>
+    </div>
+  </details>
+
   <div class="dc-toolbar">
     <button class="dc-tab active" data-mode="markets">Markets</button>
     <button class="dc-tab" data-mode="facilities">Facilities</button>
@@ -504,6 +551,7 @@
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
 <script src="/static/js/data-centers-map.js"></script>
+<script src="/static/js/private-overlay.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => DataCenterMap.init());
 </script>
