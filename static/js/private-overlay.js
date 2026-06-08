@@ -646,6 +646,18 @@
     }
     layer.style('pointer-events', 'all');
 
+    // Solo mode: hide the map's own markets/facilities so only the AIG
+    // exposure markers are visible.  We remember the previous display
+    // state so "Clear map overlay" can restore it.
+    const dcm = window.DataCenterMap;
+    if (!dcm._aigSoloActive) {
+      dcm._priorBubbleDisplay   = dcm.bubbleLayer.style('display');
+      dcm._priorFacilityDisplay = dcm.facilityLayer.style('display');
+      dcm._aigSoloActive = true;
+    }
+    dcm.bubbleLayer.style('display', 'none');
+    dcm.facilityLayer.style('display', 'none');
+
     const join = layer.selectAll('circle.aig-marker').data(data, d => `${d.lat},${d.lon}`);
     join.exit().remove();
     const enter = join.enter().append('circle').attr('class', 'aig-marker');
@@ -664,18 +676,23 @@
       (d.items.length > 8 ? `\n…and ${d.items.length - 8} more` : '')
     );
 
-    // Encourage user to switch to Facilities mode if they're not there.
-    if (window.DataCenterMap.mode && window.DataCenterMap.mode !== 'facilities') {
-      const facTab = document.querySelector('.dc-tab[data-mode="facilities"]');
-      if (facTab) facTab.click();
-    }
-
-    setStatus(`plotted ${data.length} unique locations · max single exposure ≈ ${fmtUsd(maxExp)}`);
+    setStatus(`solo-plotted ${data.length} locations · max single exposure ≈ ${fmtUsd(maxExp)} · click "Clear map overlay" to restore the facility map`);
   }
 
   function clearExposureMap() {
-    const svg = window.DataCenterMap?.svg;
-    if (svg) svg.select('g.aig-exposure-layer').remove();
+    const dcm = window.DataCenterMap;
+    if (!dcm?.svg) return;
+    dcm.svg.select('g.aig-exposure-layer').remove();
+    // Restore the map's own marker visibility.
+    if (dcm._aigSoloActive) {
+      if (dcm._priorBubbleDisplay !== undefined)
+        dcm.bubbleLayer.style('display', dcm._priorBubbleDisplay);
+      if (dcm._priorFacilityDisplay !== undefined)
+        dcm.facilityLayer.style('display', dcm._priorFacilityDisplay);
+      dcm._aigSoloActive = false;
+      dcm._priorBubbleDisplay   = undefined;
+      dcm._priorFacilityDisplay = undefined;
+    }
   }
 
   // ── Renderer ─────────────────────────────────────────────────────
