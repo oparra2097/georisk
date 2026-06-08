@@ -17,7 +17,11 @@
   'use strict';
 
   // ── Tiny RFC-4180-ish CSV parser ─────────────────────────────────
+  // Auto-detects delimiter (comma / semicolon / tab) and strips
+  // UTF-8 BOM. Returns ALL rows; header-row detection happens later.
   function parseCSV(text) {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);  // strip BOM
+    const delim = pickDelimiter(text);
     const rows = [];
     let row = [], field = '', inQuotes = false;
     for (let i = 0; i < text.length; i++) {
@@ -28,23 +32,59 @@
         else field += c;
       } else {
         if (c === '"') inQuotes = true;
-        else if (c === ',') { row.push(field); field = ''; }
+        else if (c === delim) { row.push(field); field = ''; }
         else if (c === '\r') { /* ignore */ }
         else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
         else field += c;
       }
     }
     if (field.length || row.length) { row.push(field); rows.push(row); }
-    if (!rows.length) return { headers: [], rows: [] };
-    const headers = rows.shift().map(h => h.trim());
-    const out = rows
-      .filter(r => r.some(cell => cell && cell.trim()))
+    return { rows, delim };
+  }
+  function pickDelimiter(text) {
+    // Sample the first ~2 KB and count delimiter occurrences.
+    const sample = text.slice(0, 2048);
+    const counts = { ',': 0, ';': 0, '\t': 0 };
+    let inQuotes = false;
+    for (const c of sample) {
+      if (c === '"') inQuotes = !inQuotes;
+      else if (!inQuotes && counts[c] != null) counts[c]++;
+    }
+    let best = ',', bestN = counts[',']; // default to comma
+    for (const [d, n] of Object.entries(counts)) if (n > bestN) { best = d; bestN = n; }
+    return best;
+  }
+
+  // Pick the header row by scoring each candidate against the alias dictionary.
+  // Real headers usually match at least 2-3 known column types; title rows
+  // and blank rows score 0.
+  function findHeaderRow(rows) {
+    let bestIdx = 0, bestScore = 0;
+    const maxLook = Math.min(rows.length, 20);
+    for (let i = 0; i < maxLook; i++) {
+      const r = rows[i];
+      if (!r || r.length < 2) continue;
+      const detected = autoDetectColumns(r.map(c => (c || '').toString()));
+      const score = Object.keys(detected).length;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
+      // 4+ matches is "definitely the header row"; stop looking.
+      if (score >= 4) break;
+    }
+    return { headerIdx: bestIdx, headerScore: bestScore };
+  }
+
+  function tabulate(parsed) {
+    if (!parsed.rows.length) return { headers: [], rows: [], delim: parsed.delim, headerScore: 0 };
+    const { headerIdx, headerScore } = findHeaderRow(parsed.rows);
+    const headers = (parsed.rows[headerIdx] || []).map(h => (h || '').toString().trim());
+    const out = parsed.rows.slice(headerIdx + 1)
+      .filter(r => r.some(cell => cell && cell.toString().trim()))
       .map(r => {
         const o = {};
-        headers.forEach((h, i) => { o[h] = (r[i] || '').trim(); });
+        headers.forEach((h, i) => { o[h] = (r[i] || '').toString().trim(); });
         return o;
       });
-    return { headers, rows: out };
+    return { headers, rows: out, delim: parsed.delim, headerIdx, headerScore };
   }
 
   // ── Column auto-detect ───────────────────────────────────────────
@@ -53,7 +93,10 @@
   // normalized headers.  Order doesn't matter — first hit wins.
   const COLUMN_ALIASES = {
     name:        ['name', 'facility', 'facility_name', 'building', 'dc_name', 'asset',
-                  'asset_name', 'site', 'property', 'issuer_name', 'issuer'],
+                  'asset_name', 'site', 'site_name', 'property', 'property_name',
+                  'issuer_name', 'issuer', 'holding', 'holding_name',
+                  'security_name', 'description', 'instrument', 'investment',
+                  'investment_name', 'position_name', 'company', 'company_name'],
     city:        ['city', 'town', 'municipality'],
     state:       ['state', 'region', 'province', 'state_abbr'],
     // Combined "City, ST" or "City, State" or "City, State, Country" fields
@@ -97,6 +140,29 @@
         if (idx >= 0) { map[key] = headers[idx]; break; }
       }
     });
+    // Fallbacks for the critical name field — catch unrecognized aliases
+    // by suffix / contained-keyword match.  Order matters; more specific
+    // suffixes preferred.
+    if (!map.name) {
+      const prefer = ['_name', 'name'];
+      for (const suffix of prefer) {
+        for (let i = 0; i < normalized.length; i++) {
+          if (normalized[i].endsWith(suffix) && !Object.values(map).includes(headers[i])) {
+            map.name = headers[i]; break;
+          }
+        }
+        if (map.name) break;
+      }
+    }
+    // Same fallback for state — any column ending in "_state" if Texas etc.
+    if (!map.state) {
+      for (let i = 0; i < normalized.length; i++) {
+        if ((normalized[i].endsWith('_state') || normalized[i] === 'st') &&
+            !Object.values(map).includes(headers[i])) {
+          map.state = headers[i]; break;
+        }
+      }
+    }
     return map;
   }
 
@@ -541,21 +607,68 @@
       setStatus(`parsing ${f.name} (${(f.size / 1024).toFixed(1)} KB) locally…`);
       try {
         const text = await readUploadedFile(f);
-        const parsed = parseCSV(text);
-        if (!parsed.rows.length) { setStatus('no data rows found'); return; }
+        const raw = parseCSV(text);
+        if (!raw.rows.length) {
+          setStatus('no rows found in file — is it actually a CSV?');
+          return;
+        }
+        const parsed = tabulate(raw);
+        const delimName = { ',': 'comma', ';': 'semicolon', '\t': 'tab' }[raw.delim] || raw.delim;
+        if (!parsed.headers.length || !parsed.rows.length) {
+          setStatus(`detected ${delimName}-delimited but couldn't extract headers + rows`);
+          showDiagnostics(parsed, raw);
+          return;
+        }
         const col = autoDetectColumns(parsed.headers);
         if (!col.name) {
-          setStatus(`could not find a name column. headers: ${parsed.headers.slice(0, 6).join(', ')}…`);
+          setStatus(`could not auto-detect a name column — see headers below`);
+          showDiagnostics(parsed, raw, col);
           return;
         }
         UPLOADED = { ...parsed, columnMap: col };
         const recognized = Object.entries(col).map(([k, v]) => `${k}→${v}`).join(', ');
-        setStatus(`loaded ${parsed.rows.length} rows locally. columns: ${recognized}`);
+        const headerNote = parsed.headerIdx > 0
+          ? ` (header row #${parsed.headerIdx + 1}, ${delimName}-delimited)`
+          : ` (${delimName}-delimited)`;
+        setStatus(`loaded ${parsed.rows.length} rows locally${headerNote}. columns: ${recognized}`);
         runBtn.disabled = false;
       } catch (e) {
         setStatus(`parse error: ${e.message}`);
       }
     });
+
+    function showDiagnostics(parsed, raw, col) {
+      const box = $('overlay-results');
+      const looked = (raw.rows || []).slice(0, 6).map((r, i) =>
+        `<tr><td style="padding:4px;color:#9ca3af;">#${i + 1}</td>
+          ${r.slice(0, 8).map(c => `<td style="padding:4px;border:1px solid #fde68a;">${(c || '').slice(0, 30)}</td>`).join('')}
+        </tr>`).join('');
+      const detectedList = col ? Object.entries(col).map(([k, v]) =>
+        `<li><code>${k}</code> ← <code>${v}</code></li>`).join('') : '';
+      box.style.display = '';
+      box.innerHTML = `
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:12px;font-size:12px;color:#374151;">
+          <div style="font-weight:600;color:#92400e;margin-bottom:6px;">Parser diagnostics</div>
+          <div style="margin-bottom:8px;">First ${Math.min(6, raw.rows?.length || 0)} rows of your file (first 8 columns shown):</div>
+          <div style="overflow-x:auto;margin-bottom:10px;">
+            <table style="font-size:11px;border-collapse:collapse;">${looked}</table>
+          </div>
+          ${parsed.headers?.length ? `
+            <div style="margin-bottom:8px;"><strong>Detected header row:</strong>
+              <code>${parsed.headers.join(' | ')}</code></div>` : ''}
+          ${detectedList ? `<div style="margin-bottom:8px;">
+            <strong>Columns I recognized:</strong>
+            <ul style="margin:4px 0 0 18px;">${detectedList}</ul>
+          </div>` : ''}
+          <div style="margin-top:8px;color:#6b7280;font-size:11px;line-height:1.5;">
+            <strong>To fix:</strong> rename one of your columns to <code>name</code>,
+            <code>asset_name</code>, <code>holding_name</code>, <code>security_name</code>,
+            <code>issuer_name</code>, <code>facility</code>, or anything ending in
+            <code>_name</code>. Or save the sheet with the header row at the top
+            (no title/blank rows above it).
+          </div>
+        </div>`;
+    }
 
     runBtn.addEventListener('click', async () => {
       runBtn.disabled = true;
