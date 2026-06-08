@@ -565,6 +565,119 @@
     setStatus(`done: ${matched.length}/${UPLOADED.rows.length} matched (${((matched.length / UPLOADED.rows.length) * 100).toFixed(0)}%)`);
   }
 
+  // ── Map exposure overlay ─────────────────────────────────────────
+  // Plots matched-row exposure as purple circles on the existing
+  // data-centers map.  100% client-side: pulls coordinates from
+  // FACILITIES (already fetched) and never touches the user's file
+  // again.  The map layer is cleared on "Clear from memory".
+  function plotExposureOnMap(matched) {
+    if (!window.DataCenterMap?.svg || !window.DataCenterMap?.projection) {
+      setStatus('map not ready — switch the toolbar to Facilities mode first, then click Plot again');
+      return;
+    }
+    if (!FACILITIES) {
+      setStatus('reference data not loaded');
+      return;
+    }
+    const { svg, projection } = window.DataCenterMap;
+    const col = UPLOADED.columnMap;
+
+    // Build per-facility marker rows.
+    const markers = [];
+    for (const m of matched) {
+      const usd = rowExposureUsd(m.row, col) || 0;
+      let facs = [];
+      let sourceLabel = m.row[col.name] || '';
+      if (m.operatorHit) {
+        facs = m.operatorHit.facilities || [];
+        sourceLabel = `${m.row[col.name]} → ${m.operatorHit.operator.canonical} (operator)`;
+      } else if (m.dealMatch) {
+        // The deal's facility_matches are names; look them up in FACILITIES
+        // for the coordinates.  Loose match because deal collateral_facilities
+        // sometimes use abbreviated names.
+        const fmNames = (m.dealMatch.facility_matches || []).map(fm => (fm.name || '').toLowerCase());
+        if (fmNames.length) {
+          facs = FACILITIES.filter(f => fmNames.includes((f.name || '').toLowerCase()));
+        }
+        if (!facs.length) {
+          // Fall back: token-match by sponsor.
+          const sponsorLow = (m.dealMatch.sponsor || '').toLowerCase();
+          if (sponsorLow) {
+            facs = FACILITIES.filter(f =>
+              ((f.operator || f.developer || f.tenant_norm || '') + ' ' + (f.name || ''))
+                .toLowerCase().includes(sponsorLow)
+            );
+          }
+        }
+        sourceLabel = `${m.row[col.name]} → ${m.dealMatch.deal_name}`;
+      } else if (m.top?.facility) {
+        facs = [m.top.facility];
+      }
+
+      facs = facs.filter(f => f.lat != null && f.lon != null);
+      if (!facs.length) continue;
+      const perFac = usd / facs.length;
+      for (const f of facs) {
+        markers.push({ lat: f.lat, lon: f.lon, exposure: perFac, label: sourceLabel, facility: f.name });
+      }
+    }
+    if (!markers.length) {
+      setStatus('no plottable matches — none had facility coordinates');
+      return;
+    }
+
+    // Aggregate by coordinate (rounded to ~1 km).
+    const agg = new Map();
+    for (const mk of markers) {
+      const key = `${mk.lat.toFixed(2)},${mk.lon.toFixed(2)}`;
+      const e = agg.get(key) || { lat: mk.lat, lon: mk.lon, exposure: 0, items: [] };
+      e.exposure += mk.exposure;
+      e.items.push(`${mk.label} (${mk.facility})`);
+      agg.set(key, e);
+    }
+    const data = [...agg.values()];
+    const maxExp = Math.max(...data.map(d => d.exposure));
+    const radiusScale = d => Math.max(4, Math.sqrt(d / maxExp) * 28);
+
+    // Find or create our exposure layer (above all existing map layers).
+    let layer = svg.select('g.aig-exposure-layer');
+    if (layer.empty()) {
+      layer = svg.append('g').attr('class', 'aig-exposure-layer');
+    }
+    layer.style('pointer-events', 'all');
+
+    const join = layer.selectAll('circle.aig-marker').data(data, d => `${d.lat},${d.lon}`);
+    join.exit().remove();
+    const enter = join.enter().append('circle').attr('class', 'aig-marker');
+    enter.append('title');
+    const merged = enter.merge(join);
+    merged
+      .attr('cx', d => { const p = projection([d.lon, d.lat]); return p ? p[0] : null; })
+      .attr('cy', d => { const p = projection([d.lon, d.lat]); return p ? p[1] : null; })
+      .attr('r',  d => radiusScale(d.exposure))
+      .style('fill', '#7c3aed').style('fill-opacity', 0.45)
+      .style('stroke', '#5b21b6').style('stroke-width', 1.5)
+      .style('cursor', 'pointer');
+    merged.select('title').text(d =>
+      `$${fmtUsd(d.exposure)} portfolio exposure mapped here\n\n` +
+      d.items.slice(0, 8).join('\n') +
+      (d.items.length > 8 ? `\n…and ${d.items.length - 8} more` : '')
+    );
+
+    // Encourage user to switch to Facilities mode if they're not there.
+    if (window.DataCenterMap.mode && window.DataCenterMap.mode !== 'facilities') {
+      const facTab = document.querySelector('.dc-tab[data-mode="facilities"]');
+      if (facTab) facTab.click();
+    }
+
+    setStatus(`plotted ${data.length} unique locations · max single exposure ≈ ${fmtUsd(maxExp)}`);
+  }
+
+  function clearExposureMap() {
+    const svg = window.DataCenterMap?.svg;
+    if (svg) svg.select('g.aig-exposure-layer').remove();
+  }
+
   // ── Renderer ─────────────────────────────────────────────────────
   function fmt(n) { return n == null ? '—' : Math.round(n).toLocaleString(); }
   function fmtUsd(n) {
@@ -627,6 +740,19 @@
     const kpiRow = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px;">
         ${tiles.join('')}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button type="button" id="overlay-plot-map"
+                style="padding:6px 12px;border:1px solid #7c3aed;background:#faf5ff;color:#6d28d9;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;">
+          📍 Plot exposure on map
+        </button>
+        <button type="button" id="overlay-clear-map"
+                style="padding:6px 12px;border:1px solid #d1d5db;background:#fff;color:#6b7280;border-radius:4px;cursor:pointer;font-size:11px;">
+          Clear map overlay
+        </button>
+        <span style="align-self:center;font-size:10px;color:#9ca3af;">
+          markers scaled by exposure $; tooltip shows portfolio holdings at each location
+        </span>
       </div>`;
 
     const gapTable = r.gapByState.length ? `
@@ -791,6 +917,13 @@
 
     box.innerHTML = kpiRow + gapTable + managerTable + matchedRows + unmatchedRows;
     box.style.display = '';
+
+    // Stash matched results for the map plot button.
+    window.__overlayMatched = r.matchedRows;
+    document.getElementById('overlay-plot-map')?.addEventListener('click',
+      () => plotExposureOnMap(window.__overlayMatched || []));
+    document.getElementById('overlay-clear-map')?.addEventListener('click',
+      () => { clearExposureMap(); setStatus('map overlay cleared'); });
   }
 
   // ── Wire UI ──────────────────────────────────────────────────────
@@ -878,11 +1011,13 @@
 
     clearBtn.addEventListener('click', () => {
       UPLOADED = null;
+      window.__overlayMatched = null;
       fileInput.value = '';
       runBtn.disabled = true;
       const box = $('overlay-results');
       if (box) { box.innerHTML = ''; box.style.display = 'none'; }
-      setStatus('cleared from memory');
+      clearExposureMap();
+      setStatus('cleared from memory (including map overlay)');
     });
   });
 })();
