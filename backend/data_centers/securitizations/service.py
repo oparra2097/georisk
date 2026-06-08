@@ -132,6 +132,18 @@ def _load_csv() -> list[dict[str, Any]]:
                 'wal_years':            _to_float(r.get('wal_years')),
                 'final_maturity':       r.get('final_maturity', '').strip(),
                 'current_balance_usd_m': _to_float(r.get('current_balance_usd_m')),
+                # ── Credit-analyst structural fields ─────────────────
+                'ard':                      r.get('ard', '').strip(),
+                'senior_advance_rate_pct':  _to_float(r.get('senior_advance_rate_pct')),
+                'dscr_at_close':            _to_float(r.get('dscr_at_close')),
+                'dscr_trigger':             _to_float(r.get('dscr_trigger')),
+                'subordination_pct':        _to_float(r.get('subordination_pct')),
+                'senior_coupon':            r.get('senior_coupon', '').strip(),
+                'substitution_allowed':     (r.get('substitution_allowed') or '').strip(),
+                'lease_type':               r.get('lease_type', '').strip(),
+                'ppa_tenor_years':          _to_float(r.get('ppa_tenor_years')),
+                'structuring_source':       (r.get('structuring_source') or '').strip(),
+                # ─────────────────────────────────────────────────────
                 'status':               (r.get('status') or 'active').strip().lower(),
                 'source_url':           r.get('source_url', '').strip(),
                 'confidence':           (r.get('confidence') or 'medium').strip().lower(),
