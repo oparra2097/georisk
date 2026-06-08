@@ -1299,3 +1299,7 @@ const DataCenterMap = {
     this.tooltipEl.classList.remove('show');
   },
 };
+
+// Expose the map module so private-overlay.js can plot AIG portfolio
+// markers onto the existing facilities layer.
+if (typeof window !== 'undefined') window.DataCenterMap = DataCenterMap;
