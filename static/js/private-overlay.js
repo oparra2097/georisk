@@ -294,6 +294,81 @@
     return null;
   }
 
+  // ── Operator / REIT corporate-bond matcher ──────────────────────
+  // AIG-style portfolios often hold corporate bonds of DC operators
+  // (Digital Realty Trust, Equinix, Iron Mountain).  These aren't ABS
+  // — they're general unsecured REIT debt backed by the issuer's
+  // whole portfolio.  When the row name matches one of these, we
+  // route through the operator's facility footprint instead of a
+  // single deal.
+  const OPERATORS = [
+    // Public DC REITs (corporate bond issuers in AIG portfolios)
+    { canonical: 'Digital Realty Trust', type: 'reit_public',
+      patterns: ['digital realty'], facility_match: 'digital realty' },
+    { canonical: 'Equinix Inc',          type: 'reit_public',
+      patterns: ['equinix'],            facility_match: 'equinix' },
+    { canonical: 'Iron Mountain Inc',    type: 'reit_public',
+      patterns: ['iron mountain'],      facility_match: 'iron mountain' },
+    // Private operators — usually surface via ABS issuer, but if AIG
+    // holds their parent-level paper, catch it here.
+    { canonical: 'QTS Realty Trust',     type: 'private_operator',
+      patterns: ['qts realty', 'qts data centers', 'qts inc'],
+      facility_match: 'qts' },
+    { canonical: 'CoreSite Realty',      type: 'reit_private',
+      patterns: ['coresite'],           facility_match: 'coresite' },
+    { canonical: 'CyrusOne',             type: 'private_operator',
+      patterns: ['cyrusone'],           facility_match: 'cyrusone' },
+    { canonical: 'EdgeConneX',           type: 'private_operator',
+      patterns: ['edgeconnex', 'edgecore'], facility_match: 'edge' },
+    { canonical: 'T5 Data Centers',      type: 'private_operator',
+      patterns: ['t5 data centers', 't5 facilities'],
+      facility_match: 't5' },
+    { canonical: 'Sabey Data Centers',   type: 'private_operator',
+      patterns: ['sabey data centers', 'sabey corp'],
+      facility_match: 'sabey' },
+    { canonical: 'Stream Data Centers',  type: 'private_operator',
+      patterns: ['stream data centers', 'stream dc'],
+      facility_match: 'stream' },
+  ];
+
+  function matchOperator(row, col) {
+    if (!FACILITIES) return null;
+    const blob = (((row[col.name] || '') + ' ' + (row[col.tenant] || '') + ' ' +
+                    (row[col.operator] || '')).toLowerCase());
+    for (const op of OPERATORS) {
+      for (const p of op.patterns) {
+        if (blob.includes(p)) {
+          // Find our facilities operated by this operator (by operator
+          // field or by name substring on the facility name).
+          const fmKey = op.facility_match;
+          const facs = FACILITIES.filter(f => {
+            const opField = ((f.operator || f.developer || f.tenant_norm || '')).toLowerCase();
+            const nameField = (f.name || '').toLowerCase();
+            return opField.includes(fmKey) || nameField.includes(fmKey);
+          });
+          // Aggregate the operator's MW + risk across our map.
+          const totalMw = facs.reduce((s, f) => s + (f.mw || 0), 0);
+          const totalAtRisk = facs.reduce((s, f) => s + (f.at_risk_mw || 0), 0);
+          const scored = facs.filter(f => f.stranded_risk != null && (f.mw || 0) > 0);
+          const num = scored.reduce((s, f) => s + (f.stranded_risk || 0) * (f.mw || 0), 0);
+          const den = scored.reduce((s, f) => s + (f.mw || 0), 0);
+          const weightedRisk = den > 0 ? num / den : null;
+          return {
+            operator:        op,
+            facilities:      facs,
+            facility_count:  facs.length,
+            total_mw:        totalMw,
+            at_risk_mw:      totalAtRisk,
+            stranded_risk:   weightedRisk,
+            matchKind:       'operator',
+            score:           0.85,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
   // Try to match against a securitization DEAL.  AIG-style portfolios
   // hold bonds, not buildings — the Name field describes a security
   // ("VANTAGE DC ISSUER 2021-1A AA RT"), so token-set similarity vs
@@ -405,20 +480,26 @@
       if (usd != null) totalUpUsd += usd;
 
       let dealHit = matchDeal(row, col);
+      let opHit = !dealHit ? matchOperator(row, col) : null;
       let facRanked = [];
-      let entry = null;
 
       if (dealHit) {
-        entry = {
+        matched.push({
           row,
           matchKind: dealHit.matchKind,
           dealMatch: dealHit.deal,
           dealScore: dealHit.score,
-          top: null,
-          rest: [],
-          sec: [dealHit.deal],
-        };
-        matched.push(entry);
+          sec:       [dealHit.deal],
+        });
+        if (mw  != null) matchedMw  += mw;
+        if (usd != null) matchedUsd += usd;
+      } else if (opHit) {
+        matched.push({
+          row,
+          matchKind:    'operator',
+          operatorHit:  opHit,
+          sec:          [],
+        });
         if (mw  != null) matchedMw  += mw;
         if (usd != null) matchedUsd += usd;
       } else {
@@ -428,8 +509,8 @@
           matched.push({
             row,
             matchKind: 'facility',
-            top: facRanked[0],
-            rest: facRanked.slice(1),
+            top:       facRanked[0],
+            rest:      facRanked.slice(1),
             sec,
           });
           if (mw  != null) matchedMw  += mw;
@@ -621,8 +702,6 @@
               const usd = rowExposureUsd(m.row, col);
               let matchedTo, market, dealMw, sr, atRisk, scoreLabel, kindLabel;
               if (m.dealMatch) {
-                // Matched against a securitization deal — surface deal name,
-                // collateral facility count + MW, deal-level risk rollup.
                 const d = m.dealMatch;
                 matchedTo  = d.deal_name;
                 market     = `${(d.collateral_facilities || []).length} collateral DCs`;
@@ -633,6 +712,17 @@
                 kindLabel  = m.matchKind === 'cusip'
                   ? '<span style="background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">CUSIP</span>'
                   : '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">DEAL</span>';
+              } else if (m.operatorHit) {
+                // Corporate-bond match — points to an operator/REIT,
+                // whose risk is their whole portfolio.
+                const o = m.operatorHit;
+                matchedTo  = `${o.operator.canonical} <span style="color:#9ca3af;font-size:9px;">(${o.operator.type})</span>`;
+                market     = `${o.facility_count} US DCs operated`;
+                dealMw     = o.total_mw;
+                sr         = o.stranded_risk;
+                atRisk     = o.at_risk_mw;
+                scoreLabel = 'OP';
+                kindLabel  = '<span style="background:#ede9fe;color:#6d28d9;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">OP</span>';
               } else {
                 const f = m.top.facility;
                 matchedTo  = f.name;
