@@ -695,6 +695,139 @@
     }
   }
 
+  // ── Stage + structuring helpers ──────────────────────────────────
+  // Returns construction-stage MW breakdown ({built_mw, uc_mw,
+  // planned_mw, label}) for any match type — pulls from the deal's
+  // issuer-disclosed splits where populated, otherwise aggregates
+  // from facility_matches[] / operator footprint / single facility.
+  function stageBreakdown(m) {
+    let built = 0, uc = 0, planned = 0;
+    if (m.dealMatch) {
+      built = m.dealMatch.collateral_mw_built || 0;
+      uc    = m.dealMatch.collateral_mw_uc    || 0;
+      if (!built && !uc && Array.isArray(m.dealMatch.facility_matches)) {
+        for (const f of m.dealMatch.facility_matches) {
+          if (f.status === 'built')                  built   += f.mw || 0;
+          else if (f.status === 'under_construction') uc     += f.mw || 0;
+          else if (f.status === 'planned')           planned += f.mw || 0;
+        }
+      }
+    } else if (m.operatorHit) {
+      for (const f of m.operatorHit.facilities || []) {
+        if (f.status === 'built')                  built   += f.mw || 0;
+        else if (f.status === 'under_construction') uc     += f.mw || 0;
+        else if (f.status === 'planned')           planned += f.mw || 0;
+      }
+    } else if (m.top?.facility) {
+      const f = m.top.facility;
+      if (f.status === 'built')                  built   = f.mw || 0;
+      else if (f.status === 'under_construction') uc     = f.mw || 0;
+      else if (f.status === 'planned')           planned = f.mw || 0;
+    }
+    const total = built + uc + planned;
+    let label;
+    if (!total)                                   label = '<span style="color:#9ca3af;">not disclosed</span>';
+    else if (built && !uc && !planned)            label = `<span style="color:#10b981;font-weight:600;">100% built</span>`;
+    else if (!built && uc && !planned)            label = `<span style="color:#f59e0b;font-weight:600;">100% UC</span>`;
+    else if (!built && !uc && planned)            label = `<span style="color:#6366f1;font-weight:600;">100% plan</span>`;
+    else {
+      const pct = v => Math.round(100 * v / total);
+      const parts = [];
+      if (built)   parts.push(`<span style="color:#10b981;">${pct(built)}%B</span>`);
+      if (uc)      parts.push(`<span style="color:#f59e0b;">${pct(uc)}%U</span>`);
+      if (planned) parts.push(`<span style="color:#6366f1;">${pct(planned)}%P</span>`);
+      label = parts.join(' · ');
+    }
+    return { built_mw: built, uc_mw: uc, planned_mw: planned, total, label };
+  }
+
+  // Pulls deal_type / tenant_type / dc_type / final maturity year.
+  function classification(m) {
+    if (m.dealMatch) {
+      const d = m.dealMatch;
+      return {
+        deal_type:       d.deal_type_label || d.deal_type || '',
+        deal_type_key:   d.deal_type || '',
+        tenant_type:     d.tenant_type_label || '',
+        tenant_type_key: d.tenant_type || '',
+        dc_type:         d.datacenter_type_label || '',
+        dc_type_key:     d.datacenter_type || '',
+        maturity:        (d.final_maturity || '').slice(0, 4),
+      };
+    }
+    if (m.operatorHit) {
+      const t = m.operatorHit.operator.type;
+      return {
+        deal_type:       t === 'reit_public' ? 'REIT corporate bond' : 'Operator-level',
+        deal_type_key:   'unsecured',
+        tenant_type:     '', tenant_type_key: '',
+        dc_type:         '', dc_type_key: '',
+        maturity:        '',
+      };
+    }
+    return { deal_type: '', deal_type_key: '', tenant_type: '', tenant_type_key: '',
+              dc_type: '', dc_type_key: '', maturity: '' };
+  }
+
+  // Returns HTML for the full bond-structuring panel shown when a
+  // matched row is expanded.
+  function structuringDetails(m) {
+    if (m.dealMatch) {
+      const d = m.dealMatch;
+      const cusip   = d.cusip_senior ? `<code>${d.cusip_senior}</code>` : '<span style="color:#9ca3af;">pending</span>';
+      const rating  = d.rating_senior ? `${d.rating_senior} (${d.rater || '?'})` : '—';
+      const wal     = d.wal_years ? `${d.wal_years.toFixed(1)} yrs` : '—';
+      const tcShare = d.top_tenant_share_pct ? ` (top tenant ${d.top_tenant_share_pct}%)` : '';
+      const topT    = (d.top_tenants || []).join(', ') || '—';
+      const src     = d.source_url
+        ? `<a href="${d.source_url}" target="_blank" style="color:#1d4ed8;">primary source ↗</a>`
+        : '—';
+      const notes   = d.notes
+        ? `<div style="margin-top:6px;color:#6b7280;font-size:10px;line-height:1.5;">${d.notes}</div>` : '';
+      return `
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:11px;">
+          <div style="color:#9ca3af;">Sponsor</div>          <div>${d.sponsor || '—'}</div>
+          <div style="color:#9ca3af;">Deal type</div>        <div>${d.deal_type_label}</div>
+          <div style="color:#9ca3af;">Issued → Maturity</div><div>${d.issue_date || '—'} → ${d.final_maturity || '—'}</div>
+          <div style="color:#9ca3af;">Senior rating</div>    <div>${rating}</div>
+          <div style="color:#9ca3af;">Senior CUSIP</div>     <div>${cusip}</div>
+          <div style="color:#9ca3af;">WAL</div>              <div>${wal}</div>
+          <div style="color:#9ca3af;">Tenant type</div>      <div>${d.tenant_type_label || '—'}</div>
+          <div style="color:#9ca3af;">Facility type</div>    <div>${d.datacenter_type_label || '—'}</div>
+          <div style="color:#9ca3af;">Top tenants</div>      <div>${topT}${tcShare}</div>
+          <div style="color:#9ca3af;">Collateral DCs</div>   <div>${(d.collateral_facilities || []).join('; ') || '—'}</div>
+          <div style="color:#9ca3af;">Source</div>           <div>${src}</div>
+        </div>${notes}`;
+    }
+    if (m.operatorHit) {
+      const o = m.operatorHit;
+      const facList = (o.facilities || []).slice(0, 10).map(f =>
+        `<li>${f.name} <span style="color:#9ca3af;">— ${f.market || ''} · ${(f.status || '?').replace('_',' ')} · ${Math.round(f.mw || 0)} MW</span></li>`
+      ).join('');
+      return `
+        <div style="font-size:11px;">
+          <div><strong>${o.operator.canonical}</strong>
+            <span style="color:#6b7280;">· ${o.operator.type === 'reit_public' ? 'public REIT (corporate bond — unsecured, claims operator\'s whole portfolio)' : 'private operator'}</span></div>
+          <div style="margin-top:4px;color:#6b7280;">
+            ${o.facility_count} of their US facilities in our map · ${Math.round(o.total_mw)} MW total · ${Math.round(o.at_risk_mw)} at-risk MW
+          </div>
+          <ul style="margin:6px 0 0 18px;padding:0;font-size:10px;color:#374151;">
+            ${facList}${o.facility_count > 10 ? `<li style="color:#9ca3af;">…and ${o.facility_count - 10} more</li>` : ''}
+          </ul>
+        </div>`;
+    }
+    if (m.top?.facility) {
+      const f = m.top.facility;
+      return `
+        <div style="font-size:11px;">
+          <strong>${f.name}</strong> · ${f.market || ''} · ${(f.status || '?').replace('_',' ')} · ${Math.round(f.mw || 0)} MW
+          ${f.operator    ? `<div style="color:#6b7280;margin-top:4px;">Operator: ${f.operator}</div>` : ''}
+          ${f.tenant_norm ? `<div style="color:#6b7280;">Tenant: ${f.tenant_norm}</div>` : ''}
+        </div>`;
+    }
+    return '<div style="color:#9ca3af;">No structuring details available.</div>';
+  }
+
   // ── Renderer ─────────────────────────────────────────────────────
   function fmt(n) { return n == null ? '—' : Math.round(n).toLocaleString(); }
   function fmtUsd(n) {
@@ -825,70 +958,81 @@
       <div style="margin-bottom:14px;">
         <div style="font-size:11px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
           Matched rows with risk overlay (${Math.min(20, r.matchedRows.length)} of ${r.matchedRows.length} shown)
+          <span style="font-weight:400;color:#6b7280;text-transform:none;letter-spacing:0;margin-left:6px;font-size:10px;">
+            · click any row to see full deal structuring
+          </span>
         </div>
         <div style="overflow-x:auto;">
-        <table style="width:100%;min-width:980px;font-size:11px;border-collapse:collapse;">
+        <table style="width:100%;min-width:1100px;font-size:11px;border-collapse:collapse;">
           <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
+            <th style="text-align:left;padding:4px;font-weight:500;"></th>
             <th style="text-align:left;padding:4px;font-weight:500;">Uploaded name</th>
             <th style="text-align:left;padding:4px;font-weight:500;">How</th>
             <th style="text-align:left;padding:4px;font-weight:500;">Matched to</th>
-            <th style="text-align:left;padding:4px;font-weight:500;">Market / collateral</th>
+            <th style="text-align:left;padding:4px;font-weight:500;">Stage</th>
+            <th style="text-align:left;padding:4px;font-weight:500;">Tenant</th>
+            <th style="text-align:left;padding:4px;font-weight:500;">Facility</th>
             <th style="text-align:right;padding:4px;font-weight:500;">MW</th>
             <th style="text-align:right;padding:4px;font-weight:500;">Risk</th>
             <th style="text-align:right;padding:4px;font-weight:500;">At-risk MW</th>
+            <th style="text-align:left;padding:4px;font-weight:500;">Maturity</th>
             ${r.hasExposure ? '<th style="text-align:right;padding:4px;font-weight:500;">Your exposure</th>' : ''}
-            ${col.rating    ? '<th style="text-align:left;padding:4px;font-weight:500;">Rating</th>'         : ''}
-            <th style="text-align:right;padding:4px;font-weight:500;">Score</th>
+            ${col.rating    ? '<th style="text-align:left;padding:4px;font-weight:500;">Your rating</th>'    : ''}
           </tr></thead>
           <tbody>
-            ${r.matchedRows.slice(0, 20).map(m => {
+            ${r.matchedRows.slice(0, 20).map((m, idx) => {
               const usd = rowExposureUsd(m.row, col);
-              let matchedTo, market, dealMw, sr, atRisk, scoreLabel, kindLabel;
+              const stage = stageBreakdown(m);
+              const cls   = classification(m);
+              let matchedTo, dealMw, sr, atRisk, kindLabel;
               if (m.dealMatch) {
                 const d = m.dealMatch;
-                matchedTo  = d.deal_name;
-                market     = `${(d.collateral_facilities || []).length} collateral DCs`;
-                dealMw     = (d.collateral_mw_built || 0) + (d.collateral_mw_uc || 0);
-                sr         = d.stranded_risk_avg;
-                atRisk     = d.at_risk_mw_total;
-                scoreLabel = m.matchKind === 'cusip' ? 'CUSIP' : `${(m.dealScore*100).toFixed(0)}%`;
-                kindLabel  = m.matchKind === 'cusip'
+                matchedTo = d.deal_name;
+                dealMw    = (d.collateral_mw_built || 0) + (d.collateral_mw_uc || 0);
+                sr        = d.stranded_risk_avg;
+                atRisk    = d.at_risk_mw_total;
+                kindLabel = m.matchKind === 'cusip'
                   ? '<span style="background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">CUSIP</span>'
                   : '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">DEAL</span>';
               } else if (m.operatorHit) {
-                // Corporate-bond match — points to an operator/REIT,
-                // whose risk is their whole portfolio.
                 const o = m.operatorHit;
-                matchedTo  = `${o.operator.canonical} <span style="color:#9ca3af;font-size:9px;">(${o.operator.type})</span>`;
-                market     = `${o.facility_count} US DCs operated`;
-                dealMw     = o.total_mw;
-                sr         = o.stranded_risk;
-                atRisk     = o.at_risk_mw;
-                scoreLabel = 'OP';
-                kindLabel  = '<span style="background:#ede9fe;color:#6d28d9;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">OP</span>';
+                matchedTo = `${o.operator.canonical} <span style="color:#9ca3af;font-size:9px;">(${o.operator.type})</span>`;
+                dealMw    = o.total_mw;
+                sr        = o.stranded_risk;
+                atRisk    = o.at_risk_mw;
+                kindLabel = '<span style="background:#ede9fe;color:#6d28d9;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">OP</span>';
               } else {
                 const f = m.top.facility;
-                matchedTo  = f.name;
-                market     = f.market || '—';
-                dealMw     = f.mw;
-                sr         = f.stranded_risk;
-                atRisk     = f.at_risk_mw;
-                scoreLabel = `${(m.top.score * 100).toFixed(0)}%`;
-                kindLabel  = '<span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">FAC</span>';
+                matchedTo = f.name;
+                dealMw    = f.mw;
+                sr        = f.stranded_risk;
+                atRisk    = f.at_risk_mw;
+                kindLabel = '<span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">FAC</span>';
               }
-              return `<tr style="border-bottom:1px solid #f3f4f6;">
+              const tenantPill = cls.tenant_type
+                ? `<span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:999px;font-size:9px;letter-spacing:0.04em;">${cls.tenant_type}</span>` : '—';
+              const facPill = cls.dc_type
+                ? `<span style="background:#fce7f3;color:#9d174d;padding:1px 5px;border-radius:3px;font-size:9px;letter-spacing:0.04em;">${cls.dc_type}</span>` : '—';
+              return `
+              <tr class="match-row" data-row-idx="${idx}" style="border-bottom:1px solid #f3f4f6;cursor:pointer;">
+                <td style="padding:4px;color:#9ca3af;width:18px;">▸</td>
                 <td style="padding:4px;">${m.row[col.name] || '—'}</td>
                 <td style="padding:4px;">${kindLabel}</td>
                 <td style="padding:4px;color:#1e40af;">${matchedTo}</td>
-                <td style="padding:4px;color:#6b7280;">${market}</td>
+                <td style="padding:4px;font-size:10px;">${stage.label}</td>
+                <td style="padding:4px;">${tenantPill}</td>
+                <td style="padding:4px;">${facPill}</td>
                 <td style="padding:4px;text-align:right;">${fmt(dealMw)}</td>
                 <td style="padding:4px;text-align:right;">
                   ${sr != null ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;background:${riskColor(sr)}22;color:${riskColor(sr)};font-weight:600;">${Math.round(sr)}</span>` : '—'}
                 </td>
                 <td style="padding:4px;text-align:right;">${fmt(atRisk)}</td>
+                <td style="padding:4px;color:#6b7280;">${cls.maturity || '—'}</td>
                 ${r.hasExposure ? `<td style="padding:4px;text-align:right;color:#3730a3;font-weight:600;">${fmtUsd(usd)}</td>` : ''}
                 ${col.rating    ? `<td style="padding:4px;color:#6b7280;">${m.row[col.rating] || '—'}</td>` : ''}
-                <td style="padding:4px;text-align:right;color:#6b7280;">${scoreLabel}</td>
+              </tr>
+              <tr class="match-row-details" data-row-idx="${idx}" style="display:none;background:#f9fafb;border-bottom:1px solid #e5e7eb;">
+                <td colspan="13" style="padding:10px 14px;">${structuringDetails(m)}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -935,12 +1079,24 @@
     box.innerHTML = kpiRow + gapTable + managerTable + matchedRows + unmatchedRows;
     box.style.display = '';
 
-    // Stash matched results for the map plot button.
     window.__overlayMatched = r.matchedRows;
     document.getElementById('overlay-plot-map')?.addEventListener('click',
       () => plotExposureOnMap(window.__overlayMatched || []));
     document.getElementById('overlay-clear-map')?.addEventListener('click',
       () => { clearExposureMap(); setStatus('map overlay cleared'); });
+
+    // Row expand/collapse for full deal structuring.
+    box.querySelectorAll('tr.match-row').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const idx = tr.dataset.rowIdx;
+        const details = box.querySelector(`tr.match-row-details[data-row-idx="${idx}"]`);
+        if (!details) return;
+        const open = details.style.display !== 'none';
+        details.style.display = open ? 'none' : '';
+        const caret = tr.querySelector('td:first-child');
+        if (caret) caret.textContent = open ? '▸' : '▾';
+      });
+    });
   }
 
   // ── Wire UI ──────────────────────────────────────────────────────
