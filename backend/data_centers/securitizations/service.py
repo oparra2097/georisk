@@ -52,20 +52,22 @@ TENANT_TYPE_LABELS = {
 
 # Facility form-factor — what the BUILDING is, distinct from who occupies it.
 VALID_DC_TYPES = {
-    'retail_colo',         # many small enterprise tenants, interconnection-heavy
-    'wholesale',           # multi-tenant wholesale colo (larger suites)
-    'hyperscale_bts',      # single-tenant build-to-suit dedicated facilities
-    'hyperscale_campus',   # multi-building campus for one or more hyperscalers
-    'ai_campus',           # purpose-built AI / GPU training campus
+    'retail_colo',           # many small enterprise tenants, interconnection-heavy
+    'wholesale',             # multi-tenant wholesale colo, large enterprise suites
+    'hyperscale_bts',        # single-hyperscale-tenant build-to-suit (one tenant for the pool)
+    'hyperscale_wholesale',  # multi-hyperscale-tenant pool (master trust with many BTS shells)
+    'hyperscale_campus',     # multi-building campus where the campus footprint dominates
+    'ai_campus',             # purpose-built AI / GPU training campus
     'mixed',
 }
 DC_TYPE_LABELS = {
-    'retail_colo':       'Retail colo',
-    'wholesale':         'Wholesale',
-    'hyperscale_bts':    'Hyperscale BTS',
-    'hyperscale_campus': 'Hyperscale campus',
-    'ai_campus':         'AI campus',
-    'mixed':             'Mixed facility',
+    'retail_colo':           'Retail colo',
+    'wholesale':             'Wholesale',
+    'hyperscale_bts':        'Hyperscale BTS (single-tenant)',
+    'hyperscale_wholesale':  'Hyperscale wholesale (multi-tenant)',
+    'hyperscale_campus':     'Hyperscale campus',
+    'ai_campus':             'AI campus',
+    'mixed':                 'Mixed facility',
 }
 
 
