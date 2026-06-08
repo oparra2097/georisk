@@ -1010,9 +1010,19 @@
                 kindLabel = '<span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">FAC</span>';
               }
               const tenantPill = cls.tenant_type
-                ? `<span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:999px;font-size:9px;letter-spacing:0.04em;">${cls.tenant_type}</span>` : '—';
+                ? `<span title="Who's the credit counterparty — hyperscaler vs colocation customer vs wholesale enterprise" style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:999px;font-size:9px;letter-spacing:0.04em;">${cls.tenant_type}</span>` : '—';
+              // Facility-axis tooltips spell out the BTS vs wholesale vs campus distinction.
+              const dcTip = {
+                'hyperscale_bts':       'Hyperscale BTS: single hyperscaler is the only tenant in the deal pool',
+                'hyperscale_wholesale': 'Hyperscale wholesale: multiple hyperscalers across a master-trust pool (each building may be BTS-style)',
+                'hyperscale_campus':    'Hyperscale campus: multi-building site where the campus concentration is the dominant risk',
+                'retail_colo':          'Retail colo: many small enterprise tenants per building, interconnection-heavy',
+                'wholesale':            'Wholesale colo: multi-tenant wholesale suites',
+                'ai_campus':            'AI campus: purpose-built GPU/HPC training site',
+                'mixed':                'Mixed: blend of tenant/building types',
+              }[cls.dc_type_key] || '';
               const facPill = cls.dc_type
-                ? `<span style="background:#fce7f3;color:#9d174d;padding:1px 5px;border-radius:3px;font-size:9px;letter-spacing:0.04em;">${cls.dc_type}</span>` : '—';
+                ? `<span title="${dcTip}" style="background:#fce7f3;color:#9d174d;padding:1px 5px;border-radius:3px;font-size:9px;letter-spacing:0.04em;cursor:help;">${cls.dc_type}</span>` : '—';
               return `
               <tr class="match-row" data-row-idx="${idx}" style="border-bottom:1px solid #f3f4f6;cursor:pointer;">
                 <td style="padding:4px;color:#9ca3af;width:18px;">▸</td>
