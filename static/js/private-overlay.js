@@ -784,19 +784,68 @@
         : '—';
       const notes   = d.notes
         ? `<div style="margin-top:6px;color:#6b7280;font-size:10px;line-height:1.5;">${d.notes}</div>` : '';
+      // Credit-analyst structural fields — confidence-flagged so user
+      // knows which values are presale-confirmed vs archetype-typical.
+      const srcFlag = d.structuring_source || '';
+      const sourceBadge = srcFlag.startsWith('confirmed')
+        ? '<span style="background:#d1fae5;color:#065f46;padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;">presale</span>'
+        : srcFlag.startsWith('archetype')
+          ? '<span style="background:#fef3c7;color:#92400e;padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;" title="industry-typical for this deal archetype; refine from primary-source presale">archetype</span>'
+          : srcFlag.startsWith('na')
+            ? '<span style="background:#f3f4f6;color:#6b7280;padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;">n/a</span>'
+            : '';
+      const ard  = d.ard ? d.ard : '<span style="color:#9ca3af;">—</span>';
+      const adv  = d.senior_advance_rate_pct ? `${d.senior_advance_rate_pct.toFixed(0)}%` : '—';
+      const dscC = d.dscr_at_close ? `${d.dscr_at_close.toFixed(2)}x` : '—';
+      const dscT = d.dscr_trigger  ? `${d.dscr_trigger.toFixed(2)}x` : '—';
+      const sub  = d.subordination_pct ? `${d.subordination_pct.toFixed(0)}%` : '—';
+      const cpn  = d.senior_coupon || '—';
+      const subs = d.substitution_allowed || '—';
+      const lt   = d.lease_type || '—';
+      const ppa  = d.ppa_tenor_years ? `${d.ppa_tenor_years.toFixed(0)} yrs` : '—';
       return `
-        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:11px;">
-          <div style="color:#9ca3af;">Sponsor</div>          <div>${d.sponsor || '—'}</div>
-          <div style="color:#9ca3af;">Deal type</div>        <div>${d.deal_type_label}</div>
-          <div style="color:#9ca3af;">Issued → Maturity</div><div>${d.issue_date || '—'} → ${d.final_maturity || '—'}</div>
-          <div style="color:#9ca3af;">Senior rating</div>    <div>${rating}</div>
-          <div style="color:#9ca3af;">Senior CUSIP</div>     <div>${cusip}</div>
-          <div style="color:#9ca3af;">WAL</div>              <div>${wal}</div>
-          <div style="color:#9ca3af;">Tenant type</div>      <div>${d.tenant_type_label || '—'}</div>
-          <div style="color:#9ca3af;">Facility type</div>    <div>${d.datacenter_type_label || '—'}</div>
-          <div style="color:#9ca3af;">Top tenants</div>      <div>${topT}${tcShare}</div>
-          <div style="color:#9ca3af;">Collateral DCs</div>   <div>${(d.collateral_facilities || []).join('; ') || '—'}</div>
-          <div style="color:#9ca3af;">Source</div>           <div>${src}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">
+              Headline
+            </div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:11px;">
+              <div style="color:#9ca3af;">Sponsor</div>          <div>${d.sponsor || '—'}</div>
+              <div style="color:#9ca3af;">Deal type</div>        <div>${d.deal_type_label}</div>
+              <div style="color:#9ca3af;">Issued → Maturity</div><div>${d.issue_date || '—'} → ${d.final_maturity || '—'}</div>
+              <div style="color:#9ca3af;">Senior rating</div>    <div>${rating}</div>
+              <div style="color:#9ca3af;">Senior CUSIP</div>     <div>${cusip}</div>
+              <div style="color:#9ca3af;">WAL</div>              <div>${wal}</div>
+              <div style="color:#9ca3af;">Tenant type</div>      <div>${d.tenant_type_label || '—'}</div>
+              <div style="color:#9ca3af;">Facility type</div>    <div>${d.datacenter_type_label || '—'}</div>
+              <div style="color:#9ca3af;">Top tenants</div>      <div>${topT}${tcShare}</div>
+              <div style="color:#9ca3af;">Collateral DCs</div>   <div>${(d.collateral_facilities || []).join('; ') || '—'}</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">
+              Structuring ${sourceBadge}
+            </div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:11px;">
+              <div style="color:#9ca3af;" title="Anticipated Repayment Date — spread step-up + cash sweep kick in if not refi'd by this date">ARD</div>
+                  <div>${ard}</div>
+              <div style="color:#9ca3af;" title="Senior class advance rate — senior balance ÷ appraised collateral value">Senior advance</div>
+                  <div>${adv}</div>
+              <div style="color:#9ca3af;" title="DSCR at deal close — NOI ÷ debt service">DSCR (close)</div>
+                  <div>${dscC}</div>
+              <div style="color:#9ca3af;" title="DSCR rapid-amortization trigger — below this, excess cash sweeps to senior principal">DSCR trigger</div>
+                  <div>${dscT}</div>
+              <div style="color:#9ca3af;" title="% of capital structure subordinate to Class A senior (mezz B/C/D/equity stack)">Subordination</div>
+                  <div>${sub}</div>
+              <div style="color:#9ca3af;">Senior coupon</div>    <div>${cpn}</div>
+              <div style="color:#9ca3af;" title="Can the issuer swap collateral facilities in/out of the trust?">Substitution</div>
+                  <div>${subs}</div>
+              <div style="color:#9ca3af;">Lease type</div>        <div>${lt}</div>
+              <div style="color:#9ca3af;" title="Weighted PPA / utility-contract tenor backing the underlying facilities">PPA tenor</div>
+                  <div>${ppa}</div>
+              <div style="color:#9ca3af;">Primary source</div>    <div>${src}</div>
+            </div>
+          </div>
         </div>${notes}`;
     }
     if (m.operatorHit) {
