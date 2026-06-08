@@ -90,18 +90,21 @@
   // ── Column auto-detect ───────────────────────────────────────────
   // Each value is a list of column-name aliases (header-normalized:
   // lowercased, spaces/dashes/dots → underscores).  Exact match on
-  // normalized headers.  Order doesn't matter — first hit wins.
+  // normalized headers.  Order MATTERS for ambiguous cases — first
+  // hit wins.  In particular, "dc_location" is checked before "location"
+  // so the building's location takes precedence over the issuer-LLC's
+  // HQ address (AIG sheets often include both).
   const COLUMN_ALIASES = {
     name:        ['name', 'facility', 'facility_name', 'building', 'dc_name', 'asset',
                   'asset_name', 'site', 'site_name', 'property', 'property_name',
                   'issuer_name', 'issuer', 'holding', 'holding_name',
-                  'security_name', 'description', 'instrument', 'investment',
-                  'investment_name', 'position_name', 'company', 'company_name'],
+                  'security_name', 'security_description', 'description',
+                  'instrument', 'investment', 'investment_name', 'position_name',
+                  'company', 'company_name'],
     city:        ['city', 'town', 'municipality'],
     state:       ['state', 'region', 'province', 'state_abbr'],
-    // Combined "City, ST" or "City, State" or "City, State, Country" fields
-    // — parsed at match time, see parseLocation().
-    location:    ['location', 'dc_location', 'address', 'site_location', 'full_address'],
+    location:    ['dc_location', 'site_location', 'building_location',
+                  'location', 'address', 'full_address'],
     mw:          ['mw', 'capacity_mw', 'power_mw', 'critical_load', 'load_mw',
                   'it_load', 'mw_critical', 'critical_it_load_mw'],
     operator:    ['operator', 'sponsor', 'manager', 'owner', 'asset_manager',
@@ -257,8 +260,6 @@
 
   // ── Matching engine ──────────────────────────────────────────────
   function rowCityState(row, col) {
-    // Prefer explicit city/state columns; fall back to parsing a combined
-    // Location / DC Location field.
     let city  = (row[col.city]  || '').toLowerCase();
     let state = (row[col.state] || '').toLowerCase();
     if ((!city || !state) && col.location) {
@@ -269,16 +270,67 @@
     return { city, state };
   }
   function rowExposureUsd(row, col) {
-    // Exposure preference: aig credit_exposure → market_value → book_value.
-    // Numbers in AIG sheets often have commas / $ / trailing decimals.
     for (const k of ['exposure', 'market_value', 'book_value']) {
       if (col[k]) {
-        const n = parseMW(row[col[k]]);  // same numeric coercion works
+        const n = parseMW(row[col[k]]);
         if (n != null) return n;
       }
     }
     return null;
   }
+
+  // CUSIP detector — 9-char alphanumeric anywhere in the row's string fields.
+  // Returns the first that matches a known deal, or null.
+  const _CUSIP_RE = /\b([0-9A-Z]{8}[0-9A-Z])\b/i;
+  function extractCusip(row, col) {
+    const candidates = [];
+    for (const k of ['security_id', 'name']) {
+      if (col[k] && row[col[k]]) candidates.push(row[col[k]]);
+    }
+    for (const c of candidates) {
+      const m = String(c).toUpperCase().match(_CUSIP_RE);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  // Try to match against a securitization DEAL.  AIG-style portfolios
+  // hold bonds, not buildings — the Name field describes a security
+  // ("VANTAGE DC ISSUER 2021-1A AA RT"), so token-set similarity vs
+  // facility name will be ~0.  Match against deal_name + sponsor instead;
+  // an exact CUSIP match wins over a fuzzy name match.
+  function matchDeal(row, col) {
+    if (!DEALS || !DEALS.length) return null;
+    const upName = (row[col.name] || '').toString();
+    const upTenant = (row[col.tenant] || '').toString();
+    const upBlob = (upName + ' ' + upTenant).toLowerCase();
+    const upTokens = tokenize(upBlob);
+    if (!upTokens.length) return null;
+
+    // Try exact CUSIP match first.
+    const cusip = extractCusip(row, col);
+    if (cusip) {
+      const hit = DEALS.find(d => (d.cusip_senior || '').toUpperCase() === cusip);
+      if (hit) return { deal: hit, score: 1.0, matchKind: 'cusip' };
+    }
+
+    // Fuzzy: token-set similarity against (deal_name + sponsor) blob.
+    let best = null;
+    for (const d of DEALS) {
+      const dBlob = (d.deal_name + ' ' + d.sponsor + ' ' + (d.collateral_facilities || []).join(' ')).toLowerCase();
+      const dTokens = tokenize(dBlob);
+      if (!dTokens.length) continue;
+      const sim = jaccard(upTokens, dTokens);
+      // Bonus for sponsor token overlap specifically (high-signal).
+      const sponsorTokens = tokenize(d.sponsor);
+      const sponsorHit = sponsorTokens.some(t => upTokens.includes(t)) ? 0.2 : 0;
+      const score = sim + sponsorHit;
+      if (!best || score > best.score) best = { deal: d, score, matchKind: 'deal' };
+    }
+    if (best && best.score >= 0.25) return best;
+    return null;
+  }
+
   function matchRow(row, col) {
     const upName  = row[col.name] || '';
     const ls = rowCityState(row, col);
@@ -338,19 +390,53 @@
     let totalUpMw = 0,  matchedMw  = 0;
     let totalUpUsd = 0, matchedUsd = 0;
 
+    // AIG-style holdings are SECURITIES, not buildings.  Strategy:
+    //   1. Try matching against a securitization deal (by CUSIP or
+    //      fuzzy deal_name+sponsor token similarity).
+    //   2. If that hits, the deal carries us through to its collateral
+    //      facility list with the risk overlay already pre-computed.
+    //   3. If no deal match, fall back to the original facility-name
+    //      token match (covers cases where the user uploaded an
+    //      operator inventory rather than a bond portfolio).
     for (const row of UPLOADED.rows) {
       const mw  = parseMW(row[col.mw]);
       const usd = rowExposureUsd(row, col);
       if (mw  != null) totalUpMw  += mw;
       if (usd != null) totalUpUsd += usd;
-      const ranked = matchRow(row, col);
-      const sec = matchSecuritizationOperator(row[col.operator] || row[col.tenant]);
-      if (ranked.length && ranked[0].score >= 0.40) {
-        matched.push({ row, top: ranked[0], rest: ranked.slice(1), sec });
+
+      let dealHit = matchDeal(row, col);
+      let facRanked = [];
+      let entry = null;
+
+      if (dealHit) {
+        entry = {
+          row,
+          matchKind: dealHit.matchKind,
+          dealMatch: dealHit.deal,
+          dealScore: dealHit.score,
+          top: null,
+          rest: [],
+          sec: [dealHit.deal],
+        };
+        matched.push(entry);
         if (mw  != null) matchedMw  += mw;
         if (usd != null) matchedUsd += usd;
       } else {
-        unmatched.push({ row, candidates: ranked, sec });
+        facRanked = matchRow(row, col);
+        const sec = matchSecuritizationOperator(row[col.operator] || row[col.tenant]);
+        if (facRanked.length && facRanked[0].score >= 0.30) {
+          matched.push({
+            row,
+            matchKind: 'facility',
+            top: facRanked[0],
+            rest: facRanked.slice(1),
+            sec,
+          });
+          if (mw  != null) matchedMw  += mw;
+          if (usd != null) matchedUsd += usd;
+        } else {
+          unmatched.push({ row, candidates: facRanked, sec });
+        }
       }
     }
 
@@ -517,36 +603,59 @@
           Matched rows with risk overlay (${Math.min(20, r.matchedRows.length)} of ${r.matchedRows.length} shown)
         </div>
         <div style="overflow-x:auto;">
-        <table style="width:100%;min-width:900px;font-size:11px;border-collapse:collapse;">
+        <table style="width:100%;min-width:980px;font-size:11px;border-collapse:collapse;">
           <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
             <th style="text-align:left;padding:4px;font-weight:500;">Uploaded name</th>
-            <th style="text-align:left;padding:4px;font-weight:500;">Matched facility</th>
-            <th style="text-align:left;padding:4px;font-weight:500;">Market</th>
+            <th style="text-align:left;padding:4px;font-weight:500;">How</th>
+            <th style="text-align:left;padding:4px;font-weight:500;">Matched to</th>
+            <th style="text-align:left;padding:4px;font-weight:500;">Market / collateral</th>
             <th style="text-align:right;padding:4px;font-weight:500;">MW</th>
             <th style="text-align:right;padding:4px;font-weight:500;">Risk</th>
             <th style="text-align:right;padding:4px;font-weight:500;">At-risk MW</th>
             ${r.hasExposure ? '<th style="text-align:right;padding:4px;font-weight:500;">Your exposure</th>' : ''}
             ${col.rating    ? '<th style="text-align:left;padding:4px;font-weight:500;">Rating</th>'         : ''}
             <th style="text-align:right;padding:4px;font-weight:500;">Score</th>
-            <th style="text-align:left;padding:4px;font-weight:500;">Securitized?</th>
           </tr></thead>
           <tbody>
             ${r.matchedRows.slice(0, 20).map(m => {
-              const f = m.top.facility, sr = f.stranded_risk;
               const usd = rowExposureUsd(m.row, col);
+              let matchedTo, market, dealMw, sr, atRisk, scoreLabel, kindLabel;
+              if (m.dealMatch) {
+                // Matched against a securitization deal — surface deal name,
+                // collateral facility count + MW, deal-level risk rollup.
+                const d = m.dealMatch;
+                matchedTo  = d.deal_name;
+                market     = `${(d.collateral_facilities || []).length} collateral DCs`;
+                dealMw     = (d.collateral_mw_built || 0) + (d.collateral_mw_uc || 0);
+                sr         = d.stranded_risk_avg;
+                atRisk     = d.at_risk_mw_total;
+                scoreLabel = m.matchKind === 'cusip' ? 'CUSIP' : `${(m.dealScore*100).toFixed(0)}%`;
+                kindLabel  = m.matchKind === 'cusip'
+                  ? '<span style="background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">CUSIP</span>'
+                  : '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">DEAL</span>';
+              } else {
+                const f = m.top.facility;
+                matchedTo  = f.name;
+                market     = f.market || '—';
+                dealMw     = f.mw;
+                sr         = f.stranded_risk;
+                atRisk     = f.at_risk_mw;
+                scoreLabel = `${(m.top.score * 100).toFixed(0)}%`;
+                kindLabel  = '<span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">FAC</span>';
+              }
               return `<tr style="border-bottom:1px solid #f3f4f6;">
                 <td style="padding:4px;">${m.row[col.name] || '—'}</td>
-                <td style="padding:4px;color:#1e40af;">${f.name}</td>
-                <td style="padding:4px;color:#6b7280;">${f.market || '—'}</td>
-                <td style="padding:4px;text-align:right;">${fmt(f.mw)}</td>
+                <td style="padding:4px;">${kindLabel}</td>
+                <td style="padding:4px;color:#1e40af;">${matchedTo}</td>
+                <td style="padding:4px;color:#6b7280;">${market}</td>
+                <td style="padding:4px;text-align:right;">${fmt(dealMw)}</td>
                 <td style="padding:4px;text-align:right;">
                   ${sr != null ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;background:${riskColor(sr)}22;color:${riskColor(sr)};font-weight:600;">${Math.round(sr)}</span>` : '—'}
                 </td>
-                <td style="padding:4px;text-align:right;">${fmt(f.at_risk_mw)}</td>
+                <td style="padding:4px;text-align:right;">${fmt(atRisk)}</td>
                 ${r.hasExposure ? `<td style="padding:4px;text-align:right;color:#3730a3;font-weight:600;">${fmtUsd(usd)}</td>` : ''}
                 ${col.rating    ? `<td style="padding:4px;color:#6b7280;">${m.row[col.rating] || '—'}</td>` : ''}
-                <td style="padding:4px;text-align:right;color:#6b7280;">${(m.top.score * 100).toFixed(0)}%</td>
-                <td style="padding:4px;font-size:10px;color:#7c3aed;">${(m.sec || []).slice(0, 2).map(d => d.deal_name).join('; ') || '—'}</td>
+                <td style="padding:4px;text-align:right;color:#6b7280;">${scoreLabel}</td>
               </tr>`;
             }).join('')}
           </tbody>
