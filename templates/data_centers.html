@@ -262,11 +262,15 @@
 
       <p style="margin:0 0 10px;font-size:11px;color:#6b7280;line-height:1.5;">
         <strong>Recognized columns</strong> (case-insensitive, header row required):
-        <code>name</code> / <code>facility</code> / <code>building</code> ·
-        <code>city</code> · <code>state</code> ·
-        <code>mw</code> / <code>capacity_mw</code> / <code>critical_load</code> ·
-        <code>operator</code> / <code>sponsor</code> / <code>owner</code> ·
-        <code>tenant</code> · <code>status</code>.
+        <code>name</code> / <code>facility</code> / <code>asset_name</code> ·
+        <code>city</code> · <code>state</code> · <code>location</code> or <code>dc_location</code> (combined "City, ST" fine) ·
+        <code>mw</code> / <code>critical_load</code> ·
+        <code>operator</code> / <code>portfolio_manager</code> / <code>owner</code> ·
+        <code>tenant</code> ·
+        <code>effective_rating</code> / <code>rating</code> ·
+        <code>dc_type</code> · <code>security_g</code> / <code>cusip</code> ·
+        <code>sum_of_total_aig_credit_exp</code> / <code>credit_exposure</code> /
+        <code>market_value</code> / <code>book_value</code>.
         Any other columns are ignored.
       </p>
 

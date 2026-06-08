@@ -48,25 +48,83 @@
   }
 
   // ── Column auto-detect ───────────────────────────────────────────
+  // Each value is a list of column-name aliases (header-normalized:
+  // lowercased, spaces/dashes/dots → underscores).  Exact match on
+  // normalized headers.  Order doesn't matter — first hit wins.
   const COLUMN_ALIASES = {
-    name:     ['name', 'facility', 'facility_name', 'building', 'dc_name', 'asset', 'site', 'property'],
-    city:     ['city', 'town', 'municipality'],
-    state:    ['state', 'region', 'province', 'state_abbr'],
-    mw:       ['mw', 'capacity_mw', 'power_mw', 'critical_load', 'load_mw', 'it_load', 'mw_critical'],
-    operator: ['operator', 'sponsor', 'manager', 'owner', 'asset_manager'],
-    tenant:   ['tenant', 'lessee', 'customer', 'anchor_tenant'],
-    status:   ['status', 'operational_status', 'stage', 'phase', 'state_status'],
+    name:        ['name', 'facility', 'facility_name', 'building', 'dc_name', 'asset',
+                  'asset_name', 'site', 'property', 'issuer_name', 'issuer'],
+    city:        ['city', 'town', 'municipality'],
+    state:       ['state', 'region', 'province', 'state_abbr'],
+    // Combined "City, ST" or "City, State" or "City, State, Country" fields
+    // — parsed at match time, see parseLocation().
+    location:    ['location', 'dc_location', 'address', 'site_location', 'full_address'],
+    mw:          ['mw', 'capacity_mw', 'power_mw', 'critical_load', 'load_mw',
+                  'it_load', 'mw_critical', 'critical_it_load_mw'],
+    operator:    ['operator', 'sponsor', 'manager', 'owner', 'asset_manager',
+                  'portfolio_manager', 'asset_manager_name', 'investment_manager'],
+    tenant:      ['tenant', 'lessee', 'customer', 'anchor_tenant'],
+    status:      ['status', 'operational_status', 'stage', 'phase'],
+    rating:      ['rating', 'effective_rating', 'sr_rating', 'senior_rating',
+                  'security_rating', 'cra_rating', 'kbra_rating', 'sp_rating',
+                  'moodys_rating', 'fitch_rating'],
+    dc_type:     ['dc_type', 'datacenter_type', 'facility_type', 'asset_type'],
+    security_id: ['security_g', 'security_g_name', 'security_id', 'cusip', 'isin',
+                  'security', 'identifier'],
+    // Dollar exposure fields (AIG: Sum of Total AIG Credit Exp is the
+    // headline; market_value / book_value are also useful)
+    exposure:    ['sum_of_total_aig_credit_exp', 'sum_of_total_credit_exp',
+                  'credit_exposure', 'exposure', 'total_exposure',
+                  'aig_credit_exposure', 'credit_exp', 'notional', 'par',
+                  'principal', 'par_amount'],
+    market_value: ['market_value', 'mark_to_market', 'mtm', 'fair_value'],
+    book_value:  ['book_value', 'cost_basis', 'amortized_cost', 'cost'],
+    new_holding: ['new_holding', 'new_position', 'recent_add', 'flag_new'],
   };
+  function _normHeader(h) {
+    return (h || '')
+      .toLowerCase()
+      .replace(/[.\s\-\/]+/g, '_')
+      .replace(/[^a-z0-9_]/g, '')
+      .replace(/^_+|_+$/g, '');
+  }
   function autoDetectColumns(headers) {
-    const lower = headers.map(h => h.toLowerCase().replace(/[\s_\-]/g, '_'));
+    const normalized = headers.map(_normHeader);
     const map = {};
     Object.entries(COLUMN_ALIASES).forEach(([key, aliases]) => {
       for (const alias of aliases) {
-        const idx = lower.indexOf(alias);
+        const idx = normalized.indexOf(alias);
         if (idx >= 0) { map[key] = headers[idx]; break; }
       }
     });
     return map;
+  }
+
+  // ── Location parser ──────────────────────────────────────────────
+  // Splits combined "City, State" / "City, ST" / "City, State, Country"
+  // fields. Two-letter all-caps → US state abbr.  Else first token
+  // after city = state.
+  const US_STATES = new Set([
+    'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN',
+    'IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV',
+    'NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN',
+    'TX','UT','VT','VA','WA','WV','WI','WY','DC',
+  ]);
+  function parseLocation(raw) {
+    if (!raw) return { city: '', state: '' };
+    const parts = String(raw).split(/[,;]/).map(s => s.trim()).filter(Boolean);
+    if (!parts.length) return { city: '', state: '' };
+    if (parts.length === 1) {
+      // Either just "Ashburn" or "Ashburn VA"
+      const m = parts[0].match(/^(.+?)\s+([A-Z]{2})$/);
+      if (m && US_STATES.has(m[2])) return { city: m[1].trim(), state: m[2] };
+      return { city: parts[0], state: '' };
+    }
+    const city = parts[0];
+    let state = parts[1];
+    const upper = state.toUpperCase();
+    if (US_STATES.has(upper)) state = upper;
+    return { city, state };
   }
 
   // ── Token-set similarity ─────────────────────────────────────────
@@ -132,10 +190,33 @@
   }
 
   // ── Matching engine ──────────────────────────────────────────────
+  function rowCityState(row, col) {
+    // Prefer explicit city/state columns; fall back to parsing a combined
+    // Location / DC Location field.
+    let city  = (row[col.city]  || '').toLowerCase();
+    let state = (row[col.state] || '').toLowerCase();
+    if ((!city || !state) && col.location) {
+      const p = parseLocation(row[col.location]);
+      if (!city) city = p.city.toLowerCase();
+      if (!state) state = p.state.toLowerCase();
+    }
+    return { city, state };
+  }
+  function rowExposureUsd(row, col) {
+    // Exposure preference: aig credit_exposure → market_value → book_value.
+    // Numbers in AIG sheets often have commas / $ / trailing decimals.
+    for (const k of ['exposure', 'market_value', 'book_value']) {
+      if (col[k]) {
+        const n = parseMW(row[col[k]]);  // same numeric coercion works
+        if (n != null) return n;
+      }
+    }
+    return null;
+  }
   function matchRow(row, col) {
     const upName  = row[col.name] || '';
-    const upCity  = (row[col.city] || '').toLowerCase();
-    const upState = (row[col.state] || '').toLowerCase();
+    const ls = rowCityState(row, col);
+    const upCity = ls.city, upState = ls.state;
     const upMw    = parseMW(row[col.mw]);
     const upOp    = (row[col.operator] || '').toLowerCase();
 
@@ -186,42 +267,66 @@
     setStatus('matching…');
 
     const col = UPLOADED.columnMap;
+    const hasExposure = !!(col.exposure || col.market_value || col.book_value);
     const matched = [], unmatched = [];
-    let totalUpMw = 0, matchedMw = 0;
+    let totalUpMw = 0,  matchedMw  = 0;
+    let totalUpUsd = 0, matchedUsd = 0;
 
     for (const row of UPLOADED.rows) {
-      const mw = parseMW(row[col.mw]);
-      if (mw != null) totalUpMw += mw;
+      const mw  = parseMW(row[col.mw]);
+      const usd = rowExposureUsd(row, col);
+      if (mw  != null) totalUpMw  += mw;
+      if (usd != null) totalUpUsd += usd;
       const ranked = matchRow(row, col);
       const sec = matchSecuritizationOperator(row[col.operator] || row[col.tenant]);
       if (ranked.length && ranked[0].score >= 0.40) {
         matched.push({ row, top: ranked[0], rest: ranked.slice(1), sec });
-        if (mw != null) matchedMw += mw;
+        if (mw  != null) matchedMw  += mw;
+        if (usd != null) matchedUsd += usd;
       } else {
         unmatched.push({ row, candidates: ranked, sec });
       }
     }
 
-    // Group unmatched by state for gap analysis.
+    // Group unmatched by state for gap analysis — uses combined Location field
+    // when explicit state column is missing.
     const gapByState = new Map();
     for (const u of unmatched) {
-      const st = (u.row[col.state] || '?').toUpperCase();
-      const mw = parseMW(u.row[col.mw]) || 0;
-      const b = gapByState.get(st) || { state: st, count: 0, mw: 0 };
-      b.count++; b.mw += mw;
+      const ls = rowCityState(u.row, col);
+      const st = (ls.state || '?').toUpperCase();
+      const mw  = parseMW(u.row[col.mw]) || 0;
+      const usd = rowExposureUsd(u.row, col) || 0;
+      const b = gapByState.get(st) || { state: st, count: 0, mw: 0, usd: 0 };
+      b.count++; b.mw += mw; b.usd += usd;
       gapByState.set(st, b);
+    }
+
+    // Group everything by portfolio_manager (BlackRock, etc) if present —
+    // this is how AIG breaks down exposure internally.
+    const byManager = new Map();
+    if (col.operator) {
+      for (const m of matched.concat(unmatched.map(u => ({ row: u.row, _unmatched: true })))) {
+        const mgr = (m.row[col.operator] || 'unattributed').trim() || 'unattributed';
+        const mw  = parseMW(m.row[col.mw]) || 0;
+        const usd = rowExposureUsd(m.row, col) || 0;
+        const b = byManager.get(mgr) || { manager: mgr, count: 0, mw: 0, usd: 0, unmatched: 0 };
+        b.count++; b.mw += mw; b.usd += usd;
+        if (m._unmatched) b.unmatched++;
+        byManager.set(mgr, b);
+      }
     }
 
     renderResults({
       total:           UPLOADED.rows.length,
       matched:         matched.length,
       unmatched:       unmatched.length,
-      totalUpMw,
-      matchedMw,
-      gapMw:           totalUpMw - matchedMw,
+      totalUpMw, matchedMw, gapMw: totalUpMw - matchedMw,
+      totalUpUsd, matchedUsd, gapUsd: totalUpUsd - matchedUsd,
+      hasExposure,
       matchedRows:     matched,
       unmatchedRows:   unmatched,
-      gapByState:      [...gapByState.values()].sort((a, b) => b.mw - a.mw),
+      gapByState:      [...gapByState.values()].sort((a, b) => (b.usd || b.mw) - (a.usd || a.mw)),
+      byManager:       [...byManager.values()].sort((a, b) => (b.usd || b.mw) - (a.usd || a.mw)),
       col,
     });
     setStatus(`done: ${matched.length}/${UPLOADED.rows.length} matched (${((matched.length / UPLOADED.rows.length) * 100).toFixed(0)}%)`);
@@ -229,6 +334,14 @@
 
   // ── Renderer ─────────────────────────────────────────────────────
   function fmt(n) { return n == null ? '—' : Math.round(n).toLocaleString(); }
+  function fmtUsd(n) {
+    if (n == null || n === 0) return '—';
+    const abs = Math.abs(n);
+    if (abs >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
+    if (abs >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+    if (abs >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+    return `$${Math.round(n).toLocaleString()}`;
+  }
   function riskColor(s) {
     if (s == null) return '#d1d5db';
     if (s >= 75) return '#dc2626';
@@ -238,27 +351,49 @@
   }
   function renderResults(r) {
     const box = $('overlay-results');
-    const pct = r.total ? Math.round(100 * r.matched / r.total) : 0;
-    const mwPct = r.totalUpMw ? Math.round(100 * r.matchedMw / r.totalUpMw) : 0;
+    const pct   = r.total      ? Math.round(100 * r.matched    / r.total)      : 0;
+    const mwPct = r.totalUpMw  ? Math.round(100 * r.matchedMw  / r.totalUpMw)  : 0;
+    const usdPct = r.totalUpUsd ? Math.round(100 * r.matchedUsd / r.totalUpUsd) : 0;
 
+    // KPI tiles vary by what columns were detected.  AIG sheets have $-exposure
+    // but typically no MW column → we hide MW tiles and surface $ instead.
+    const tiles = [
+      `<div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:#1e40af;">${r.matched}/${r.total}</div>
+        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Rows matched (${pct}%)</div>
+      </div>`,
+      `<div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:#1e40af;">${r.unmatched}</div>
+        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Unmatched rows</div>
+      </div>`,
+    ];
+    if (r.totalUpMw > 0) {
+      tiles.push(`<div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:#1e40af;">${fmt(r.matchedMw)}</div>
+        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">MW matched (${mwPct}%)</div>
+      </div>`);
+      tiles.push(`<div style="background:#fff;border:1px solid #fca5a5;padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:#b91c1c;">${fmt(r.gapMw)}</div>
+        <div style="font-size:10px;color:#b91c1c;text-transform:uppercase;letter-spacing:0.06em;">MW gap (not in map)</div>
+      </div>`);
+    }
+    if (r.hasExposure && r.totalUpUsd > 0) {
+      tiles.push(`<div style="background:#fff;border:1px solid #c7d2fe;padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:#3730a3;">${fmtUsd(r.totalUpUsd)}</div>
+        <div style="font-size:10px;color:#3730a3;text-transform:uppercase;letter-spacing:0.06em;">Total credit exposure</div>
+      </div>`);
+      tiles.push(`<div style="background:#fff;border:1px solid #c7d2fe;padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:#3730a3;">${fmtUsd(r.matchedUsd)}</div>
+        <div style="font-size:10px;color:#3730a3;text-transform:uppercase;letter-spacing:0.06em;">Exposure on mapped DCs (${usdPct}%)</div>
+      </div>`);
+      tiles.push(`<div style="background:#fff;border:1px solid #fca5a5;padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:#b91c1c;">${fmtUsd(r.gapUsd)}</div>
+        <div style="font-size:10px;color:#b91c1c;text-transform:uppercase;letter-spacing:0.06em;">Exposure on UN-mapped DCs</div>
+      </div>`);
+    }
     const kpiRow = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;">
-        <div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
-          <div style="font-size:20px;font-weight:600;color:#1e40af;">${r.matched}/${r.total}</div>
-          <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Rows matched (${pct}%)</div>
-        </div>
-        <div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
-          <div style="font-size:20px;font-weight:600;color:#1e40af;">${fmt(r.matchedMw)}</div>
-          <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">MW matched (${mwPct}%)</div>
-        </div>
-        <div style="background:#fff;border:1px solid #fca5a5;padding:10px;border-radius:5px;">
-          <div style="font-size:20px;font-weight:600;color:#b91c1c;">${fmt(r.gapMw)}</div>
-          <div style="font-size:10px;color:#b91c1c;text-transform:uppercase;letter-spacing:0.06em;">MW gap (not in map)</div>
-        </div>
-        <div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
-          <div style="font-size:20px;font-weight:600;color:#1e40af;">${r.unmatched}</div>
-          <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Unmatched rows</div>
-        </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px;">
+        ${tiles.join('')}
       </div>`;
 
     const gapTable = r.gapByState.length ? `
@@ -270,13 +405,40 @@
           <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
             <th style="text-align:left;padding:4px;font-weight:500;">State</th>
             <th style="text-align:right;padding:4px;font-weight:500;">Unmatched #</th>
-            <th style="text-align:right;padding:4px;font-weight:500;">Unmatched MW</th>
+            ${r.totalUpMw > 0   ? '<th style="text-align:right;padding:4px;font-weight:500;">Unmatched MW</th>'        : ''}
+            ${r.hasExposure     ? '<th style="text-align:right;padding:4px;font-weight:500;">Unmatched exposure</th>' : ''}
           </tr></thead>
           <tbody>
-            ${r.gapByState.slice(0, 8).map(g => `<tr style="border-bottom:1px solid #f3f4f6;">
+            ${r.gapByState.slice(0, 12).map(g => `<tr style="border-bottom:1px solid #f3f4f6;">
               <td style="padding:4px;">${g.state}</td>
               <td style="padding:4px;text-align:right;">${g.count}</td>
-              <td style="padding:4px;text-align:right;color:#b91c1c;font-weight:600;">${fmt(g.mw)}</td>
+              ${r.totalUpMw > 0   ? `<td style="padding:4px;text-align:right;color:#b91c1c;font-weight:600;">${fmt(g.mw)}</td>`         : ''}
+              ${r.hasExposure     ? `<td style="padding:4px;text-align:right;color:#b91c1c;font-weight:600;">${fmtUsd(g.usd)}</td>`    : ''}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : '';
+
+    const managerTable = (r.byManager && r.byManager.length) ? `
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+          By portfolio manager / operator
+        </div>
+        <table style="width:100%;font-size:11px;border-collapse:collapse;">
+          <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
+            <th style="text-align:left;padding:4px;font-weight:500;">Manager</th>
+            <th style="text-align:right;padding:4px;font-weight:500;">Rows</th>
+            <th style="text-align:right;padding:4px;font-weight:500;">Unmatched</th>
+            ${r.totalUpMw > 0 ? '<th style="text-align:right;padding:4px;font-weight:500;">MW</th>'           : ''}
+            ${r.hasExposure   ? '<th style="text-align:right;padding:4px;font-weight:500;">Exposure</th>'    : ''}
+          </tr></thead>
+          <tbody>
+            ${r.byManager.slice(0, 15).map(m => `<tr style="border-bottom:1px solid #f3f4f6;">
+              <td style="padding:4px;">${m.manager}</td>
+              <td style="padding:4px;text-align:right;">${m.count}</td>
+              <td style="padding:4px;text-align:right;color:${m.unmatched > 0 ? '#b91c1c' : '#10b981'};font-weight:600;">${m.unmatched}</td>
+              ${r.totalUpMw > 0 ? `<td style="padding:4px;text-align:right;">${fmt(m.mw)}</td>`        : ''}
+              ${r.hasExposure   ? `<td style="padding:4px;text-align:right;">${fmtUsd(m.usd)}</td>`   : ''}
             </tr>`).join('')}
           </tbody>
         </table>
@@ -289,7 +451,7 @@
           Matched rows with risk overlay (${Math.min(20, r.matchedRows.length)} of ${r.matchedRows.length} shown)
         </div>
         <div style="overflow-x:auto;">
-        <table style="width:100%;min-width:780px;font-size:11px;border-collapse:collapse;">
+        <table style="width:100%;min-width:900px;font-size:11px;border-collapse:collapse;">
           <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
             <th style="text-align:left;padding:4px;font-weight:500;">Uploaded name</th>
             <th style="text-align:left;padding:4px;font-weight:500;">Matched facility</th>
@@ -297,12 +459,15 @@
             <th style="text-align:right;padding:4px;font-weight:500;">MW</th>
             <th style="text-align:right;padding:4px;font-weight:500;">Risk</th>
             <th style="text-align:right;padding:4px;font-weight:500;">At-risk MW</th>
+            ${r.hasExposure ? '<th style="text-align:right;padding:4px;font-weight:500;">Your exposure</th>' : ''}
+            ${col.rating    ? '<th style="text-align:left;padding:4px;font-weight:500;">Rating</th>'         : ''}
             <th style="text-align:right;padding:4px;font-weight:500;">Score</th>
             <th style="text-align:left;padding:4px;font-weight:500;">Securitized?</th>
           </tr></thead>
           <tbody>
             ${r.matchedRows.slice(0, 20).map(m => {
               const f = m.top.facility, sr = f.stranded_risk;
+              const usd = rowExposureUsd(m.row, col);
               return `<tr style="border-bottom:1px solid #f3f4f6;">
                 <td style="padding:4px;">${m.row[col.name] || '—'}</td>
                 <td style="padding:4px;color:#1e40af;">${f.name}</td>
@@ -312,6 +477,8 @@
                   ${sr != null ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;background:${riskColor(sr)}22;color:${riskColor(sr)};font-weight:600;">${Math.round(sr)}</span>` : '—'}
                 </td>
                 <td style="padding:4px;text-align:right;">${fmt(f.at_risk_mw)}</td>
+                ${r.hasExposure ? `<td style="padding:4px;text-align:right;color:#3730a3;font-weight:600;">${fmtUsd(usd)}</td>` : ''}
+                ${col.rating    ? `<td style="padding:4px;color:#6b7280;">${m.row[col.rating] || '—'}</td>` : ''}
                 <td style="padding:4px;text-align:right;color:#6b7280;">${(m.top.score * 100).toFixed(0)}%</td>
                 <td style="padding:4px;font-size:10px;color:#7c3aed;">${(m.sec || []).slice(0, 2).map(d => d.deal_name).join('; ') || '—'}</td>
               </tr>`;
@@ -327,23 +494,27 @@
           Unmatched rows (${Math.min(20, r.unmatchedRows.length)} of ${r.unmatchedRows.length} shown) — your map gap
         </div>
         <div style="overflow-x:auto;">
-        <table style="width:100%;min-width:780px;font-size:11px;border-collapse:collapse;">
+        <table style="width:100%;min-width:900px;font-size:11px;border-collapse:collapse;">
           <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
             <th style="text-align:left;padding:4px;font-weight:500;">Uploaded name</th>
             <th style="text-align:left;padding:4px;font-weight:500;">City</th>
             <th style="text-align:left;padding:4px;font-weight:500;">State</th>
             <th style="text-align:right;padding:4px;font-weight:500;">MW</th>
+            ${r.hasExposure ? '<th style="text-align:right;padding:4px;font-weight:500;">Your exposure</th>' : ''}
             <th style="text-align:left;padding:4px;font-weight:500;">Operator</th>
             <th style="text-align:left;padding:4px;font-weight:500;">Best near-match (score)</th>
           </tr></thead>
           <tbody>
             ${r.unmatchedRows.slice(0, 20).map(u => {
               const c = u.candidates[0];
+              const ls = rowCityState(u.row, col);
+              const usd = rowExposureUsd(u.row, col);
               return `<tr style="border-bottom:1px solid #f3f4f6;">
                 <td style="padding:4px;">${u.row[col.name] || '—'}</td>
-                <td style="padding:4px;color:#6b7280;">${u.row[col.city] || '—'}</td>
-                <td style="padding:4px;color:#6b7280;">${u.row[col.state] || '—'}</td>
+                <td style="padding:4px;color:#6b7280;">${ls.city || '—'}</td>
+                <td style="padding:4px;color:#6b7280;">${(ls.state || '').toUpperCase() || '—'}</td>
                 <td style="padding:4px;text-align:right;">${fmt(parseMW(u.row[col.mw]))}</td>
+                ${r.hasExposure ? `<td style="padding:4px;text-align:right;color:#3730a3;font-weight:600;">${fmtUsd(usd)}</td>` : ''}
                 <td style="padding:4px;color:#6b7280;">${u.row[col.operator] || u.row[col.tenant] || '—'}</td>
                 <td style="padding:4px;font-size:10px;color:#9ca3af;">${c ? `${c.facility.name} (${(c.score*100).toFixed(0)}%)` : '—'}</td>
               </tr>`;
@@ -353,7 +524,7 @@
         </div>
       </div>` : '';
 
-    box.innerHTML = kpiRow + gapTable + matchedRows + unmatchedRows;
+    box.innerHTML = kpiRow + gapTable + managerTable + matchedRows + unmatchedRows;
     box.style.display = '';
   }
 
