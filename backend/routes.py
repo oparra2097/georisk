@@ -2264,6 +2264,20 @@ def export_reserves_excel():
     ws4 = wb.create_sheet('Gold Reserves (tonnes)')
     _write_reserves_sheet(ws4, years, countries, 'gold_tonnes')
 
+    # Sheet 5: Gold % of Reserves — gold market value / total reserves
+    ws5 = wb.create_sheet('Gold % of Reserves')
+    _write_gold_pct_sheet(ws5, years, countries)
+
+    # Sheet 6: Gold vs US Treasurys (share-of-reserves crossover)
+    try:
+        from backend.data_sources.reserve_composition import get_gold_treasury_crossover
+        cx = get_gold_treasury_crossover() or {}
+        if cx.get('periods') and not cx.get('meta', {}).get('error'):
+            ws6 = wb.create_sheet('Gold vs Treasurys')
+            _write_crossover_sheet(ws6, cx)
+    except Exception:
+        pass
+
     output = BytesIO()
     wb.save(output)
     output.seek(0)
@@ -2309,6 +2323,69 @@ def _write_reserves_sheet(ws, years, countries, field):
         ws.column_dimensions[col_letter].width = 12
 
     ws.freeze_panes = 'C2'
+
+
+def _write_gold_pct_sheet(ws, years, countries):
+    """Gold as % of total reserves = gold market value / total reserves."""
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    headers = ['Country', 'ISO3'] + years
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+
+    for row_idx, c in enumerate(countries, 2):
+        ws.cell(row=row_idx, column=1, value=c['name'])
+        ws.cell(row=row_idx, column=2, value=c['iso3'])
+        gr = c.get('gold_reserves') or []
+        tr = c.get('total_reserves') or []
+        for i in range(len(years)):
+            g = gr[i] if i < len(gr) else None
+            t = tr[i] if i < len(tr) else None
+            if g is not None and t and t > 0:
+                pct = round(g / t * 100, 1)
+                if 0 <= pct <= 100:
+                    ws.cell(row=row_idx, column=3 + i, value=pct)
+
+    ws.column_dimensions['A'].width = 22
+    ws.column_dimensions['B'].width = 8
+    for i in range(len(years)):
+        ws.column_dimensions[ws.cell(row=1, column=3 + i).column_letter].width = 12
+    ws.freeze_panes = 'C2'
+
+
+def _write_crossover_sheet(ws, cx):
+    """Gold vs US-Treasurys share-of-reserves crossover (one row per period)."""
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    headers = ['Period', 'Gold (% of reserves)', 'US Treasurys (% of reserves)']
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+
+    periods = cx.get('periods') or []
+    gs = cx.get('gold_share') or []
+    ts = cx.get('treasury_share') or []
+    for row_idx, p in enumerate(periods, 2):
+        ws.cell(row=row_idx, column=1, value=p)
+        i = row_idx - 2
+        if i < len(gs) and gs[i] is not None:
+            ws.cell(row=row_idx, column=2, value=gs[i])
+        if i < len(ts) and ts[i] is not None:
+            ws.cell(row=row_idx, column=3, value=ts[i])
+
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 22
+    ws.column_dimensions['C'].width = 26
+    ws.freeze_panes = 'A2'
 
 
 @api_bp.route('/substack')
