@@ -198,6 +198,11 @@ def create_app():
     def labor_market():
         return render_template('labor_market.html', active_page='labor-market')
 
+    @app.route('/cpi-release')
+    @social_or_login_required
+    def cpi_release():
+        return render_template('cpi_release.html', active_page='cpi-release')
+
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
     init_scheduler(app)
