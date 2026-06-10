@@ -47,9 +47,18 @@
   display: flex; align-items: center; justify-content: center;
   color: #0a0e1a; font-weight: 800; font-size: 14px;
 }
-.lm-stale-text { flex: 1; font-size: var(--lm-fs-sm); color: var(--lm-text); }
+.lm-stale-text { flex: 1; font-size: var(--lm-fs-sm); color: var(--lm-text); line-height: 1.55; }
 .lm-stale-text strong { color: var(--lm-warn); margin-right: 6px; }
 .lm-stale-text span { color: var(--lm-text-dim); }
+.lm-stale-text code {
+  background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px;
+  font-size: 11px; color: var(--lm-text);
+}
+.lm-stale-link {
+  color: var(--lm-warn); text-decoration: underline; white-space: nowrap;
+  margin-left: 4px;
+}
+.lm-stale-link:hover { color: var(--lm-text); }
 .lm-stale-banner[hidden] { display: none; }
 
 /* ── Release banner ───────────────────────────────────────── */

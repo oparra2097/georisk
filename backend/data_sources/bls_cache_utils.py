@@ -19,16 +19,43 @@ Situation in the first week of each month and CPI in the second week —
 both for the prior month — so a healthy `latest_month` is at most one
 month behind.  Two months gives us a comfortable buffer for normal
 release-day timing while still catching a multi-month drift.
+
+`get_bls_api_key` resolves the BLS_API_KEY at *call time* (not import
+time).  Config.BLS_API_KEY is frozen at module-import — env vars added
+to Render after the worker boots wouldn't be visible there.  Reading
+os.environ first picks up live changes without a redeploy.  Mirrors the
+pattern in fred_client._get_api_key.
 """
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from typing import Optional
 
+from config import Config
+
 
 STALE_LAG_MONTHS = 2
-SOFT_RETRY_SECONDS = 1800   # 30 min — how long to back off when stale
+SOFT_RETRY_SECONDS = 3600   # 1 hour — avoid hammering BLS quota when stale
+
+
+def get_bls_api_key() -> str:
+    """Resolve the BLS API key at call time, env vars first.
+
+    Honors a few alternate names in case it's mis-named in the Render
+    dashboard; strips quotes/whitespace.
+    """
+    for source in (
+        os.environ.get('BLS_API_KEY', ''),
+        os.environ.get('BLS_KEY', ''),
+        os.environ.get('BLS_TOKEN', ''),
+        getattr(Config, 'BLS_API_KEY', ''),
+    ):
+        key = (source or '').strip().strip('"').strip("'")
+        if key:
+            return key
+    return ''
 
 
 def is_stale(latest_month: Optional[str], today: Optional[date] = None) -> bool:
@@ -57,3 +84,4 @@ def months_behind(latest_month: Optional[str], today: Optional[date] = None) -> 
     if today is None:
         today = date.today()
     return (today.year - ly) * 12 + (today.month - lm)
+
