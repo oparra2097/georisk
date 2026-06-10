@@ -17,6 +17,7 @@ from datetime import datetime
 from config import Config
 from backend.data_sources.bls_cache_utils import (
     is_stale as _is_stale, months_behind as _months_behind, SOFT_RETRY_SECONDS,
+    get_bls_api_key,
 )
 
 
@@ -129,7 +130,7 @@ def _empty_result():
 
 def _fetch_bls_cpi():
     """Fetch CPI data from BLS API v2."""
-    api_key = Config.BLS_API_KEY
+    api_key = get_bls_api_key()
     current_year = datetime.utcnow().year
 
     start_year = current_year - (20 if api_key else 10)
@@ -313,7 +314,7 @@ def _empty_components_result():
 
 def _fetch_bls_components():
     """Fetch CPI component data from BLS API v2."""
-    api_key = Config.BLS_API_KEY
+    api_key = get_bls_api_key()
     current_year = datetime.utcnow().year
     start_year = current_year - (20 if api_key else 10)
     logger.info(f"BLS components fetch: key={'set' if api_key else 'MISSING'}, range={start_year}-{current_year}")
@@ -551,9 +552,14 @@ def _empty_detail_result():
     }
 
 
-def _fetch_bls_detail():
-    """Fetch the detail-level CPI components from BLS API v2."""
-    api_key = Config.BLS_API_KEY
+def _fetch_bls_detail(diagnostic: bool = False):
+    """Fetch the detail-level CPI components from BLS API v2.
+
+    When `diagnostic=True`, includes a `_diagnostic` block with the raw
+    BLS API status, per-series latest month, and api-key state so the
+    /diagnostics endpoint can show exactly what BLS returned.
+    """
+    api_key = get_bls_api_key()
     current_year = datetime.utcnow().year
     start_year = current_year - (20 if api_key else 10)
     logger.info(
@@ -570,13 +576,33 @@ def _fetch_bls_detail():
     if api_key:
         payload['registrationkey'] = api_key
 
+    diag = {
+        'has_api_key': bool(api_key),
+        'request': {'startyear': str(start_year), 'endyear': str(current_year),
+                    'series_count': len(BLS_DETAIL_COMPONENTS)},
+        'bls_api_status': None, 'bls_api_message': None, 'http_status': None,
+        'series_returned': 0, 'latest_month_per_series': {},
+        'series_with_no_data': [], 'error': None,
+    }
+
     try:
         resp = requests.post(BLS_API_URL, json=payload, headers=headers,
                              timeout=45, verify=False)
+        diag['http_status'] = resp.status_code
         resp.raise_for_status()
         result = resp.json()
+        diag['bls_api_status'] = result.get('status')
+        msg = result.get('message')
+        diag['bls_api_message'] = ('; '.join(str(m) for m in msg)
+                                   if isinstance(msg, list) and msg
+                                   else (msg or None))
         if result.get('status') != 'REQUEST_SUCCEEDED':
-            logger.error(f"BLS CPI detail API error: {result.get('message', 'unknown')}")
+            logger.error(
+                f"BLS CPI detail API error: status={result.get('status')}, "
+                f"message={diag['bls_api_message']}"
+            )
+            if diagnostic:
+                return {'_diagnostic': diag}
             return None
 
         id_to_key = {v['id']: k for k, v in BLS_DETAIL_COMPONENTS.items()}
@@ -636,9 +662,27 @@ def _fetch_bls_detail():
 
         rankings = _build_cpi_rankings(series_data)
         latest_month = ''
-        for pts in series_data.values():
-            if pts and pts[-1]['date'] > latest_month:
-                latest_month = pts[-1]['date']
+        latest_per_series = {}
+        no_data = []
+        for k, pts in series_data.items():
+            if pts:
+                latest_per_series[k] = pts[-1]['date']
+                if pts[-1]['date'] > latest_month:
+                    latest_month = pts[-1]['date']
+            else:
+                no_data.append(k)
+        for k in BLS_DETAIL_COMPONENTS:
+            if k not in series_data:
+                no_data.append(k)
+        diag.update({
+            'series_returned': len(series_data),
+            'latest_month_per_series': latest_per_series,
+            'series_with_no_data': no_data,
+        })
+        logger.info(
+            f"BLS CPI detail fetch OK: series_returned={len(series_data)}, "
+            f"latest_month={latest_month}, no_data={no_data or 'none'}"
+        )
 
         return {
             'series': series_data,
@@ -653,18 +697,45 @@ def _fetch_bls_detail():
                 'frequency': 'Monthly',
                 'year_range': f'{start_year}-{current_year}',
                 'latest_month': latest_month,
+                'latest_month_per_series': latest_per_series,
+                'series_with_no_data': no_data,
                 'has_api_key': bool(api_key),
+                'bls_api_status': diag['bls_api_status'],
+                'bls_api_message': diag['bls_api_message'],
                 'series_ids': {k: v['id'] for k, v in BLS_DETAIL_COMPONENTS.items()},
                 'fetched_at': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
             },
+            '_diagnostic': diag if diagnostic else None,
         }
 
     except requests.exceptions.Timeout:
+        diag['error'] = 'timeout'
         logger.error("BLS CPI detail API timeout")
+        if diagnostic:
+            return {'_diagnostic': diag}
         return None
     except Exception as e:
+        diag['error'] = str(e)
         logger.error(f"BLS CPI detail fetch failed: {e}")
+        if diagnostic:
+            return {'_diagnostic': diag}
         return None
+
+
+def run_cpi_detail_diagnostic():
+    """Force a fresh BLS detail call, bypass cache, return the
+    diagnostic block including per-series latest month + raw BLS status.
+    """
+    result = _fetch_bls_detail(diagnostic=True)
+    if not result:
+        return {'error': 'fetch returned None'}
+    diag = result.get('_diagnostic') or {}
+    latest = (result.get('meta') or {}).get('latest_month')
+    diag['payload_received'] = result.get('series') is not None
+    diag['latest_month'] = latest
+    diag['is_stale'] = _is_stale(latest)
+    diag['months_behind'] = _months_behind(latest)
+    return diag
 
 
 def _build_cpi_rankings(series_data: dict) -> dict:

@@ -152,16 +152,32 @@
     const meta = ((state.bundle.bls || {}).meta) || {};
     const banner = document.getElementById('lm-stale-banner');
     if (!banner) return;
-    if (meta.is_stale) {
-      const months = meta.months_behind;
-      const detail = document.getElementById('lm-stale-detail');
-      if (detail) detail.textContent =
-        `Latest BLS month: ${meta.latest_month || 'unknown'} ` +
-        (months > 0 ? `(${months} months behind today). Background refresh in progress.` : '. Background refresh in progress.');
-      banner.hidden = false;
+    if (!meta.is_stale) { banner.hidden = true; return; }
+
+    const detail = document.getElementById('lm-stale-detail');
+    if (detail) detail.innerHTML = buildStaleDetail(meta, '/api/labor-market/us/diagnostics');
+    banner.hidden = false;
+  }
+
+  function buildStaleDetail(meta, diagUrl) {
+    const months = meta.months_behind;
+    const parts = [];
+    parts.push(`Latest BLS month: <code>${meta.latest_month || 'unknown'}</code>`);
+    if (months > 0) parts.push(`(${months} months behind today)`);
+
+    // Surface the actual root cause when we can identify it.
+    if (meta.has_api_key === false) {
+      parts.push('<br><strong>Root cause:</strong> <code>BLS_API_KEY</code> is not set on the server. ' +
+        'Unauthenticated BLS access is capped at 25 requests/day, ' +
+        'which is being exhausted. Add <code>BLS_API_KEY</code> to the Render environment.');
+    } else if (meta.bls_api_status && meta.bls_api_status !== 'REQUEST_SUCCEEDED') {
+      parts.push(`<br><strong>BLS API status:</strong> <code>${meta.bls_api_status}</code>` +
+        (meta.bls_api_message ? ` &mdash; ${meta.bls_api_message}` : ''));
     } else {
-      banner.hidden = true;
+      parts.push('. Background refresh in progress.');
     }
+    parts.push(` <a href="${diagUrl}" target="_blank" rel="noopener" class="lm-stale-link">Run diagnostics &rarr;</a>`);
+    return parts.join(' ');
   }
 
   // ── Release banner + countdown ─────────────────────────────

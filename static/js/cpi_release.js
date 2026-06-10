@@ -171,21 +171,35 @@
   function renderStaleBanner() {
     const banner = document.getElementById('cpi-stale-banner');
     if (!banner) return;
-    // Both detail + overview can be stale; banner if either is.
     const dMeta = ((state.bundle.detail || {}).meta) || {};
     const oMeta = ((state.bundle.overview || {}).meta) || {};
     const stale = !!(dMeta.is_stale || oMeta.is_stale);
-    if (stale) {
-      const latest = dMeta.latest_month || oMeta.latest_month || 'unknown';
-      const months = Math.max(dMeta.months_behind || 0, oMeta.months_behind || 0);
-      const detail = document.getElementById('cpi-stale-detail');
-      if (detail) detail.textContent =
-        `Latest BLS CPI month: ${latest}` +
-        (months > 0 ? ` (${months} months behind today). Background refresh in progress.` : '. Background refresh in progress.');
-      banner.hidden = false;
+    if (!stale) { banner.hidden = true; return; }
+
+    // Use whichever payload is most stale for the diagnostic.
+    const worst = (dMeta.months_behind || 0) >= (oMeta.months_behind || 0) ? dMeta : oMeta;
+    const detail = document.getElementById('cpi-stale-detail');
+    if (detail) detail.innerHTML = buildStaleDetail(worst, '/api/cpi/us/diagnostics');
+    banner.hidden = false;
+  }
+
+  function buildStaleDetail(meta, diagUrl) {
+    const months = meta.months_behind;
+    const parts = [];
+    parts.push(`Latest BLS month: <code>${meta.latest_month || 'unknown'}</code>`);
+    if (months > 0) parts.push(`(${months} months behind today)`);
+    if (meta.has_api_key === false) {
+      parts.push('<br><strong>Root cause:</strong> <code>BLS_API_KEY</code> is not set on the server. ' +
+        'Unauthenticated BLS access is capped at 25 requests/day, which is being exhausted. ' +
+        'Add <code>BLS_API_KEY</code> to the Render environment.');
+    } else if (meta.bls_api_status && meta.bls_api_status !== 'REQUEST_SUCCEEDED') {
+      parts.push(`<br><strong>BLS API status:</strong> <code>${meta.bls_api_status}</code>` +
+        (meta.bls_api_message ? ` &mdash; ${meta.bls_api_message}` : ''));
     } else {
-      banner.hidden = true;
+      parts.push('. Background refresh in progress.');
     }
+    parts.push(` <a href="${diagUrl}" target="_blank" rel="noopener" class="lm-stale-link">Run diagnostics &rarr;</a>`);
+    return parts.join(' ');
   }
 
   // ── Release banner ───────────────────────────────────────

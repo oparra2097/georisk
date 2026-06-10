@@ -728,6 +728,31 @@ def release_calendar():
     })
 
 
+# ── BLS Diagnostics ───────────────────────────────────────────────────
+#
+# These force a fresh BLS API call (bypassing the cache) and return the
+# raw API status + per-series latest month + api-key state so we can
+# see *why* the dashboards might be showing old data — without needing
+# to access Render logs.  Examples:
+#
+#   - bls_api_status: REQUEST_NOT_PROCESSED → BLS rejected the call
+#   - bls_api_message: "Daily threshold for…" → quota exhausted
+#   - has_api_key: false on prod → key not set in env
+#   - latest_month_per_series: shows which series are dragging the
+#     overall latest_month down
+
+@api_bp.route('/labor-market/us/diagnostics')
+def labor_market_diagnostics():
+    from backend.data_sources.bls_employment import run_diagnostic
+    return jsonify(run_diagnostic())
+
+
+@api_bp.route('/cpi/us/diagnostics')
+def cpi_diagnostics():
+    from backend.data_sources.bls_cpi import run_cpi_detail_diagnostic
+    return jsonify(run_cpi_detail_diagnostic())
+
+
 def _export_labor_market_excel(bls_data, nowcast_data):
     """Generate a multi-sheet Excel: payrolls, unemployment, track record."""
     from io import BytesIO

@@ -40,6 +40,7 @@ from datetime import datetime
 from config import Config
 from backend.data_sources.bls_cache_utils import (
     is_stale as _is_stale, months_behind as _months_behind, SOFT_RETRY_SECONDS,
+    get_bls_api_key,
 )
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -230,9 +231,16 @@ def _empty_result():
     }
 
 
-def _fetch():
-    """Fetch all employment series from BLS API v2."""
-    api_key = Config.BLS_API_KEY
+def _fetch(diagnostic: bool = False):
+    """Fetch all employment series from BLS API v2.
+
+    When `diagnostic=True`, also returns a `_diagnostic` block on the
+    payload with per-series latest month, BLS API status messages, and
+    request metadata — so the /diagnostics endpoint can show exactly
+    what came back even when normal logic would discard a partial
+    response.
+    """
+    api_key = get_bls_api_key()
     current_year = datetime.utcnow().year
     start_year = current_year - (20 if api_key else 10)
     logger.info(
@@ -248,14 +256,39 @@ def _fetch():
     if api_key:
         payload['registrationkey'] = api_key
 
+    diag = {
+        'has_api_key': bool(api_key),
+        'request': {'startyear': str(start_year), 'endyear': str(current_year),
+                    'series_count': len(BLS_SERIES)},
+        'bls_api_status': None,
+        'bls_api_message': None,
+        'http_status': None,
+        'series_returned': 0,
+        'latest_month_per_series': {},
+        'series_with_no_data': [],
+        'error': None,
+    }
+
     try:
         resp = requests.post(BLS_API_URL, json=payload,
                              headers={'Content-Type': 'application/json'},
                              timeout=45, verify=False)
+        diag['http_status'] = resp.status_code
         resp.raise_for_status()
         result = resp.json()
+        diag['bls_api_status'] = result.get('status')
+        msg = result.get('message')
+        if isinstance(msg, list):
+            diag['bls_api_message'] = '; '.join(str(m) for m in msg) if msg else None
+        else:
+            diag['bls_api_message'] = msg or None
         if result.get('status') != 'REQUEST_SUCCEEDED':
-            logger.error(f"BLS employment API error: {result.get('message', 'unknown')}")
+            logger.error(
+                f"BLS employment API error: status={result.get('status')}, "
+                f"message={diag['bls_api_message']}"
+            )
+            if diagnostic:
+                return {'_diagnostic': diag}
             return None
 
         id_to_key = {v['id']: k for k, v in BLS_SERIES.items()}
@@ -320,6 +353,29 @@ def _fetch():
         rankings = _build_rankings(series_data)
         latest_month = _latest_month(series_data)
 
+        # Per-series freshness — surfaced both in normal meta (for the
+        # stale-banner detail) and in the diagnostic payload so we can
+        # see whether *one* bad series is dragging latest_month down.
+        latest_per_series = {}
+        no_data = []
+        for key, pts in series_data.items():
+            if pts:
+                latest_per_series[key] = pts[-1]['date']
+            else:
+                no_data.append(key)
+        for key in BLS_SERIES:
+            if key not in series_data:
+                no_data.append(key)
+        diag.update({
+            'series_returned': len(series_data),
+            'latest_month_per_series': latest_per_series,
+            'series_with_no_data': no_data,
+        })
+        logger.info(
+            f"BLS employment fetch OK: series_returned={len(series_data)}, "
+            f"latest_month={latest_month}, no_data={no_data or 'none'}"
+        )
+
         return {
             'series': series_data,
             'categories': {k: v['label'] for k, v in BLS_SERIES.items()},
@@ -337,18 +393,45 @@ def _fetch():
                 'frequency': 'Monthly',
                 'year_range': f'{start_year}-{current_year}',
                 'latest_month': latest_month,
+                'latest_month_per_series': latest_per_series,
+                'series_with_no_data': no_data,
                 'has_api_key': bool(api_key),
+                'bls_api_status': diag['bls_api_status'],
+                'bls_api_message': diag['bls_api_message'],
                 'series_ids': {k: v['id'] for k, v in BLS_SERIES.items()},
                 'fetched_at': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
             },
+            '_diagnostic': diag if diagnostic else None,
         }
 
     except requests.exceptions.Timeout:
+        diag['error'] = 'timeout'
         logger.error("BLS employment API timeout")
+        if diagnostic:
+            return {'_diagnostic': diag}
         return None
     except Exception as e:
+        diag['error'] = str(e)
         logger.error(f"BLS employment fetch failed: {e}")
+        if diagnostic:
+            return {'_diagnostic': diag}
         return None
+
+
+def run_diagnostic():
+    """Force a fresh BLS call, bypassing the cache. Returns the
+    diagnostic block so the /diagnostics endpoint can surface raw API
+    status + per-series freshness without polluting the regular cache.
+    """
+    result = _fetch(diagnostic=True)
+    if not result:
+        return {'error': 'fetch returned None'}
+    diag = result.get('_diagnostic') or {}
+    diag['payload_received'] = result.get('series') is not None
+    diag['latest_month'] = (result.get('meta') or {}).get('latest_month')
+    diag['is_stale'] = _is_stale(diag.get('latest_month'))
+    diag['months_behind'] = _months_behind(diag.get('latest_month'))
+    return diag
 
 
 def _latest_month(series_data: dict) -> str:
