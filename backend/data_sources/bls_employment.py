@@ -38,6 +38,9 @@ import requests
 import urllib3
 from datetime import datetime
 from config import Config
+from backend.data_sources.bls_cache_utils import (
+    is_stale as _is_stale, months_behind as _months_behind, SOFT_RETRY_SECONDS,
+)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -152,29 +155,55 @@ PERIOD_MAP = {f'M{str(i).zfill(2)}': i for i in range(1, 13)}
 
 
 class _Cache:
-    """Thread-safe cache with TTL and failure backoff."""
+    """Thread-safe cache with TTL, failure backoff, and staleness guard.
+
+    Staleness guard: if a successful fetch comes back with `latest_month`
+    more than 2 months behind today (see bls_cache_utils.STALE_LAG_MONTHS),
+    we still serve the data so the page doesn't go blank, but we mark the
+    cache as failed and use a short retry backoff (30 min) so the next
+    request automatically re-fetches.  This prevents the 24h TTL from
+    locking us into a stale snapshot for a whole day after a bad warm-up.
+    """
 
     def __init__(self):
         self._lock = threading.RLock()
         self._data = None
         self._last_fetch = 0
         self._last_fail = 0
+        self._retry_backoff = RETRY_BACKOFF
 
     def get(self):
         with self._lock:
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
-            if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
+            if self._last_fail and (time.time() - self._last_fail) < self._retry_backoff:
                 return self._data or _empty_result()
         data = _fetch()
         if data:
+            latest = (data.get('meta') or {}).get('latest_month')
+            stale = _is_stale(latest)
             with self._lock:
+                # Annotate the payload so the UI can show a "data may be
+                # stale" chip without a second round-trip.
+                data['meta']['is_stale'] = stale
+                data['meta']['months_behind'] = _months_behind(latest)
                 self._data = data
-                self._last_fetch = time.time()
-                self._last_fail = 0
+                if stale:
+                    logger.warning(
+                        f"BLS employment data stale: latest_month={latest}, "
+                        f"will retry in {SOFT_RETRY_SECONDS}s"
+                    )
+                    self._last_fetch = 0
+                    self._last_fail = time.time()
+                    self._retry_backoff = SOFT_RETRY_SECONDS
+                else:
+                    self._last_fetch = time.time()
+                    self._last_fail = 0
+                    self._retry_backoff = RETRY_BACKOFF
             return data
         with self._lock:
             self._last_fail = time.time()
+            self._retry_backoff = RETRY_BACKOFF
             return self._data or _empty_result()
 
     def clear(self):
@@ -182,6 +211,7 @@ class _Cache:
             self._data = None
             self._last_fetch = 0
             self._last_fail = 0
+            self._retry_backoff = RETRY_BACKOFF
 
 
 _cache = _Cache()

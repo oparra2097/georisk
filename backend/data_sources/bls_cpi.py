@@ -15,6 +15,32 @@ import requests
 import urllib3
 from datetime import datetime
 from config import Config
+from backend.data_sources.bls_cache_utils import (
+    is_stale as _is_stale, months_behind as _months_behind, SOFT_RETRY_SECONDS,
+)
+
+
+def _latest_month_from_series(series_data: dict) -> str:
+    """Return the latest 'YYYY-MM' date present across any series."""
+    latest = ''
+    for pts in (series_data or {}).values():
+        if pts and pts[-1].get('date', '') > latest:
+            latest = pts[-1]['date']
+    return latest
+
+
+def _annotate_freshness(data: dict) -> dict:
+    """Add `meta.latest_month`, `meta.is_stale`, `meta.months_behind` to a
+    BLS CPI payload (overview, components, or detail).
+    """
+    if not data:
+        return data
+    meta = data.setdefault('meta', {})
+    latest = meta.get('latest_month') or _latest_month_from_series(data.get('series'))
+    meta['latest_month'] = latest
+    meta['is_stale'] = _is_stale(latest)
+    meta['months_behind'] = _months_behind(latest)
+    return data
 
 # BLS API has recurring SSL certificate issues; suppress warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -42,30 +68,43 @@ RETRY_BACKOFF = 600  # Wait 10 minutes before retrying after a failure
 
 
 class BlsCpiCache:
-    """Thread-safe cache for BLS CPI data."""
+    """Thread-safe cache with TTL, failure backoff, and staleness guard."""
 
     def __init__(self):
         self._lock = threading.RLock()
         self._data = None
         self._last_fetch = 0
         self._last_fail = 0
+        self._retry_backoff = RETRY_BACKOFF
 
     def get(self):
         with self._lock:
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
-            # Don't retry if we recently failed (avoid burning BLS quota)
-            if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
+            if self._last_fail and (time.time() - self._last_fail) < self._retry_backoff:
                 return self._data or _empty_result()
         data = _fetch_bls_cpi()
         if data:
+            data = _annotate_freshness(data)
+            stale = data.get('meta', {}).get('is_stale', False)
             with self._lock:
                 self._data = data
-                self._last_fetch = time.time()
-                self._last_fail = 0
+                if stale:
+                    logger.warning(
+                        f"BLS CPI overview stale: latest_month="
+                        f"{data['meta'].get('latest_month')}, retry in {SOFT_RETRY_SECONDS}s"
+                    )
+                    self._last_fetch = 0
+                    self._last_fail = time.time()
+                    self._retry_backoff = SOFT_RETRY_SECONDS
+                else:
+                    self._last_fetch = time.time()
+                    self._last_fail = 0
+                    self._retry_backoff = RETRY_BACKOFF
             return data
         with self._lock:
             self._last_fail = time.time()
+            self._retry_backoff = RETRY_BACKOFF
             return self._data or _empty_result()
 
     def clear(self):
@@ -73,6 +112,7 @@ class BlsCpiCache:
             self._data = None
             self._last_fetch = 0
             self._last_fail = 0
+            self._retry_backoff = RETRY_BACKOFF
 
 
 _cache = BlsCpiCache()
@@ -212,29 +252,43 @@ BLS_COMPONENTS = {
 
 
 class BlsComponentCache:
-    """Thread-safe cache for BLS CPI component data."""
+    """Thread-safe cache with TTL, failure backoff, and staleness guard."""
 
     def __init__(self):
         self._lock = threading.RLock()
         self._data = None
         self._last_fetch = 0
         self._last_fail = 0
+        self._retry_backoff = RETRY_BACKOFF
 
     def get(self):
         with self._lock:
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
-            if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
+            if self._last_fail and (time.time() - self._last_fail) < self._retry_backoff:
                 return self._data or _empty_components_result()
         data = _fetch_bls_components()
         if data:
+            data = _annotate_freshness(data)
+            stale = data.get('meta', {}).get('is_stale', False)
             with self._lock:
                 self._data = data
-                self._last_fetch = time.time()
-                self._last_fail = 0
+                if stale:
+                    logger.warning(
+                        f"BLS CPI components stale: latest_month="
+                        f"{data['meta'].get('latest_month')}, retry in {SOFT_RETRY_SECONDS}s"
+                    )
+                    self._last_fetch = 0
+                    self._last_fail = time.time()
+                    self._retry_backoff = SOFT_RETRY_SECONDS
+                else:
+                    self._last_fetch = time.time()
+                    self._last_fail = 0
+                    self._retry_backoff = RETRY_BACKOFF
             return data
         with self._lock:
             self._last_fail = time.time()
+            self._retry_backoff = RETRY_BACKOFF
             return self._data or _empty_components_result()
 
     def clear(self):
@@ -242,6 +296,7 @@ class BlsComponentCache:
             self._data = None
             self._last_fetch = 0
             self._last_fail = 0
+            self._retry_backoff = RETRY_BACKOFF
 
 
 _component_cache = BlsComponentCache()
@@ -435,29 +490,43 @@ BLS_DETAIL_COMPONENTS = {
 
 
 class _DetailCache:
-    """Thread-safe cache for the richer detail-component dataset."""
+    """Thread-safe cache with TTL, failure backoff, and staleness guard."""
 
     def __init__(self):
         self._lock = threading.RLock()
         self._data = None
         self._last_fetch = 0
         self._last_fail = 0
+        self._retry_backoff = RETRY_BACKOFF
 
     def get(self):
         with self._lock:
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
-            if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
+            if self._last_fail and (time.time() - self._last_fail) < self._retry_backoff:
                 return self._data or _empty_detail_result()
         data = _fetch_bls_detail()
         if data:
+            data = _annotate_freshness(data)
+            stale = data.get('meta', {}).get('is_stale', False)
             with self._lock:
                 self._data = data
-                self._last_fetch = time.time()
-                self._last_fail = 0
+                if stale:
+                    logger.warning(
+                        f"BLS CPI detail stale: latest_month="
+                        f"{data['meta'].get('latest_month')}, retry in {SOFT_RETRY_SECONDS}s"
+                    )
+                    self._last_fetch = 0
+                    self._last_fail = time.time()
+                    self._retry_backoff = SOFT_RETRY_SECONDS
+                else:
+                    self._last_fetch = time.time()
+                    self._last_fail = 0
+                    self._retry_backoff = RETRY_BACKOFF
             return data
         with self._lock:
             self._last_fail = time.time()
+            self._retry_backoff = RETRY_BACKOFF
             return self._data or _empty_detail_result()
 
     def clear(self):
@@ -465,6 +534,7 @@ class _DetailCache:
             self._data = None
             self._last_fetch = 0
             self._last_fail = 0
+            self._retry_backoff = RETRY_BACKOFF
 
 
 _detail_cache = _DetailCache()

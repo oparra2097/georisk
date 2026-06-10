@@ -8,6 +8,16 @@
 {% block content %}
 <div class="lm-page" id="lm-page">
 
+  <!-- ── Staleness banner (hidden unless BLS data is >2mo behind) ── -->
+  <section class="lm-stale-banner" id="lm-stale-banner" hidden>
+    <div class="lm-stale-icon" aria-hidden="true">!</div>
+    <div class="lm-stale-text">
+      <strong>BLS data may be stale.</strong>
+      <span id="lm-stale-detail">Latest available month is older than expected. Background refresh in progress.</span>
+    </div>
+    <button class="lm-btn lm-btn-ghost" id="lm-stale-refresh">Refresh now</button>
+  </section>
+
   <!-- ── Release banner ───────────────────────────────────────── -->
   <section class="lm-release-banner" id="lm-release-banner">
     <div class="lm-release-left">
@@ -109,15 +119,19 @@
     </div>
   </section>
 
-  <!-- ── Sector trend matrix (small multiples) ────────────────── -->
+  <!-- ── Sector trend matrix (small multiples, grouped) ───────── -->
   <section class="lm-section">
     <div class="lm-section-header">
       <div>
         <h2>Sector trends &mdash; 5-year YoY (%)</h2>
-        <p class="lm-note">Each tile is a sector's 12-month payroll growth. Read across as a snapshot of where labor is expanding vs contracting.</p>
+        <p class="lm-note">Each tile is a sector&rsquo;s 12-month payroll growth, grouped by goods-producing, services, and government. Click any tile to load it in the payroll chart above.</p>
+      </div>
+      <div class="lm-toggle-group" role="tablist" aria-label="Tile sort">
+        <button class="lm-toggle active" data-tile-sort="group">By group</button>
+        <button class="lm-toggle" data-tile-sort="yoy">Largest YoY first</button>
       </div>
     </div>
-    <div class="lm-sparks" id="lm-sparks"></div>
+    <div class="lm-spark-groups" id="lm-sparks"></div>
   </section>
 
   <!-- ── Payrolls chart ───────────────────────────────────────── -->
