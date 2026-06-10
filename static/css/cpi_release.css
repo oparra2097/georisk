@@ -1,0 +1,37 @@
+/* CPI Release dashboard — adjustments on top of labor_market.css.
+ *
+ * The CPI page reuses .lm-page tokens (release banner, KPI strip, table,
+ * sparkline grid) and just adds the ranking layout primitives.
+ */
+
+.cpi-rank-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr);
+  gap: 18px;
+}
+.cpi-rank-chart-wrap { height: 540px; position: relative; }
+.cpi-rank-table-wrap {
+  max-height: 540px; overflow-y: auto;
+  border: 1px solid var(--lm-border); border-radius: 8px;
+}
+.cpi-rank-table tbody tr { cursor: pointer; transition: background 0.05s; }
+.cpi-rank-table tbody tr:hover { background: rgba(255,255,255,0.04); }
+.cpi-rank-table tbody tr.cpi-row-active {
+  background: rgba(59, 130, 246, 0.10);
+  outline: 1px solid rgba(59, 130, 246, 0.35);
+}
+.cpi-rank-table tbody tr.cpi-row-aggregate td { font-weight: 600; }
+
+.cpi-group-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--lm-fs-xs); color: var(--lm-text-mute);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+  padding: 2px 8px; border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+}
+
+@media (max-width: 880px) {
+  .cpi-rank-layout { grid-template-columns: 1fr; }
+  .cpi-rank-chart-wrap { height: 420px; }
+  .cpi-rank-table-wrap { max-height: 360px; }
+}

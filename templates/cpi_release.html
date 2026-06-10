@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}CPI Release Monitor — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/labor_market.css">
+<link rel="stylesheet" href="/static/css/cpi_release.css">
+{% endblock %}
+
+{% block content %}
+<div class="lm-page" id="cpi-page">
+
+  <!-- ── Release banner ───────────────────────────────────────── -->
+  <section class="lm-release-banner" id="cpi-release-banner">
+    <div class="lm-release-left">
+      <span class="lm-release-eyebrow">Next BLS release · Consumer Price Index</span>
+      <h1 class="lm-release-date" id="cpi-release-date">—</h1>
+      <p class="lm-release-meta">
+        <span id="cpi-release-data-label">Consumer Price Index, all items</span>
+        &middot; <span id="cpi-release-time">08:30 ET</span>
+      </p>
+    </div>
+    <div class="lm-release-countdown" id="cpi-release-countdown">
+      <div class="lm-cd-cell"><span class="lm-cd-num" id="cpi-cd-days">—</span><span>days</span></div>
+      <div class="lm-cd-cell"><span class="lm-cd-num" id="cpi-cd-hours">—</span><span>hrs</span></div>
+      <div class="lm-cd-cell"><span class="lm-cd-num" id="cpi-cd-mins">—</span><span>min</span></div>
+    </div>
+    <div class="lm-release-actions">
+      <a href="/api/cpi/us/export" class="lm-btn lm-btn-primary" title="Download Excel">Export</a>
+      <button id="cpi-refresh-btn" class="lm-btn lm-btn-ghost" title="Force re-fetch from BLS">
+        Refresh
+      </button>
+    </div>
+  </section>
+
+  <!-- ── Headline KPIs ────────────────────────────────────────── -->
+  <section class="lm-kpi-grid" id="cpi-kpi-grid">
+    <div class="lm-kpi-card lm-kpi-card--nowcast">
+      <span class="lm-kpi-label">Headline CPI YoY</span>
+      <span class="lm-kpi-value" id="cpi-kpi-headline">—</span>
+      <span class="lm-kpi-meta" id="cpi-kpi-headline-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Core CPI YoY</span>
+      <span class="lm-kpi-value" id="cpi-kpi-core">—</span>
+      <span class="lm-kpi-meta" id="cpi-kpi-core-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Food YoY</span>
+      <span class="lm-kpi-value" id="cpi-kpi-food">—</span>
+      <span class="lm-kpi-meta" id="cpi-kpi-food-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Energy YoY</span>
+      <span class="lm-kpi-value" id="cpi-kpi-energy">—</span>
+      <span class="lm-kpi-meta" id="cpi-kpi-energy-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Shelter YoY</span>
+      <span class="lm-kpi-value" id="cpi-kpi-shelter">—</span>
+      <span class="lm-kpi-meta" id="cpi-kpi-shelter-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Headline MoM</span>
+      <span class="lm-kpi-value" id="cpi-kpi-headline-mom">—</span>
+      <span class="lm-kpi-meta" id="cpi-kpi-headline-mom-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Core MoM</span>
+      <span class="lm-kpi-value" id="cpi-kpi-core-mom">—</span>
+      <span class="lm-kpi-meta" id="cpi-kpi-core-mom-meta">—</span>
+    </div>
+  </section>
+
+  <!-- ── Headline + Core YoY history ──────────────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Headline &amp; core inflation &mdash; YoY history</h2>
+        <p class="lm-note">Compare the print to the Fed&rsquo;s 2 % target band. Toggle window to spot regime shifts.</p>
+      </div>
+      <div class="lm-toggle-group" role="tablist" aria-label="History window">
+        <button class="lm-toggle" data-window="24">2y</button>
+        <button class="lm-toggle active" data-window="60">5y</button>
+        <button class="lm-toggle" data-window="120">10y</button>
+        <button class="lm-toggle" data-window="0">Max</button>
+      </div>
+    </div>
+    <div class="lm-chart-wrap"><canvas id="cpi-history-chart"></canvas></div>
+  </section>
+
+  <!-- ── Component ranking ────────────────────────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Component ranking &mdash; what moved the print</h2>
+        <p class="lm-note">Every tracked component sorted by change at the latest month. Bar = % change, dot color groups items (shelter / food / energy / vehicles / medical / services / goods). Click a row to see its history.</p>
+      </div>
+      <div class="lm-toggle-group" role="tablist" aria-label="Change basis">
+        <button class="lm-toggle active" data-rank="mom">MoM %</button>
+        <button class="lm-toggle" data-rank="yoy">YoY %</button>
+      </div>
+    </div>
+    <div class="cpi-rank-layout">
+      <div class="cpi-rank-chart-wrap">
+        <canvas id="cpi-rank-chart"></canvas>
+      </div>
+      <div class="cpi-rank-table-wrap">
+        <table class="lm-table cpi-rank-table" id="cpi-rank-table">
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Group</th>
+              <th class="num">MoM %</th>
+              <th class="num">YoY %</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Component detail (sparkline + chart) ─────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2 id="cpi-detail-title">Select a component</h2>
+        <p class="lm-note" id="cpi-detail-note">Click any row in the ranking table to load its YoY history here.</p>
+      </div>
+      <div class="lm-toggle-group" role="tablist" aria-label="Detail basis">
+        <button class="lm-toggle active" data-detail="yoy">YoY %</button>
+        <button class="lm-toggle" data-detail="mom">MoM %</button>
+        <button class="lm-toggle" data-detail="level">Index level</button>
+      </div>
+    </div>
+    <div class="lm-chart-wrap"><canvas id="cpi-detail-chart"></canvas></div>
+  </section>
+
+  <!-- ── Component small-multiples (5y YoY sparklines) ────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>5-year YoY trend per component</h2>
+        <p class="lm-note">Quick scan of which items are still sticky and which have come back down.</p>
+      </div>
+    </div>
+    <div class="lm-sparks" id="cpi-sparks"></div>
+  </section>
+
+  <!-- ── Upcoming releases ────────────────────────────────────── -->
+  <section class="lm-section">
+    <h2>Upcoming BLS releases</h2>
+    <ul class="lm-release-list" id="cpi-release-list"></ul>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="/static/js/cpi_release.js"></script>
+{% endblock %}

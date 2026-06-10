@@ -9,7 +9,11 @@ from backend.data_sources.imf_cofer import (
     diagnose_fetch as diagnose_cofer_fetch,
 )
 from backend.data_sources.reserves_nowcast import get_nowcast_data
-from backend.data_sources.bls_cpi import get_bls_cpi_data, get_bls_components, clear_bls_caches
+from backend.data_sources.bls_cpi import (
+    get_bls_cpi_data, get_bls_components, clear_bls_caches,
+    get_bls_cpi_detail,
+)
+from backend.data_sources import bls_release_calendar
 from backend.data_sources.ons_cpi import get_ons_cpi_data, get_ons_components
 from backend.data_sources.eurostat_hicp import get_eurostat_cpi_data, get_eurostat_components
 from backend.data_sources.substack_feed import get_substack_posts
@@ -668,7 +672,13 @@ def labor_market_us():
     """Combined payload: BLS payrolls + unemployment + bridge-model nowcast."""
     bls = get_bls_employment_data()
     nowcast = get_labor_nowcast()
-    return jsonify({'bls': bls, 'nowcast': nowcast})
+    next_rel = bls_release_calendar.next_release('employment_situation')
+    return jsonify({
+        'bls': bls,
+        'nowcast': nowcast,
+        'next_release': next_rel,
+        'upcoming_releases': bls_release_calendar.upcoming_releases(limit=6),
+    })
 
 
 @api_bp.route('/labor-market/us/refresh', methods=['POST'])
@@ -682,10 +692,40 @@ def labor_market_us_refresh():
     return jsonify({'status': 'ok', 'message': 'Labor market caches cleared'})
 
 
+
+
 @api_bp.route('/labor-market/us/export')
 def labor_market_us_export():
     """Excel export of BLS series + the bridge-model track record."""
     return _export_labor_market_excel(get_bls_employment_data(), get_labor_nowcast())
+
+
+# ── CPI Release dashboard endpoints ────────────────────────────────────
+
+@api_bp.route('/cpi/us/detail')
+def cpi_us_detail():
+    """Detail-level CPI components + MoM/YoY rankings + next release."""
+    detail = get_bls_cpi_detail()
+    overview = get_bls_cpi_data()
+    next_rel = bls_release_calendar.next_release('cpi')
+    return jsonify({
+        'detail': detail,
+        'overview': overview,
+        'next_release': next_rel,
+        'upcoming_releases': bls_release_calendar.upcoming_releases(limit=6),
+    })
+
+
+@api_bp.route('/release-calendar')
+def release_calendar():
+    """All known BLS releases in our schedule."""
+    return jsonify({
+        'next': {
+            'employment_situation': bls_release_calendar.next_release('employment_situation'),
+            'cpi': bls_release_calendar.next_release('cpi'),
+        },
+        'upcoming': bls_release_calendar.upcoming_releases(limit=12),
+    })
 
 
 def _export_labor_market_excel(bls_data, nowcast_data):

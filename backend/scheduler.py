@@ -176,6 +176,67 @@ def init_scheduler(app):
         )
         logger.info("Labor market nowcast scheduled (every 6 hours).")
 
+    # Job 5c: BLS release-day refreshes.
+    # We fire one cron job per known release date 5 minutes after the
+    # 8:30 AM ET embargo lifts.  Each release type has its own callback
+    # so we only repull what changed.
+    from backend.data_sources import bls_release_calendar as rel_cal
+
+    def _refresh_employment_situation_release():
+        try:
+            from backend.data_sources.bls_employment import clear_bls_employment_cache, get_bls_employment_data
+            clear_bls_employment_cache()
+            data = get_bls_employment_data()
+            latest = (data or {}).get('meta', {}).get('latest_month')
+            logger.info(f"Employment Situation release refresh: latest BLS month={latest}")
+            # Also kick the labor nowcast so the comparison uses fresh BLS data.
+            from backend.data_sources.labor_nowcast import clear_cache as clear_lm
+            from backend.data_sources.fred_client import clear_cache as clear_fred
+            clear_lm()
+            clear_fred()
+        except Exception as e:
+            logger.error(f"Employment release refresh failed: {e}")
+
+    def _refresh_cpi_release():
+        try:
+            from backend.data_sources.bls_cpi import clear_bls_caches, get_bls_cpi_data, get_bls_cpi_detail
+            clear_bls_caches()
+            overview = get_bls_cpi_data()
+            detail = get_bls_cpi_detail()
+            o_month = (overview or {}).get('meta', {}).get('year_range', '?')
+            d_month = (detail or {}).get('meta', {}).get('latest_month', '?')
+            logger.info(f"CPI release refresh: detail latest_month={d_month}")
+        except Exception as e:
+            logger.error(f"CPI release refresh failed: {e}")
+
+    for trig in rel_cal.cron_kwargs_for('employment_situation'):
+        scheduler.add_job(
+            func=_refresh_employment_situation_release,
+            trigger='cron',
+            id=f"empsit_release_{trig['year']}{trig['month']:02d}{trig['day']:02d}",
+            year=trig['year'], month=trig['month'], day=trig['day'],
+            hour=trig['hour'], minute=trig['minute'],
+            replace_existing=True,
+            misfire_grace_time=3600,
+            max_instances=1,
+        )
+    for trig in rel_cal.cron_kwargs_for('cpi'):
+        scheduler.add_job(
+            func=_refresh_cpi_release,
+            trigger='cron',
+            id=f"cpi_release_{trig['year']}{trig['month']:02d}{trig['day']:02d}",
+            year=trig['year'], month=trig['month'], day=trig['day'],
+            hour=trig['hour'], minute=trig['minute'],
+            replace_existing=True,
+            misfire_grace_time=3600,
+            max_instances=1,
+        )
+    logger.info(
+        f"BLS release-day refreshes scheduled: "
+        f"{len(rel_cal.cron_kwargs_for('employment_situation'))} employment, "
+        f"{len(rel_cal.cron_kwargs_for('cpi'))} CPI."
+    )
+
     # Job 6: Data center drift scan once daily at 07:30 UTC.
     def _scan_dc_drift():
         try:
@@ -288,6 +349,19 @@ def init_scheduler(app):
             except Exception as e:
                 logger.error(f"GDP nowcast warmup failed: {e}")
         threading.Thread(target=_warm_gdp_nowcast, daemon=True).start()
+
+        def _warm_cpi_detail():
+            try:
+                from backend.data_sources.bls_cpi import get_bls_cpi_detail
+                data = get_bls_cpi_detail()
+                meta = (data or {}).get('meta', {})
+                logger.info(
+                    f"CPI detail cache warmed: latest_month={meta.get('latest_month')}, "
+                    f"series={len((data or {}).get('series', {}))}"
+                )
+            except Exception as e:
+                logger.error(f"CPI detail warmup failed: {e}")
+        threading.Thread(target=_warm_cpi_detail, daemon=True).start()
 
         def _warm_labor_nowcast():
             try:

@@ -8,127 +8,193 @@
 {% block content %}
 <div class="lm-page" id="lm-page">
 
-  <header class="lm-header">
-    <div class="lm-header-text">
-      <h1 class="lm-title">US Labor Market</h1>
-      <p class="lm-subtitle">
-        Monthly nonfarm payroll growth and the unemployment rate from the
-        Bureau of Labor Statistics, set against an in-house bridge-model
-        nowcast built from FRED leading indicators (initial &amp; continued
-        claims, JOLTS openings, manufacturing hours, industrial production,
-        consumer sentiment). Updated every six hours.
+  <!-- ── Release banner ───────────────────────────────────────── -->
+  <section class="lm-release-banner" id="lm-release-banner">
+    <div class="lm-release-left">
+      <span class="lm-release-eyebrow">Next BLS release · Employment Situation</span>
+      <h1 class="lm-release-date" id="lm-release-date">—</h1>
+      <p class="lm-release-meta">
+        <span id="lm-release-data-label">Nonfarm payrolls + unemployment rate</span>
+        &middot; <span id="lm-release-time">08:30 ET</span>
       </p>
     </div>
-    <div class="lm-status">
-      <div class="lm-status-item">
-        <span class="lm-status-label">Latest BLS</span>
-        <span class="lm-status-value" id="lm-latest-month">—</span>
-      </div>
-      <div class="lm-status-item">
-        <span class="lm-status-label">Payrolls&nbsp;Δ</span>
-        <span class="lm-status-value" id="lm-latest-payroll">—</span>
-      </div>
-      <div class="lm-status-item">
-        <span class="lm-status-label">U-rate</span>
-        <span class="lm-status-value" id="lm-latest-unrate">—</span>
-      </div>
-      <div class="lm-status-item">
-        <span class="lm-status-label">Nowcast&nbsp;Δ</span>
-        <span class="lm-status-value" id="lm-nowcast-payroll">—</span>
-      </div>
-      <a href="/api/labor-market/us/export" class="lm-export-btn" title="Download Excel">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
+    <div class="lm-release-countdown" id="lm-release-countdown">
+      <div class="lm-cd-cell"><span class="lm-cd-num" id="lm-cd-days">—</span><span>days</span></div>
+      <div class="lm-cd-cell"><span class="lm-cd-num" id="lm-cd-hours">—</span><span>hrs</span></div>
+      <div class="lm-cd-cell"><span class="lm-cd-num" id="lm-cd-mins">—</span><span>min</span></div>
+    </div>
+    <div class="lm-release-actions">
+      <a href="/api/labor-market/us/export" class="lm-btn lm-btn-primary" title="Download Excel">
         Export
       </a>
-    </div>
-  </header>
-
-  <section class="lm-summary-grid" id="lm-summary-grid">
-    <div class="lm-summary-card">
-      <span class="lm-summary-label">Payroll MAE (last 12 mo)</span>
-      <span class="lm-summary-value" id="lm-payroll-mae">—</span>
-      <span class="lm-summary-meta">thousands · lower is better</span>
-    </div>
-    <div class="lm-summary-card">
-      <span class="lm-summary-label">Direction hit-rate</span>
-      <span class="lm-summary-value" id="lm-payroll-hit">—</span>
-      <span class="lm-summary-meta">payroll Δ sign vs BLS</span>
-    </div>
-    <div class="lm-summary-card">
-      <span class="lm-summary-label">U-rate MAE (last 12 mo)</span>
-      <span class="lm-summary-value" id="lm-unrate-mae">—</span>
-      <span class="lm-summary-meta">percentage points</span>
-    </div>
-    <div class="lm-summary-card">
-      <span class="lm-summary-label">Sample</span>
-      <span class="lm-summary-value" id="lm-sample">—</span>
-      <span class="lm-summary-meta">months in fitted panel</span>
+      <button id="lm-refresh-btn" class="lm-btn lm-btn-ghost" title="Force re-fetch from BLS + FRED">
+        Refresh
+      </button>
     </div>
   </section>
 
-  <div class="lm-toolbar">
-    <div class="lm-toggle-group" role="tablist" aria-label="History window">
-      <button class="lm-toggle" data-window="12">1y</button>
-      <button class="lm-toggle active" data-window="24">2y</button>
-      <button class="lm-toggle" data-window="60">5y</button>
-      <button class="lm-toggle" data-window="0">Max</button>
+  <!-- ── Headline KPI strip ──────────────────────────────────── -->
+  <section class="lm-kpi-grid" id="lm-kpi-grid">
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Nonfarm payrolls (MoM)</span>
+      <span class="lm-kpi-value" id="lm-kpi-payrolls">—</span>
+      <span class="lm-kpi-meta" id="lm-kpi-payrolls-meta">—</span>
     </div>
-    <span class="lm-spacer"></span>
-    <button id="lm-refresh-btn" class="lm-link-btn" title="Force re-fetch from BLS + FRED">
-      Refresh data
-    </button>
-  </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Unemployment rate (U-3)</span>
+      <span class="lm-kpi-value" id="lm-kpi-unrate">—</span>
+      <span class="lm-kpi-meta" id="lm-kpi-unrate-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">U-6 broad underemployment</span>
+      <span class="lm-kpi-value" id="lm-kpi-u6">—</span>
+      <span class="lm-kpi-meta" id="lm-kpi-u6-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Labor-force participation</span>
+      <span class="lm-kpi-value" id="lm-kpi-lfp">—</span>
+      <span class="lm-kpi-meta" id="lm-kpi-lfp-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Employment-to-population</span>
+      <span class="lm-kpi-value" id="lm-kpi-eppop">—</span>
+      <span class="lm-kpi-meta" id="lm-kpi-eppop-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Avg hourly earnings (YoY)</span>
+      <span class="lm-kpi-value" id="lm-kpi-ahe">—</span>
+      <span class="lm-kpi-meta" id="lm-kpi-ahe-meta">—</span>
+    </div>
+    <div class="lm-kpi-card">
+      <span class="lm-kpi-label">Avg weekly hours</span>
+      <span class="lm-kpi-value" id="lm-kpi-aweek">—</span>
+      <span class="lm-kpi-meta" id="lm-kpi-aweek-meta">—</span>
+    </div>
+    <div class="lm-kpi-card lm-kpi-card--nowcast">
+      <span class="lm-kpi-label">Our nowcast · next print</span>
+      <span class="lm-kpi-value" id="lm-kpi-nowcast">—</span>
+      <span class="lm-kpi-meta" id="lm-kpi-nowcast-meta">—</span>
+    </div>
+  </section>
 
-  <section class="lm-chart-section">
-    <div class="lm-chart-header">
-      <h2>Monthly nonfarm payroll change</h2>
-      <div class="lm-legend">
-        <span class="lm-legend-item"><span class="lm-legend-swatch" style="background:#3b82f6"></span>BLS actual</span>
-        <span class="lm-legend-item"><span class="lm-legend-swatch lm-legend-line" style="background:#f59e0b"></span>Our estimate</span>
-        <span class="lm-legend-item"><span class="lm-legend-swatch" style="background:rgba(245,158,11,0.45);border:1px dashed #f59e0b"></span>Forward nowcast</span>
+  <!-- ── Sector breakdown: ranked bars + table ────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Sectoral payrolls &mdash; ranked by change</h2>
+        <p class="lm-note">Every supersector ranked at the latest print. Toggle MoM / YoY views; sort or filter the table.</p>
+      </div>
+      <div class="lm-toggle-group" role="tablist" aria-label="Change basis">
+        <button class="lm-toggle active" data-rank="mom">MoM (thousands)</button>
+        <button class="lm-toggle" data-rank="yoy">YoY (% &amp; thousands)</button>
       </div>
     </div>
-    <div class="lm-chart-wrap">
-      <canvas id="lm-payroll-chart"></canvas>
-    </div>
-  </section>
-
-  <section class="lm-chart-section">
-    <div class="lm-chart-header">
-      <h2>Unemployment rate</h2>
-      <div class="lm-legend">
-        <span class="lm-legend-item"><span class="lm-legend-swatch lm-legend-line" style="background:#ef4444"></span>BLS actual (level)</span>
-        <span class="lm-legend-item"><span class="lm-legend-swatch lm-legend-line" style="background:#f59e0b"></span>Our estimate (level)</span>
+    <div class="lm-rank-grid">
+      <div class="lm-rank-chart-wrap">
+        <canvas id="lm-sector-rank-chart"></canvas>
+      </div>
+      <div class="lm-rank-table-wrap">
+        <table class="lm-table lm-rank-table" id="lm-sector-rank-table">
+          <thead>
+            <tr>
+              <th>Sector</th>
+              <th class="num">Level</th>
+              <th class="num">Δ (000s)</th>
+              <th class="num">Δ %</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
-    <div class="lm-chart-wrap">
-      <canvas id="lm-unrate-chart"></canvas>
-    </div>
   </section>
 
-  <section class="lm-track-section">
-    <div class="lm-chart-header">
-      <h2>Track record &mdash; last 24 months</h2>
-      <p class="lm-section-note">
-        Each row compares the BLS print to what the bridge model would have
-        produced from contemporaneous FRED indicators. Error = estimate &minus; actual.
-      </p>
+  <!-- ── Sector trend matrix (small multiples) ────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Sector trends &mdash; 5-year YoY (%)</h2>
+        <p class="lm-note">Each tile is a sector's 12-month payroll growth. Read across as a snapshot of where labor is expanding vs contracting.</p>
+      </div>
+    </div>
+    <div class="lm-sparks" id="lm-sparks"></div>
+  </section>
+
+  <!-- ── Payrolls chart ───────────────────────────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Monthly payroll change &mdash; BLS vs estimate</h2>
+        <p class="lm-note">Blue bars = BLS actuals · orange line = bridge-model estimate · dashed bar = forward nowcast for the in-progress month.</p>
+      </div>
+      <div class="lm-toggle-group" role="tablist" aria-label="History window">
+        <button class="lm-toggle" data-window="12">1y</button>
+        <button class="lm-toggle active" data-window="24">2y</button>
+        <button class="lm-toggle" data-window="60">5y</button>
+        <button class="lm-toggle" data-window="0">Max</button>
+      </div>
+    </div>
+    <div class="lm-chart-wrap"><canvas id="lm-payroll-chart"></canvas></div>
+  </section>
+
+  <!-- ── Unemployment chart ───────────────────────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Unemployment rates &mdash; U-3 vs U-6</h2>
+        <p class="lm-note">Spread widens before recessions and compresses in tight labor markets. Bridge-model estimate of U-3 overlaid.</p>
+      </div>
+    </div>
+    <div class="lm-chart-wrap"><canvas id="lm-unrate-chart"></canvas></div>
+  </section>
+
+  <!-- ── Wages + hours chart ──────────────────────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Wages &amp; hours</h2>
+        <p class="lm-note">Average hourly earnings YoY (left axis) and average weekly hours (right axis), total private.</p>
+      </div>
+    </div>
+    <div class="lm-chart-wrap"><canvas id="lm-wages-chart"></canvas></div>
+  </section>
+
+  <!-- ── Participation + EPOP chart ───────────────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Participation &amp; employment-to-population</h2>
+        <p class="lm-note">Two rates that decompose unemployment moves into labor-force entry/exit vs hiring.</p>
+      </div>
+    </div>
+    <div class="lm-chart-wrap"><canvas id="lm-participation-chart"></canvas></div>
+  </section>
+
+  <!-- ── Bridge-model track record ────────────────────────────── -->
+  <section class="lm-section">
+    <div class="lm-section-header">
+      <div>
+        <h2>Bridge-model track record</h2>
+        <p class="lm-note">Last 24 prints, side by side. Error = estimate &minus; BLS actual. Sample MAE and direction hit-rate at right.</p>
+      </div>
+      <div class="lm-stats-inline">
+        <div><span>Payroll MAE 12m</span><b id="lm-stat-pay-mae">—</b></div>
+        <div><span>Hit rate</span><b id="lm-stat-pay-hit">—</b></div>
+        <div><span>U-rate MAE 12m</span><b id="lm-stat-ur-mae">—</b></div>
+        <div><span>Sample</span><b id="lm-stat-sample">—</b></div>
+      </div>
     </div>
     <div class="lm-track-grid">
-      <div class="lm-track-col">
-        <h3>Payrolls (thousands)</h3>
-        <table class="lm-track-table" id="lm-payroll-track-table">
+      <div>
+        <h3 class="lm-subhead">Payrolls (thousands)</h3>
+        <table class="lm-table" id="lm-payroll-track-table">
           <thead><tr><th>Month</th><th class="num">BLS</th><th class="num">Estimate</th><th class="num">Error</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="lm-track-col">
-        <h3>Unemployment Δ (pp)</h3>
-        <table class="lm-track-table" id="lm-unrate-track-table">
+      <div>
+        <h3 class="lm-subhead">Unemployment Δ (pp)</h3>
+        <table class="lm-table" id="lm-unrate-track-table">
           <thead><tr><th>Month</th><th class="num">BLS</th><th class="num">Estimate</th><th class="num">Error</th></tr></thead>
           <tbody></tbody>
         </table>
@@ -136,20 +202,23 @@
     </div>
   </section>
 
-  <section class="lm-indicators-section">
-    <h2>Bridge-model indicators</h2>
-    <p class="lm-section-note">
-      Fitted coefficients from the latest OLS run. The payroll model maps
-      indicator levels to month-over-month change in thousands; the
-      unemployment model to month-over-month change in percentage points.
-    </p>
-    <table class="lm-indicators-table" id="lm-indicators-table">
-      <thead><tr>
-        <th>FRED series</th><th>Indicator</th><th>Lag (mo)</th>
-        <th class="num">β · payrolls</th><th class="num">β · u-rate</th>
-      </tr></thead>
+  <!-- ── Indicator coefficients ────────────────────────────────── -->
+  <details class="lm-section lm-section--details">
+    <summary>
+      <h2>Bridge model coefficients</h2>
+      <span class="lm-note">Fitted β from the latest OLS run. Click to expand.</span>
+    </summary>
+    <table class="lm-table" id="lm-indicators-table">
+      <thead><tr><th>FRED series</th><th>Indicator</th><th>Lag (mo)</th>
+        <th class="num">β · payrolls</th><th class="num">β · u-rate</th></tr></thead>
       <tbody></tbody>
     </table>
+  </details>
+
+  <!-- ── Upcoming releases ────────────────────────────────────── -->
+  <section class="lm-section">
+    <h2>Upcoming BLS releases</h2>
+    <ul class="lm-release-list" id="lm-release-list"></ul>
   </section>
 
 </div>
@@ -157,5 +226,5 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script src="/static/js/labor_market.js"></script>
+<script src="/static/js/labor_market.js?v=2"></script>
 {% endblock %}

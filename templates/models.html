@@ -26,6 +26,7 @@
   .model-card.card-sec::before    { background: #7c3aed; }
   .model-card.card-cd::before     { background: #dc2626; }
   .model-card.card-lm::before     { background: #0891b2; }
+  .model-card.card-cpi::before    { background: #8b5cf6; }
 
   .model-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .model-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0; }
@@ -36,6 +37,7 @@
   .card-sec .model-icon    { background: #7c3aed18; color: #7c3aed; }
   .card-cd .model-icon     { background: #dc262618; color: #dc2626; }
   .card-lm .model-icon     { background: #0891b218; color: #0891b2; }
+  .card-cpi .model-icon    { background: #8b5cf618; color: #8b5cf6; }
 
   .model-name { font-size: 17px; font-weight: 600; margin: 0; color: #111827; }
   .model-tagline { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
@@ -164,6 +166,34 @@
         <div class="model-stat"><span class="num">3</span><span class="lbl">Horizons</span></div>
       </div>
       <span class="model-cta">Open Credit Default <span class="arrow">&rarr;</span></span>
+    </a>
+
+    <!-- CPI Release Monitor -->
+    <a href="/cpi-release" class="model-card card-cpi">
+      <div class="model-card-top">
+        <div class="model-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 3v18h18"/>
+            <path d="M7 16l3-6 4 4 4-8"/>
+            <circle cx="7" cy="16" r="1.4" fill="currentColor"/>
+            <circle cx="10" cy="10" r="1.4" fill="currentColor"/>
+            <circle cx="14" cy="14" r="1.4" fill="currentColor"/>
+            <circle cx="18" cy="6" r="1.4" fill="currentColor"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="model-name">CPI Release Monitor</h3>
+          <p class="model-tagline">Release-day dashboard &middot; component ranking</p>
+        </div>
+        <span class="model-badge badge-public">Public</span>
+      </div>
+      <p class="model-desc">Wake up to the BLS CPI print. Countdown to next release, headline + core YoY history, and every tracked component (shelter, food, energy, vehicles, services, medical) ranked by MoM and YoY change so you can scan what moved the print at a glance. Refresh fires automatically when BLS publishes.</p>
+      <div class="model-stats">
+        <div class="model-stat"><span class="num">20+</span><span class="lbl">Components</span></div>
+        <div class="model-stat"><span class="num">2</span><span class="lbl">Rank views</span></div>
+        <div class="model-stat"><span class="num">Auto</span><span class="lbl">Release refresh</span></div>
+      </div>
+      <span class="model-cta">Open CPI Monitor <span class="arrow">&rarr;</span></span>
     </a>
 
     <!-- US Labor Market -->
