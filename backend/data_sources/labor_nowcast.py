@@ -248,6 +248,16 @@ def compute_labor_nowcast() -> dict:
     # ── Summary stats over the most recent 12-month window ─────────────
     summary = _summary_stats(payroll_track[-12:], unrate_track[-12:])
 
+    # ── Freshness flag.  The model is "fresh" if the last month for which
+    # we have a BLS realisation (= last FRED PAYEMS observation) is ≤ 2
+    # months behind today.  The forward nowcast can extend one month past
+    # that, so a fresh data feed means the chart will show estimates up
+    # to "current month" instead of looking lagged.
+    from backend.data_sources.bls_cache_utils import is_stale, months_behind
+    last_actual_month = max(payems_months) if payems_months else ''
+    is_data_stale = is_stale(last_actual_month)
+    data_months_behind = months_behind(last_actual_month)
+
     # ── Final payload ─────────────────────────────────────────────────
     return {
         'payroll_track': payroll_track[-TRACK_RECORD_MONTHS:],
@@ -256,6 +266,12 @@ def compute_labor_nowcast() -> dict:
         'unrate_track_full': unrate_track,
         'nowcast': nowcast_payload,
         'summary': summary,
+        'data_freshness': {
+            'last_fred_payems_month': last_actual_month,
+            'is_stale': is_data_stale,
+            'months_behind': data_months_behind,
+            'forward_nowcast_month': nowcast_payload.get('month'),
+        },
         'indicators': [
             {
                 'id': ind['id'],
@@ -398,3 +414,84 @@ def clear_cache():
     with _lock:
         _cached_result = None
         _cached_at = 0.0
+
+
+def run_fred_diagnostic():
+    """Force a fresh fetch of every FRED series the labor nowcast uses
+    and return per-series freshness so we can see whether the model's
+    "lag" is actually a FRED-side problem (key missing, FRED returning
+    old data, JOLTS publication delay, …).
+
+    Also reports the labor-nowcast cache state — when it was last
+    computed, what the forward nowcast covered, whether it errored.
+    """
+    from backend.data_sources.fred_client import (
+        _get_api_key, _cache as fred_cache, clear_cache as clear_fred_cache,
+    )
+    fred_key = _get_api_key()
+    # Drop FRED's in-memory cache for the series we care about so this
+    # diagnostic shows the *current* state from FRED, not an old hit.
+    series_ids = [PAYROLLS_SERIES, UNRATE_SERIES] + [ind['id'] for ind in INDICATORS]
+    clear_fred_cache()
+
+    today = date.today()
+    start_date = (today - timedelta(days=int(HISTORY_MONTHS * 31))).strftime('%Y-%m-%d')
+
+    per_series = {}
+    for sid in series_ids:
+        try:
+            obs = fetch_series(sid, start_date=start_date)
+        except Exception as e:
+            per_series[sid] = {'error': str(e), 'observations': 0, 'latest_date': None}
+            continue
+        if not obs:
+            per_series[sid] = {'observations': 0, 'latest_date': None, 'error': 'empty response'}
+            continue
+        latest = obs[-1]
+        # Convert latest observation date → 'YYYY-MM' for staleness check
+        latest_month = (latest.get('date') or '')[:7]
+        per_series[sid] = {
+            'observations': len(obs),
+            'latest_date': latest.get('date'),
+            'latest_value': latest.get('value'),
+            'latest_month': latest_month,
+        }
+
+    # Latest month across the inputs the nowcast actually consumes
+    latest_overall = ''
+    for sid, info in per_series.items():
+        m = (info.get('latest_month') or '')
+        if m and m > latest_overall:
+            latest_overall = m
+
+    # Nowcast cache state
+    with _lock:
+        cache_age_s = (time.time() - _cached_at) if _cached_at else None
+        cached = _cached_result
+    if cached:
+        nc_block = (cached.get('nowcast') or {})
+        nowcast_state = {
+            'last_refreshed': cached.get('last_refreshed'),
+            'cache_age_seconds': int(cache_age_s) if cache_age_s else None,
+            'forward_nowcast_month': nc_block.get('month'),
+            'forward_available': nc_block.get('available'),
+            'last_bls_payroll_month': nc_block.get('last_bls_payroll_month'),
+            'last_bls_unrate_month': nc_block.get('last_bls_unrate_month'),
+            'error': cached.get('error'),
+            'sample_size': cached.get('sample_size'),
+            'payroll_track_last_month': (cached.get('payroll_track_full') or [{}])[-1].get('month'),
+        }
+    else:
+        nowcast_state = {'cache': 'empty', 'cache_age_seconds': None}
+
+    return {
+        'has_fred_api_key': bool(fred_key),
+        'series': per_series,
+        'latest_month_across_inputs': latest_overall,
+        'nowcast_cache': nowcast_state,
+        'note': (
+            'The labor model uses these FRED series. If their latest_date is '
+            'still recent but the dashboard shows old estimates, the labor '
+            'nowcast cache is stuck — POST /api/labor-market/us/refresh to clear.'
+        ),
+    }

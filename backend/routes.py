@@ -743,8 +743,16 @@ def release_calendar():
 
 @api_bp.route('/labor-market/us/diagnostics')
 def labor_market_diagnostics():
-    from backend.data_sources.bls_employment import run_diagnostic
-    return jsonify(run_diagnostic())
+    """Combined diagnostic across the three layers feeding /labor-market:
+    BLS direct (sectoral + headline rates), FRED (PAYEMS + the leading
+    indicators the bridge model consumes), and the labor-nowcast cache.
+    """
+    from backend.data_sources.bls_employment import run_diagnostic as run_bls
+    from backend.data_sources.labor_nowcast import run_fred_diagnostic as run_fred
+    return jsonify({
+        'bls': run_bls(),
+        'fred': run_fred(),
+    })
 
 
 @api_bp.route('/cpi/us/diagnostics')
