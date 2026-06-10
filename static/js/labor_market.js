@@ -42,14 +42,24 @@
     bundle: null,
     windowMonths: 24,
     rankBy: 'mom',          // 'mom' or 'yoy'
+    tileSort: 'group',      // 'group' or 'yoy'
     charts: {},             // keyed by canvas id
     countdownTimer: null,
+  };
+
+  const SECTOR_GROUP_LABELS = {
+    goods:      'Goods-producing',
+    services:   'Services',
+    government: 'Government',
+    headline:   'Headline aggregates',
   };
 
   document.addEventListener('DOMContentLoaded', () => {
     bindToolbar();
     bindRankToggle();
+    bindTileSort();
     bindRefresh();
+    bindStaleRefresh();
     fetchBundle();
   });
 
@@ -81,21 +91,39 @@
     });
   }
 
+  function bindTileSort() {
+    document.querySelectorAll('.lm-toggle[data-tile-sort]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.lm-toggle[data-tile-sort]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.tileSort = btn.dataset.tileSort;
+        renderSparklines();
+      });
+    });
+  }
+
   function bindRefresh() {
     const btn = document.getElementById('lm-refresh-btn');
     if (!btn) return;
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      btn.textContent = 'Refreshing…';
-      try {
-        await fetch(API.refresh, { method: 'POST' });
-        await fetchBundle();
-      } catch (e) { console.error(e); }
-      finally {
-        btn.disabled = false;
-        btn.textContent = 'Refresh';
-      }
-    });
+    btn.addEventListener('click', () => doRefresh(btn));
+  }
+  function bindStaleRefresh() {
+    const btn = document.getElementById('lm-stale-refresh');
+    if (!btn) return;
+    btn.addEventListener('click', () => doRefresh(btn));
+  }
+  async function doRefresh(btn) {
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = 'Refreshing…';
+    try {
+      await fetch(API.refresh, { method: 'POST' });
+      await fetchBundle();
+    } catch (e) { console.error(e); }
+    finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+    }
   }
 
   async function fetchBundle() {
@@ -103,6 +131,7 @@
       const resp = await fetch(API.bundle, { credentials: 'same-origin' });
       const data = await resp.json();
       state.bundle = data || {};
+      renderStaleBanner();
       renderReleaseBanner();
       renderKPIs();
       drawSectorRanking();
@@ -116,6 +145,22 @@
       renderUpcomingReleases();
     } catch (e) {
       console.error('labor market fetch failed', e);
+    }
+  }
+
+  function renderStaleBanner() {
+    const meta = ((state.bundle.bls || {}).meta) || {};
+    const banner = document.getElementById('lm-stale-banner');
+    if (!banner) return;
+    if (meta.is_stale) {
+      const months = meta.months_behind;
+      const detail = document.getElementById('lm-stale-detail');
+      if (detail) detail.textContent =
+        `Latest BLS month: ${meta.latest_month || 'unknown'} ` +
+        (months > 0 ? `(${months} months behind today). Background refresh in progress.` : '. Background refresh in progress.');
+      banner.hidden = false;
+    } else {
+      banner.hidden = true;
     }
   }
 
@@ -309,17 +354,80 @@
     const sectorKeys = (bls.sector_keys || []).filter(k =>
       k !== 'payrolls' && k !== 'payrolls_private'
     );
-    container.innerHTML = sectorKeys.map(k => `
-      <div class="lm-spark-card">
-        <div class="lm-spark-head">
-          <span class="lm-color-dot" style="background:${(bls.colors||{})[k] || '#64748b'}"></span>
-          <span class="lm-spark-label">${(bls.categories||{})[k] || k}</span>
-        </div>
-        <canvas class="lm-spark-canvas" data-key="${k}"></canvas>
-        <div class="lm-spark-meta" data-meta="${k}">—</div>
-      </div>`).join('');
+    const sectorGroups = bls.sector_groups || {};
+
+    // Latest YoY per key (used for sorting + tile-value display)
+    const yoyByKey = {};
+    sectorKeys.forEach(k => {
+      const pts = (series[k] || []).filter(p => p.yoy_change != null);
+      const last = pts[pts.length - 1];
+      yoyByKey[k] = last ? last.yoy_change : null;
+    });
+
+    // Bucket keys by group (fallback to 'services')
+    const buckets = {};
+    sectorKeys.forEach(k => {
+      const g = sectorGroups[k] || 'services';
+      (buckets[g] = buckets[g] || []).push(k);
+    });
+    // Within each bucket, sort by YoY desc
+    Object.keys(buckets).forEach(g => buckets[g].sort((a, b) => (yoyByKey[b] ?? -1e9) - (yoyByKey[a] ?? -1e9)));
+
+    let html = '';
+    if (state.tileSort === 'yoy') {
+      // Flat list sorted by YoY desc
+      const ordered = sectorKeys.slice().sort((a, b) => (yoyByKey[b] ?? -1e9) - (yoyByKey[a] ?? -1e9));
+      html = `<div class="lm-spark-grid">${ordered.map(k => tileHtml(k, bls)).join('')}</div>`;
+    } else {
+      // Grouped sections in canonical order
+      ['goods', 'services', 'government'].forEach(g => {
+        if (!buckets[g] || !buckets[g].length) return;
+        const label = SECTOR_GROUP_LABELS[g] || g;
+        html += `
+          <div class="lm-spark-group">
+            <div class="lm-spark-group-head">
+              <span class="lm-spark-group-name">${label}</span>
+              <span class="lm-spark-group-count">${buckets[g].length} ${buckets[g].length === 1 ? 'sector' : 'sectors'}</span>
+            </div>
+            <div class="lm-spark-grid">${buckets[g].map(k => tileHtml(k, bls)).join('')}</div>
+          </div>`;
+      });
+    }
+    container.innerHTML = html;
 
     sectorKeys.forEach(k => drawSparkline(k, series[k]));
+    container.querySelectorAll('.lm-spark-card').forEach(card => {
+      card.addEventListener('click', () => {
+        // Tile click on labor market: no detail chart, so just visually flash
+        // (clicking a sector in the ranking table is the canonical entry point)
+        card.classList.add('lm-spark-card--flash');
+        setTimeout(() => card.classList.remove('lm-spark-card--flash'), 600);
+      });
+    });
+  }
+
+  function tileHtml(key, bls) {
+    const cats = bls.categories || {};
+    const colors = bls.colors || {};
+    const series = (bls.series || {})[key] || [];
+    const pts = series.filter(p => p.yoy_change != null);
+    const last = pts[pts.length - 1];
+    const yoy = last ? last.yoy_change : null;
+    const moLabel = last ? formatMonth(last.date) : '—';
+    const cls = yoy != null && yoy >= 0 ? 'lm-pos' : 'lm-neg';
+    const valTxt = yoy != null ? `${yoy >= 0 ? '+' : ''}${yoy.toFixed(2)}%` : '—';
+    return `
+      <div class="lm-spark-card" data-spark="${key}">
+        <div class="lm-spark-head">
+          <span class="lm-color-dot" style="background:${colors[key] || '#64748b'}"></span>
+          <span class="lm-spark-label" title="${cats[key] || key}">${cats[key] || key}</span>
+        </div>
+        <div class="lm-spark-value-row">
+          <span class="lm-spark-value ${cls}">${valTxt}</span>
+          <span class="lm-spark-when">${moLabel}</span>
+        </div>
+        <canvas class="lm-spark-canvas" data-key="${key}"></canvas>
+      </div>`;
   }
 
   function drawSparkline(key, points) {
@@ -362,14 +470,6 @@
         elements: { line: { borderJoinStyle: 'round' } },
       },
     });
-
-    const last = slice[slice.length - 1];
-    const meta = document.querySelector(`[data-meta="${key}"]`);
-    if (meta) {
-      const cls = last.yoy_change >= 0 ? 'lm-pos' : 'lm-neg';
-      meta.innerHTML = `<span class="${cls}">${last.yoy_change >= 0 ? '+' : ''}${last.yoy_change.toFixed(2)}%</span>
-        <span class="lm-muted">${formatMonth(last.date)}</span>`;
-    }
   }
 
   // ── Payrolls Δ chart (BLS bars vs estimate line) ───────────

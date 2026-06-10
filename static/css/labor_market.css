@@ -32,6 +32,26 @@
   min-height: calc(100vh - 60px);
 }
 
+/* ── Staleness banner ─────────────────────────────────────── */
+.lm-stale-banner {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 18px;
+  background: linear-gradient(90deg, rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.04) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.lm-stale-icon {
+  width: 26px; height: 26px; flex-shrink: 0;
+  border-radius: 50%; background: var(--lm-warn);
+  display: flex; align-items: center; justify-content: center;
+  color: #0a0e1a; font-weight: 800; font-size: 14px;
+}
+.lm-stale-text { flex: 1; font-size: var(--lm-fs-sm); color: var(--lm-text); }
+.lm-stale-text strong { color: var(--lm-warn); margin-right: 6px; }
+.lm-stale-text span { color: var(--lm-text-dim); }
+.lm-stale-banner[hidden] { display: none; }
+
 /* ── Release banner ───────────────────────────────────────── */
 .lm-release-banner {
   display: grid;
@@ -217,18 +237,51 @@
   margin-right: 8px; vertical-align: middle;
 }
 
-/* ── Sparkline grid ───────────────────────────────────────── */
-.lm-sparks {
+/* ── Sparkline grid (grouped) ─────────────────────────────── */
+.lm-spark-groups {
+  display: flex; flex-direction: column; gap: 18px;
+}
+.lm-spark-group {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.lm-spark-group-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--lm-border);
+}
+.lm-spark-group-name {
+  font-size: var(--lm-fs-sm); font-weight: 700; color: var(--lm-text);
+  letter-spacing: 0.02em;
+}
+.lm-spark-group-count {
+  font-size: var(--lm-fs-xs); color: var(--lm-text-mute);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.lm-spark-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 10px;
 }
 .lm-spark-card {
   background: var(--lm-surface-2);
   border: 1px solid var(--lm-border);
   border-radius: 8px;
-  padding: 10px 12px;
-  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 6px;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.12s, background 0.12s;
+}
+.lm-spark-card:hover {
+  border-color: var(--lm-border-strong);
+  background: var(--lm-surface);
+}
+.lm-spark-card--active {
+  border-color: var(--lm-accent);
+  background: rgba(59, 130, 246, 0.06);
+}
+.lm-spark-card--flash {
+  border-color: var(--lm-warn);
+  background: rgba(245, 158, 11, 0.08);
 }
 .lm-spark-head {
   display: flex; align-items: center; gap: 6px;
@@ -236,13 +289,19 @@
 }
 .lm-spark-label {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 600; color: var(--lm-text);
 }
-.lm-spark-canvas { height: 38px; width: 100%; }
-.lm-spark-meta {
-  display: flex; gap: 8px; align-items: baseline;
-  font-size: var(--lm-fs-sm); font-weight: 600;
+.lm-spark-value-row {
+  display: flex; align-items: baseline; gap: 8px;
 }
-.lm-spark-meta .lm-muted { font-size: var(--lm-fs-xs); font-weight: 400; }
+.lm-spark-value {
+  font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.lm-spark-when {
+  font-size: var(--lm-fs-xs); color: var(--lm-text-mute);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.lm-spark-canvas { height: 50px; width: 100%; }
 
 /* ── Chart wraps ──────────────────────────────────────────── */
 .lm-chart-wrap {

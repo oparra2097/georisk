@@ -9,6 +9,16 @@
 {% block content %}
 <div class="lm-page" id="cpi-page">
 
+  <!-- ── Staleness banner (hidden unless BLS data is >2mo behind) ── -->
+  <section class="lm-stale-banner" id="cpi-stale-banner" hidden>
+    <div class="lm-stale-icon" aria-hidden="true">!</div>
+    <div class="lm-stale-text">
+      <strong>BLS CPI data may be stale.</strong>
+      <span id="cpi-stale-detail">Latest available month is older than expected. Background refresh in progress.</span>
+    </div>
+    <button class="lm-btn lm-btn-ghost" id="cpi-stale-refresh">Refresh now</button>
+  </section>
+
   <!-- ── Release banner ───────────────────────────────────────── -->
   <section class="lm-release-banner" id="cpi-release-banner">
     <div class="lm-release-left">
@@ -136,15 +146,19 @@
     <div class="lm-chart-wrap"><canvas id="cpi-detail-chart"></canvas></div>
   </section>
 
-  <!-- ── Component small-multiples (5y YoY sparklines) ────────── -->
+  <!-- ── Component small-multiples (5y YoY sparklines, grouped) ── -->
   <section class="lm-section">
     <div class="lm-section-header">
       <div>
         <h2>5-year YoY trend per component</h2>
-        <p class="lm-note">Quick scan of which items are still sticky and which have come back down.</p>
+        <p class="lm-note">Quick scan of which items are still sticky and which have come back down. Tiles are grouped by category &mdash; click any one to load its history above.</p>
+      </div>
+      <div class="lm-toggle-group" role="tablist" aria-label="Tile sort">
+        <button class="lm-toggle active" data-tile-sort="group">By group</button>
+        <button class="lm-toggle" data-tile-sort="yoy">Largest YoY first</button>
       </div>
     </div>
-    <div class="lm-sparks" id="cpi-sparks"></div>
+    <div class="lm-spark-groups" id="cpi-sparks"></div>
   </section>
 
   <!-- ── Upcoming releases ────────────────────────────────────── -->

@@ -47,15 +47,31 @@
     rankBy: 'mom',
     detailKey: null,
     detailBasis: 'yoy',
+    tileSort: 'group',
     charts: {},
     countdownTimer: null,
+  };
+
+  const GROUP_ORDER = ['shelter', 'food', 'energy', 'vehicles', 'medical', 'services', 'goods', 'aggregate', 'other'];
+  const GROUP_LABEL = {
+    shelter:   'Shelter',
+    food:      'Food',
+    energy:    'Energy',
+    vehicles:  'Vehicles & insurance',
+    medical:   'Medical care',
+    services:  'Services',
+    goods:     'Goods',
+    aggregate: 'Core aggregates',
+    other:     'Other',
   };
 
   document.addEventListener('DOMContentLoaded', () => {
     bindToolbar();
     bindRankToggle();
     bindDetailToggle();
+    bindTileSort();
     bindRefresh();
+    bindStaleRefresh();
     fetchBundle();
   });
 
@@ -96,17 +112,36 @@
     });
   }
 
+  function bindTileSort() {
+    document.querySelectorAll('.lm-toggle[data-tile-sort]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.lm-toggle[data-tile-sort]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.tileSort = btn.dataset.tileSort;
+        renderSparklines();
+      });
+    });
+  }
+
   function bindRefresh() {
     const btn = document.getElementById('cpi-refresh-btn');
     if (!btn) return;
-    btn.addEventListener('click', async () => {
-      btn.disabled = true; btn.textContent = 'Refreshing…';
-      try {
-        await fetch(API.refresh, { method: 'POST' });
-        await fetchBundle();
-      } catch (e) { console.error(e); }
-      finally { btn.disabled = false; btn.textContent = 'Refresh'; }
-    });
+    btn.addEventListener('click', () => doRefresh(btn));
+  }
+  function bindStaleRefresh() {
+    const btn = document.getElementById('cpi-stale-refresh');
+    if (!btn) return;
+    btn.addEventListener('click', () => doRefresh(btn));
+  }
+  async function doRefresh(btn) {
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = 'Refreshing…';
+    try {
+      await fetch(API.refresh, { method: 'POST' });
+      await fetchBundle();
+    } catch (e) { console.error(e); }
+    finally { btn.disabled = false; btn.textContent = prev; }
   }
 
   async function fetchBundle() {
@@ -120,6 +155,7 @@
       const top = rank.find(r => !r.is_aggregate);
       if (top) state.detailKey = top.key;
 
+      renderStaleBanner();
       renderReleaseBanner();
       renderKPIs();
       drawHistoryChart();
@@ -129,6 +165,26 @@
       renderUpcomingReleases();
     } catch (e) {
       console.error('CPI release fetch failed', e);
+    }
+  }
+
+  function renderStaleBanner() {
+    const banner = document.getElementById('cpi-stale-banner');
+    if (!banner) return;
+    // Both detail + overview can be stale; banner if either is.
+    const dMeta = ((state.bundle.detail || {}).meta) || {};
+    const oMeta = ((state.bundle.overview || {}).meta) || {};
+    const stale = !!(dMeta.is_stale || oMeta.is_stale);
+    if (stale) {
+      const latest = dMeta.latest_month || oMeta.latest_month || 'unknown';
+      const months = Math.max(dMeta.months_behind || 0, oMeta.months_behind || 0);
+      const detail = document.getElementById('cpi-stale-detail');
+      if (detail) detail.textContent =
+        `Latest BLS CPI month: ${latest}` +
+        (months > 0 ? ` (${months} months behind today). Background refresh in progress.` : '. Background refresh in progress.');
+      banner.hidden = false;
+    } else {
+      banner.hidden = true;
     }
   }
 
@@ -443,18 +499,86 @@
     const series = det.series || {};
 
     // Skip aggregate buckets in the grid (they're already a different lens)
-    const keys = Object.keys(cats).filter(k => !((det.aggregates || []).includes(k)));
-    container.innerHTML = keys.map(k => `
-      <div class="lm-spark-card" data-spark="${k}">
-        <div class="lm-spark-head">
-          <span class="lm-color-dot" style="background:${colors[k] || '#64748b'}"></span>
-          <span class="lm-spark-label">${cats[k]}</span>
-        </div>
-        <canvas class="lm-spark-canvas" data-key="${k}"></canvas>
-        <div class="lm-spark-meta" data-meta="${k}">—</div>
-      </div>`).join('');
+    const aggregates = det.aggregates || [];
+    const allKeys = Object.keys(cats).filter(k => !aggregates.includes(k));
 
-    keys.forEach(k => drawSparkline(k, series[k], colors[k]));
+    // Latest YoY per key for sorting + tile-value display
+    const yoyByKey = {};
+    allKeys.forEach(k => {
+      const pts = (series[k] || []).filter(p => p.yoy_change != null);
+      const last = pts[pts.length - 1];
+      yoyByKey[k] = last ? last.yoy_change : null;
+    });
+
+    // Bucket by group
+    const buckets = {};
+    allKeys.forEach(k => {
+      const g = groups[k] || 'other';
+      (buckets[g] = buckets[g] || []).push(k);
+    });
+    Object.keys(buckets).forEach(g => buckets[g].sort((a, b) => (yoyByKey[b] ?? -1e9) - (yoyByKey[a] ?? -1e9)));
+
+    let html = '';
+    if (state.tileSort === 'yoy') {
+      const ordered = allKeys.slice().sort((a, b) => (yoyByKey[b] ?? -1e9) - (yoyByKey[a] ?? -1e9));
+      html = `<div class="lm-spark-grid">${ordered.map(k => tileHtml(k, det)).join('')}</div>`;
+    } else {
+      GROUP_ORDER.forEach(g => {
+        if (!buckets[g] || !buckets[g].length) return;
+        const label = GROUP_LABEL[g] || g;
+        html += `
+          <div class="lm-spark-group">
+            <div class="lm-spark-group-head">
+              <span class="lm-spark-group-name">${label}</span>
+              <span class="lm-spark-group-count">${buckets[g].length} ${buckets[g].length === 1 ? 'item' : 'items'}</span>
+            </div>
+            <div class="lm-spark-grid">${buckets[g].map(k => tileHtml(k, det)).join('')}</div>
+          </div>`;
+      });
+    }
+    container.innerHTML = html;
+
+    allKeys.forEach(k => drawSparkline(k, series[k], colors[k]));
+    container.querySelectorAll('.lm-spark-card').forEach(card => {
+      const k = card.dataset.spark;
+      card.addEventListener('click', () => {
+        state.detailKey = k;
+        state.detailBasis = 'yoy';
+        document.querySelectorAll('.lm-toggle[data-detail]').forEach(b =>
+          b.classList.toggle('active', b.dataset.detail === 'yoy'));
+        drawDetailChart();
+        document.querySelectorAll('.cpi-rank-table tbody tr').forEach(t =>
+          t.classList.toggle('cpi-row-active', t.dataset.key === k));
+        const target = document.getElementById('cpi-detail-chart');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+
+  function tileHtml(key, det) {
+    const cats = det.categories || {};
+    const colors = det.colors || {};
+    const series = (det.series || {})[key] || [];
+    const pts = series.filter(p => p.yoy_change != null);
+    const last = pts[pts.length - 1];
+    const yoy = last ? last.yoy_change : null;
+    const moLabel = last ? formatMonth(last.date) : '—';
+    // For CPI, positive = price increase = "bad" → red
+    const cls = yoy != null && yoy >= 0 ? 'lm-neg' : 'lm-pos';
+    const valTxt = yoy != null ? `${yoy >= 0 ? '+' : ''}${yoy.toFixed(2)}%` : '—';
+    const active = state.detailKey === key ? 'lm-spark-card--active' : '';
+    return `
+      <div class="lm-spark-card ${active}" data-spark="${key}">
+        <div class="lm-spark-head">
+          <span class="lm-color-dot" style="background:${colors[key] || '#64748b'}"></span>
+          <span class="lm-spark-label" title="${cats[key] || key}">${cats[key] || key}</span>
+        </div>
+        <div class="lm-spark-value-row">
+          <span class="lm-spark-value ${cls}">${valTxt}</span>
+          <span class="lm-spark-when">${moLabel}</span>
+        </div>
+        <canvas class="lm-spark-canvas" data-key="${key}"></canvas>
+      </div>`;
   }
 
   function drawSparkline(key, points, color) {
@@ -495,25 +619,6 @@
         },
         scales: { x: { display: false }, y: { display: false } },
       },
-    });
-
-    const last = slice[slice.length - 1];
-    const meta = document.querySelector(`[data-meta="${key}"]`);
-    if (meta) {
-      const cls = last.yoy_change >= 0 ? 'lm-neg' : 'lm-pos';  // CPI: positive = bad
-      meta.innerHTML = `<span class="${cls}">${last.yoy_change >= 0 ? '+' : ''}${last.yoy_change.toFixed(2)}%</span>
-        <span class="lm-muted">${formatMonth(last.date)}</span>`;
-    }
-
-    el.parentElement.addEventListener('click', () => {
-      state.detailKey = key;
-      state.detailBasis = 'yoy';
-      document.querySelectorAll('.lm-toggle[data-detail]').forEach(b =>
-        b.classList.toggle('active', b.dataset.detail === 'yoy'));
-      drawDetailChart();
-      document.querySelectorAll('.cpi-rank-table tbody tr').forEach(t =>
-        t.classList.toggle('cpi-row-active', t.dataset.key === key));
-      document.getElementById('cpi-detail-chart').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   }
 
