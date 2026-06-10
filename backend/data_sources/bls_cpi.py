@@ -133,7 +133,11 @@ def _fetch_bls_cpi():
     api_key = get_bls_api_key()
     current_year = datetime.utcnow().year
 
-    start_year = current_year - (20 if api_key else 10)
+    # BLS API caps queries at 20yr window (10yr unauth).  The range is
+    # *inclusive* — startyear=current_year-19, endyear=current_year is the
+    # maximum 20-year span.  Using (current_year - 20) overflows to 21
+    # inclusive years and BLS silently truncates the most recent year.
+    start_year = current_year - (19 if api_key else 9)
     logger.info(f"BLS CPI fetch: key={'set' if api_key else 'MISSING'}, range={start_year}-{current_year}")
 
     series_ids = [s['id'] for s in BLS_SERIES.values()]
@@ -316,7 +320,11 @@ def _fetch_bls_components():
     """Fetch CPI component data from BLS API v2."""
     api_key = get_bls_api_key()
     current_year = datetime.utcnow().year
-    start_year = current_year - (20 if api_key else 10)
+    # BLS API caps queries at 20yr window (10yr unauth).  The range is
+    # *inclusive* — startyear=current_year-19, endyear=current_year is the
+    # maximum 20-year span.  Using (current_year - 20) overflows to 21
+    # inclusive years and BLS silently truncates the most recent year.
+    start_year = current_year - (19 if api_key else 9)
     logger.info(f"BLS components fetch: key={'set' if api_key else 'MISSING'}, range={start_year}-{current_year}")
 
     series_ids = [s['id'] for s in BLS_COMPONENTS.values()]
@@ -561,7 +569,11 @@ def _fetch_bls_detail(diagnostic: bool = False):
     """
     api_key = get_bls_api_key()
     current_year = datetime.utcnow().year
-    start_year = current_year - (20 if api_key else 10)
+    # BLS API caps queries at 20yr window (10yr unauth).  The range is
+    # *inclusive* — startyear=current_year-19, endyear=current_year is the
+    # maximum 20-year span.  Using (current_year - 20) overflows to 21
+    # inclusive years and BLS silently truncates the most recent year.
+    start_year = current_year - (19 if api_key else 9)
     logger.info(
         f"BLS CPI detail fetch: key={'set' if api_key else 'MISSING'}, "
         f"range={start_year}-{current_year}, series={len(BLS_DETAIL_COMPONENTS)}"

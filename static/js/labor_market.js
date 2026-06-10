@@ -149,34 +149,47 @@
   }
 
   function renderStaleBanner() {
-    const meta = ((state.bundle.bls || {}).meta) || {};
+    const blsMeta = ((state.bundle.bls || {}).meta) || {};
+    const freshness = ((state.bundle.nowcast || {}).data_freshness) || {};
     const banner = document.getElementById('lm-stale-banner');
     if (!banner) return;
-    if (!meta.is_stale) { banner.hidden = true; return; }
+    const blsStale = !!blsMeta.is_stale;
+    const fredStale = !!freshness.is_stale;
+    if (!blsStale && !fredStale) { banner.hidden = true; return; }
 
     const detail = document.getElementById('lm-stale-detail');
-    if (detail) detail.innerHTML = buildStaleDetail(meta, '/api/labor-market/us/diagnostics');
+    if (detail) detail.innerHTML = buildStaleDetail(blsMeta, freshness, '/api/labor-market/us/diagnostics');
     banner.hidden = false;
   }
 
-  function buildStaleDetail(meta, diagUrl) {
-    const months = meta.months_behind;
+  function buildStaleDetail(blsMeta, freshness, diagUrl) {
     const parts = [];
-    parts.push(`Latest BLS month: <code>${meta.latest_month || 'unknown'}</code>`);
-    if (months > 0) parts.push(`(${months} months behind today)`);
+    const blsStale = !!blsMeta.is_stale;
+    const fredStale = !!freshness.is_stale;
 
-    // Surface the actual root cause when we can identify it.
-    if (meta.has_api_key === false) {
-      parts.push('<br><strong>Root cause:</strong> <code>BLS_API_KEY</code> is not set on the server. ' +
-        'Unauthenticated BLS access is capped at 25 requests/day, ' +
-        'which is being exhausted. Add <code>BLS_API_KEY</code> to the Render environment.');
-    } else if (meta.bls_api_status && meta.bls_api_status !== 'REQUEST_SUCCEEDED') {
-      parts.push(`<br><strong>BLS API status:</strong> <code>${meta.bls_api_status}</code>` +
-        (meta.bls_api_message ? ` &mdash; ${meta.bls_api_message}` : ''));
-    } else {
-      parts.push('. Background refresh in progress.');
+    // BLS feed (sectoral charts, KPIs)
+    if (blsStale) {
+      const blsM = blsMeta.months_behind;
+      parts.push(`<strong>BLS feed:</strong> latest <code>${blsMeta.latest_month || 'unknown'}</code>` +
+        (blsM > 0 ? ` (${blsM} months behind).` : '.'));
+      if (blsMeta.has_api_key === false) {
+        parts.push('<code>BLS_API_KEY</code> not set on server.');
+      } else if (blsMeta.bls_api_status && blsMeta.bls_api_status !== 'REQUEST_SUCCEEDED') {
+        parts.push(`API status <code>${blsMeta.bls_api_status}</code>` +
+          (blsMeta.bls_api_message ? ` &mdash; ${blsMeta.bls_api_message}.` : '.'));
+      }
     }
-    parts.push(` <a href="${diagUrl}" target="_blank" rel="noopener" class="lm-stale-link">Run diagnostics &rarr;</a>`);
+
+    // FRED feed (labor model / nowcast)
+    if (fredStale) {
+      const m = freshness.months_behind;
+      const sep = parts.length ? ' <br>' : '';
+      parts.push(`${sep}<strong>Labor model (FRED feed):</strong> latest PAYEMS <code>${freshness.last_fred_payems_month || 'unknown'}</code>` +
+        (m > 0 ? ` (${m} months behind).` : '.') +
+        ' The model uses FRED, not BLS direct &mdash; if BLS looks current but the model lags, the FRED cache or <code>FRED_API_KEY</code> is the culprit.');
+    }
+
+    parts.push(`<br><a href="${diagUrl}" target="_blank" rel="noopener" class="lm-stale-link">Run diagnostics (BLS + FRED) &rarr;</a>`);
     return parts.join(' ');
   }
 

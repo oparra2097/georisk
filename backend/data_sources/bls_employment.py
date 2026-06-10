@@ -242,7 +242,13 @@ def _fetch(diagnostic: bool = False):
     """
     api_key = get_bls_api_key()
     current_year = datetime.utcnow().year
-    start_year = current_year - (20 if api_key else 10)
+    # BLS API caps queries at 20yr window (10yr unauth).  The range is
+    # *inclusive* — so startyear=current_year-19, endyear=current_year is
+    # the maximum 20-year span.  Using (current_year - 20) overflows to 21
+    # inclusive years and BLS silently truncates the most recent year
+    # ("Year range has been reduced to the system-allowed limit of 20
+    # years"), leaving 2026 data missing on every series.
+    start_year = current_year - (19 if api_key else 9)
     logger.info(
         f"BLS employment fetch: key={'set' if api_key else 'MISSING'}, "
         f"range={start_year}-{current_year}, series={len(BLS_SERIES)}"
