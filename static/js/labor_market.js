@@ -328,6 +328,8 @@
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
+        resizeDelay: 100,
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -378,6 +380,13 @@
   function renderSparklines() {
     const container = document.getElementById('lm-sparks');
     if (!container) return;
+
+    // Destroy any existing sparkline Chart instances BEFORE wiping the
+    // DOM.  Otherwise Chart.js orphans hold references to detached
+    // canvases and a stray resize event causes the new canvases (with
+    // the same data-key) to flicker as the dying instance redraws.
+    destroySparklines();
+
     const bls = state.bundle.bls || {};
     const series = bls.series || {};
     const sectorKeys = (bls.sector_keys || []).filter(k =>
@@ -455,7 +464,7 @@
           <span class="lm-spark-value ${cls}">${valTxt}</span>
           <span class="lm-spark-when">${moLabel}</span>
         </div>
-        <canvas class="lm-spark-canvas" data-key="${key}"></canvas>
+        <div class="lm-spark-canvas-wrap"><canvas data-key="${key}"></canvas></div>
       </div>`;
   }
 
@@ -484,6 +493,7 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        animation: false, resizeDelay: 100,
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -746,9 +756,20 @@
 
   // ── Chart option factories ─────────────────────────────────
 
+  function destroySparklines() {
+    Object.keys(state.charts).forEach(k => {
+      if (k.startsWith('spark_')) {
+        try { state.charts[k].destroy(); } catch (_e) { /* already gone */ }
+        delete state.charts[k];
+      }
+    });
+  }
+
   function chartOpts({ yTitle, yFmt, showLegend = false }) {
     return {
       responsive: true, maintainAspectRatio: false,
+      animation: false,             // ⛔ no animations — they cause flicker on every redraw
+      resizeDelay: 100,             // debounce resize observer to break the loop
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: showLegend, position: 'top', labels: { color: COLOR.text, boxWidth: 12 } },
@@ -771,6 +792,8 @@
   function dualAxisOpts({ yLeft, yRight }) {
     return {
       responsive: true, maintainAspectRatio: false,
+      animation: false,
+      resizeDelay: 100,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: true, position: 'top', labels: { color: COLOR.text, boxWidth: 12 } },
