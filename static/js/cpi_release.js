@@ -375,6 +375,7 @@
       options: {
         indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
+        animation: false, resizeDelay: 100,
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -506,6 +507,12 @@
   function renderSparklines() {
     const container = document.getElementById('cpi-sparks');
     if (!container) return;
+
+    // Destroy any existing sparkline Chart instances BEFORE wiping the
+    // DOM — otherwise orphaned Chart.js holds references to detached
+    // canvases and flickers when the new ones mount.
+    destroySparklines();
+
     const det = state.bundle.detail || {};
     const cats = det.categories || {};
     const colors = det.colors || {};
@@ -591,8 +598,17 @@
           <span class="lm-spark-value ${cls}">${valTxt}</span>
           <span class="lm-spark-when">${moLabel}</span>
         </div>
-        <canvas class="lm-spark-canvas" data-key="${key}"></canvas>
+        <div class="lm-spark-canvas-wrap"><canvas data-key="${key}"></canvas></div>
       </div>`;
+  }
+
+  function destroySparklines() {
+    Object.keys(state.charts).forEach(k => {
+      if (k.startsWith('spark_')) {
+        try { state.charts[k].destroy(); } catch (_e) { /* already gone */ }
+        delete state.charts[k];
+      }
+    });
   }
 
   function drawSparkline(key, points, color) {
@@ -620,6 +636,7 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false,
+        animation: false, resizeDelay: 100,
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -641,6 +658,7 @@
   function chartOpts({ yTitle, yFmt, showLegend = false }) {
     return {
       responsive: true, maintainAspectRatio: false,
+      animation: false, resizeDelay: 100,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: showLegend, position: 'top',

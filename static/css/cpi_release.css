@@ -9,7 +9,13 @@
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr);
   gap: 18px;
 }
-.cpi-rank-chart-wrap { height: 540px; position: relative; }
+.cpi-rank-chart-wrap {
+  height: 500px; position: relative; overflow: hidden;
+}
+.cpi-rank-chart-wrap canvas {
+  position: absolute !important; inset: 0;
+  width: 100% !important; height: 100% !important;
+}
 .cpi-rank-table-wrap {
   max-height: 540px; overflow-y: auto;
   border: 1px solid var(--lm-border); border-radius: 8px;
@@ -32,6 +38,6 @@
 
 @media (max-width: 880px) {
   .cpi-rank-layout { grid-template-columns: 1fr; }
-  .cpi-rank-chart-wrap { height: 420px; }
+  .cpi-rank-chart-wrap { height: 380px; }
   .cpi-rank-table-wrap { max-height: 360px; }
 }

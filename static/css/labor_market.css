@@ -213,7 +213,13 @@
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
   gap: 18px;
 }
-.lm-rank-chart-wrap { height: 480px; position: relative; }
+.lm-rank-chart-wrap {
+  height: 440px; position: relative; overflow: hidden;
+}
+.lm-rank-chart-wrap canvas {
+  position: absolute !important; inset: 0;
+  width: 100% !important; height: 100% !important;
+}
 .lm-rank-table-wrap { overflow-x: auto; }
 
 /* ── Table styling ────────────────────────────────────────── */
@@ -310,12 +316,34 @@
   font-size: var(--lm-fs-xs); color: var(--lm-text-mute);
   text-transform: uppercase; letter-spacing: 0.04em;
 }
-.lm-spark-canvas { height: 50px; width: 100%; }
+/* Chart.js with maintainAspectRatio:false needs a sized, positioned
+ * parent — otherwise the canvas resize observer feeds back into the
+ * page layout and slowly grows the tile.  The wrapper locks the size
+ * and the canvas absolutely fills it. */
+.lm-spark-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 50px;
+  overflow: hidden;
+}
+.lm-spark-canvas-wrap canvas {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
 
 /* ── Chart wraps ──────────────────────────────────────────── */
 .lm-chart-wrap {
   position: relative;
-  height: 340px;
+  height: 300px;
+  overflow: hidden;
+}
+.lm-chart-wrap canvas {
+  position: absolute !important;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ── Stats inline (track-record header) ───────────────────── */
@@ -369,7 +397,7 @@
   .lm-release-banner { grid-template-columns: 1fr; }
   .lm-release-countdown { justify-content: flex-start; }
   .lm-rank-grid { grid-template-columns: 1fr; }
-  .lm-rank-chart-wrap { height: 420px; }
-  .lm-chart-wrap { height: 280px; }
+  .lm-rank-chart-wrap { height: 380px; }
+  .lm-chart-wrap { height: 240px; }
   .lm-release-row { grid-template-columns: 1fr; gap: 2px; padding: 12px 0; }
 }
