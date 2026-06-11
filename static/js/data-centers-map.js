@@ -488,6 +488,7 @@ const DataCenterMap = {
       const states = topojson.feature(us, us.objects.states);
       const nation = topojson.mesh(us, us.objects.states, (a, b) => a !== b);
 
+      this.statesData = states.features; // stash for energy overlay
       this.g.selectAll('path.state')
         .data(states.features)
         .join('path')
@@ -502,6 +503,91 @@ const DataCenterMap = {
       console.error('Failed to load US atlas:', e);
     }
   },
+
+  // ── Energy-cost overlay ────────────────────────────────────────────
+  // EIA industrial electricity rates by state, cents/kWh (2024-2025
+  // approximate, sourced from EIA Monthly Electricity Report).  Data
+  // center customers often get bespoke wholesale-tier rates lower than
+  // the industrial average, but the state industrial rate is the
+  // standard benchmark for comparing market power costs.
+  ENERGY_COSTS_CKWH: {
+    'Alabama': 7.0, 'Alaska': 16.0, 'Arizona': 8.0, 'Arkansas': 7.5,
+    'California': 18.5, 'Colorado': 8.5, 'Connecticut': 17.0, 'Delaware': 10.5,
+    'District of Columbia': 12.0, 'Florida': 10.0, 'Georgia': 7.5, 'Hawaii': 28.5,
+    'Idaho': 6.5, 'Illinois': 9.5, 'Indiana': 8.0, 'Iowa': 7.5, 'Kansas': 8.5,
+    'Kentucky': 7.0, 'Louisiana': 6.5, 'Maine': 12.0, 'Maryland': 10.0,
+    'Massachusetts': 15.5, 'Michigan': 9.5, 'Minnesota': 9.0, 'Mississippi': 8.0,
+    'Missouri': 8.0, 'Montana': 7.5, 'Nebraska': 7.5, 'Nevada': 7.5,
+    'New Hampshire': 14.0, 'New Jersey': 12.0, 'New Mexico': 8.5, 'New York': 9.0,
+    'North Carolina': 7.5, 'North Dakota': 8.5, 'Ohio': 8.5, 'Oklahoma': 6.0,
+    'Oregon': 6.5, 'Pennsylvania': 8.0, 'Rhode Island': 16.5, 'South Carolina': 7.5,
+    'South Dakota': 8.0, 'Tennessee': 7.0, 'Texas': 7.5, 'Utah': 6.5,
+    'Vermont': 13.0, 'Virginia': 8.0, 'Washington': 6.0, 'West Virginia': 8.0,
+    'Wisconsin': 9.5, 'Wyoming': 7.0,
+  },
+
+  toggleEnergyOverlay(active) {
+    this.energyOverlayActive = !!active;
+    const rates = this.ENERGY_COSTS_CKWH;
+    const all = Object.values(rates);
+    const min = Math.min(...all), max = Math.max(...all);
+    const colorFor = v => {
+      if (v == null) return '#f3f4f6';
+      const t = (v - min) / (max - min);
+      // Cheap = green, expensive = red.
+      const r = Math.round(16 + t * 220);
+      const g = Math.round(160 - t * 130);
+      const b = Math.round(80 - t * 60);
+      return `rgb(${r},${g},${b})`;
+    };
+
+    if (this.energyOverlayActive) {
+      this.g.selectAll('path.state')
+        .style('fill', d => {
+          const name = d?.properties?.name;
+          const rate = rates[name];
+          return rate != null ? colorFor(rate) : '#f3f4f6';
+        })
+        .style('fill-opacity', 0.72)
+        .append('title')
+        .text(d => {
+          const name = d?.properties?.name;
+          const rate = rates[name];
+          return rate != null ? `${name}: ${rate.toFixed(1)}¢/kWh industrial` : `${name}: n/a`;
+        });
+      this._renderEnergyLegend(min, max);
+    } else {
+      this.g.selectAll('path.state').style('fill', null).style('fill-opacity', null).select('title').remove();
+      const el = document.getElementById('dc-energy-legend');
+      if (el) el.remove();
+    }
+  },
+
+  _renderEnergyLegend(min, max) {
+    let el = document.getElementById('dc-energy-legend');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'dc-energy-legend';
+      el.style.cssText = 'position:absolute;bottom:18px;left:18px;background:rgba(255,255,255,0.95);'
+        + 'border:1px solid #e5e7eb;border-radius:6px;padding:8px 12px;font-size:11px;color:#374151;'
+        + 'box-shadow:0 2px 8px rgba(0,0,0,0.06);z-index:5;line-height:1.5;';
+      const mapParent = this.svg?.node()?.parentElement;
+      if (mapParent) mapParent.appendChild(el);
+    }
+    el.innerHTML = `
+      <div style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:#1f2937;margin-bottom:4px;">
+        Industrial electricity rate (¢/kWh)
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="color:#10a040;">${min.toFixed(1)}¢</span>
+        <div style="height:8px;width:140px;border-radius:4px;background:linear-gradient(to right,rgb(16,160,80),rgb(126,95,50),rgb(236,30,20));"></div>
+        <span style="color:#dc2626;">${max.toFixed(1)}¢</span>
+      </div>
+      <div style="margin-top:4px;color:#6b7280;font-size:10px;">
+        Source: EIA Monthly Electricity Report (2024-25). Cheap = WA/ID/OR/UT/LA. Expensive = HI/CA/CT.
+      </div>`;
+  },
+
 
   scenarioQuery() {
     const qs = new URLSearchParams();
@@ -618,6 +704,13 @@ const DataCenterMap = {
         share.textContent = 'Link copied ✓';
         setTimeout(() => share.textContent = 'Copy share link', 1500);
       });
+    });
+    const energyBtn = document.getElementById('energy-overlay-btn');
+    if (energyBtn) energyBtn.addEventListener('click', () => {
+      const active = !this.energyOverlayActive;
+      this.toggleEnergyOverlay(active);
+      energyBtn.classList.toggle('active', active);
+      energyBtn.textContent = active ? '⚡ Hide energy overlay' : '⚡ Energy cost overlay';
     });
     document.querySelectorAll('.dc-tab[data-tier]').forEach(btn => {
       btn.addEventListener('click', () => {

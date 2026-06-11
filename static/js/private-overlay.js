@@ -565,11 +565,65 @@
     setStatus(`done: ${matched.length}/${UPLOADED.rows.length} matched (${((matched.length / UPLOADED.rows.length) * 100).toFixed(0)}%)`);
   }
 
+  // ── US state centroids ──────────────────────────────────────────
+  // Approximate lat/lon for each US state, used as fallback
+  // coordinates when an uploaded row has only a state-level location
+  // and no facility-level match.  Lets us plot holdings AIG describes
+  // as "Multi", "14 US Markets", or "Richland Parish, Louisiana" at
+  // the state centroid so the entire portfolio appears on the map.
+  const STATE_CENTROIDS = {
+    'AL': [32.7, -86.8], 'AK': [64.0, -150.0], 'AZ': [34.0, -111.5], 'AR': [34.9, -92.4],
+    'CA': [37.0, -119.5], 'CO': [39.0, -105.5], 'CT': [41.6, -72.7], 'DE': [39.0, -75.5],
+    'DC': [38.9, -77.0], 'FL': [28.0, -82.5], 'GA': [32.7, -83.6], 'HI': [21.0, -157.0],
+    'ID': [44.4, -114.5], 'IL': [40.0, -89.0], 'IN': [39.9, -86.3], 'IA': [42.0, -93.5],
+    'KS': [38.5, -98.4], 'KY': [37.5, -85.3], 'LA': [31.2, -92.0], 'ME': [45.3, -69.0],
+    'MD': [39.0, -76.7], 'MA': [42.2, -71.8], 'MI': [44.3, -85.4], 'MN': [46.3, -94.3],
+    'MS': [32.7, -89.7], 'MO': [38.4, -92.5], 'MT': [47.1, -109.6], 'NE': [41.5, -99.8],
+    'NV': [38.5, -116.9], 'NH': [43.7, -71.6], 'NJ': [40.1, -74.7], 'NM': [34.5, -106.1],
+    'NY': [43.0, -75.5], 'NC': [35.5, -79.4], 'ND': [47.5, -100.3], 'OH': [40.4, -82.8],
+    'OK': [35.6, -97.5], 'OR': [43.9, -120.5], 'PA': [40.6, -77.2], 'RI': [41.7, -71.5],
+    'SC': [33.9, -80.9], 'SD': [44.2, -99.4], 'TN': [35.7, -86.7], 'TX': [31.0, -98.0],
+    'UT': [39.3, -111.7], 'VT': [44.0, -72.7], 'VA': [37.7, -78.2], 'WA': [47.4, -120.5],
+    'WV': [38.6, -80.6], 'WI': [44.6, -90.0], 'WY': [42.7, -107.3],
+  };
+  const STATE_NAME_TO_ABBR = {
+    'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+    'colorado':'CO','connecticut':'CT','delaware':'DE','district of columbia':'DC',
+    'florida':'FL','georgia':'GA','hawaii':'HI','idaho':'ID','illinois':'IL',
+    'indiana':'IN','iowa':'IA','kansas':'KS','kentucky':'KY','louisiana':'LA',
+    'maine':'ME','maryland':'MD','massachusetts':'MA','michigan':'MI','minnesota':'MN',
+    'mississippi':'MS','missouri':'MO','montana':'MT','nebraska':'NE','nevada':'NV',
+    'new hampshire':'NH','new jersey':'NJ','new mexico':'NM','new york':'NY',
+    'north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK','oregon':'OR',
+    'pennsylvania':'PA','rhode island':'RI','south carolina':'SC','south dakota':'SD',
+    'tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT','virginia':'VA',
+    'washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+  };
+
+  // Extract state(s) from any location-ish field in the row.
+  function extractStates(row, col) {
+    const blob = [
+      row[col.location], row[col.city], row[col.state],
+      row[col.name], row[col.tenant], col.dc_type ? row[col.dc_type] : '',
+    ].filter(Boolean).join(' ').toLowerCase();
+    const found = new Set();
+    for (const m of blob.matchAll(/\b([a-z]{2})\b/g)) {
+      const up = m[1].toUpperCase();
+      if (STATE_CENTROIDS[up]) found.add(up);
+    }
+    for (const [name, abbr] of Object.entries(STATE_NAME_TO_ABBR)) {
+      if (blob.includes(name)) found.add(abbr);
+    }
+    return [...found];
+  }
+
   // ── Map exposure overlay ─────────────────────────────────────────
-  // Plots matched-row exposure as purple circles on the existing
-  // data-centers map.  100% client-side: pulls coordinates from
-  // FACILITIES (already fetched) and never touches the user's file
-  // again.  The map layer is cleared on "Clear from memory".
+  // Plots holdings as circles on the existing data-centers map.  Tries
+  // three location sources in order of precision: matched-facility
+  // coordinates (most precise) → deal-collateral matches → state-level
+  // centroid (fallback).  This way every uploaded row appears on the
+  // map even when we can't match it to a known facility.
+  // 100% client-side, never touches the user's file again.
   function plotExposureOnMap(matched) {
     if (!window.DataCenterMap?.svg || !window.DataCenterMap?.projection) {
       setStatus('map not ready — switch the toolbar to Facilities mode first, then click Plot again');
@@ -582,25 +636,34 @@
     const { svg, projection } = window.DataCenterMap;
     const col = UPLOADED.columnMap;
 
-    // Build per-facility marker rows.
+    // Combine matched + unmatched so every uploaded row is candidate
+    // for plotting (state-level fallback if no facility coordinate).
+    const allRows = [
+      ...matched.map(m => ({ ...m, _wasMatched: true })),
+      ...(window.__overlayUnmatched || []).map(u => ({ row: u.row, _wasMatched: false })),
+    ];
+
+    // Build markers.  Three precision tiers:
+    //   facility (most precise) - exact lat/lon from FACILITIES
+    //   state-level (fallback)  - lat/lon at state centroid
     const markers = [];
-    for (const m of matched) {
+    let stateLevelCount = 0;
+    let droppedCount = 0;
+    for (const m of allRows) {
       const usd = rowExposureUsd(m.row, col) || 0;
       let facs = [];
       let sourceLabel = m.row[col.name] || '';
+      let precision = 'facility';
+
       if (m.operatorHit) {
         facs = m.operatorHit.facilities || [];
         sourceLabel = `${m.row[col.name]} → ${m.operatorHit.operator.canonical} (operator)`;
       } else if (m.dealMatch) {
-        // The deal's facility_matches are names; look them up in FACILITIES
-        // for the coordinates.  Loose match because deal collateral_facilities
-        // sometimes use abbreviated names.
         const fmNames = (m.dealMatch.facility_matches || []).map(fm => (fm.name || '').toLowerCase());
         if (fmNames.length) {
           facs = FACILITIES.filter(f => fmNames.includes((f.name || '').toLowerCase()));
         }
         if (!facs.length) {
-          // Fall back: token-match by sponsor.
           const sponsorLow = (m.dealMatch.sponsor || '').toLowerCase();
           if (sponsorLow) {
             facs = FACILITIES.filter(f =>
@@ -615,24 +678,46 @@
       }
 
       facs = facs.filter(f => f.lat != null && f.lon != null);
-      if (!facs.length) continue;
-      const perFac = usd / facs.length;
-      for (const f of facs) {
-        markers.push({ lat: f.lat, lon: f.lon, exposure: perFac, label: sourceLabel, facility: f.name });
+
+      if (facs.length) {
+        // Facility-level precision.
+        const perFac = usd / facs.length;
+        for (const f of facs) {
+          markers.push({ lat: f.lat, lon: f.lon, exposure: perFac,
+                          label: sourceLabel, facility: f.name, precision: 'facility' });
+        }
+      } else {
+        // Fall back to state centroid(s) extracted from any location field.
+        const states = extractStates(m.row, col);
+        if (states.length) {
+          const perState = usd / states.length;
+          for (const st of states) {
+            const [lat, lon] = STATE_CENTROIDS[st];
+            markers.push({ lat, lon, exposure: perState,
+                            label: `${sourceLabel} (state-level fallback)`,
+                            facility: `${st} state-level`, precision: 'state' });
+          }
+          stateLevelCount++;
+        } else {
+          droppedCount++;
+        }
       }
     }
+
     if (!markers.length) {
-      setStatus('no plottable matches — none had facility coordinates');
+      setStatus('no plottable rows — none had facility coordinates or extractable state location');
       return;
     }
 
-    // Aggregate by coordinate (rounded to ~1 km).
+    // Aggregate by coordinate.  Track precision per bucket so we can
+    // style state-level fallbacks distinctly from facility-level.
     const agg = new Map();
     for (const mk of markers) {
       const key = `${mk.lat.toFixed(2)},${mk.lon.toFixed(2)}`;
-      const e = agg.get(key) || { lat: mk.lat, lon: mk.lon, exposure: 0, items: [] };
+      const e = agg.get(key) || { lat: mk.lat, lon: mk.lon, exposure: 0, items: [], precision: 'state' };
       e.exposure += mk.exposure;
       e.items.push(`${mk.label} (${mk.facility})`);
+      if (mk.precision === 'facility') e.precision = 'facility'; // facility wins
       agg.set(key, e);
     }
     const data = [...agg.values()];
@@ -667,16 +752,26 @@
       .attr('cx', d => { const p = projection([d.lon, d.lat]); return p ? p[0] : null; })
       .attr('cy', d => { const p = projection([d.lon, d.lat]); return p ? p[1] : null; })
       .attr('r',  d => radiusScale(d.exposure))
-      .style('fill', '#7c3aed').style('fill-opacity', 0.45)
-      .style('stroke', '#5b21b6').style('stroke-width', 1.5)
+      .style('fill', d => d.precision === 'state' ? '#a78bfa' : '#7c3aed')
+      .style('fill-opacity', d => d.precision === 'state' ? 0.28 : 0.50)
+      .style('stroke', d => d.precision === 'state' ? '#7c3aed' : '#5b21b6')
+      .style('stroke-width', 1.5)
+      .style('stroke-dasharray', d => d.precision === 'state' ? '3,3' : null)
       .style('cursor', 'pointer');
     merged.select('title').text(d =>
-      `$${fmtUsd(d.exposure)} portfolio exposure mapped here\n\n` +
+      `$${fmtUsd(d.exposure)} portfolio exposure (${d.precision === 'state' ? 'STATE-LEVEL fallback' : 'facility-level'})\n\n` +
       d.items.slice(0, 8).join('\n') +
       (d.items.length > 8 ? `\n…and ${d.items.length - 8} more` : '')
     );
 
-    setStatus(`solo-plotted ${data.length} locations · max single exposure ≈ ${fmtUsd(maxExp)} · click "Clear map overlay" to restore the facility map`);
+    const facCount = data.filter(d => d.precision === 'facility').length;
+    const stCount = data.filter(d => d.precision === 'state').length;
+    setStatus(
+      `solo-plotted ${data.length} locations (${facCount} facility-level, ${stCount} state-level)` +
+      (droppedCount ? ` · ${droppedCount} rows had no extractable location` : '') +
+      ` · max single exposure ≈ ${fmtUsd(maxExp)}` +
+      ` · click "Clear map overlay" to restore the facility map`
+    );
   }
 
   function clearExposureMap() {
@@ -1139,6 +1234,7 @@
     box.style.display = '';
 
     window.__overlayMatched = r.matchedRows;
+    window.__overlayUnmatched = r.unmatchedRows;
     document.getElementById('overlay-plot-map')?.addEventListener('click',
       () => plotExposureOnMap(window.__overlayMatched || []));
     document.getElementById('overlay-clear-map')?.addEventListener('click',
@@ -1244,6 +1340,7 @@
     clearBtn.addEventListener('click', () => {
       UPLOADED = null;
       window.__overlayMatched = null;
+      window.__overlayUnmatched = null;
       fileInput.value = '';
       runBtn.disabled = true;
       const box = $('overlay-results');
