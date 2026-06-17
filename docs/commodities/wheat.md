@@ -22,6 +22,11 @@ buffered by global stocks-to-use dynamics.
   price spikes 6-12 months out with empirical correlation ~ -0.55.
   Requires `USDA_NASS_API_KEY` env var (free registration at
   https://quickstats.nass.usda.gov/api); fail-soft if unset.
+- **NAO — North Atlantic Oscillation (NOAA PSL)** — surface-pressure
+  dipole between Iceland and the Azores. Positive NAO winters bring
+  wetter / warmer conditions to N. Europe (helpful for EU wheat) and
+  drier conditions to S. Europe. Captures climate regime variation
+  that complements ENSO.
 - **Geopolitical Risk Index** — captures the Black Sea (Ukraine / Russia)
   risk premium that became dominant after Feb 2022.
 - **WTI Crude (`CL=F`, cross-commodity)** — energy cost in farming (diesel,
@@ -64,7 +69,7 @@ agronomic specifics.
 
 - SARIMAX(1,0,1) on monthly log-returns of `ZW=F` close.
 - Exogenous: DXY log-returns, ENSO ONI level, USDA ending-stocks
-  log-returns, GPR log-level, WTI log-returns.
+  log-returns, NAO level, GPR log-level, WTI log-returns.
 - GARCH(1,1) on residuals.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
 

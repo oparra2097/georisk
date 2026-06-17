@@ -14,6 +14,11 @@ residuals for years.
   conditions in Ghana + Côte d'Ivoire growing regions; positive ONI
   readings precede yield-shortfall episodes by 2-6 months. Enters as
   a signed-anomaly level (°C).
+- **AMO — Atlantic Multidecadal Oscillation (NOAA PSL)** — North
+  Atlantic SST pattern. Positive AMO phases bring above-normal West
+  African monsoon rainfall (bullish for cocoa yields); negative phases
+  precede drier seasons. Slower than ENSO but persistent — helpful for
+  multi-quarter horizons.
 - **S&P 500 (^GSPC)** — weak proxy for discretionary chocolate demand.
 
 > Drivers we'd still like: NOAA CPC African Rainfall Climatology
@@ -51,7 +56,7 @@ the 2023-26 episode illustrates how badly that can bite:
 ## Model specification
 
 - SARIMAX(1,0,1) on monthly log-returns of `CC=F` close.
-- Exogenous: DXY log-returns, ENSO ONI level, `^GSPC` log-returns.
+- Exogenous: DXY log-returns, ENSO ONI level, AMO level, `^GSPC` log-returns.
 - GARCH(1,1) on residuals — cocoa has enormous volatility clustering,
   so GARCH is material here.
 - 1,000-path bootstrap, 12-month horizon, 4 quarterly means.
