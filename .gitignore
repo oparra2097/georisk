@@ -12,6 +12,8 @@ data/*
 !data/ae_contingent_liabilities/**
 !data/em_regional_exposure/
 !data/em_regional_exposure/**
+!data/em_sovereign_stacks/
+!data/em_sovereign_stacks/**
 
 # Commodity model cache artifacts (regenerated on monthly refit)
 backend/cache/commodity_models/*.pkl
