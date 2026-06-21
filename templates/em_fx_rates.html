@@ -26,6 +26,45 @@
     </div>
   </section>
 
+  <!-- ── How to read this (walkthrough) ─────────────────────── -->
+  <details class="efr-guide" id="efr-guide">
+    <summary>
+      <span class="efr-guide-q">?</span>
+      <span>New here? <b>How to read this dashboard</b> — what each opportunity type means and how to use it</span>
+      <span class="efr-guide-chev">▾</span>
+    </summary>
+    <div class="efr-guide-body">
+      <div class="efr-guide-grid">
+        <div class="efr-guide-card">
+          <h4><span class="efr-dot efr-dot-long"></span>FX — Carry &amp; Alpha (β)</h4>
+          <p>We split each currency's move into the part the <b>dollar</b> explains (its DXY beta) and the part it doesn't (<b>residual / alpha</b>). High <b>carry-to-vol</b> + positive momentum = clean long; a big <i>negative</i> residual = it lagged its dollar beta, a mean-reversion long.</p>
+        </div>
+        <div class="efr-guide-card">
+          <h4><span class="efr-dot efr-dot-dur"></span>Duration (rates β)</h4>
+          <p>Sensitivity to the <b>level of rates</b>. Where EM 10Y yields are high <i>and falling</i>, a long-duration (receiver) position earns carry plus capital gains. The ETF block shows the real price move per 100bp.</p>
+        </div>
+        <div class="efr-guide-card">
+          <h4><span class="efr-dot efr-dot-cvx"></span>Convexity (γ)</h4>
+          <p><b>Vol compression</b> (1m ÷ 1y realized vol) flags coiled, low-vol regimes — long-gamma breakout setups. Negative <b>skew</b> + fat tails flag the carry-crash signature, where you're implicitly <i>short</i> gamma.</p>
+        </div>
+      </div>
+      <p class="efr-guide-foot">
+        <b>Data note.</b> Everything is built from free spot FX, the US Treasury curve, EM bond ETFs and FRED/OECD yields.
+        We can't see NDFs, FX swaps or swaption implied-vol surfaces (paid OTC data), so carry is the
+        forward-implied rate differential (covered interest parity) and convexity is <i>realized</i>, not implied — directional reads, not live option greeks.
+      </p>
+    </div>
+  </details>
+
+  <!-- ── Sticky jump-nav ────────────────────────────────────── -->
+  <nav class="efr-jump" id="efr-jump">
+    <a href="#sec-opps" class="efr-jump-link active">Opportunity screen</a>
+    <a href="#sec-fx" class="efr-jump-link">FX moves</a>
+    <a href="#sec-duration" class="efr-jump-link">Duration (β)</a>
+    <a href="#sec-convexity" class="efr-jump-link">Convexity (γ)</a>
+    <a href="#sec-rates" class="efr-jump-link">Rates &amp; curve</a>
+  </nav>
+
   <!-- ── Macro backdrop strip ───────────────────────────────── -->
   <section class="efr-backdrop">
     <div class="efr-kpis" id="efr-kpis"></div>
@@ -33,7 +72,7 @@
   </section>
 
   <!-- ── Opportunity screen (the star) ──────────────────────── -->
-  <section class="efr-section">
+  <section class="efr-section" id="sec-opps">
     <div class="efr-section-head">
       <div>
         <h2>Opportunity screen</h2>
@@ -74,7 +113,7 @@
   </section>
 
   <!-- ── FX moves table ─────────────────────────────────────── -->
-  <section class="efr-section">
+  <section class="efr-section" id="sec-fx">
     <div class="efr-section-head">
       <div>
         <h2>FX moves vs USD</h2>
@@ -100,8 +139,64 @@
     </div>
   </section>
 
+  <!-- ── Duration (rates beta) opportunities ────────────────── -->
+  <section class="efr-section" id="sec-duration">
+    <div class="efr-section-head">
+      <div>
+        <h2>Duration opportunities <span class="efr-tag efr-tag-dur">rates β</span></h2>
+        <p class="efr-note">
+          Where to take <b>duration</b> (the level of rates). High EM 10Y yields that are <i>falling</i> reward a
+          long-duration (receiver) stance — carry plus capital gains. The ETF chips show the empirical effective
+          duration: the actual price move per 100bp shift in US 10Y.
+        </p>
+      </div>
+      <div class="efr-etf-chips" id="efr-dur-etfs"></div>
+    </div>
+    <div class="efr-table-wrap">
+      <table class="efr-table" id="efr-duration">
+        <thead>
+          <tr>
+            <th>#</th><th>Country</th><th>Stance</th>
+            <th class="num">10Y&nbsp;%</th><th class="num">Δ3M&nbsp;bp</th><th class="num">Δ12M&nbsp;bp</th>
+            <th class="num">Score</th><th class="efr-rationale-col">Read</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="efr-method" id="efr-dur-method"></p>
+  </section>
+
+  <!-- ── Convexity (gamma) opportunities ────────────────────── -->
+  <section class="efr-section" id="sec-convexity">
+    <div class="efr-section-head">
+      <div>
+        <h2>Convexity opportunities <span class="efr-tag efr-tag-cvx">gamma γ</span></h2>
+        <p class="efr-note">
+          <b>Realized</b> convexity proxies (no options data). <b>Vol compression</b> = 1m ÷ 1y realized vol:
+          well below 1 = a coiled, quiet regime (long-gamma / breakout setup). Strongly negative <b>skew</b> with
+          fat tails = the carry-crash signature — small steady gains, occasional big drops, i.e. implicitly short gamma.
+        </p>
+      </div>
+    </div>
+    <div class="efr-table-wrap">
+      <table class="efr-table" id="efr-convexity">
+        <thead>
+          <tr>
+            <th>Currency</th><th>Signal</th>
+            <th class="num">Vol 1m</th><th class="num">Vol 1y</th>
+            <th class="num">Compress</th><th class="num">Skew</th><th class="num">Kurt</th>
+            <th class="efr-rationale-col">Read</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="efr-method" id="efr-cvx-method"></p>
+  </section>
+
   <!-- ── Rates ──────────────────────────────────────────────── -->
-  <section class="efr-section efr-rates-grid">
+  <section class="efr-section efr-rates-grid" id="sec-rates">
     <div>
       <h2 class="efr-sub-h2">US Treasury curve <span class="efr-pill" id="efr-slope">—</span></h2>
       <table class="efr-table efr-compact" id="efr-curve">

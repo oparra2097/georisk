@@ -34,6 +34,7 @@
     bindRefresh();
     bindSort();
     bindSigFilter();
+    bindJumpNav();
     fetchBundle();
   });
 
@@ -70,6 +71,23 @@
     });
   }
 
+  function bindJumpNav() {
+    const links = Array.from(document.querySelectorAll('.efr-jump-link'));
+    links.forEach(a => a.addEventListener('click', e => {
+      e.preventDefault();
+      const el = document.querySelector(a.getAttribute('href'));
+      if (el) window.scrollTo({ top: el.offsetTop - 64, behavior: 'smooth' });
+    }));
+    // Scroll-spy: highlight the section currently in view.
+    const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+    window.addEventListener('scroll', () => {
+      const y = window.scrollY + 120;
+      let active = sections[0];
+      sections.forEach(s => { if (s.offsetTop <= y) active = s; });
+      links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (active && active.id)));
+    }, { passive: true });
+  }
+
   async function fetchBundle() {
     try {
       const resp = await fetch(API.bundle, { credentials: 'same-origin' });
@@ -78,6 +96,8 @@
       renderBackdrop();
       renderScreen();
       renderFxTable();
+      renderDuration();
+      renderConvexity();
       renderRates();
     } catch (e) {
       console.error('EM FX fetch failed', e);
@@ -219,6 +239,92 @@
     });
   }
 
+  // ── Duration (rates beta) ─────────────────────────────────
+  function renderDuration() {
+    const dur = state.data.duration || {};
+    setText('efr-dur-method', dur.method || '');
+
+    const chips = document.getElementById('efr-dur-etfs');
+    if (chips) {
+      chips.innerHTML = (dur.etfs || []).map(e => {
+        const d = e.duration != null ? `${e.duration.toFixed(1)}y` : '—';
+        const r2 = e.r2 != null ? ` · R²${e.r2.toFixed(2)}` : '';
+        return `<span class="efr-etf-chip" title="Empirical effective duration vs US 10Y${r2}">
+          <b>${e.code}</b> ${d}<span class="efr-chip-sub"> eff. dur</span></span>`;
+      }).join('');
+    }
+
+    const tbody = document.querySelector('#efr-duration tbody');
+    if (!tbody) return;
+    const rows = dur.rows || [];
+    const hasFred = (state.data.meta || {}).has_fred;
+    if (!rows.length) {
+      const msg = hasFred
+        ? 'No EM 10Y series returned data from FRED right now.'
+        : 'FRED API key not configured on the server — per-country duration needs the FRED/OECD 10Y yields. The empirical ETF durations above still work.';
+      tbody.innerHTML = `<tr><td colspan="8" class="efr-empty">${msg}</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `<tr>
+      <td class="efr-rank">${r.rank ?? '—'}</td>
+      <td class="efr-ccy"><span>${r.name}</span></td>
+      <td>${durBadge(r.stance)}</td>
+      <td class="num"><b>${fmt(r.yield, 2)}</b></td>
+      <td class="num ${signClsInv(r.chg_3m_bp)}">${bp(r.chg_3m_bp)}</td>
+      <td class="num ${signClsInv(r.chg_12m_bp)}">${bp(r.chg_12m_bp)}</td>
+      <td class="num ${signCls(r.score)}">${fmt(r.score, 2)}</td>
+      <td class="efr-rationale">${r.note || ''}</td>
+    </tr>`).join('');
+  }
+
+  function durBadge(stance) {
+    if (!stance) return '';
+    let cls = 'efr-badge-neutral';
+    if (/long duration|receiver/i.test(stance)) cls = 'efr-badge-long';
+    else if (/pay|short/i.test(stance)) cls = 'efr-badge-rich';
+    else if (/carry/i.test(stance)) cls = 'efr-badge-value';
+    return `<span class="efr-badge ${cls}">${stance}</span>`;
+  }
+
+  // ── Convexity (gamma) ─────────────────────────────────────
+  function renderConvexity() {
+    const cvx = state.data.convexity || {};
+    setText('efr-cvx-method', cvx.method || '');
+    const tbody = document.querySelector('#efr-convexity tbody');
+    if (!tbody) return;
+    const rows = cvx.rows || [];
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="8" class="efr-empty">No FX history available.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `<tr>
+      <td class="efr-ccy"><span class="efr-flag">${r.flag || ''}</span><span>${r.name}</span><span class="efr-bloc">${r.code}</span></td>
+      <td>${cvxBadge(r.label)}</td>
+      <td class="num">${fmt(r.vol_1m, 1)}</td>
+      <td class="num">${fmt(r.vol_1y, 1)}</td>
+      <td class="num">${compCell(r.compression)}</td>
+      <td class="num ${r.skew != null && r.skew < 0 ? 'efr-neg' : ''}">${fmt(r.skew, 2)}</td>
+      <td class="num">${fmt(r.exkurt, 1)}</td>
+      <td class="efr-rationale">${r.note || ''}</td>
+    </tr>`).join('');
+  }
+
+  function compCell(v) {
+    if (v == null) return '—';
+    // <1 coiled (blue), >1 expanding (amber)
+    const cls = v <= 0.85 ? 'efr-comp-low' : (v >= 1.15 ? 'efr-comp-high' : '');
+    return `<span class="${cls}">${v.toFixed(2)}×</span>`;
+  }
+
+  function cvxBadge(label) {
+    if (!label) return '';
+    let cls = 'efr-badge-neutral';
+    if (/short gamma|negative convexity/i.test(label)) cls = 'efr-badge-rich';
+    else if (/long gamma|coiled/i.test(label)) cls = 'efr-badge-value';
+    else if (/expanding/i.test(label)) cls = 'efr-badge-long';
+    return `<span class="efr-badge ${cls}">${label}</span>`;
+  }
+
   // ── Rates ─────────────────────────────────────────────────
   function renderRates() {
     const rates = state.data.rates || {};
@@ -277,6 +383,8 @@
   function pct(v) { return v == null ? '—' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`; }
   function bp(v) { return v == null ? '—' : `${v >= 0 ? '+' : ''}${Math.round(v)}`; }
   function signCls(v) { return v == null ? '' : (v >= 0 ? 'efr-pos' : 'efr-neg'); }
+  // Inverted: for yields, a fall (negative) is the favourable/green case.
+  function signClsInv(v) { return v == null ? '' : (v <= 0 ? 'efr-pos' : 'efr-neg'); }
   function fmtTime(iso) {
     try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
     catch { return iso; }

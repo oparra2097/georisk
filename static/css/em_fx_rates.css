@@ -51,6 +51,72 @@
 .efr-btn-ghost:hover { color: var(--efr-text); border-color: #2a3245; }
 .efr-btn:disabled { opacity: .6; cursor: default; }
 
+/* ── How-to guide (collapsible) ──────────────────────────── */
+.efr-guide {
+  border: 1px solid var(--efr-border); border-radius: 12px;
+  background: var(--efr-surface); margin-bottom: 18px; overflow: hidden;
+}
+.efr-guide > summary {
+  display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+  cursor: pointer; list-style: none; font-size: 13.5px; color: var(--efr-dim);
+}
+.efr-guide > summary::-webkit-details-marker { display: none; }
+.efr-guide > summary b { color: var(--efr-text); }
+.efr-guide-q {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  background: var(--efr-accent); color: #fff; font-weight: 700; font-size: 13px;
+}
+.efr-guide-chev { margin-left: auto; transition: transform .2s; color: var(--efr-mute); }
+.efr-guide[open] .efr-guide-chev { transform: rotate(180deg); }
+.efr-guide-body { padding: 4px 18px 18px; border-top: 1px solid var(--efr-border); }
+.efr-guide-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 16px 0; }
+.efr-guide-card h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+.efr-guide-card p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--efr-dim); }
+.efr-guide-card b { color: var(--efr-text); }
+.efr-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.efr-dot-long { background: #34d399; }
+.efr-dot-dur  { background: #60a5fa; }
+.efr-dot-cvx  { background: #fbbf24; }
+.efr-guide-foot {
+  margin: 4px 0 0; padding: 12px 14px; font-size: 12px; line-height: 1.6;
+  color: var(--efr-mute); background: rgba(255,255,255,.02);
+  border: 1px solid var(--efr-border); border-radius: 8px;
+}
+.efr-guide-foot b { color: var(--efr-dim); }
+
+/* ── Sticky jump-nav ─────────────────────────────────────── */
+.efr-jump {
+  position: sticky; top: 0; z-index: 20; display: flex; gap: 4px; flex-wrap: wrap;
+  padding: 8px 6px; margin-bottom: 22px;
+  background: rgba(10,14,26,.85); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--efr-border);
+}
+.efr-jump-link {
+  font-size: 12.5px; font-weight: 600; color: var(--efr-dim); text-decoration: none;
+  padding: 6px 12px; border-radius: 7px; transition: all .15s;
+}
+.efr-jump-link:hover { color: var(--efr-text); background: rgba(255,255,255,.04); }
+.efr-jump-link.active { color: #fff; background: var(--efr-accent); }
+
+/* ── Section tags ────────────────────────────────────────── */
+.efr-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: .05em; vertical-align: middle; }
+.efr-tag-dur { background: rgba(96,165,250,.16); color: #60a5fa; }
+.efr-tag-cvx { background: rgba(251,191,36,.16); color: #fbbf24; }
+
+/* ── ETF duration chips ──────────────────────────────────── */
+.efr-etf-chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.efr-etf-chip {
+  font-size: 12px; color: var(--efr-text); background: var(--efr-surface);
+  border: 1px solid var(--efr-border); border-radius: 8px; padding: 7px 11px;
+}
+.efr-etf-chip b { color: #60a5fa; }
+.efr-chip-sub { color: var(--efr-mute); font-size: 10.5px; }
+
+/* Compression cell coloring */
+.efr-comp-low  { color: #60a5fa; font-weight: 600; }
+.efr-comp-high { color: #fbbf24; font-weight: 600; }
+
 /* ── Backdrop strip ──────────────────────────────────────── */
 .efr-backdrop {
   background: linear-gradient(135deg, #0c1424 0%, #111d36 100%);

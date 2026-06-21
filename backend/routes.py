@@ -875,6 +875,48 @@ def _export_em_fx_rates_excel(data):
     for col, w in zip('ABCDE', [22, 10, 12, 10, 10]):
         ws2.column_dimensions[col].width = w
 
+    # ── Sheet 3: Duration ──
+    ws3 = wb.create_sheet('Duration')
+    dur = data.get('duration', {})
+    ws3.cell(row=1, column=1, value='Duration (rates-beta) opportunities').font = Font(bold=True, size=13)
+    etf_txt = '  '.join(f"{e.get('code')}: {e.get('duration')}y eff. dur"
+                        for e in dur.get('etfs', []) if e.get('duration') is not None)
+    ws3.cell(row=2, column=1, value=etf_txt or 'ETF durations unavailable').font = Font(italic=True, size=9, color='6B7280')
+    style_header(ws3, 4, ['Rank', 'Country', 'Stance', '10Y %', 'Δ3M bp', 'Δ12M bp', 'Score'])
+    r = 5
+    for row in dur.get('rows', []):
+        ws3.cell(row=r, column=1, value=row.get('rank')).border = box
+        ws3.cell(row=r, column=2, value=row.get('name')).border = box
+        ws3.cell(row=r, column=3, value=row.get('stance')).border = box
+        ws3.cell(row=r, column=4, value=row.get('yield')).border = box
+        ws3.cell(row=r, column=4).number_format = '0.00'
+        signed(ws3, r, 5, row.get('chg_3m_bp'), '+0;-0;0')
+        signed(ws3, r, 6, row.get('chg_12m_bp'), '+0;-0;0')
+        ws3.cell(row=r, column=7, value=row.get('score')).border = box
+        r += 1
+    for col, w in zip('ABCDEFG', [6, 20, 24, 9, 9, 9, 8]):
+        ws3.column_dimensions[col].width = w
+    ws3.freeze_panes = 'A5'
+
+    # ── Sheet 4: Convexity ──
+    ws4 = wb.create_sheet('Convexity')
+    cvx = data.get('convexity', {})
+    ws4.cell(row=1, column=1, value='Convexity (gamma) — realized proxies').font = Font(bold=True, size=13)
+    style_header(ws4, 3, ['Currency', 'Signal', 'Vol 1m %', 'Vol 1y %', 'Compression', 'Skew', 'Excess Kurt'])
+    r = 4
+    for row in cvx.get('rows', []):
+        ws4.cell(row=r, column=1, value=row.get('name')).border = box
+        ws4.cell(row=r, column=2, value=row.get('label')).border = box
+        ws4.cell(row=r, column=3, value=row.get('vol_1m')).border = box
+        ws4.cell(row=r, column=4, value=row.get('vol_1y')).border = box
+        ws4.cell(row=r, column=5, value=row.get('compression')).border = box
+        ws4.cell(row=r, column=6, value=row.get('skew')).border = box
+        ws4.cell(row=r, column=7, value=row.get('exkurt')).border = box
+        r += 1
+    for col, w in zip('ABCDEFG', [20, 30, 10, 10, 12, 8, 11]):
+        ws4.column_dimensions[col].width = w
+    ws4.freeze_panes = 'A4'
+
     output = BytesIO()
     wb.save(output)
     output.seek(0)

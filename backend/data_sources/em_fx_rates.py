@@ -298,15 +298,60 @@ def _beta_corr(ccy_returns, factor_returns):
     return beta, corr
 
 
-def _ann_vol_pct(ccy_returns):
-    """Annualized FX volatility (%), from trailing daily returns."""
+def _ann_vol_pct(ccy_returns, n=CORR_WINDOW):
+    """Annualized FX volatility (%), from the trailing `n` daily returns."""
     _ensure_libs()
-    if len(ccy_returns) < 20:
+    r = [v for _, v in ccy_returns[-n:]]
+    if len(r) < 15:
         return None
-    r = np.array([v for _, v in ccy_returns[-CORR_WINDOW:]])
-    if r.size < 20:
-        return None
-    return round(float(r.std() * (252 ** 0.5) * 100.0), 1)
+    arr = np.array(r)
+    return round(float(arr.std() * (252 ** 0.5) * 100.0), 1)
+
+
+def _skew_kurt(ccy_returns):
+    """Sample skewness and excess kurtosis of daily returns. Negative skew +
+    fat tails = the carry-crash signature (you're implicitly short gamma)."""
+    _ensure_libs()
+    r = np.array([v for _, v in ccy_returns])
+    if r.size < 30:
+        return None, None
+    mu, sd = r.mean(), r.std()
+    if sd == 0:
+        return None, None
+    z = (r - mu) / sd
+    skew = float((z ** 3).mean())
+    exkurt = float((z ** 4).mean() - 3.0)
+    return round(skew, 2), round(exkurt, 1)
+
+
+def _yield_changes(level_series):
+    """Daily first-difference of a yield level series → (date, Δ in %-points)."""
+    out = []
+    for i in range(1, len(level_series)):
+        out.append((level_series[i]['date'],
+                    level_series[i]['value'] - level_series[i - 1]['value']))
+    return out
+
+
+def _empirical_duration(etf_returns, dyield):
+    """Effective duration (years) of a bond ETF, from regressing its daily
+    returns on daily US-10Y yield changes. price_return ≈ −Dur · Δy(decimal),
+    so with Δy in %-points: Dur = −beta · 100. Returns (duration, r2)."""
+    _ensure_libs()
+    xs, ys = _align(etf_returns, dyield)  # xs=etf ret, ys=Δyield(%pts)
+    if len(xs) < 30:
+        return None, None
+    x = np.array(xs)
+    y = np.array(ys)
+    if y.std() == 0:
+        return None, None
+    try:
+        beta = float(np.polyfit(y, x, 1)[0])
+        corr = float(np.corrcoef(x, y)[0, 1])
+        dur = round(-beta * 100.0, 1)
+        return dur, round(corr * corr, 2)
+    except Exception:
+        return None, None
 
 
 # ── Payload assembly ──────────────────────────────────────────────────────
@@ -338,6 +383,16 @@ def _build_payload():
         ccy_ret = [(d, -r) for d, r in pair_ret]
         dxy_beta, dxy_corr, dxy_r2 = _fit_factor(ccy_ret, dxy_ret)
         oil_beta, oil_corr = _beta_corr(ccy_ret, brent_ret)
+
+        # Convexity (gamma) proxies from realized returns — no options data, so
+        # these are realized, not implied: a vol-compression ratio (coiled vs
+        # expanding) and the skew/kurtosis carry-crash signature.
+        vol_1m = _ann_vol_pct(ccy_ret, 21)
+        vol_3m = _ann_vol_pct(ccy_ret, 63)
+        vol_1y = _ann_vol_pct(ccy_ret, 252)
+        compression = round(vol_1m / vol_1y, 2) if (vol_1m and vol_1y) else None
+        skew, exkurt = _skew_kurt(ccy_ret)
+
         fx.append({
             'code': c['code'], 'name': c['name'], 'flag': c['flag'],
             'bloc': c['bloc'], 'pair': c['pair'],
@@ -349,6 +404,10 @@ def _build_payload():
             'drivers': {
                 'dxy_beta': dxy_beta, 'dxy_corr': dxy_corr, 'dxy_r2': dxy_r2,
                 'oil_beta': oil_beta, 'oil_corr': oil_corr,
+            },
+            'convexity': {
+                'vol_1m': vol_1m, 'vol_3m': vol_3m, 'vol_1y': vol_1y,
+                'compression': compression, 'skew': skew, 'exkurt': exkurt,
             },
         })
 
@@ -392,6 +451,15 @@ def _build_payload():
             'asof': asof, 'chg': moves, 'spark': _sparkline_level(s),
         })
 
+    # Empirical effective duration of the EM bond proxies, from regressing
+    # their daily returns on daily US-10Y yield changes.
+    us10_dy = _yield_changes(curve_series.get('^TNX', []))
+    for e in em_bond_etfs:
+        ret = _daily_returns(etf_series.get(e['code'], []))
+        dur, r2 = _empirical_duration(ret, us10_dy)
+        e['duration'] = dur
+        e['duration_r2'] = r2
+
     # ── Rates: per-country FRED 10Y yields ──
     em_10y, has_fred = _fred_10y_table()
 
@@ -408,8 +476,10 @@ def _build_payload():
         }),
     }
 
-    # ── Beta-opportunity signals (the analytical core) ──
-    signals = _build_signals(fx, y10, em_10y, dxy_moves)
+    # ── Opportunity engines ──
+    signals = _build_signals(fx, y10, em_10y, dxy_moves)            # FX beta/carry/value
+    duration = _build_duration(em_10y, em_bond_etfs, has_fred)      # rates beta
+    convexity = _build_convexity(fx)                                # gamma proxies
 
     return {
         'meta': {
@@ -427,7 +497,126 @@ def _build_payload():
             'em_10y': em_10y,
         },
         'signals': signals,
+        'duration': duration,
+        'convexity': convexity,
         'backdrop': backdrop,
+    }
+
+
+def _build_duration(em_10y_rows, em_bond_etfs, has_fred):
+    """Duration (rates-beta) opportunities. For each country with a FRED 10Y
+    yield we combine the *level* (carry cushion) with the recent *trend* in
+    yields: falling yields = capital gains for a long-duration (receiver)
+    position, on top of the carry. Ranked by a simple high-yield + falling-
+    yield score. The ETF block reports the empirical effective duration of the
+    EM bond proxies — the actual price sensitivity to a 100bp rate move."""
+    rows = []
+    for r in (em_10y_rows or []):
+        level = r.get('yield')
+        d3 = r.get('chg_3m_bp')
+        d12 = r.get('chg_12m_bp')
+        # Stance from the 3m trend in yields.
+        if d3 is not None and d3 <= -15:
+            stance = 'Long duration (receiver)'
+            note = f'Yields down {abs(int(d3))}bp/3m with a {level:.1f}% carry cushion — falling rates add capital gains to carry.'
+        elif d3 is not None and d3 >= 25:
+            stance = 'Pay / short duration'
+            note = f'Yields up {int(d3)}bp/3m — rising-rate drag; better received later or paid now.'
+        elif level is not None and level >= 8:
+            stance = 'High carry, range-bound'
+            note = f'{level:.1f}% yield with little trend — carry without a clear duration tailwind.'
+        else:
+            stance = 'Neutral'
+            note = 'No standout level or trend in the 10Y right now.'
+        rows.append({
+            'code': r.get('code'), 'name': r.get('name'),
+            'yield': level, 'chg_3m_bp': d3, 'chg_12m_bp': d12,
+            'asof': r.get('asof'), 'stance': stance, 'note': note,
+        })
+
+    # Score: high level + falling yields (negative 3m change is good).
+    lvl_z = _zscores([r['yield'] for r in rows])
+    trd_z = _zscores([(-(r['chg_3m_bp']) if r['chg_3m_bp'] is not None else None) for r in rows])
+    for i, r in enumerate(rows):
+        parts = [z for z in (lvl_z[i], trd_z[i]) if z is not None]
+        r['score'] = round(sum(parts) / len(parts), 2) if parts else None
+    rows.sort(key=lambda r: (r['score'] if r['score'] is not None else -1e9), reverse=True)
+    for i, r in enumerate(rows, 1):
+        r['rank'] = i
+
+    return {
+        'rows': rows,
+        'etfs': [{'code': e['code'], 'name': e['name'], 'duration': e.get('duration'),
+                  'r2': e.get('duration_r2')} for e in (em_bond_etfs or [])],
+        'has_fred': has_fred,
+        'method': (
+            'Effective duration = −β·100 from regressing each EM bond proxy\'s daily '
+            'return on daily US-10Y yield changes (price move per 100bp). Country stance '
+            'reads the 3-month trend in the FRED/OECD 10Y: falling yields favour receiving '
+            '(long duration), rising yields favour paying.'
+        ),
+    }
+
+
+def _build_convexity(fx):
+    """Convexity (gamma) opportunities from *realized* return distributions —
+    we have no options data, so this is realized, not implied vol/greeks.
+
+      • Vol compression = 1m realized vol ÷ 1y realized vol. Well below 1 = a
+        coiled, low-vol regime → a long-gamma / breakout setup (cheap optionality
+        if you could buy it). Well above 1 = vol already expanding.
+      • Skew + excess kurtosis = the carry-crash signature. Strongly negative
+        skew with fat tails means small steady gains punctuated by large drops —
+        you are implicitly SHORT gamma holding the carry (e.g. managed pegs).
+    """
+    rows = []
+    for f in fx:
+        cx = f.get('convexity', {})
+        comp = cx.get('compression')
+        skew = cx.get('skew')
+        exk = cx.get('exkurt')
+
+        if skew is not None and skew <= -0.6 and (exk is None or exk >= 1):
+            label = 'Short gamma — negative convexity'
+            note = f'Skew {skew:+.2f}, fat tails — carry-crash risk; you are implicitly short vol holding this.'
+        elif comp is not None and comp <= 0.75:
+            label = 'Long gamma — coiled (vol compressed)'
+            note = f'1m vol is {comp:.2f}× its 1y average — quiet regime, breakout/optionality setup.'
+        elif comp is not None and comp >= 1.3:
+            label = 'Vol expanding'
+            note = f'1m vol is {comp:.2f}× its 1y average — already moving; momentum over mean-reversion.'
+        else:
+            label = 'Balanced'
+            note = 'No vol-compression or tail-skew dislocation right now.'
+
+        rows.append({
+            'code': f['code'], 'name': f['name'], 'flag': f['flag'], 'bloc': f['bloc'],
+            'vol_1m': cx.get('vol_1m'), 'vol_1y': cx.get('vol_1y'),
+            'compression': comp, 'skew': skew, 'exkurt': exk,
+            'label': label, 'note': note,
+        })
+
+    # Most "interesting" first: lowest compression (most coiled) and most
+    # negative skew bubble up; balanced names sink.
+    def sort_key(r):
+        priority = 0
+        if r['label'].startswith('Short gamma'):
+            priority = 3
+        elif r['label'].startswith('Long gamma'):
+            priority = 2
+        elif r['label'].startswith('Vol expanding'):
+            priority = 1
+        return (priority, -(r['compression'] or 99))
+    rows.sort(key=sort_key, reverse=True)
+
+    return {
+        'rows': rows,
+        'method': (
+            'Realized (not implied) convexity proxies. Vol compression = 1m ÷ 1y realized '
+            'vol: <0.75 = coiled long-gamma setup, >1.3 = expanding. Skew/kurtosis flag the '
+            'carry-crash tail (short-gamma). True option greeks need an implied-vol surface, '
+            'which is paid data.'
+        ),
     }
 
 
@@ -537,7 +726,10 @@ def _build_signals(fx, us_10y, em_10y_rows, dxy_moves):
         'method': (
             'Composite = cross-sectional z(carry-to-vol) + z(3m momentum). '
             'Residual_1m = actual 1m move − (DXY beta × DXY 1m move): the part '
-            'of the move the dollar does not explain. Carry = local 10Y − US 10Y.'
+            'of the move the dollar does not explain. Carry = local 10Y − US 10Y — '
+            'the forward/NDF-implied carry under covered interest parity (we proxy it '
+            'with the rate differential because forward points and the cross-currency '
+            'basis are paid data).'
         ),
     }
 
