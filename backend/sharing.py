@@ -145,6 +145,15 @@ def meta_for_path(path: str) -> dict:
             "og_url": path,
         }
 
+    if path.startswith("/em-fx-rates"):
+        return {
+            **base,
+            "og_title": "EM FX & Rates — Parra Macro",
+            "og_description": "Beta opportunity screen for major EM currencies — Turkey, South Africa, Brazil, Mexico, China, Colombia, Chile and more. Dollar beta vs idiosyncratic alpha, ranked by carry, momentum and value against the DXY, MSCI EM and the US curve.",
+            "og_image": "/og/preview.png?chart=em-fx-rates",
+            "og_url": path,
+        }
+
     if path.startswith("/models"):
         return {
             **base,

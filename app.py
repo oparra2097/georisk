@@ -203,6 +203,11 @@ def create_app():
     def cpi_release():
         return render_template('cpi_release.html', active_page='cpi-release')
 
+    @app.route('/em-fx-rates')
+    @social_or_login_required
+    def em_fx_rates():
+        return render_template('em_fx_rates.html', active_page='em-fx-rates')
+
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
     init_scheduler(app)

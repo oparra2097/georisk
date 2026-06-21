@@ -34,6 +34,9 @@ from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.data_sources.yale_tariff import get_yale_tariff_data
 from backend.data_sources.insurance_inflation import get_insurance_inflation_data
 from backend.data_sources.em_vulnerability import get_em_vulnerability_data
+from backend.data_sources.em_fx_rates import (
+    get_em_fx_rates, clear_cache as clear_em_fx_rates_cache,
+)
 from flask_login import login_required, current_user
 from functools import wraps
 from backend.cache.database import get_country_history, get_all_history, detect_anomalies, get_score_count
@@ -759,6 +762,129 @@ def labor_market_diagnostics():
 def cpi_diagnostics():
     from backend.data_sources.bls_cpi import run_cpi_detail_diagnostic
     return jsonify(run_cpi_detail_diagnostic())
+
+
+# ── EM FX & Rates tracker ──────────────────────────────────────────────
+
+@api_bp.route('/em-fx-rates')
+def em_fx_rates():
+    """FX moves, rates/curve backdrop, and drivers for the major EMs."""
+    return jsonify(get_em_fx_rates())
+
+
+@api_bp.route('/em-fx-rates/refresh', methods=['POST'])
+def em_fx_rates_refresh():
+    """Clear the EM FX/rates cache (and FRED) and recompute on next request."""
+    clear_em_fx_rates_cache()
+    return jsonify({'status': 'ok', 'message': 'EM FX & rates cache cleared'})
+
+
+@api_bp.route('/em-fx-rates/export')
+def em_fx_rates_export():
+    """Excel export: FX moves, US curve, EM bond ETFs, EM 10Y yields, drivers."""
+    return _export_em_fx_rates_excel(get_em_fx_rates())
+
+
+def _export_em_fx_rates_excel(data):
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    green = Font(color='10B981')
+    red = Font(color='EF4444')
+    thin = Side(style='thin', color='D1D5DB')
+    box = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    def style_header(ws, row, headers):
+        for col, h in enumerate(headers, 1):
+            c = ws.cell(row=row, column=col, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.alignment = Alignment(horizontal='center')
+            c.border = box
+
+    def signed(ws, row, col, val, fmt='+0.00;-0.00;0.00'):
+        c = ws.cell(row=row, column=col, value=val)
+        c.number_format = fmt
+        c.alignment = Alignment(horizontal='center')
+        c.border = box
+        if val is not None:
+            c.font = green if val >= 0 else red
+        return c
+
+    wb = Workbook()
+
+    # ── Sheet 1: FX ──
+    ws = wb.active
+    ws.title = 'EM FX'
+    ws.cell(row=1, column=1, value='EM FX — moves vs USD (positive = currency stronger)').font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value=data.get('meta', {}).get('source', '')).font = Font(italic=True, size=9, color='6B7280')
+    style_header(ws, 4, ['Currency', 'Code', 'Spot (USD/CCY)', '1D %', '1W %', '1M %', 'YTD %', '1Y %',
+                         'β to DXY', 'corr DXY', 'corr Brent'])
+    r = 5
+    for fx in data.get('fx', []):
+        ch = fx.get('chg', {})
+        dr = fx.get('drivers', {})
+        ws.cell(row=r, column=1, value=fx.get('name')).border = box
+        ws.cell(row=r, column=2, value=fx.get('code')).border = box
+        ws.cell(row=r, column=3, value=fx.get('spot')).border = box
+        ws.cell(row=r, column=3).number_format = '#,##0.0000'
+        signed(ws, r, 4, ch.get('d1'))
+        signed(ws, r, 5, ch.get('w1'))
+        signed(ws, r, 6, ch.get('m1'))
+        signed(ws, r, 7, ch.get('ytd'))
+        signed(ws, r, 8, ch.get('y1'))
+        ws.cell(row=r, column=9, value=dr.get('dxy_beta')).border = box
+        ws.cell(row=r, column=10, value=dr.get('dxy_corr')).border = box
+        ws.cell(row=r, column=11, value=dr.get('oil_corr')).border = box
+        r += 1
+    for col, w in zip('ABCDEFGHIJK', [20, 8, 16, 9, 9, 9, 9, 9, 10, 10, 11]):
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = 'A5'
+
+    # ── Sheet 2: Rates ──
+    ws2 = wb.create_sheet('Rates')
+    ws2.cell(row=1, column=1, value='US Treasury curve').font = Font(bold=True, size=12)
+    style_header(ws2, 2, ['Tenor', 'Yield %', '1D bp', '1M bp', 'YTD bp'])
+    r = 3
+    for leg in data.get('rates', {}).get('us_curve', []):
+        ch = leg.get('chg_bp', {})
+        ws2.cell(row=r, column=1, value=leg.get('tenor')).border = box
+        ws2.cell(row=r, column=2, value=leg.get('yield')).border = box
+        ws2.cell(row=r, column=2).number_format = '0.00'
+        signed(ws2, r, 3, ch.get('d1'), '+0;-0;0')
+        signed(ws2, r, 4, ch.get('m1'), '+0;-0;0')
+        signed(ws2, r, 5, ch.get('ytd'), '+0;-0;0')
+        r += 1
+
+    r += 1
+    ws2.cell(row=r, column=1, value='EM 10Y govt yields (FRED / OECD)').font = Font(bold=True, size=12)
+    r += 1
+    style_header(ws2, r, ['Country', 'Yield %', 'As of', 'Δ3M bp', 'Δ12M bp'])
+    r += 1
+    for row in data.get('rates', {}).get('em_10y', []):
+        ws2.cell(row=r, column=1, value=row.get('name')).border = box
+        ws2.cell(row=r, column=2, value=row.get('yield')).border = box
+        ws2.cell(row=r, column=2).number_format = '0.00'
+        ws2.cell(row=r, column=3, value=row.get('asof')).border = box
+        signed(ws2, r, 4, row.get('chg_3m_bp'), '+0;-0;0')
+        signed(ws2, r, 5, row.get('chg_12m_bp'), '+0;-0;0')
+        r += 1
+    for col, w in zip('ABCDE', [22, 10, 12, 10, 10]):
+        ws2.column_dimensions[col].width = w
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'em_fx_rates_{today}.xlsx',
+    )
 
 
 def _export_labor_market_excel(bls_data, nowcast_data):

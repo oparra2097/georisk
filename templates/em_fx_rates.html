@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}EM FX & Rates — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/em_fx_rates.css?v=1">
+{% endblock %}
+
+{% block content %}
+<div class="efr-page" id="efr-page">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <section class="efr-header">
+    <div class="efr-header-left">
+      <span class="efr-eyebrow">Parra Macro · EM Currency Strategy</span>
+      <h1 class="efr-title">EM FX &amp; Rates — Beta Opportunity Screen</h1>
+      <p class="efr-sub">
+        Where EM currencies and rates are moving, decomposed into <b>dollar beta</b> vs
+        <b>idiosyncratic alpha</b>, then ranked by carry, momentum and value. Built to
+        surface opportunities you can act on — not just chart.
+      </p>
+    </div>
+    <div class="efr-header-actions">
+      <a href="/api/em-fx-rates/export" class="efr-btn efr-btn-primary" title="Download Excel">Export</a>
+      <button id="efr-refresh" class="efr-btn efr-btn-ghost" title="Force re-fetch">Refresh</button>
+      <span class="efr-updated" id="efr-updated">—</span>
+    </div>
+  </section>
+
+  <!-- ── Macro backdrop strip ───────────────────────────────── -->
+  <section class="efr-backdrop">
+    <div class="efr-kpis" id="efr-kpis"></div>
+    <p class="efr-narrative" id="efr-narrative">—</p>
+  </section>
+
+  <!-- ── Opportunity screen (the star) ──────────────────────── -->
+  <section class="efr-section">
+    <div class="efr-section-head">
+      <div>
+        <h2>Opportunity screen</h2>
+        <p class="efr-note">
+          Ranked by composite = z(carry-to-vol) + z(3-month momentum). Click any column to re-sort.
+          <b>Residual</b> = actual 1m move &minus; (DXY&nbsp;β &times; DXY 1m move): the slice of the
+          move the dollar does <i>not</i> explain. Big negative residual = lagged its dollar beta → mean-reversion long.
+        </p>
+      </div>
+      <div class="efr-toggle-group" role="tablist" aria-label="Filter signals">
+        <button class="efr-toggle active" data-sig="all">All</button>
+        <button class="efr-toggle" data-sig="long">Longs</button>
+        <button class="efr-toggle" data-sig="rich">Rich / fade</button>
+        <button class="efr-toggle" data-sig="value">Value</button>
+      </div>
+    </div>
+    <div class="efr-table-wrap">
+      <table class="efr-table efr-screen" id="efr-screen">
+        <thead>
+          <tr>
+            <th class="efr-sortable" data-sort="rank">#</th>
+            <th class="efr-sortable" data-sort="name">Currency</th>
+            <th>Signal</th>
+            <th class="num efr-sortable" data-sort="score">Score</th>
+            <th class="num efr-sortable" data-sort="carry_bp" title="Local 10Y − US 10Y">Carry&nbsp;bp</th>
+            <th class="num efr-sortable" data-sort="carry_to_vol" title="Excess yield per unit of FX vol">Carry/Vol</th>
+            <th class="num efr-sortable" data-sort="mom_3m">3m&nbsp;%</th>
+            <th class="num efr-sortable" data-sort="beta_dxy" title="Sensitivity to the dollar index">β&nbsp;DXY</th>
+            <th class="num efr-sortable" data-sort="residual_1m" title="Move not explained by the dollar">Resid&nbsp;1m</th>
+            <th class="num efr-sortable" data-sort="ann_vol_pct">Vol&nbsp;%</th>
+            <th class="efr-rationale-col">Rationale</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="efr-method" id="efr-method"></p>
+  </section>
+
+  <!-- ── FX moves table ─────────────────────────────────────── -->
+  <section class="efr-section">
+    <div class="efr-section-head">
+      <div>
+        <h2>FX moves vs USD</h2>
+        <p class="efr-note">Positive = currency stronger against the dollar. Sparkline = currency-strength index (rising = appreciating).</p>
+      </div>
+    </div>
+    <div class="efr-table-wrap">
+      <table class="efr-table" id="efr-fx">
+        <thead>
+          <tr>
+            <th>Currency</th>
+            <th class="num">Spot</th>
+            <th class="num">1D</th>
+            <th class="num">1W</th>
+            <th class="num">1M</th>
+            <th class="num">YTD</th>
+            <th class="num">1Y</th>
+            <th>Trend (1y)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Rates ──────────────────────────────────────────────── -->
+  <section class="efr-section efr-rates-grid">
+    <div>
+      <h2 class="efr-sub-h2">US Treasury curve <span class="efr-pill" id="efr-slope">—</span></h2>
+      <table class="efr-table efr-compact" id="efr-curve">
+        <thead><tr><th>Tenor</th><th class="num">Yield</th><th class="num">1D bp</th><th class="num">1M bp</th><th class="num">YTD bp</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <h2 class="efr-sub-h2 efr-mt">EM bond proxies</h2>
+      <table class="efr-table efr-compact" id="efr-etfs">
+        <thead><tr><th>Proxy</th><th class="num">Price</th><th class="num">1M</th><th class="num">YTD</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div>
+      <h2 class="efr-sub-h2">EM 10Y government yields <span class="efr-src" id="efr-yield-src"></span></h2>
+      <table class="efr-table efr-compact" id="efr-yields">
+        <thead><tr><th>Country</th><th class="num">10Y %</th><th class="num">Δ3M bp</th><th class="num">Δ12M bp</th><th>As of</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="efr-note efr-mt" id="efr-yield-note"></p>
+    </div>
+  </section>
+
+  <p class="efr-source" id="efr-source">—</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="/static/js/em_fx_rates.js?v=1"></script>
+{% endblock %}

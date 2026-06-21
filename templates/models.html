@@ -27,6 +27,7 @@
   .model-card.card-cd::before     { background: #dc2626; }
   .model-card.card-lm::before     { background: #0891b2; }
   .model-card.card-cpi::before    { background: #8b5cf6; }
+  .model-card.card-fx::before     { background: #14b8a6; }
 
   .model-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .model-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0; }
@@ -38,6 +39,7 @@
   .card-cd .model-icon     { background: #dc262618; color: #dc2626; }
   .card-lm .model-icon     { background: #0891b218; color: #0891b2; }
   .card-cpi .model-icon    { background: #8b5cf618; color: #8b5cf6; }
+  .card-fx .model-icon     { background: #14b8a618; color: #14b8a6; }
 
   .model-name { font-size: 17px; font-weight: 600; margin: 0; color: #111827; }
   .model-tagline { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
@@ -220,6 +222,31 @@
         <div class="model-stat"><span class="num">6&thinsp;h</span><span class="lbl">Refresh</span></div>
       </div>
       <span class="model-cta">Open Labor Market <span class="arrow">&rarr;</span></span>
+    </a>
+
+    <!-- EM FX & Rates -->
+    <a href="/em-fx-rates" class="model-card card-fx">
+      <div class="model-card-top">
+        <div class="model-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 17l5-5 4 4 8-9"/>
+            <path d="M16 7h5v5"/>
+            <path d="M3 21h18"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="model-name">EM FX &amp; Rates</h3>
+          <p class="model-tagline">Beta opportunity screen &middot; carry, momentum, alpha</p>
+        </div>
+        <span class="model-badge badge-login">Login Required</span>
+      </div>
+      <p class="model-desc">Where the major EM currencies and rates are moving — Turkey, South Africa, Brazil, Mexico, China, Colombia, Chile and more — decomposed into dollar beta vs idiosyncratic alpha. Ranks the cross-section by risk-adjusted carry and momentum, flags currencies lagging their dollar beta as mean-reversion longs, and frames it all against the DXY, MSCI EM, the US curve and oil.</p>
+      <div class="model-stats">
+        <div class="model-stat"><span class="num">11</span><span class="lbl">EM currencies</span></div>
+        <div class="model-stat"><span class="num">4</span><span class="lbl">Signal factors</span></div>
+        <div class="model-stat"><span class="num">15&thinsp;min</span><span class="lbl">Refresh</span></div>
+      </div>
+      <span class="model-cta">Open EM FX &amp; Rates <span class="arrow">&rarr;</span></span>
     </a>
 
     <!-- Data Centers -->
