@@ -50,6 +50,7 @@
   .badge-public     { background: #d1fae5; color: #065f46; }
   .badge-login      { background: #dbeafe; color: #1e40af; }
   .badge-restricted { background: #fef3c7; color: #78350f; }
+  .badge-beta       { background: #ede9fe; color: #5b21b6; margin-left: 6px; }
 
   .model-desc { font-size: 13px; color: #4b5563; line-height: 1.55; margin: 0 0 16px; flex-grow: 1; }
 
@@ -159,7 +160,8 @@
           <h3 class="model-name">Sovereign Credit Default</h3>
           <p class="model-tagline">PD &amp; rating &middot; macro-only &middot; agency comparison</p>
         </div>
-        <span class="model-badge badge-login">Login Required</span>
+        <span class="model-badge badge-public">Public</span>
+        <span class="model-badge badge-beta">Beta</span>
       </div>
       <p class="model-desc">Probability of default and 1–10 internal credit rating for ~190 sovereigns. Trained on macro/external/fiscal indicators (IMF WEO + World Bank) plus a shadow-debt overlay, fit against historical sovereign default events. Logistic regression and gradient boost; PD calibrated empirically.</p>
       <div class="model-stats">
@@ -238,7 +240,8 @@
           <h3 class="model-name">EM FX &amp; Rates</h3>
           <p class="model-tagline">Beta opportunity screen &middot; carry, momentum, alpha</p>
         </div>
-        <span class="model-badge badge-login">Login Required</span>
+        <span class="model-badge badge-public">Public</span>
+        <span class="model-badge badge-beta">Beta</span>
       </div>
       <p class="model-desc">Where the major EM currencies and rates are moving — Turkey, South Africa, Brazil, Mexico, China, Colombia, Chile and more — decomposed into dollar beta vs idiosyncratic alpha. Ranks the cross-section by risk-adjusted carry and momentum, flags currencies lagging their dollar beta as mean-reversion longs, and frames it all against the DXY, MSCI EM, the US curve and oil.</p>
       <div class="model-stats">

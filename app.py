@@ -189,7 +189,6 @@ def create_app():
         return render_template('securitizations.html', active_page='securitizations')
 
     @app.route('/credit-default')
-    @social_or_login_required
     def credit_default():
         return render_template('credit_default.html', active_page='credit-default')
 
@@ -204,7 +203,6 @@ def create_app():
         return render_template('cpi_release.html', active_page='cpi-release')
 
     @app.route('/em-fx-rates')
-    @social_or_login_required
     def em_fx_rates():
         return render_template('em_fx_rates.html', active_page='em-fx-rates')
 
