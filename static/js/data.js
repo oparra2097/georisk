@@ -4238,6 +4238,7 @@
                 caSource: c.ca_source,
                 caYear: c.ca_year,
                 fdi: c.fdi_pct_gdp,
+                fdiNote: c.fdi_note,
                 basic: c.basic_balance_pct_gdp,
                 ratio: ratio,
                 ratioMissing: ratio == null,
@@ -4365,6 +4366,9 @@
                                     : '';
                                 lines.push('CA: ' + (p.ca != null ? p.ca.toFixed(2) : '—') + '%' + caTag +
                                     '  ·  FDI: ' + (p.fdi != null ? p.fdi.toFixed(2) : '—') + '%');
+                                if (p.fdiNote) {
+                                    lines.push('⚠ Net FDI neutralized (SPE / capital-in-transit)');
+                                }
                                 // Synthetic ratios (GCC net creditors, sanctions, WAEMU pool)
                                 // are flagged via st_debt_source that doesn't start with "World Bank".
                                 const isSynth = p.stDebtSource &&
