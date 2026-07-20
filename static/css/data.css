@@ -1673,3 +1673,78 @@ th.col-actual {
         grid-template-columns: 1fr;
     }
 }
+
+/* ── EM Monthly Reserves table ─────────────────────────────────────────── */
+.emr-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin: 4px 0 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.emr-summary strong { color: var(--text-primary); }
+.emr-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+}
+.emr-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.emr-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: right;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    z-index: 1;
+}
+.emr-table th.emr-country,
+.emr-table td.emr-country {
+    position: sticky;
+    left: 0;
+    text-align: left;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-weight: 600;
+    padding: 8px 12px;
+    z-index: 2;
+    border-right: 1px solid var(--border);
+}
+.emr-table thead th.emr-country { z-index: 3; }
+.emr-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+.emr-table tbody tr:hover td { background: rgba(127, 127, 127, 0.08); }
+.emr-num { text-align: right; font-variant-numeric: tabular-nums; }
+.emr-latest { font-weight: 700; }
+.emr-table th.emr-latest,
+.emr-table td.emr-latest { border-left: 1px solid var(--border); }
+.emr-src { text-align: left; color: var(--text-muted); }
+.emr-src-period { font-variant-numeric: tabular-nums; }
+.emr-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+}
+.emr-badge-cb { background: rgba(37, 99, 235, 0.16); color: #3b82f6; }
+.emr-badge-imf { background: rgba(107, 114, 128, 0.16); color: var(--text-muted); }
+.emr-foot {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}

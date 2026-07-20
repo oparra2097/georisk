@@ -571,6 +571,7 @@
             case 'yale-tariff': renderYaleTariff(ds); break;
             case 'gdp-nowcast': renderGdpNowcast(ds); break;
             case 'em-vulnerability': renderEmVulnerability(ds); break;
+            case 'em-reserves': renderEmReserves(ds); break;
             case 'us-trade-quarterly': renderUsTradeQuarterly(ds); break;
             case 'currency-debt': renderCurrencyDebt(ds); break;
         }
@@ -4046,6 +4047,117 @@
         if (abs >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
         if (abs >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
         return '$' + v.toFixed(0);
+    }
+
+    function renderEmReserves(ds) {
+        const data = PD.getCached(ds.api);
+        const panel = document.getElementById('active-panel');
+        if (!panel) return;
+        if (!data || !data.countries) {
+            panel.innerHTML = '<p style="color:var(--text-muted);padding:24px;">' +
+                'Monthly reserves data is unavailable right now.</p>';
+            return;
+        }
+
+        const meta = data.meta || {};
+        const countries = data.countries;
+        const order = (data.order && data.order.length)
+            ? data.order
+            : Object.keys(countries);
+        const periods = data.periods || [];
+        // Show the most recent 12 months as columns (newest on the right).
+        const months = periods.slice(-12);
+
+        const fmtBn = v => (v == null || isNaN(v))
+            ? '<span style="color:var(--text-muted)">—</span>'
+            : Number(v).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        const fmtPct = v => {
+            if (v == null || isNaN(v)) return '<span style="color:var(--text-muted)">—</span>';
+            const c = v > 0 ? '#16a34a' : (v < 0 ? '#dc2626' : 'var(--text-muted)');
+            const s = (v > 0 ? '+' : '') + Number(v).toFixed(1) + '%';
+            return `<span style="color:${c}">${s}</span>`;
+        };
+        const monthLabel = p => {
+            // "2025-05" → "May '25"
+            const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const parts = (p || '').split('-');
+            if (parts.length < 2) return p || '';
+            const mi = parseInt(parts[1], 10) - 1;
+            return (m[mi] || parts[1]) + " '" + parts[0].slice(2);
+        };
+
+        const cbCount = (meta.direct_cb_countries || []).length;
+
+        const controlsHtml = (typeof buildControlsHtml === 'function') ? buildControlsHtml(ds) : '';
+        const exportBtn = ds.exportUrl
+            ? '<a href="' + ds.exportUrl + '" class="export-btn-data" title="Download Excel">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+              '<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>' +
+              '<polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>' +
+              '</svg>Excel</a>'
+            : '';
+
+        // Header cells for the month columns.
+        const monthHead = months.map(p =>
+            `<th class="emr-num" title="${p}">${monthLabel(p)}</th>`).join('');
+
+        const rowsHtml = order.map(iso => {
+            const r = countries[iso];
+            if (!r) return '';
+            const series = r.series || {};
+            const monthCells = months.map(p =>
+                `<td class="emr-num">${fmtBn(series[p])}</td>`).join('');
+            const isCB = r.source_tier === 'central_bank';
+            const badge = isCB
+                ? '<span class="emr-badge emr-badge-cb" title="' + (r.source || '') + '">CB</span>'
+                : '<span class="emr-badge emr-badge-imf" title="' + (r.source || '') + '">IMF</span>';
+            return '<tr>' +
+                `<td class="emr-country" title="${iso}">${r.name || iso}</td>` +
+                monthCells +
+                `<td class="emr-num emr-latest">${fmtBn(r.latest_usd_bn)}</td>` +
+                `<td class="emr-num">${fmtPct(r.mom_pct)}</td>` +
+                `<td class="emr-num">${fmtPct(r.yoy_pct)}</td>` +
+                `<td class="emr-src">${badge} <span class="emr-src-period">${r.latest_period || ''}</span></td>` +
+                '</tr>';
+        }).join('');
+
+        panel.innerHTML = `
+            <div class="data-section-header">
+                <div>
+                    <h1 class="data-title" id="panel-title">${ds.label}</h1>
+                    <p class="data-source">${ds.source} &mdash; ${ds.sourceDetail || ''}</p>
+                </div>
+                <div class="data-controls" id="panel-controls">
+                    ${controlsHtml}
+                    ${exportBtn}
+                </div>
+            </div>
+            <div class="emr-summary">
+                <span class="emr-stat"><strong>${meta.country_count || order.length}</strong> emerging markets</span>
+                <span class="emr-stat">Latest month: <strong>${meta.latest_period || '—'}</strong></span>
+                <span class="emr-stat"><strong>${cbCount}</strong> via direct central-bank feed</span>
+                <span class="emr-stat">Units: USD&nbsp;billion (total reserves, incl. gold)</span>
+            </div>
+            <div class="emr-table-wrap">
+                <table class="emr-table">
+                    <thead>
+                        <tr>
+                            <th class="emr-country">Country</th>
+                            ${monthHead}
+                            <th class="emr-num emr-latest">Latest</th>
+                            <th class="emr-num">MoM</th>
+                            <th class="emr-num">YoY</th>
+                            <th class="emr-src">Source</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+            <p class="emr-foot">CB = latest print sourced directly from the country's central bank
+            (Brazil · Mexico · Türkiye); IMF = IMF monthly reserves template (central-bank
+            submissions). MoM / YoY computed on months present in the series.</p>
+        `;
     }
 
     function renderEmVulnerability(ds) {

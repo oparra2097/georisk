@@ -34,6 +34,7 @@ from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.data_sources.yale_tariff import get_yale_tariff_data
 from backend.data_sources.insurance_inflation import get_insurance_inflation_data
 from backend.data_sources.em_vulnerability import get_em_vulnerability_data
+from backend.data_sources.em_reserves import get_em_reserves_data, refresh_cache as refresh_em_reserves
 from backend.data_sources.em_fx_rates import (
     get_em_fx_rates, clear_cache as clear_em_fx_rates_cache,
 )
@@ -2084,6 +2085,132 @@ def export_em_vulnerability_excel():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name=f'em_external_vulnerability_{today}.xlsx'
+    )
+
+
+# ── EM Monthly Reserves database ───────────────────────────────────────────
+
+@api_bp.route('/em-reserves')
+def get_em_reserves():
+    """Return the EM monthly reserves database (cached 24 hours).
+
+    Hybrid source: IMF monthly reserves template (central-bank submissions)
+    plus direct central-bank feeds for Brazil / Mexico / Türkiye. Values in
+    USD billions, keyed by ISO-3, with a monthly ``series`` per country plus
+    latest / MoM / YoY convenience fields.
+    """
+    data = get_em_reserves_data()
+    return jsonify(data)
+
+
+@api_bp.route('/em-reserves/refresh')
+def refresh_em_reserves_route():
+    """Force an immediate rebuild of the monthly reserves database and return
+    a short summary (used to verify a fresh fetch on production)."""
+    data = refresh_em_reserves()
+    meta = data.get('meta', {})
+    return jsonify({
+        'ok': True,
+        'country_count': meta.get('country_count'),
+        'latest_period': meta.get('latest_period'),
+        'direct_cb_countries': meta.get('direct_cb_countries'),
+        'source': meta.get('source'),
+    })
+
+
+@api_bp.route('/em-reserves/export')
+def export_em_reserves_excel():
+    """Excel export of the EM monthly reserves database — the direct
+    replacement for the old Haver-fed reserves table.
+
+    One sheet: countries down the rows, months across the columns (most
+    recent last), values in USD billions, with a Latest / MoM% / YoY% /
+    Source block. Formatted so it can be pasted straight into the External
+    Vulnerability workbook.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    data = get_em_reserves_data()
+    countries = data.get('countries', {})
+    meta = data.get('meta', {})
+    all_periods = data.get('periods', [])
+    order = data.get('order') or sorted(countries.keys())
+
+    # Show the most recent 24 months of columns to keep the sheet legible;
+    # the JSON API still carries the full retained history.
+    months = all_periods[-24:]
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='1F2937', end_color='1F2937', fill_type='solid')
+    latest_fill = PatternFill(start_color='DBEAFE', end_color='DBEAFE', fill_type='solid')
+    thin = Side(style='thin', color='D1D5DB')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'EM Monthly Reserves'
+
+    ws.cell(row=1, column=1, value='EM Monthly International Reserves (USD billion)')
+    ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+    ws.cell(row=2, column=1, value=meta.get('source', ''))
+    ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
+    ws.cell(row=3, column=1,
+            value=f"{meta.get('measure', '')} · latest month: {meta.get('latest_period', '—')}")
+    ws.cell(row=3, column=1).font = Font(italic=True, size=9, color='6B7280')
+
+    HEADER_ROW = 5
+    fixed_headers = ['Country', 'ISO3']
+    tail_headers = ['Latest', 'MoM %', 'YoY %', 'Source']
+    headers = fixed_headers + list(months) + tail_headers
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=HEADER_ROW, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        cell.border = border
+
+    n_month_cols = len(months)
+    for i, iso in enumerate(order):
+        r = countries.get(iso)
+        if not r:
+            continue
+        row = HEADER_ROW + 1 + i
+        series = r.get('series', {})
+        ws.cell(row=row, column=1, value=r.get('name', iso)).border = border
+        ws.cell(row=row, column=2, value=iso).border = border
+        for j, p in enumerate(months):
+            c = ws.cell(row=row, column=3 + j, value=series.get(p))
+            c.border = border
+            c.number_format = '#,##0.0'
+            c.alignment = Alignment(horizontal='right')
+        base_col = 3 + n_month_cols
+        latest_cell = ws.cell(row=row, column=base_col, value=r.get('latest_usd_bn'))
+        latest_cell.number_format = '#,##0.0'
+        latest_cell.fill = latest_fill
+        mom_cell = ws.cell(row=row, column=base_col + 1, value=r.get('mom_pct'))
+        yoy_cell = ws.cell(row=row, column=base_col + 2, value=r.get('yoy_pct'))
+        for cc in (mom_cell, yoy_cell):
+            cc.number_format = '0.0'
+            cc.alignment = Alignment(horizontal='right')
+        ws.cell(row=row, column=base_col + 3, value=r.get('source', ''))
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row, column=col).border = border
+
+    ws.column_dimensions['A'].width = 22
+    ws.column_dimensions['B'].width = 7
+    ws.freeze_panes = ws.cell(row=HEADER_ROW + 1, column=3).coordinate
+    ws.row_dimensions[HEADER_ROW].height = 24
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'em_monthly_reserves_{today}.xlsx'
     )
 
 
