@@ -335,6 +335,19 @@ def init_scheduler(app):
 
     threading.Thread(target=_warm_em_vuln, daemon=True).start()
 
+    # Pre-warm the EM monthly reserves database (IMF monthly template +
+    # direct central-bank feeds) so the Data-tab table and its Excel export
+    # are cache-served, and the on-disk database is refreshed.
+    def _warm_em_reserves():
+        try:
+            from backend.data_sources.em_reserves import get_em_reserves_data
+            get_em_reserves_data()
+            logger.info("EM monthly reserves cache warmed.")
+        except Exception as e:
+            logger.error(f"EM monthly reserves warmup failed: {e}")
+
+    threading.Thread(target=_warm_em_reserves, daemon=True).start()
+
     # Pre-warm GDP nowcast so first visit is instant
     # Use the dynamic resolver — Config.FRED_API_KEY is frozen at import
     # time and may be empty even when env var is set.
