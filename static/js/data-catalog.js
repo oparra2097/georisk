@@ -187,7 +187,7 @@ window.ParraData.CATALOG = {
                     id: 'yale-tariff',
                     label: 'US Effective Tariff Rate',
                     source: 'Yale Budget Lab',
-                    sourceDetail: 'Average Effective Tariff Rate — Policy through April 15, 2026 (Pre-Substitution)',
+                    sourceDetail: 'Average Effective Tariff Rate — Policy through July 21, 2026 (Pre-Substitution)',
                     api: '/api/yale-tariff',
                     exportUrl: '/api/yale-tariff/export',
                     type: 'yale-tariff',
