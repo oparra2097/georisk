@@ -1852,6 +1852,10 @@ def export_em_vulnerability_excel():
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.chart import BubbleChart, Reference, Series
+    from openpyxl.chart.label import DataLabelList
+    from openpyxl.chart.series import SeriesLabel
+    from openpyxl.chart.data_source import StrRef
+    from openpyxl.chart.shapes import GraphicalProperties
 
     data = get_em_vulnerability_data()
     countries = data.get('countries', {})
@@ -1867,22 +1871,21 @@ def export_em_vulnerability_excel():
         bottom=Side(style='thin', color='D1D5DB'),
     )
 
-    # Only countries that can be plotted (have basic balance). ST-debt-missing
-    # ones still get a row but with blank X so Excel skips them — user can
-    # tell from the blank cell why they're not on the chart.
-    plottable = [
-        r for r in countries.values()
-        if r.get('basic_balance_pct_gdp') is not None
+    # Curated default view — mirror exactly what the website plots by
+    # default: the Top-EM set from default_em_countries (GCC creditors,
+    # euro-area members, Ukraine, Iraq, Algeria, etc. already filtered out
+    # upstream), each with a plottable basic balance AND ratio.
+    VISUAL_MAX_RATIO = 1500  # same clip the web chart uses
+
+    default_isos = data.get('default_em_countries') or []
+    chart_rows = [
+        countries[iso] for iso in default_isos
+        if iso in countries
+        and countries[iso].get('basic_balance_pct_gdp') is not None
+        and countries[iso].get('reserves_to_st_debt_pct') is not None
     ]
-    em_rows = sorted(
-        [r for r in plottable if r.get('is_em')],
-        key=lambda r: -(r.get('gdp_usd') or 0),
-    )
-    dm_rows = sorted(
-        [r for r in plottable if not r.get('is_em')],
-        key=lambda r: -(r.get('gdp_usd') or 0),
-    )
-    chart_rows = em_rows + dm_rows  # EM first so they're a contiguous series
+    # Largest exposure first so big bubbles draw behind small ones.
+    chart_rows.sort(key=lambda r: -(r.get('gdp_usd') or 0))
 
     wb = Workbook()
 
@@ -1890,28 +1893,28 @@ def export_em_vulnerability_excel():
     chart_ws = wb.active
     chart_ws.title = 'Bubble Chart'
 
-    chart_ws.cell(row=1, column=1, value='EM External Vulnerability — Bubble Chart Data')
+    chart_ws.cell(row=1, column=1, value='EM External Vulnerability — Bubble Chart')
     chart_ws.cell(row=1, column=1).font = Font(bold=True, size=13)
     chart_ws.cell(row=2, column=1, value=meta.get('source', 'World Bank'))
     chart_ws.cell(row=2, column=1).font = Font(italic=True, size=9, color='6B7280')
     chart_ws.cell(
         row=3, column=1,
         value=(
-            'X = Reserves / Short-Term External Debt (%)  ·  '
-            'Y = Basic Balance (Current Account + Net FDI, % GDP)  ·  '
-            'Bubble size = Nominal GDP ($B). '
-            'EM rows (red shading) are listed first; the embedded chart '
-            'splits them into two series for color coding.'
+            'Default Top-EM view.  X = Reserves / Short-Term External Debt '
+            f'(%, clipped at {VISUAL_MAX_RATIO}%)  ·  Y = Basic Balance '
+            '(Current Account + Net FDI, % GDP)  ·  Bubble size = Nominal GDP '
+            '($B).  Full universe (incl. excluded outliers) on the '
+            '"Full Metrics" sheet.'
         ),
     )
     chart_ws.cell(row=3, column=1).font = Font(italic=True, size=9, color='6B7280')
 
     chart_headers = [
-        'Country', 'ISO3', 'EM',
-        'X · Reserves / ST Debt (%)',
+        'Country', 'ISO3',
+        'X · Reserves / ST Debt (%, clipped)',
         'Y · Basic Balance (% GDP)',
         'Size · GDP ($B)',
-        'Year', 'CA Source',
+        'Raw Ratio (%)', 'Reserves Period',
     ]
     HEADER_ROW = 5
     for col, h in enumerate(chart_headers, 1):
@@ -1924,78 +1927,85 @@ def export_em_vulnerability_excel():
     DATA_START = HEADER_ROW + 1
     for i, r in enumerate(chart_rows):
         row = DATA_START + i
+        raw_ratio = r.get('reserves_to_st_debt_pct')
+        x_plot = min(raw_ratio, VISUAL_MAX_RATIO) if raw_ratio is not None else None
         values = [
             r.get('name', ''),
             r.get('iso3', ''),
-            'Yes' if r.get('is_em') else 'No',
-            r.get('reserves_to_st_debt_pct'),  # X — may be None
+            x_plot,                             # X — clipped for the chart axis
             r.get('basic_balance_pct_gdp'),     # Y
             (r.get('gdp_usd') or 0) / 1e9,      # Size in $B for legibility
-            r.get('year', ''),
-            r.get('ca_source', ''),
+            raw_ratio,                          # unclipped, for reference
+            r.get('reserves_period', ''),
         ]
         for col, v in enumerate(values, 1):
             cell = chart_ws.cell(row=row, column=col, value=v)
             cell.border = thin_border
-            if r.get('is_em'):
-                cell.fill = em_fill
-            if col in (4, 5):
+            if col in (3, 4, 6):
                 cell.number_format = '0.00'
                 cell.alignment = Alignment(horizontal='right')
-            elif col == 6:
+            elif col == 5:
                 cell.number_format = '#,##0'
                 cell.alignment = Alignment(horizontal='right')
             elif col == 7:
                 cell.alignment = Alignment(horizontal='center')
 
-    chart_ws.column_dimensions['A'].width = 28
+    chart_ws.column_dimensions['A'].width = 26
     chart_ws.column_dimensions['B'].width = 7
-    chart_ws.column_dimensions['C'].width = 6
+    chart_ws.column_dimensions['C'].width = 20
     chart_ws.column_dimensions['D'].width = 18
-    chart_ws.column_dimensions['E'].width = 18
-    chart_ws.column_dimensions['F'].width = 14
-    chart_ws.column_dimensions['G'].width = 7
-    chart_ws.column_dimensions['H'].width = 18
+    chart_ws.column_dimensions['E'].width = 14
+    chart_ws.column_dimensions['F'].width = 13
+    chart_ws.column_dimensions['G'].width = 15
     chart_ws.row_dimensions[HEADER_ROW].height = 32
     chart_ws.freeze_panes = f'A{DATA_START}'
 
     # ── Embedded bubble chart ─────────────────────────────────────────────
+    # One single-point series per country so every bubble can carry its ISO3
+    # label (openpyxl has no way to attach free-text point labels otherwise);
+    # all share one EM colour so they still read as a single group. The X
+    # axis is capped at the same 1500% clip so a couple of extreme ratios
+    # can't compress every normal bubble against the left edge.
     if chart_rows:
-        em_count = len(em_rows)
-        dm_count = len(dm_rows)
-        em_end = DATA_START + em_count - 1
-        dm_start = em_end + 1
-        dm_end = dm_start + dm_count - 1
-
         bubble = BubbleChart()
         bubble.style = 18
         bubble.title = 'EM External Vulnerability'
         bubble.x_axis.title = 'Foreign Reserves / Short-Term External Debt (%)'
         bubble.y_axis.title = 'Basic Balance (Current Account + Net FDI, % GDP)'
+        bubble.x_axis.delete = False
+        bubble.y_axis.delete = False
         bubble.x_axis.scaling.min = 0
-        bubble.height = 14
-        bubble.width = 24
-        bubble.legend.position = 'b'
+        bubble.x_axis.scaling.max = VISUAL_MAX_RATIO
+        bubble.height = 15
+        bubble.width = 26
+        bubble.legend = None  # 1 series/country would make a 40-row legend
 
-        if em_count > 0:
-            em_series = Series(
-                values=Reference(chart_ws, min_col=5, min_row=DATA_START, max_row=em_end),
-                xvalues=Reference(chart_ws, min_col=4, min_row=DATA_START, max_row=em_end),
-                zvalues=Reference(chart_ws, min_col=6, min_row=DATA_START, max_row=em_end),
-                title='Emerging Markets',
+        sheet = chart_ws.title
+        for i in range(len(chart_rows)):
+            row = DATA_START + i
+            ser = Series(
+                values=Reference(chart_ws, min_col=4, min_row=row, max_row=row),
+                xvalues=Reference(chart_ws, min_col=3, min_row=row, max_row=row),
+                zvalues=Reference(chart_ws, min_col=5, min_row=row, max_row=row),
             )
-            bubble.series.append(em_series)
-        if dm_count > 0:
-            dm_series = Series(
-                values=Reference(chart_ws, min_col=5, min_row=dm_start, max_row=dm_end),
-                xvalues=Reference(chart_ws, min_col=4, min_row=dm_start, max_row=dm_end),
-                zvalues=Reference(chart_ws, min_col=6, min_row=dm_start, max_row=dm_end),
-                title='Advanced / Other',
-            )
-            bubble.series.append(dm_series)
+            # Series name → the ISO3 cell, which is what showSerName renders
+            # as the on-bubble label.
+            ser.tx = SeriesLabel(strRef=StrRef(f"'{sheet}'!$B${row}"))
+            gp = GraphicalProperties()
+            gp.solidFill = '2563EB'
+            ser.graphicalProperties = gp
+            dl = DataLabelList()
+            dl.showSerName = True
+            dl.showVal = False
+            dl.showCatName = False
+            dl.showBubbleSize = False
+            dl.showLegendKey = False
+            dl.showPercent = False
+            ser.dLbls = dl
+            bubble.series.append(ser)
 
         # Anchor the chart to the right of the data, top-aligned with headers.
-        chart_ws.add_chart(bubble, 'J5')
+        chart_ws.add_chart(bubble, 'I5')
 
     # ── Sheet 2: Full Metrics (everything we have) ────────────────────────
     ws = wb.create_sheet(title='Full Metrics')
