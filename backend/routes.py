@@ -3079,6 +3079,63 @@ def export_yale_tariff_excel():
     ws.column_dimensions['C'].width = 22
     ws.column_dimensions['D'].width = 80
 
+    # ── Sheet 1b: Embedded stepped-line chart ───────────────────────────
+    from openpyxl.chart import LineChart, Reference
+    from openpyxl.chart.series import DataPoint
+    from openpyxl.utils import get_column_letter
+
+    # Build stepped data in columns F and G (date labels, values).
+    # Duplicate each point so the line is horizontal then vertical.
+    step_header_row = 4
+    ws.cell(row=step_header_row, column=6, value='Chart Date').font = header_font
+    ws.cell(row=step_header_row, column=6).fill = header_fill
+    ws.cell(row=step_header_row, column=7, value='Rate (%)').font = header_font
+    ws.cell(row=step_header_row, column=7).fill = header_fill
+
+    sr = step_header_row + 1
+    for i, p in enumerate(points):
+        val = p.get('value')
+        label = p.get('date', '')
+        if i > 0:
+            # Horizontal segment: carry forward previous value to this date
+            ws.cell(row=sr, column=6, value=label)
+            ws.cell(row=sr, column=7, value=points[i - 1].get('value'))
+            sr += 1
+        # Vertical jump (or first point): this date at its own value
+        ws.cell(row=sr, column=6, value=label)
+        ws.cell(row=sr, column=7, value=val)
+        sr += 1
+
+    step_last_row = sr - 1
+    ws.column_dimensions['F'].width = 14
+    ws.column_dimensions['G'].width = 12
+
+    chart = LineChart()
+    chart.title = 'US Average Effective Tariff Rate (Pre-Substitution)'
+    chart.style = 10
+    chart.y_axis.title = 'Percent of goods imports'
+    chart.x_axis.title = 'Date'
+    chart.y_axis.scaling.min = 0
+    chart.y_axis.scaling.max = 30
+    chart.width = 28
+    chart.height = 14
+    chart.legend = None
+
+    cats = Reference(ws, min_col=6, min_row=step_header_row + 1, max_row=step_last_row)
+    vals = Reference(ws, min_col=7, min_row=step_header_row, max_row=step_last_row)
+    chart.add_data(vals, titles_from_data=True)
+    chart.set_categories(cats)
+
+    series = chart.series[0]
+    series.graphicalProperties.line.width = 25000  # ~2pt in EMUs
+    series.graphicalProperties.line.solidFill = '1E3A8A'
+    series.smooth = False
+    series.marker = None
+
+    # Place chart below the data table on Sheet 1
+    chart_anchor = f'A{len(points) + 7}'
+    ws.add_chart(chart, chart_anchor)
+
     # ── Sheet 2: Summary & Methodology ──────────────────────────────────
     ws2 = wb.create_sheet('Summary & Methodology')
 
