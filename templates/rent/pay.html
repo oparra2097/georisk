@@ -1,0 +1,91 @@
+{% extends "rent/base.html" %}
+{% set active_tab = 'pay' %}
+{% block title %}Pay rent — Resident Portal{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+
+{% if canceled %}
+<div class="banner banner-warn">Payment canceled — nothing was charged.</div>
+{% endif %}
+
+<div class="page-head">
+    <div>
+        <div class="page-title">Pay rent</div>
+        <div class="page-sub">{{ lease.property_name }} &middot; Unit {{ lease.unit_label }}</div>
+    </div>
+</div>
+
+{% if not stripe_ready %}
+<div class="card">
+    <div class="banner banner-warn" style="margin:0">
+        <strong>Online payments aren't connected yet.</strong><br>
+        Your balance is {{ summary.balance_cents | money }}. Contact the leasing
+        office to pay by check or money order while card and bank payments are
+        being set up.
+    </div>
+</div>
+{% else %}
+
+<div class="card">
+    <form id="pay-form"
+          data-balance="{{ summary.balance_cents }}"
+          data-due="{{ summary.amount_due_cents }}"
+          data-partial="{{ settings.allow_partial_payments }}">
+        <div class="field">
+            <label for="amount">Amount to pay</label>
+            <div class="amount-input">
+                <span>$</span>
+                <input id="amount" name="amount" type="text" inputmode="decimal"
+                       value="{{ '%.2f' % (default_cents / 100) }}" required>
+            </div>
+            <div class="field-hint">
+                Balance on the account: {{ summary.balance_cents | money }}.
+                {% if settings.allow_partial_payments == '1' %}
+                    You can pay part of it now.
+                {% else %}
+                    The full balance is required.
+                {% endif %}
+            </div>
+        </div>
+
+        <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--r-text-soft)">
+            How would you like to pay?
+        </label>
+        <div class="method-list" id="method-list">
+            {% for key, q in quotes.items() %}
+            <label class="method">
+                <input type="radio" name="method" value="{{ key }}" {% if loop.first %}checked{% endif %}>
+                <span class="method-body">
+                    <span class="method-name">
+                        {{ 'Bank account (ACH)' if key == 'us_bank_account' else 'Debit or credit card' }}
+                    </span>
+                    <span class="method-desc">
+                        {% if key == 'us_bank_account' %}
+                            Clears in 3–5 business days. Cheapest option.
+                        {% else %}
+                            Posts immediately. Visa, Mastercard, Amex, Discover.
+                        {% endif %}
+                    </span>
+                </span>
+                <span class="method-fee" data-fee-for="{{ key }}">
+                    {% if q.fee_cents %}+{{ q.fee_cents | money }} fee{% else %}<span class="free">No fee</span>{% endif %}
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <div class="banner" id="pay-total">Total charged today: <strong id="total-amount">—</strong></div>
+        <div class="banner banner-error hidden" id="pay-error"></div>
+
+        <button class="btn btn-block" type="submit" id="pay-submit">Continue to secure checkout</button>
+        <p class="field-hint" style="text-align:center; margin-top:12px">
+            Payments are processed by Stripe. Card and bank details never touch this site.
+        </p>
+    </form>
+</div>
+{% endif %}
+
+<p style="text-align:center"><a href="{{ url_for('rent_pages.portal') }}">Back to your account</a></p>
+{% endblock %}
+
+{% block scripts %}<script src="/static/js/rent.js"></script>{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "rent/base.html" %}
+{% block title %}Sign in — Resident Portal{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="page-title" style="margin-bottom:4px">Sign in</div>
+    <p class="page-sub" style="margin-bottom:18px">View your balance and pay rent online.</p>
+    <form method="post" action="{{ url_for('rent_pages.login') }}{% if next %}?next={{ next }}{% endif %}">
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" required autofocus>
+        </div>
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </div>
+        <button class="btn btn-block" type="submit">Sign in</button>
+    </form>
+    <p class="field-hint" style="margin-top:16px; text-align:center">
+        <a href="{{ url_for('rent_pages.forgot') }}">Forgot your password?</a>
+    </p>
+</div>
+<p class="card-note" style="text-align:center">
+    New resident? Your setup link is emailed when your lease is added.
+</p>
+{% endblock %}

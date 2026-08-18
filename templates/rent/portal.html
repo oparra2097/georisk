@@ -1,0 +1,145 @@
+{% extends "rent/base.html" %}
+{% set active_tab = 'portal' %}
+{% block title %}Your account — Resident Portal{% endblock %}
+{% block content %}
+
+<div class="page-head">
+    <div>
+        <div class="page-title">Hi {{ tenant.full_name.split(' ')[0] }}</div>
+        {% if active_lease %}
+        <div class="page-sub">
+            {{ active_lease.property_name }} &middot; Unit {{ active_lease.unit_label }}
+            &middot; {{ active_lease.bedrooms }} bd / {{ active_lease.bathrooms | round(1) }} ba
+            {% if active_lease.sqft %}&middot; {{ active_lease.sqft }} sqft{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if not active_lease %}
+    <div class="card empty">
+        There is no active lease on your account yet. Once the office adds your
+        lease, your balance and payment options will show up here.
+    </div>
+{% else %}
+
+<div class="card balance-card">
+    <div>
+        <div class="balance-label">Current balance</div>
+        <div class="balance-amount {% if summary.balance_cents <= 0 %}balance-zero{% elif summary.is_late %}balance-late{% endif %}">
+            {{ summary.balance_cents | money }}
+        </div>
+        <div class="balance-meta">
+            {% if summary.balance_cents <= 0 %}
+                You're all paid up. Next rent of {{ active_lease.rent_cents | money }} is due
+                {{ summary.next_due_date }}.
+            {% elif summary.is_late %}
+                <span class="badge badge-bad">Past due</span>
+                Rent was due {{ summary.current_period }}-{{ '%02d' % active_lease.due_day }}.
+                A late fee may apply.
+            {% else %}
+                Due {{ summary.next_due_date }}
+                {% if summary.days_until_due >= 0 %}
+                    ({{ summary.days_until_due }} day{{ '' if summary.days_until_due == 1 else 's' }} from now)
+                {% endif %}
+            {% endif %}
+            {% if summary.pending_cents %}
+                <br><span class="badge badge-info">{{ summary.pending_cents | money }} processing</span>
+                Bank transfers take 3–5 business days to clear.
+            {% endif %}
+        </div>
+    </div>
+    <div>
+        {% if summary.balance_cents > 0 %}
+            <a class="btn" href="{{ url_for('rent_pages.pay') }}">Pay {{ summary.balance_cents | money }}</a>
+        {% else %}
+            <a class="btn btn-ghost" href="{{ url_for('rent_pages.pay') }}">Make a payment</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if not stripe_ready %}
+<div class="banner banner-warn">
+    Online payments aren't switched on yet. Contact the leasing office to arrange
+    payment in the meantime.
+</div>
+{% endif %}
+
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-head"><span class="card-title">Your lease</span></div>
+        <dl class="kv">
+            <dt>Monthly rent</dt><dd>{{ active_lease.rent_cents | money }}</dd>
+            <dt>Due day</dt><dd>{{ active_lease.due_day }}{{ 'st' if active_lease.due_day == 1 else ('nd' if active_lease.due_day == 2 else ('rd' if active_lease.due_day == 3 else 'th')) }} of the month</dd>
+            <dt>Grace period</dt><dd>{{ active_lease.grace_days }} days</dd>
+            <dt>Late fee</dt><dd>{{ active_lease.late_fee_cents | money }}{% if active_lease.late_fee_daily_cents %} + {{ active_lease.late_fee_daily_cents | money }}/day{% endif %}</dd>
+            <dt>Lease term</dt><dd>{{ active_lease.start_date }} &rarr; {{ active_lease.end_date or 'month-to-month' }}</dd>
+            <dt>Deposit on file</dt><dd>{{ active_lease.deposit_cents | money }}</dd>
+        </dl>
+        {% if active_lease.property_amenities %}
+        <div class="card-note" style="margin-top:14px">
+            Included: {{ active_lease.property_amenities }}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-head"><span class="card-title">This month</span></div>
+        <div class="grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="stat">
+                <div class="stat-label">Charged</div>
+                <div class="stat-value">{{ statement.charged_cents | money }}</div>
+                <div class="stat-sub">life of lease</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Paid</div>
+                <div class="stat-value">{{ statement.paid_cents | money }}</div>
+                <div class="stat-sub">life of lease</div>
+            </div>
+        </div>
+        <p class="card-note" style="margin-top:14px">
+            Rent for {{ summary.current_period }} is {{ active_lease.rent_cents | money }}.
+            Payments post to your balance as soon as they clear.
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">Statement</span>
+        <span class="card-note">Every charge and payment on this lease</span>
+    </div>
+    {% if statement.rows %}
+    <div class="table-wrap">
+        <table class="rent-table">
+            <thead>
+                <tr>
+                    <th>Date</th><th>Description</th><th class="num">Amount</th>
+                    <th class="num">Balance</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in statement.rows | reverse %}
+                <tr>
+                    <td class="muted">{{ row.date }}</td>
+                    <td>{{ row.description }}</td>
+                    <td class="num">{{ row.amount_cents | money }}</td>
+                    <td class="num muted">{{ row.running_balance_cents | money }}</td>
+                    <td>
+                        {% if row.status == 'processing' %}<span class="badge badge-warn">Processing</span>
+                        {% elif row.status == 'refunded' %}<span class="badge badge-bad">Refunded</span>
+                        {% elif row.receipt_url %}<a href="{{ row.receipt_url }}" target="_blank" rel="noopener">Receipt</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <div class="empty">Nothing has posted to this lease yet.</div>
+    {% endif %}
+</div>
+
+{% endif %}
+{% endblock %}

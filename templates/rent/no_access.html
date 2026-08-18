@@ -1,0 +1,13 @@
+{% extends "rent/base.html" %}
+{% block title %}Manager access required{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="page-title" style="margin-bottom:8px">Manager access required</div>
+    <p class="page-sub">
+        This console is limited to portfolio managers. Access is granted by adding
+        your email to the <code>RENT_MANAGERS</code> environment variable.
+    </p>
+    <p style="margin-top:18px"><a class="btn btn-ghost" href="{{ url_for('rent_pages.portal') }}">Back to the portal</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,241 @@
+/* ===== Resident rent portal =====
+   Deliberately its own palette: residents are a different audience from the
+   macro-research site, and a bright, high-contrast sheet reads better on a
+   phone in a parking lot than the dark research theme does. */
+
+:root {
+    --r-bg: #f5f7fa;
+    --r-surface: #ffffff;
+    --r-surface-alt: #f0f3f8;
+    --r-text: #111827;
+    --r-text-soft: #4b5563;
+    --r-text-muted: #6b7280;
+    --r-border: #e2e8f0;
+    --r-accent: #1d4ed8;
+    --r-accent-dark: #1e40af;
+    --r-green: #047857;
+    --r-green-bg: #ecfdf5;
+    --r-red: #b91c1c;
+    --r-red-bg: #fef2f2;
+    --r-amber: #b45309;
+    --r-amber-bg: #fffbeb;
+    --r-radius: 10px;
+    --r-shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 16px rgba(16, 24, 40, .06);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body.rent {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: var(--r-bg);
+    color: var(--r-text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--r-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.rent-nav {
+    background: var(--r-surface);
+    border-bottom: 1px solid var(--r-border);
+    position: sticky; top: 0; z-index: 50;
+}
+.rent-nav-inner {
+    max-width: 1080px; margin: 0 auto; padding: 0 20px; height: 60px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.rent-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; font-size: 16px; color: var(--r-text); text-decoration: none;
+}
+.rent-brand:hover { text-decoration: none; }
+.rent-brand-mark {
+    width: 28px; height: 28px; border-radius: 8px; flex: none;
+    background: linear-gradient(135deg, var(--r-accent), #7c3aed);
+    display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 800;
+}
+.rent-nav-links { display: flex; align-items: center; gap: 18px; font-size: 14px; }
+.rent-nav-links a { color: var(--r-text-soft); }
+.rent-nav-links a.active { color: var(--r-accent); font-weight: 600; }
+
+/* ── Layout ─────────────────────────────────────────────────────────── */
+
+.rent-main { flex: 1; width: 100%; max-width: 1080px; margin: 0 auto; padding: 28px 20px 56px; }
+.rent-main.narrow { max-width: 460px; }
+
+.rent-footer {
+    border-top: 1px solid var(--r-border); background: var(--r-surface);
+    padding: 18px 20px; font-size: 12px; color: var(--r-text-muted); text-align: center;
+}
+
+.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.page-title { font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+.page-sub { color: var(--r-text-muted); font-size: 14px; margin-top: 4px; }
+
+.card {
+    background: var(--r-surface); border: 1px solid var(--r-border);
+    border-radius: var(--r-radius); box-shadow: var(--r-shadow); padding: 20px;
+    margin-bottom: 18px;
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.card-title { font-size: 15px; font-weight: 650; }
+.card-note { font-size: 12px; color: var(--r-text-muted); }
+
+.grid { display: grid; gap: 16px; }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+/* ── Balance hero ───────────────────────────────────────────────────── */
+
+.balance-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+.balance-amount { font-size: 40px; font-weight: 750; letter-spacing: -.02em; line-height: 1.1; }
+.balance-label { font-size: 13px; color: var(--r-text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.balance-meta { font-size: 13px; color: var(--r-text-soft); margin-top: 8px; }
+.balance-zero { color: var(--r-green); }
+.balance-late { color: var(--r-red); }
+
+.stat { background: var(--r-surface-alt); border-radius: 8px; padding: 14px; }
+.stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--r-text-muted); }
+.stat-value { font-size: 22px; font-weight: 700; margin-top: 6px; letter-spacing: -.01em; }
+.stat-sub { font-size: 12px; color: var(--r-text-muted); margin-top: 4px; }
+
+/* ── Buttons ────────────────────────────────────────────────────────── */
+
+.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 18px; border-radius: 8px; border: 1px solid transparent;
+    font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+    background: var(--r-accent); color: #fff; text-decoration: none;
+}
+.btn:hover { background: var(--r-accent-dark); text-decoration: none; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--r-text-soft); border-color: var(--r-border); }
+.btn-ghost:hover { background: var(--r-surface-alt); color: var(--r-text); }
+.btn-danger { background: var(--r-red); }
+.btn-danger:hover { background: #991b1b; }
+.btn-sm { padding: 7px 12px; font-size: 13px; }
+.btn-block { width: 100%; }
+
+/* ── Forms ──────────────────────────────────────────────────────────── */
+
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--r-text-soft); }
+.field input, .field select, .field textarea {
+    width: 100%; padding: 10px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--r-border); border-radius: 8px; background: #fff; color: var(--r-text);
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+    outline: none; border-color: var(--r-accent); box-shadow: 0 0 0 3px rgba(29, 78, 216, .12);
+}
+.field-hint { font-size: 12px; color: var(--r-text-muted); margin-top: 5px; }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+
+.amount-input { position: relative; }
+.amount-input span { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--r-text-muted); font-size: 16px; }
+.amount-input input { padding-left: 26px; font-size: 20px; font-weight: 650; }
+
+/* ── Payment method picker ──────────────────────────────────────────── */
+
+.method-list { display: grid; gap: 10px; margin: 6px 0 16px; }
+.method {
+    display: flex; align-items: flex-start; gap: 12px; padding: 14px;
+    border: 1.5px solid var(--r-border); border-radius: 10px; cursor: pointer; background: #fff;
+}
+.method:hover { border-color: #c7d2fe; }
+.method input { margin-top: 3px; accent-color: var(--r-accent); }
+.method-body { flex: 1; }
+.method-name { font-weight: 650; font-size: 14px; }
+.method-desc { font-size: 12px; color: var(--r-text-muted); margin-top: 3px; }
+.method-fee { font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; }
+.method-fee .free { color: var(--r-green); }
+.method input:checked ~ .method-body .method-name { color: var(--r-accent); }
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.rent-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.rent-table th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--r-text-muted); font-weight: 650; padding: 8px 10px;
+    border-bottom: 1px solid var(--r-border); white-space: nowrap;
+}
+.rent-table td { padding: 10px; border-bottom: 1px solid var(--r-border); vertical-align: middle; }
+.rent-table tr:last-child td { border-bottom: none; }
+.rent-table tbody tr:hover { background: var(--r-surface-alt); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.muted { color: var(--r-text-muted); }
+
+/* ── Badges + banners ───────────────────────────────────────────────── */
+
+.badge {
+    display: inline-block; padding: 3px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 650; letter-spacing: .02em;
+    background: var(--r-surface-alt); color: var(--r-text-soft); white-space: nowrap;
+}
+.badge-ok { background: var(--r-green-bg); color: var(--r-green); }
+.badge-warn { background: var(--r-amber-bg); color: var(--r-amber); }
+.badge-bad { background: var(--r-red-bg); color: var(--r-red); }
+.badge-info { background: #eff6ff; color: var(--r-accent); }
+
+.banner {
+    border-radius: 8px; padding: 12px 14px; font-size: 13.5px; margin-bottom: 16px;
+    border: 1px solid var(--r-border); background: var(--r-surface-alt); color: var(--r-text-soft);
+}
+.banner-ok { background: var(--r-green-bg); border-color: #a7f3d0; color: var(--r-green); }
+.banner-error { background: var(--r-red-bg); border-color: #fecaca; color: var(--r-red); }
+.banner-warn { background: var(--r-amber-bg); border-color: #fde68a; color: var(--r-amber); }
+.banner strong { font-weight: 700; }
+.banner code { background: rgba(0,0,0,.05); padding: 1px 5px; border-radius: 4px; font-size: 12px; word-break: break-all; }
+
+/* ── Unit grid ──────────────────────────────────────────────────────── */
+
+.unit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+.unit {
+    border: 1px solid var(--r-border); border-radius: 8px; padding: 10px 12px;
+    background: var(--r-surface); font-size: 13px;
+}
+.unit-label { font-weight: 700; font-size: 15px; }
+.unit-mix { color: var(--r-text-muted); font-size: 12px; margin-top: 2px; }
+.unit-rent { margin-top: 6px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.unit-occupied { border-left: 3px solid var(--r-green); }
+.unit-vacant { border-left: 3px solid #cbd5e1; }
+.unit-offline { border-left: 3px solid var(--r-amber); background: var(--r-surface-alt); }
+.unit-unpriced .unit-rent { color: var(--r-amber); }
+
+/* ── Misc ───────────────────────────────────────────────────────────── */
+
+.section-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.section-tabs button {
+    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--r-border);
+    background: #fff; font-size: 13px; font-weight: 600; color: var(--r-text-soft);
+    cursor: pointer; font-family: inherit;
+}
+.section-tabs button.active { background: var(--r-accent); border-color: var(--r-accent); color: #fff; }
+.hidden { display: none !important; }
+.empty { padding: 26px; text-align: center; color: var(--r-text-muted); font-size: 14px; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.inline-form .field { margin-bottom: 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13.5px; }
+.kv dt { color: var(--r-text-muted); }
+.kv dd { font-weight: 600; text-align: right; }
+
+@media (max-width: 640px) {
+    .balance-amount { font-size: 32px; }
+    .rent-nav-links { gap: 12px; font-size: 13px; }
+    .rent-main { padding: 20px 14px 44px; }
+}
+
+/* ── Manager dialogs ────────────────────────────────────────────────── */
+
+dialog.rent-dialog {
+    border: none; border-radius: 12px; padding: 0; width: min(520px, calc(100vw - 32px));
+    box-shadow: 0 24px 48px rgba(16, 24, 40, .18); color: var(--r-text); background: var(--r-surface);
+}
+dialog.rent-dialog::backdrop { background: rgba(15, 23, 42, .45); }
+.dialog-body { padding: 22px; max-height: 85vh; overflow-y: auto; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }

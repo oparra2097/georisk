@@ -1,0 +1,100 @@
+{% extends "rent/base.html" %}
+{% set active_tab = 'manage' %}
+{% block title %}{{ property.name }} — Rent{% endblock %}
+{% block content %}
+
+<div class="banner hidden" id="manage-result"></div>
+
+<div class="page-head">
+    <div>
+        <div class="page-title">{{ property.name }}</div>
+        <div class="page-sub">
+            {{ units | length }} unit{{ '' if units | length == 1 else 's' }}
+            {% if property.city %}&middot; {{ property.city }}{% if property.state %}, {{ property.state }}{% endif %}{% endif %}
+            {% if property.amenities %}&middot; {{ property.amenities }}{% endif %}
+        </div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('rent_pages.manage') }}">Back to console</a>
+        <button class="btn btn-sm" data-action="add-units">Add units</button>
+    </div>
+</div>
+
+{% if property.notes %}
+<div class="banner">{{ property.notes }}</div>
+{% endif %}
+
+{% set unpriced = units | selectattr('market_rent_cents', 'equalto', 0) | list | length %}
+{% if unpriced %}
+<div class="banner banner-warn">
+    <strong>{{ unpriced }} unit{{ '' if unpriced == 1 else 's' }} have no rent set.</strong>
+    Type an amount in the rent box on each card — a unit can't be leased at $0.
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">Unit roster</span>
+        <span class="card-note">Rent edits save as you leave the box</span>
+    </div>
+    {% if units %}
+    <div class="unit-grid">
+        {% for unit in units %}
+        <div class="unit unit-{{ unit.status }} {% if not unit.market_rent_cents %}unit-unpriced{% endif %}">
+            <div class="unit-label">#{{ unit.label }}</div>
+            <div class="unit-mix">
+                {{ unit.bedrooms }}bd / {{ unit.bathrooms | round(1) }}ba{% if unit.sqft %} · {{ unit.sqft }} sf{% endif %}
+            </div>
+            {% if unit.lease_id %}
+                <div class="unit-rent">{{ unit.lease_rent_cents | money }}</div>
+                <div class="unit-mix">{{ unit.tenant_name }}</div>
+                <a class="badge badge-ok" style="margin-top:6px; display:inline-block"
+                   href="{{ url_for('rent_pages.manage_lease', lease_id=unit.lease_id) }}">Leased</a>
+            {% else %}
+                <div class="amount-input" style="margin-top:6px">
+                    <span style="font-size:13px">$</span>
+                    <input type="text" inputmode="decimal"
+                           style="padding:6px 6px 6px 18px; font-size:14px; font-weight:600"
+                           value="{{ '%.2f' % (unit.market_rent_cents / 100) }}"
+                           data-unit-rent="{{ unit.id }}" data-unit-label="{{ unit.label }}">
+                </div>
+                <span class="badge" style="margin-top:6px; display:inline-block">{{ unit.status | title }}</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No units yet — add the roster to start leasing.</div>
+    {% endif %}
+</div>
+
+<dialog id="dlg-units" class="rent-dialog">
+    <form method="dialog" class="dialog-body" data-endpoint="/api/rent/units" id="units-form">
+        <div class="card-title" style="margin-bottom:14px">Add units to {{ property.name }}</div>
+        <input type="hidden" name="property_id" value="{{ property.id }}">
+        <div class="field">
+            <label for="unit-labels">Unit numbers</label>
+            <input id="unit-labels" name="labels" placeholder="101-116, 201-216" required>
+            <div class="field-hint">Comma-separated. Ranges like <code>101-116</code> expand.</div>
+        </div>
+        <div class="field-row">
+            <div class="field"><label for="unit-bd">Bedrooms</label>
+                <input id="unit-bd" name="bedrooms" type="number" min="0" max="6" value="2"></div>
+            <div class="field"><label for="unit-ba">Bathrooms</label>
+                <input id="unit-ba" name="bathrooms" type="number" min="0" max="6" step="0.5" value="2"></div>
+            <div class="field"><label for="unit-sqft">Sq ft</label>
+                <input id="unit-sqft" name="sqft" type="number" min="0" value="1080"></div>
+        </div>
+        <div class="field">
+            <label for="unit-rent">Market rent ($, optional)</label>
+            <input id="unit-rent" name="market_rent" type="text" inputmode="decimal" placeholder="0.00">
+        </div>
+        <div class="dialog-actions">
+            <button class="btn btn-ghost btn-sm" value="cancel" formnovalidate>Cancel</button>
+            <button class="btn btn-sm" value="submit">Add units</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}<script src="/static/js/rent_manage.js"></script>{% endblock %}

@@ -15,3 +15,12 @@ services:
         value: 3.11.0
       - key: DATA_DIR
         value: /data
+      # --- Rent portal ---
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RENT_MANAGERS
+        sync: false

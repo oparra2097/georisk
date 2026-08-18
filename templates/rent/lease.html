@@ -1,0 +1,137 @@
+{% extends "rent/base.html" %}
+{% set active_tab = 'manage' %}
+{% block title %}{{ lease.property_name }} #{{ lease.unit_label }} — Ledger{% endblock %}
+{% block content %}
+
+<div class="banner hidden" id="manage-result"></div>
+
+<div class="page-head">
+    <div>
+        <div class="page-title">{{ lease.property_name }} #{{ lease.unit_label }}</div>
+        <div class="page-sub">
+            {{ lease.tenant_name }} &middot; {{ lease.tenant_email }}
+            {% if lease.tenant_phone %}&middot; {{ lease.tenant_phone }}{% endif %}
+        </div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('rent_pages.manage') }}">Back to console</a>
+        <button class="btn btn-ghost btn-sm" data-action="add-charge">Add charge</button>
+        <button class="btn btn-ghost btn-sm" data-action="record-payment">Record payment</button>
+        {% if lease.status == 'active' %}
+        <button class="btn btn-danger btn-sm" data-action="end-lease" data-lease="{{ lease.id }}">End lease</button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:18px">
+    <div class="card" style="margin:0">
+        <div class="stat-label">Balance</div>
+        <div class="stat-value {% if summary.balance_cents > 0 %}balance-late{% elif summary.balance_cents < 0 %}balance-zero{% endif %}">
+            {{ summary.balance_cents | money }}
+        </div>
+        <div class="stat-sub">{% if summary.is_late %}past due{% else %}current{% endif %}</div>
+    </div>
+    <div class="card" style="margin:0">
+        <div class="stat-label">Monthly rent</div>
+        <div class="stat-value">{{ lease.rent_cents | money }}</div>
+        <div class="stat-sub">due on the {{ lease.due_day }}</div>
+    </div>
+    <div class="card" style="margin:0">
+        <div class="stat-label">Processing</div>
+        <div class="stat-value">{{ summary.pending_cents | money }}</div>
+        <div class="stat-sub">ACH not yet cleared</div>
+    </div>
+    <div class="card" style="margin:0">
+        <div class="stat-label">Lease</div>
+        <div class="stat-value" style="font-size:15px">{{ lease.start_date }} → {{ lease.end_date or 'MTM' }}</div>
+        <div class="stat-sub">{{ lease.status }} &middot; deposit {{ lease.deposit_cents | money }}</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">Ledger</span>
+        <span class="card-note">Newest first</span>
+    </div>
+    {% if statement.rows %}
+    <div class="table-wrap">
+        <table class="rent-table">
+            <thead><tr><th>Date</th><th>Description</th><th>Type</th>
+                <th class="num">Amount</th><th class="num">Balance</th><th></th></tr></thead>
+            <tbody>
+            {% for row in statement.rows | reverse %}
+                <tr>
+                    <td class="muted">{{ row.date }}</td>
+                    <td>{{ row.description }}</td>
+                    <td><span class="badge">{{ row.type | replace('_', ' ') | title }}</span></td>
+                    <td class="num">{{ row.amount_cents | money }}</td>
+                    <td class="num muted">{{ row.running_balance_cents | money }}</td>
+                    <td>
+                        {% if row.status == 'processing' %}<span class="badge badge-warn">Processing</span>
+                        {% elif row.status == 'refunded' %}<span class="badge badge-bad">Refunded</span>
+                        {% elif row.receipt_url %}<a href="{{ row.receipt_url }}" target="_blank" rel="noopener">Receipt</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty">Nothing posted to this lease yet.</div>
+    {% endif %}
+</div>
+
+<dialog id="dlg-charge" class="rent-dialog">
+    <form method="dialog" class="dialog-body" data-endpoint="/api/rent/charges">
+        <div class="card-title" style="margin-bottom:14px">Add a charge</div>
+        <input type="hidden" name="lease_id" value="{{ lease.id }}">
+        <div class="field"><label for="charge-kind">Type</label>
+            <select id="charge-kind" name="kind">
+                <option value="utility">Utility</option>
+                <option value="late_fee">Late fee</option>
+                <option value="deposit">Deposit</option>
+                <option value="other">Other</option>
+                <option value="credit">Credit / concession</option>
+            </select></div>
+        <div class="field"><label for="charge-desc">Description</label>
+            <input id="charge-desc" name="description" placeholder="Water &amp; sewer — August"></div>
+        <div class="field-row">
+            <div class="field"><label for="charge-amount">Amount ($)</label>
+                <input id="charge-amount" name="amount" type="text" inputmode="decimal" required>
+                <div class="field-hint">Use a negative amount for a credit.</div></div>
+            <div class="field"><label for="charge-due">Due date</label>
+                <input id="charge-due" name="due_date" type="date"></div>
+        </div>
+        <div class="dialog-actions">
+            <button class="btn btn-ghost btn-sm" value="cancel" formnovalidate>Cancel</button>
+            <button class="btn btn-sm" value="submit">Post charge</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="dlg-manual" class="rent-dialog">
+    <form method="dialog" class="dialog-body" data-endpoint="/api/rent/payments/manual">
+        <div class="card-title" style="margin-bottom:14px">Record an offline payment</div>
+        <input type="hidden" name="lease_id" value="{{ lease.id }}">
+        <div class="field-row">
+            <div class="field"><label for="manual-amount">Amount ($)</label>
+                <input id="manual-amount" name="amount" type="text" inputmode="decimal" required></div>
+            <div class="field"><label for="manual-method">Method</label>
+                <select id="manual-method" name="method">
+                    <option value="check">Check / money order</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                </select></div>
+        </div>
+        <div class="field"><label for="manual-memo">Memo</label>
+            <input id="manual-memo" name="memo" placeholder="Check #1042"></div>
+        <div class="dialog-actions">
+            <button class="btn btn-ghost btn-sm" value="cancel" formnovalidate>Cancel</button>
+            <button class="btn btn-sm" value="submit">Record payment</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}
+
+{% block scripts %}<script src="/static/js/rent_manage.js"></script>{% endblock %}

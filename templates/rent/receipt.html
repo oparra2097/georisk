@@ -1,0 +1,54 @@
+{% extends "rent/base.html" %}
+{% block title %}Payment receipt — Resident Portal{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+
+{% if not payment %}
+<div class="card empty">
+    We couldn't find that payment. If you were just charged, it may take a moment
+    to post — check your <a href="{{ url_for('rent_pages.portal') }}">account</a>.
+</div>
+{% else %}
+<div class="card">
+    {% if payment.status == 'succeeded' %}
+        <div class="badge badge-ok" style="margin-bottom:12px">Payment received</div>
+        <div class="balance-amount balance-zero">{{ payment.amount_cents | money }}</div>
+        <p class="page-sub" style="margin-top:8px">
+            Thank you — your payment posted to
+            {{ lease.property_name }} #{{ lease.unit_label }}.
+        </p>
+    {% elif payment.status in ('pending', 'processing') %}
+        <div class="badge badge-warn" style="margin-bottom:12px">Processing</div>
+        <div class="balance-amount">{{ payment.amount_cents | money }}</div>
+        <p class="page-sub" style="margin-top:8px">
+            Your bank transfer is on its way. ACH takes 3–5 business days to clear;
+            your balance updates the moment it does.
+        </p>
+    {% else %}
+        <div class="badge badge-bad" style="margin-bottom:12px">Payment failed</div>
+        <div class="balance-amount">{{ payment.amount_cents | money }}</div>
+        <p class="page-sub" style="margin-top:8px">
+            {{ payment.failure_reason or 'The payment did not go through. Nothing was charged.' }}
+        </p>
+    {% endif %}
+
+    <dl class="kv" style="margin-top:20px">
+        <dt>Applied to rent</dt><dd>{{ payment.amount_cents | money }}</dd>
+        {% if payment.fee_cents %}
+        <dt>Processing fee</dt><dd>{{ payment.fee_cents | money }}</dd>
+        <dt>Total charged</dt><dd>{{ (payment.amount_cents + payment.fee_cents) | money }}</dd>
+        {% endif %}
+        <dt>Method</dt><dd>{{ 'Bank transfer (ACH)' if payment.method == 'us_bank_account' else payment.method | title }}</dd>
+        <dt>Date</dt><dd>{{ (payment.paid_at or payment.created_at)[:10] }}</dd>
+        {% if summary %}<dt>Balance now</dt><dd>{{ summary.balance_cents | money }}</dd>{% endif %}
+    </dl>
+
+    <div style="margin-top:20px; display:flex; gap:10px; flex-wrap:wrap">
+        <a class="btn" href="{{ url_for('rent_pages.portal') }}">Back to your account</a>
+        {% if payment.receipt_url %}
+        <a class="btn btn-ghost" href="{{ payment.receipt_url }}" target="_blank" rel="noopener">Stripe receipt</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

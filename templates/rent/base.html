@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{% block title %}Resident Portal{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/rent.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="rent">
+    <nav class="rent-nav">
+        <div class="rent-nav-inner">
+            <a href="{{ url_for('rent_pages.portal') }}" class="rent-brand">
+                <span class="rent-brand-mark">R</span>
+                <span>Resident Portal</span>
+            </a>
+            <div class="rent-nav-links">
+                {% if tenant %}
+                    <a href="{{ url_for('rent_pages.portal') }}"
+                       class="{% if active_tab == 'portal' %}active{% endif %}">Account</a>
+                    <a href="{{ url_for('rent_pages.pay') }}"
+                       class="{% if active_tab == 'pay' %}active{% endif %}">Pay rent</a>
+                {% endif %}
+                {% if is_manager %}
+                    <a href="{{ url_for('rent_pages.manage') }}"
+                       class="{% if active_tab == 'manage' %}active{% endif %}">Manager</a>
+                {% endif %}
+                {% if tenant %}
+                    <a href="{{ url_for('rent_pages.logout') }}">Sign out</a>
+                {% elif not is_manager %}
+                    <a href="{{ url_for('rent_pages.login') }}">Sign in</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="rent-main {% block main_class %}{% endblock %}">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="banner banner-{{ 'error' if category == 'error' else 'ok' }}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="rent-footer">
+        <div>
+            {% if settings and settings.support_email %}
+                Questions? <a href="mailto:{{ settings.support_email }}">{{ settings.support_email }}</a>
+                {% if settings.support_phone %} &middot; {{ settings.support_phone }}{% endif %}
+            {% else %}
+                Questions about your account? Contact the leasing office.
+            {% endif %}
+        </div>
+    </footer>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

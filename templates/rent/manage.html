@@ -1,0 +1,344 @@
+{% extends "rent/base.html" %}
+{% set active_tab = 'manage' %}
+{% block title %}Manager console — Rent{% endblock %}
+{% block content %}
+
+<div class="page-head">
+    <div>
+        <div class="page-title">Manager console</div>
+        <div class="page-sub">
+            Period {{ summary.period }} &middot; as of {{ summary.as_of }}
+        </div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" data-action="run-billing">Post rent + late fees</button>
+        <button class="btn btn-sm" data-action="add-resident">Add resident</button>
+    </div>
+</div>
+
+<div class="banner hidden" id="manage-result"></div>
+
+{% if not stripe.ready %}
+<div class="banner banner-warn">
+    <strong>Stripe isn't connected yet.</strong> Residents can't pay online until it is.
+    <ol style="margin:8px 0 0 18px; line-height:1.7">
+        {% if not stripe.sdk_installed %}<li>Deploy with <code>stripe</code> in requirements.txt (already added).</li>{% endif %}
+        <li>Set <code>STRIPE_SECRET_KEY</code> (and <code>STRIPE_PUBLISHABLE_KEY</code>) in the environment.</li>
+        <li>Add a Stripe webhook pointing at <code>{{ webhook_url }}</code> for the events
+            <code>checkout.session.completed</code>, <code>checkout.session.async_payment_succeeded</code>,
+            <code>checkout.session.async_payment_failed</code>, <code>charge.refunded</code>,
+            then set <code>STRIPE_WEBHOOK_SECRET</code>.</li>
+        <li>Turn on ACH in the Stripe dashboard (Settings &rarr; Payment methods &rarr; US bank account).</li>
+    </ol>
+</div>
+{% else %}
+<div class="banner banner-ok">
+    Stripe connected in <strong>{{ stripe.mode }}</strong> mode.
+    Webhook endpoint: <code>{{ webhook_url }}</code>
+    {% if not stripe.webhook_secret_set %}
+        — <strong>but STRIPE_WEBHOOK_SECRET is not set</strong>, so payment confirmations
+        rely on the return page only.
+    {% endif %}
+</div>
+{% endif %}
+
+{% if not smtp_ready %}
+<div class="banner">
+    Email isn't configured (<code>SMTP_EMAIL</code> / <code>SMTP_PASSWORD</code>), so invite and
+    reset links are shown here for you to copy instead of being emailed.
+</div>
+{% endif %}
+
+<div class="grid grid-4" style="margin-bottom:18px">
+    <div class="card" style="margin:0">
+        <div class="stat-label">Occupancy</div>
+        <div class="stat-value">{{ summary.occupancy_pct }}%</div>
+        <div class="stat-sub">{{ summary.occupied_units }} of {{ summary.unit_count }} units</div>
+    </div>
+    <div class="card" style="margin:0">
+        <div class="stat-label">Scheduled rent</div>
+        <div class="stat-value">{{ summary.scheduled_rent_cents | money }}</div>
+        <div class="stat-sub">per month, active leases</div>
+    </div>
+    <div class="card" style="margin:0">
+        <div class="stat-label">Collected {{ summary.period }}</div>
+        <div class="stat-value">{{ summary.collected_this_period_cents | money }}</div>
+        <div class="stat-sub">{{ summary.collection_rate_pct }}% of billed</div>
+    </div>
+    <div class="card" style="margin:0">
+        <div class="stat-label">Outstanding</div>
+        <div class="stat-value">{{ summary.outstanding_cents | money }}</div>
+        <div class="stat-sub">{{ summary.delinquent | length }} delinquent</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">Properties</span>
+        <button class="btn btn-ghost btn-sm" data-action="add-property">Add property</button>
+    </div>
+    <div class="table-wrap">
+        <table class="rent-table">
+            <thead>
+                <tr>
+                    <th>Property</th><th class="num">Units</th><th class="num">Occupied</th>
+                    <th class="num">Vacant</th><th class="num">Scheduled rent</th><th>Included</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for prop in summary.properties %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('rent_pages.manage_property', prop_id=prop.id) }}">{{ prop.name }}</a>
+                        {% if prop.city %}<div class="muted" style="font-size:12px">{{ prop.city }}{% if prop.state %}, {{ prop.state }}{% endif %}</div>{% endif %}
+                    </td>
+                    <td class="num">{{ prop.unit_count }}</td>
+                    <td class="num">{{ prop.occupied }}</td>
+                    <td class="num">{{ prop.vacant }}</td>
+                    <td class="num">{{ prop.scheduled_rent_cents | money }}</td>
+                    <td class="muted">{{ prop.amenities or '—' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if summary.delinquent %}
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">Past due</span>
+        <span class="card-note">Past the grace period with a balance</span>
+    </div>
+    <div class="table-wrap">
+        <table class="rent-table">
+            <thead><tr><th>Resident</th><th>Unit</th><th class="num">Balance</th><th></th></tr></thead>
+            <tbody>
+            {% for row in summary.delinquent %}
+                <tr>
+                    <td>{{ row.tenant_name }}<div class="muted" style="font-size:12px">{{ row.tenant_email }}</div></td>
+                    <td>{{ row.property_name }} #{{ row.unit_label }}</td>
+                    <td class="num" style="color:var(--r-red); font-weight:650">{{ row.balance_cents | money }}</td>
+                    <td><a class="btn btn-ghost btn-sm" href="{{ url_for('rent_pages.manage_lease', lease_id=row.lease_id) }}">Ledger</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">Active leases</span>
+        <button class="btn btn-ghost btn-sm" data-action="add-lease">New lease</button>
+    </div>
+    {% if leases %}
+    <div class="table-wrap">
+        <table class="rent-table">
+            <thead>
+                <tr><th>Unit</th><th>Resident</th><th class="num">Rent</th><th class="num">Due</th>
+                    <th>Term</th><th></th></tr>
+            </thead>
+            <tbody>
+            {% for lease in leases %}
+                <tr>
+                    <td>{{ lease.property_name }} #{{ lease.unit_label }}
+                        <div class="muted" style="font-size:12px">{{ lease.bedrooms }}bd/{{ lease.bathrooms | round(1) }}ba{% if lease.sqft %} · {{ lease.sqft }} sqft{% endif %}</div>
+                    </td>
+                    <td>{{ lease.tenant_name }}<div class="muted" style="font-size:12px">{{ lease.tenant_email }}</div></td>
+                    <td class="num">{{ lease.rent_cents | money }}</td>
+                    <td class="num">{{ lease.due_day }}</td>
+                    <td class="muted">{{ lease.start_date }} → {{ lease.end_date or 'MTM' }}</td>
+                    <td><a class="btn btn-ghost btn-sm" href="{{ url_for('rent_pages.manage_lease', lease_id=lease.id) }}">Ledger</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty">No active leases yet. Add a resident, then start a lease on a unit.</div>
+    {% endif %}
+</div>
+
+<div class="grid grid-2">
+    <div class="card">
+        <div class="card-head"><span class="card-title">Residents</span></div>
+        {% if tenants %}
+        <div class="table-wrap">
+            <table class="rent-table">
+                <thead><tr><th>Name</th><th>Unit</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                {% for t in tenants %}
+                    <tr>
+                        <td>{{ t.full_name }}<div class="muted" style="font-size:12px">{{ t.email }}</div></td>
+                        <td class="muted">{% if t.unit_label %}{{ t.property_name }} #{{ t.unit_label }}{% else %}—{% endif %}</td>
+                        <td>
+                            {% if not t.active %}<span class="badge">Inactive</span>
+                            {% elif t.activated %}<span class="badge badge-ok">Active</span>
+                            {% else %}<span class="badge badge-warn">Invited</span>{% endif %}
+                        </td>
+                        <td><button class="btn btn-ghost btn-sm" data-action="invite" data-tenant="{{ t.id }}">Send link</button></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty">No residents yet.</div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-head"><span class="card-title">Recent payments</span></div>
+        {% if payments %}
+        <div class="table-wrap">
+            <table class="rent-table">
+                <thead><tr><th>Date</th><th>Resident</th><th class="num">Amount</th><th>Status</th></tr></thead>
+                <tbody>
+                {% for p in payments %}
+                    <tr>
+                        <td class="muted">{{ (p.paid_at or p.created_at)[:10] }}</td>
+                        <td>{{ p.tenant_name }}<div class="muted" style="font-size:12px">{{ p.property_name }} #{{ p.unit_label }}</div></td>
+                        <td class="num">{{ p.amount_cents | money }}</td>
+                        <td>
+                            {% if p.status == 'succeeded' %}<span class="badge badge-ok">Paid</span>
+                            {% elif p.status in ('pending', 'processing') %}<span class="badge badge-warn">{{ p.status | title }}</span>
+                            {% elif p.status == 'refunded' %}<span class="badge">Refunded</span>
+                            {% else %}<span class="badge badge-bad">{{ p.status | title }}</span>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty">No payments recorded yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-head">
+        <span class="card-title">Payment settings</span>
+        <span class="card-note">Convenience fees are added on top of the rent amount at checkout</span>
+    </div>
+    <form id="settings-form" class="field-row">
+        <div class="field">
+            <label for="card_fee_bps">Card fee (basis points)</label>
+            <input id="card_fee_bps" name="card_fee_bps" type="number" min="0" max="1000" value="{{ settings.card_fee_bps }}">
+            <div class="field-hint">300 = 3.00%</div>
+        </div>
+        <div class="field">
+            <label for="card_fee_flat_cents">Card flat fee (cents)</label>
+            <input id="card_fee_flat_cents" name="card_fee_flat_cents" type="number" min="0" value="{{ settings.card_fee_flat_cents }}">
+        </div>
+        <div class="field">
+            <label for="ach_fee_bps">ACH fee (basis points)</label>
+            <input id="ach_fee_bps" name="ach_fee_bps" type="number" min="0" max="1000" value="{{ settings.ach_fee_bps }}">
+        </div>
+        <div class="field">
+            <label for="allow_partial_payments">Partial payments</label>
+            <select id="allow_partial_payments" name="allow_partial_payments">
+                <option value="1" {% if settings.allow_partial_payments == '1' %}selected{% endif %}>Allowed</option>
+                <option value="0" {% if settings.allow_partial_payments != '1' %}selected{% endif %}>Full balance only</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="support_email">Support email</label>
+            <input id="support_email" name="support_email" type="email" value="{{ settings.support_email }}">
+        </div>
+        <div class="field" style="align-self:flex-end">
+            <button class="btn btn-sm" type="submit">Save settings</button>
+        </div>
+    </form>
+</div>
+
+<dialog id="dlg-resident" class="rent-dialog">
+    <form method="dialog" class="dialog-body" data-endpoint="/api/rent/tenants">
+        <div class="card-title" style="margin-bottom:14px">Add resident</div>
+        <div class="field"><label for="res-name">Full name</label>
+            <input id="res-name" name="full_name" required></div>
+        <div class="field"><label for="res-email">Email</label>
+            <input id="res-email" name="email" type="email" required></div>
+        <div class="field"><label for="res-phone">Phone</label>
+            <input id="res-phone" name="phone" type="tel"></div>
+        <div class="field-hint">They get a link to set a password. If email isn't
+            configured, the link is shown here to copy.</div>
+        <div class="dialog-actions">
+            <button class="btn btn-ghost btn-sm" value="cancel" formnovalidate>Cancel</button>
+            <button class="btn btn-sm" value="submit">Add resident</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="dlg-property" class="rent-dialog">
+    <form method="dialog" class="dialog-body" data-endpoint="/api/rent/properties">
+        <div class="card-title" style="margin-bottom:14px">Add property</div>
+        <div class="field"><label for="prop-name">Name</label>
+            <input id="prop-name" name="name" required></div>
+        <div class="field-row">
+            <div class="field"><label for="prop-city">City</label><input id="prop-city" name="city"></div>
+            <div class="field"><label for="prop-state">State</label><input id="prop-state" name="state" maxlength="2"></div>
+        </div>
+        <div class="field"><label for="prop-amenities">Included in rent</label>
+            <input id="prop-amenities" name="amenities" placeholder="In-unit washer/dryer, Trash included"></div>
+        <div class="dialog-actions">
+            <button class="btn btn-ghost btn-sm" value="cancel" formnovalidate>Cancel</button>
+            <button class="btn btn-sm" value="submit">Add property</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="dlg-lease" class="rent-dialog">
+    <form method="dialog" class="dialog-body" data-endpoint="/api/rent/leases">
+        <div class="card-title" style="margin-bottom:14px">Start a lease</div>
+        <div class="field"><label for="lease-unit">Unit</label>
+            <select id="lease-unit" name="unit_id" required>
+                <option value="">Select a vacant unit…</option>
+                {% for unit in vacant_units %}
+                <option value="{{ unit.id }}" data-rent="{{ unit.market_rent_cents }}">
+                    {{ unit.property_name }} #{{ unit.label }} — {{ unit.bedrooms }}bd/{{ unit.bathrooms | round(1) }}ba
+                </option>
+                {% endfor %}
+            </select></div>
+        <div class="field"><label for="lease-tenant">Resident</label>
+            <select id="lease-tenant" name="tenant_id" required>
+                <option value="">Select a resident…</option>
+                {% for t in tenants %}{% if not t.lease_id %}
+                <option value="{{ t.id }}">{{ t.full_name }} — {{ t.email }}</option>
+                {% endif %}{% endfor %}
+            </select>
+            <div class="field-hint">Only residents without an active lease are listed.</div></div>
+        <div class="field-row">
+            <div class="field"><label for="lease-start">Start date</label>
+                <input id="lease-start" name="start_date" type="date" required></div>
+            <div class="field"><label for="lease-end">End date</label>
+                <input id="lease-end" name="end_date" type="date"></div>
+        </div>
+        <div class="field-row">
+            <div class="field"><label for="lease-rent">Monthly rent ($)</label>
+                <input id="lease-rent" name="rent" type="text" inputmode="decimal" required></div>
+            <div class="field"><label for="lease-deposit">Deposit ($)</label>
+                <input id="lease-deposit" name="deposit" type="text" inputmode="decimal" value="0"></div>
+        </div>
+        <div class="field-row">
+            <div class="field"><label for="lease-due">Due day</label>
+                <input id="lease-due" name="due_day" type="number" min="1" max="28" value="1"></div>
+            <div class="field"><label for="lease-grace">Grace days</label>
+                <input id="lease-grace" name="grace_days" type="number" min="0" max="15" value="5"></div>
+            <div class="field"><label for="lease-late">Late fee ($)</label>
+                <input id="lease-late" name="late_fee" type="text" inputmode="decimal" value="50"></div>
+        </div>
+        <label class="field-hint" style="display:block"><input type="checkbox" name="post_deposit" value="1"> Post the deposit as a charge</label>
+        <label class="field-hint" style="display:block"><input type="checkbox" name="post_first_month" value="1" checked> Post this month's rent now (prorated from the start date)</label>
+        <div class="dialog-actions">
+            <button class="btn btn-ghost btn-sm" value="cancel" formnovalidate>Cancel</button>
+            <button class="btn btn-sm" value="submit">Create lease</button>
+        </div>
+    </form>
+</dialog>
+
+{% endblock %}
+
+{% block scripts %}<script src="/static/js/rent_manage.js"></script>{% endblock %}

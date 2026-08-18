@@ -1,0 +1,19 @@
+{% extends "rent/base.html" %}
+{% block title %}Reset password — Resident Portal{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+<div class="card">
+    <div class="page-title" style="margin-bottom:4px">Reset your password</div>
+    <p class="page-sub" style="margin-bottom:18px">We'll email you a link to choose a new one.</p>
+    <form method="post">
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" required autofocus>
+        </div>
+        <button class="btn btn-block" type="submit">Send reset link</button>
+    </form>
+    <p class="field-hint" style="margin-top:16px; text-align:center">
+        <a href="{{ url_for('rent_pages.login') }}">Back to sign in</a>
+    </p>
+</div>
+{% endblock %}

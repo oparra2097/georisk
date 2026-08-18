@@ -306,6 +306,44 @@ def init_scheduler(app):
     )
     logger.info("Data center ISO queue pull scheduled (Monday 08:00 UTC).")
 
+    # Job 7: Rent billing. Post each lease's monthly rent on the 1st at 08:00
+    # UTC, then sweep for late fees every morning once the grace period lapses.
+    def _post_monthly_rent():
+        try:
+            from backend.rent import billing
+            result = billing.generate_charges_for_period()
+            logger.info(f"Rent charges posted: {result}")
+        except Exception as e:
+            logger.error(f"Monthly rent charge run failed: {e}")
+
+    def _sweep_late_fees():
+        try:
+            from backend.rent import billing
+            result = billing.apply_late_fees()
+            logger.info(f"Rent late-fee sweep: {result}")
+        except Exception as e:
+            logger.error(f"Late-fee sweep failed: {e}")
+
+    scheduler.add_job(
+        func=_post_monthly_rent,
+        trigger='cron',
+        day=1, hour=8, minute=0,
+        id='rent_post_monthly',
+        replace_existing=True,
+        misfire_grace_time=21600,
+        max_instances=1,
+    )
+    scheduler.add_job(
+        func=_sweep_late_fees,
+        trigger='cron',
+        hour=9, minute=0,
+        id='rent_late_fees',
+        replace_existing=True,
+        misfire_grace_time=21600,
+        max_instances=1,
+    )
+    logger.info("Rent billing scheduled (charges 1st 08:00 UTC, late fees daily 09:00 UTC).")
+
     scheduler.start()
     logger.info(
         f"Scheduler started. GDELT every {gdelt_interval}min (ALL countries), "
