@@ -165,20 +165,23 @@ DRIVERS: dict[str, list[tuple[str, str]]] = {
     'Copper':           [('fred', 'DTWEXBGS'), ('yf', '^GSPC'), ('fred', 'DFII10')],
     'Aluminum':         [('fred', 'DTWEXBGS'), ('comm', 'Copper'), ('comm', 'Natural Gas (HH)')],
     'Cocoa':            [('fred', 'DTWEXBGS'),
-                         ('enso', ''),                # NEW: ENSO state — West Africa rainfall
+                         ('enso', ''),
+                         ('climate', 'AMO'),          # NEW: Atlantic SST → W. Africa monsoon
                          ('yf', '^GSPC')],
     'Wheat':            [('fred', 'DTWEXBGS'),
                          ('enso', ''),
-                         ('wasde', 'Wheat'),          # NEW: USDA ending stocks (NASS)
+                         ('wasde', 'Wheat'),
+                         ('climate', 'NAO'),          # NEW: N. Atlantic Oscillation → EU climate
                          ('gpr', ''),
                          ('comm', 'WTI Crude')],
     'Soybeans':         [('fred', 'DTWEXBGS'),
                          ('enso', ''),
-                         ('wasde', 'Soybeans'),       # NEW: USDA ending stocks (NASS)
+                         ('wasde', 'Soybeans'),
                          ('comm', 'Wheat'),
                          ('yf', '^GSPC')],
     'Coffee':           [('fred', 'DTWEXBGS'),
-                         ('enso', ''),                # NEW: ENSO — Brazil drought / Vietnam typhoons
+                         ('enso', ''),
+                         ('climate', 'AMO'),          # NEW: Atlantic SST → Brazil rainfall
                          ('yf', '^GSPC')],
 }
 
@@ -193,6 +196,7 @@ DRIVER_TRANSFORM = {
     'gpr_':          'loglevel', # GPR index — log of level
     'enso_':         'level',    # ENSO ONI — already a signed anomaly (°C), use level
     'wasde_':        'logret',   # USDA ending stocks — log-return on level
+    'climate_':      'level',    # NOAA climate index (AMO/NAO/PDO) — signed level
     'yf_^GSPC':      'logret',   # equities — returns
     'comm_':         'logret',   # other commodity price — returns
 }
@@ -531,6 +535,8 @@ class DriverFetcher:
                 series = self._fetch_enso(start, end)
             elif kind == 'wasde':
                 series = self._fetch_wasde(key, start, end)
+            elif kind == 'climate':
+                series = self._fetch_climate_index(key, start, end)
             else:
                 logger.warning(f'Unknown driver kind: {kind}')
                 return None
@@ -574,6 +580,26 @@ class DriverFetcher:
             return None
         # The driver key carries the commodity name (e.g. 'Wheat', 'Soybeans')
         return usda_wasde.fetch_stocks(commodity, start=start, end=end)
+
+    @staticmethod
+    def _fetch_climate_index(name: str, start: date,
+                              end: Optional[date] = None) -> Optional[pd.Series]:
+        """Pull a NOAA climate index (AMO, NAO, PDO). Driver `key` is the
+        index name. Fail-soft: returns None on any fetch / parse failure.
+        """
+        try:
+            from backend.data_sources import climate_indices
+        except Exception:
+            return None
+        s = climate_indices.fetch_index(name, start=start, end=end)
+        if s is None or len(s) == 0:
+            return None
+        s = s.copy()
+        try:
+            s.index = s.index.to_period('M').to_timestamp('M')
+        except Exception:
+            pass
+        return s
 
     @staticmethod
     def _fetch_yf(ticker: str, start: date, end: Optional[date] = None) -> Optional[pd.Series]:
@@ -807,11 +833,12 @@ class CommodityModel:
             raw = fetcher.fetch(kind, key, start, end)
             if raw is None or len(raw) < 24:
                 continue
-            # 'comm' / 'wasde' carry a commodity name in `key`; we want the
-            # same transform regardless of which commodity, so collapse those
-            # to a key-less form ('comm_' / 'wasde_'). Other kinds keep the
+            # 'comm' / 'wasde' / 'climate' carry an identifier in `key` that
+            # doesn't change the transform semantics — same treatment for all
+            # commodities / index names. Collapse to a key-less form
+            # ('comm_' / 'wasde_' / 'climate_'). Other kinds keep the
             # full per-series transform mapping (e.g. fred_DTWEXBGS).
-            if kind in ('comm', 'wasde'):
+            if kind in ('comm', 'wasde', 'climate'):
                 transform_key = f'{kind}_'
             else:
                 transform_key = f'{kind}_{key}'
