@@ -154,6 +154,15 @@ def meta_for_path(path: str) -> dict:
             "og_url": path,
         }
 
+    if path.startswith("/options-model"):
+        return {
+            **base,
+            "og_title": "Equity Vol & Options Model — Parra Macro",
+            "og_description": "Random-walk and GARCH simulation for high-volatility single names. Direction probabilities, strike-by-strike model vs market odds, and option structures ranked on expected value with a walk-forward calibration test.",
+            "og_image": "/og/preview.png?chart=options-model",
+            "og_url": path,
+        }
+
     if path.startswith("/models"):
         return {
             **base,

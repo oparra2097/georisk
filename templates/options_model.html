@@ -1,0 +1,429 @@
+{% extends "base.html" %}
+{% block title %}Equity Vol &amp; Options Model — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/options_model.css?v=1">
+{% endblock %}
+
+{% block content %}
+<div class="om-page" id="om-page">
+
+  <!-- ── Header ─────────────────────────────────────────────── -->
+  <section class="om-header">
+    <div class="om-header-left">
+      <span class="om-eyebrow">Parra Macro · Equity Volatility</span>
+      <h1 class="om-title">Random-Walk Options Model <span class="om-ticker-badge" id="om-ticker-badge">TSEM</span></h1>
+      <p class="om-sub">
+        Simulate the stock forward, read the <b>distribution</b> rather than a price target, and
+        compare it to what the option chain is charging. Built for high-volatility names where the
+        move is large, the direction is a coin flip, and the money is in pricing the <b>range</b>.
+      </p>
+    </div>
+    <div class="om-header-actions">
+      <form class="om-ticker-form" id="om-ticker-form" autocomplete="off">
+        <input type="text" id="om-ticker-input" class="om-input" maxlength="12"
+               placeholder="Ticker" aria-label="Ticker symbol">
+        <button type="submit" class="om-btn om-btn-primary">Run</button>
+      </form>
+      <a href="#" class="om-btn om-btn-ghost" id="om-export" title="Download the full workbook">Export</a>
+      <button id="om-refresh" class="om-btn om-btn-ghost" title="Drop the cache and re-fetch">Refresh</button>
+      <span class="om-updated" id="om-updated">—</span>
+    </div>
+  </section>
+
+  <div class="om-presets" id="om-presets"></div>
+
+  <!-- ── How to read this ───────────────────────────────────── -->
+  <details class="om-guide" id="om-guide">
+    <summary>
+      <span class="om-guide-q">?</span>
+      <span>New here? <b>How this model works</b> — and the one thing it will not do for you</span>
+      <span class="om-guide-chev">▾</span>
+    </summary>
+    <div class="om-guide-body">
+      <div class="om-guide-grid">
+        <div class="om-guide-card">
+          <h4><span class="om-dot om-dot-walk"></span>The random walk</h4>
+          <p>Tomorrow's price is today's price times a random shock. We estimate how <b>big</b> those
+          shocks are (volatility), draw thousands of paths, and keep the whole distribution of where
+          the stock lands. Four engines disagree on purpose — the gap between them is the model risk.</p>
+        </div>
+        <div class="om-guide-card">
+          <h4><span class="om-dot om-dot-dir"></span>Direction probability</h4>
+          <p>A random walk says P(up) is <i>near</i> 50% — and on a high-vol name it is reliably a
+          little <b>under</b>, because volatility drags the median below the mean. That is arithmetic,
+          not a forecast. Anyone selling you a directional edge from a random walk is selling noise.</p>
+        </div>
+        <div class="om-guide-card">
+          <h4><span class="om-dot om-dot-vol"></span>Where the edge actually is</h4>
+          <p>Volatility <i>is</i> forecastable — the backtest at the bottom of this page measures how
+          well. When the market's implied vol sits above the model's forecast you are paid to sell
+          the range; when it sits below, you buy it. That is the trade this page is built to find.</p>
+        </div>
+      </div>
+      <p class="om-guide-foot">
+        <b>Read the calibration section before sizing anything.</b> Every probability here is only as
+        good as the volatility forecast behind it, and the walk-forward test reports that error in
+        vol points. Each structure is re-scored at that error in both directions — a trade that only
+        works if the forecast is right is not an edge, it is leverage on an opinion.
+      </p>
+    </div>
+  </details>
+
+  <!-- ── Controls ───────────────────────────────────────────── -->
+  <section class="om-controls" id="om-controls">
+    <div class="om-control">
+      <label for="om-engine">Engine</label>
+      <select id="om-engine" class="om-select">
+        <option value="garch_t">GARCH(1,1)-t — clustering + fat tails</option>
+        <option value="student_t">Student-t — fat tails, constant vol</option>
+        <option value="gbm">Gaussian GBM — the textbook walk</option>
+        <option value="bootstrap">Block bootstrap — the stock's own history</option>
+      </select>
+    </div>
+    <div class="om-control">
+      <label for="om-horizon">Horizon</label>
+      <select id="om-horizon" class="om-select">
+        <option value="5">1 week (5d)</option>
+        <option value="10">2 weeks (10d)</option>
+        <option value="21" selected>1 month (21d)</option>
+        <option value="42">2 months (42d)</option>
+        <option value="63">3 months (63d)</option>
+        <option value="126">6 months (126d)</option>
+      </select>
+    </div>
+    <div class="om-control">
+      <label for="om-drift">Drift</label>
+      <select id="om-drift" class="om-select">
+        <option value="risk_neutral">Risk-neutral (r − q)</option>
+        <option value="zero">Zero — pure coin flip</option>
+        <option value="historical">Historical, shrunk</option>
+        <option value="custom">My view…</option>
+      </select>
+    </div>
+    <div class="om-control om-control-custom" id="om-custom-wrap" hidden>
+      <label for="om-mu">Annual return view</label>
+      <input type="number" id="om-mu" class="om-input om-input-num" step="1" value="0"
+             aria-label="Expected annual return, percent"> <span class="om-unit">%</span>
+    </div>
+    <div class="om-control">
+      <label for="om-paths">Paths</label>
+      <select id="om-paths" class="om-select">
+        <option value="10000">10,000</option>
+        <option value="20000" selected>20,000</option>
+        <option value="50000">50,000</option>
+      </select>
+    </div>
+    <div class="om-control-note" id="om-drift-note"></div>
+  </section>
+
+  <!-- ── Sticky jump-nav ────────────────────────────────────── -->
+  <nav class="om-jump" id="om-jump">
+    <a href="#sec-direction" class="om-jump-link active">Direction</a>
+    <a href="#sec-dist" class="om-jump-link">Distribution</a>
+    <a href="#sec-vol" class="om-jump-link">Volatility</a>
+    <a href="#sec-chain" class="om-jump-link">Implied vs model</a>
+    <a href="#sec-trades" class="om-jump-link">Trade screen</a>
+    <a href="#sec-strikes" class="om-jump-link">Strike odds</a>
+    <a href="#sec-calib" class="om-jump-link">Calibration</a>
+  </nav>
+
+  <!-- ── KPI strip + narrative ──────────────────────────────── -->
+  <section class="om-backdrop">
+    <div class="om-kpis" id="om-kpis"></div>
+    <p class="om-narrative" id="om-narrative">Loading…</p>
+  </section>
+
+  <!-- ── Direction ──────────────────────────────────────────── -->
+  <section class="om-section" id="sec-direction">
+    <div class="om-section-head">
+      <div>
+        <h2>Direction probability</h2>
+        <p class="om-note">
+          P(up) from the simulated terminal distribution at each horizon. The
+          <b>variance drag</b> column is the whole story: half the variance is subtracted from the
+          median every period, so a driftless high-vol stock finishes below its start price
+          <i>more often than not</i> while still having a positive expected value. That asymmetry —
+          not a view — is what tilts these numbers off 50%.
+        </p>
+      </div>
+    </div>
+    <div class="om-split">
+      <div class="om-table-wrap">
+        <table class="om-table" id="om-direction">
+          <thead>
+            <tr>
+              <th>Horizon</th>
+              <th class="num">Model vol</th>
+              <th class="num">P(up)</th>
+              <th class="num">1σ move</th>
+              <th class="num">68% range</th>
+              <th class="num" title="Half-variance drag on the median">Drag</th>
+              <th class="num" title="10th to 90th percentile of the terminal price">10–90%</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="om-chart-box">
+        <h3 class="om-chart-title">Simulated cone — <span id="om-cone-label">—</span></h3>
+        <div class="om-canvas-wrap"><canvas id="om-cone"></canvas></div>
+      </div>
+    </div>
+    <div class="om-engine-strip" id="om-engines"></div>
+  </section>
+
+  <!-- ── Distribution ───────────────────────────────────────── -->
+  <section class="om-section" id="sec-dist">
+    <div class="om-section-head">
+      <div>
+        <h2>Terminal distribution</h2>
+        <p class="om-note">
+          Where the simulation lands at the horizon. The <b>touch</b> columns matter more than they
+          look: an option position is rarely held to expiry, and the chance of the stock <i>trading
+          through</i> a level is much higher than the chance of it <i>closing</i> beyond it.
+        </p>
+      </div>
+    </div>
+    <div class="om-split">
+      <div class="om-chart-box">
+        <div class="om-canvas-wrap"><canvas id="om-hist"></canvas></div>
+      </div>
+      <div class="om-table-wrap">
+        <table class="om-table om-compact" id="om-moves">
+          <thead>
+            <tr>
+              <th>Move</th><th class="num">Up level</th><th class="num">P(close above)</th>
+              <th class="num">P(touch)</th><th class="num">Down level</th>
+              <th class="num">P(close below)</th><th class="num">P(touch)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="om-note om-mt" id="om-tail-note"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Volatility ─────────────────────────────────────────── -->
+  <section class="om-section" id="sec-vol">
+    <div class="om-section-head">
+      <div>
+        <h2>Volatility</h2>
+        <p class="om-note">
+          Six estimators of the same quantity. They differ because they use different information:
+          close-to-close ignores the intraday range, <b>Parkinson</b> uses the range but misses
+          overnight gaps, and <b>Yang-Zhang</b> catches both — which is why it is the one to trust on
+          a name that moves on earnings gaps.
+        </p>
+      </div>
+    </div>
+    <div class="om-split">
+      <div class="om-table-wrap">
+        <table class="om-table om-compact" id="om-vol-table">
+          <thead><tr><th>Estimator</th><th class="num">Annualized</th><th>Reads</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="om-garch" id="om-garch"></div>
+      </div>
+      <div class="om-chart-box">
+        <h3 class="om-chart-title">Vol term structure — GARCH forecast vs realized cone vs implied</h3>
+        <div class="om-canvas-wrap"><canvas id="om-term"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Implied vs model ───────────────────────────────────── -->
+  <section class="om-section" id="sec-chain">
+    <div class="om-section-head">
+      <div>
+        <h2>Implied vs model volatility <span class="om-tag om-tag-vrp">the actual edge</span></h2>
+        <p class="om-note">
+          <b>VRP</b> = implied − model forecast, in vol points. Positive means the market charges more
+          for the range than the model expects it to move, which is the premium-selling case; negative
+          favours owning gamma. <b>Skew</b> is the 25-delta risk reversal (put IV over call IV) — on
+          equities it is almost always positive, so a positive number is not a signal by itself,
+          only an unusually large one is.
+        </p>
+      </div>
+    </div>
+    <div class="om-split">
+      <div class="om-table-wrap">
+        <table class="om-table om-compact" id="om-chain">
+          <thead>
+            <tr>
+              <th>Expiry</th><th class="num">DTE</th><th class="num">ATM IV</th>
+              <th class="num">Model</th><th class="num">VRP</th><th class="num">Skew 25Δ</th>
+              <th class="num">Implied move</th><th class="num">Model move</th><th>Read</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="om-chart-box">
+        <h3 class="om-chart-title">Volatility smile — <span id="om-smile-label">—</span></h3>
+        <div class="om-canvas-wrap"><canvas id="om-smile"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Trade screen ───────────────────────────────────────── -->
+  <section class="om-section" id="sec-trades">
+    <div class="om-section-head">
+      <div>
+        <h2>Trade screen</h2>
+        <p class="om-note">
+          Every structure priced at the chain's own quotes and scored against the simulated
+          distribution. <b>EV</b> is per contract and discounted, so a trade priced exactly at the
+          model's distribution scores zero. <b>Vol−/Vol+</b> re-score it with the vol forecast wrong
+          by <span id="om-stress-pts">—</span> in each direction, which is how wrong this model has
+          actually been out of sample. A structure that fails that test is filtered out of the ranked
+          view no matter how good its EV looks.
+        </p>
+      </div>
+      <div class="om-toggle-group" role="tablist">
+        <button class="om-toggle active" data-view="ranked">Survives the stress</button>
+        <button class="om-toggle" data-view="all">Everything scored</button>
+      </div>
+    </div>
+    <div class="om-table-wrap">
+      <table class="om-table om-trades" id="om-trades">
+        <thead>
+          <tr>
+            <th class="om-sortable" data-sort="name">Structure</th>
+            <th>Legs</th>
+            <th class="num om-sortable" data-sort="dte">DTE</th>
+            <th class="num om-sortable" data-sort="net_debit" title="Positive = you pay, negative = you receive">Debit</th>
+            <th class="num om-sortable" data-sort="ev">EV</th>
+            <th class="num" title="EV if the vol forecast is too high by the model's own error">Vol−</th>
+            <th class="num" title="EV if the vol forecast is too low by the model's own error">Vol+</th>
+            <th class="num om-sortable" data-sort="pop">POP</th>
+            <th class="num om-sortable" data-sort="ev_on_capital">EV/cap</th>
+            <th class="num" title="Growth-optimal fraction — a ceiling, not a recommendation">Kelly</th>
+            <th class="num">Δ</th>
+            <th class="num">Vega</th>
+            <th class="num">Θ/day</th>
+            <th class="num">Max loss</th>
+            <th>Quotes</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="om-method" id="om-trades-note"></p>
+  </section>
+
+  <!-- ── Strike odds ────────────────────────────────────────── -->
+  <section class="om-section" id="sec-strikes">
+    <div class="om-section-head">
+      <div>
+        <h2>Strike odds — model vs market</h2>
+        <p class="om-note">
+          <b>N(d2)</b> is the market's risk-neutral probability of finishing in the money: a price
+          expressed as a probability, not a forecast. The model column is the real-world probability
+          of the same event. A gap on <i>both</i> wings is the variance risk premium — the market's
+          charge for bearing the move — and is expected, not free money. A gap on only one wing is
+          where to look.
+        </p>
+      </div>
+      <div class="om-toggle-group" role="tablist">
+        <button class="om-toggle active" data-strike="call">Calls</button>
+        <button class="om-toggle" data-strike="put">Puts</button>
+      </div>
+    </div>
+    <div class="om-table-wrap">
+      <table class="om-table om-compact" id="om-strikes">
+        <thead>
+          <tr>
+            <th>Expiry</th><th class="num">Strike</th><th class="num">Moneyness</th>
+            <th class="num">IV</th><th class="num">Δ</th><th class="num">Mid</th>
+            <th class="num">P(ITM) market</th><th class="num">P(ITM) model</th>
+            <th class="num">Edge</th><th class="num">Model price</th><th class="num">OI</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Calibration ────────────────────────────────────────── -->
+  <section class="om-section" id="sec-calib">
+    <div class="om-section-head">
+      <div>
+        <h2>Does it work? <span class="om-tag om-tag-calib">walk-forward</span></h2>
+        <p class="om-note">
+          Every estimate below was made using only data available at the time. Three questions:
+          can it call direction, can it forecast volatility, and is the whole distribution the right
+          shape? The third is the one that decides whether the strike probabilities above can be
+          taken at face value.
+        </p>
+      </div>
+    </div>
+    <div class="om-calib-grid">
+      <div class="om-calib-card">
+        <h3>Direction — Brier score</h3>
+        <div class="om-calib-body" id="om-calib-direction"></div>
+        <p class="om-calib-foot">Lower is better. A coin flip scores 0.250; beating it is the only evidence that direction is forecastable at all.</p>
+      </div>
+      <div class="om-calib-card">
+        <h3>Volatility — forecast error</h3>
+        <div class="om-calib-body" id="om-calib-vol"></div>
+        <p class="om-calib-foot">Mincer-Zarnowitz: a perfect forecast has slope 1 and intercept 0. Slope well below 1 means the forecast over-extrapolates spikes.</p>
+      </div>
+      <div class="om-calib-card">
+        <h3>Distribution — interval coverage</h3>
+        <div class="om-calib-body" id="om-calib-cover"></div>
+        <p class="om-calib-foot">Empirical below nominal means the wings are too thin, so tail strikes get reached more often than the model says.</p>
+      </div>
+    </div>
+    <p class="om-verdict" id="om-verdict"></p>
+  </section>
+
+  <!-- ── Method ─────────────────────────────────────────────── -->
+  <section class="om-section om-method-section">
+    <h2>Method &amp; limits</h2>
+    <div class="om-method-grid">
+      <div>
+        <h4>What is estimated</h4>
+        <p>Volatility from six realized estimators plus a GARCH(1,1) fitted by Gaussian quasi-MLE with
+        variance targeting; tail thickness as a Student-t df on the standardized residuals. The GARCH
+        gives the term structure — today's vol decaying toward its long-run level at the fitted
+        half-life — which is the vol each expiry is actually priced off.</p>
+      </div>
+      <div>
+        <h4>How paths are drawn</h4>
+        <p>Daily steps in log space, with an exact Brownian-bridge correction so the running high and
+        low reflect intraday extremes rather than just the closes. Simulation horizon and pricing year
+        fraction both use trading days over 252, so simulated and Black-Scholes variance span exactly
+        the same interval.</p>
+      </div>
+      <div>
+        <h4>What the chain contributes</h4>
+        <p>Implied vols are re-solved from the current mid quote rather than taken from the feed,
+        which computes them off the last trade. Out-of-the-money quotes only build the smile. Every
+        row carries its quote quality, and structures whose legs have no bid or a crossed market are
+        never ranked.</p>
+      </div>
+      <div>
+        <h4>What this cannot do</h4>
+        <p>It cannot predict direction — the backtest is there to prove it rather than assert it. It
+        does not model earnings jumps as scheduled events, so a simulation spanning an earnings date
+        understates the gap. It has no order book, so fills, assignment and early exercise on American
+        options are outside it. Positive EV means the model disagrees with the market; the market is
+        not automatically the one that is wrong.</p>
+      </div>
+    </div>
+    <p class="om-disclaimer">
+      Research output, not investment advice. Options carry the risk of total loss of premium, and
+      the short structures shown here can lose more than the capital committed.
+    </p>
+  </section>
+
+  <p class="om-source" id="om-source">—</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="/static/js/options_model.js?v=1"></script>
+{% endblock %}

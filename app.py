@@ -70,6 +70,7 @@ from backend.data_centers.routes import data_centers_bp
 from backend.data_centers.securitizations.routes import securitizations_bp
 from backend.data_centers.private_credit.routes import private_credit_bp
 from backend.credit_default.routes import credit_default_bp
+from backend.options_model.routes import options_model_bp
 
 
 def social_or_login_required(view):
@@ -130,6 +131,7 @@ def create_app():
     app.register_blueprint(securitizations_bp, url_prefix='/api/securitizations')
     app.register_blueprint(private_credit_bp, url_prefix='/api/private-credit')
     app.register_blueprint(credit_default_bp, url_prefix='/api/credit-default')
+    app.register_blueprint(options_model_bp, url_prefix='/api/options-model')
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(sharing_bp)  # /og/* routes (public, no auth)
 
@@ -205,6 +207,11 @@ def create_app():
     @app.route('/em-fx-rates')
     def em_fx_rates():
         return render_template('em_fx_rates.html', active_page='em-fx-rates')
+
+    @app.route('/options-model')
+    @social_or_login_required
+    def options_model():
+        return render_template('options_model.html', active_page='options-model')
 
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
