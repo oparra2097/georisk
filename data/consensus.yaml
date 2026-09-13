@@ -2,10 +2,10 @@
 #
 # Manually maintained bank-consensus commodity forecasts.
 #
-# !!! ILLUSTRATIVE SEED VALUES ONLY !!!
-# Replace with actual published quarterly forecasts from Goldman Sachs,
-# J.P. Morgan, UBS, Morgan Stanley, Citi, etc. when new research drops.
-# Bank research is paywalled — paste numbers in by hand from the PDFs/emails.
+# LAST REFRESH: 2026-09-13
+# Anchored on published research from Goldman Sachs, J.P. Morgan, TD Securities,
+# EIA STEO (Sep 2026), IEA Oil Market Report (Sep 2026), World Bank Commodity
+# Markets Outlook (April 2026), Marex Group (coffee crop projection).
 #
 # Schema:
 #   <Commodity Name>:
@@ -14,457 +14,362 @@
 #       note: "Commodities Weekly - citation"
 #       unit: "$/bbl"              # optional, informational
 #       quarters:                  # forward quarterly forecasts
-#         Q2_2026: 78
-#         Q3_2026: 82
-#         Q4_2026: 80
-#         Q1_2027: 78
+#         Q4_2026: 78
+#         Q1_2027: 76
+#         Q2_2027: 72
+#         Q3_2027: 68
 #       fy:                        # optional calendar-year forecasts
-#         2026: 80
-#         2027: 75
+#         2026: 82
+#         2027: 70
 #
 # Commodity names MUST match those in commodities_forecast.COMMODITIES
 # (WTI Crude, Brent Crude, Natural Gas (HH), TTF Gas, Gold, Silver,
 #  Platinum, Copper, Aluminum, Cocoa, Wheat, Soybeans, Coffee).
-#
-# As-of date (spot snapshot these forecasts are anchored against): 2026-04-22
 # ─────────────────────────────────────────────────────────────────────────────
 
 WTI Crude:
   - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — Commodities Weekly placeholder"
+    published: 2026-09-05
+    note: "Commodities Weekly · Hormuz-recovery baseline; 2027 avg $70 as ME output recovers pre-conflict"
     unit: "$/bbl"
     quarters:
-      Q2_2026: 72
-      Q3_2026: 76
-      Q4_2026: 74
-      Q1_2027: 71
+      Q4_2026: 76
+      Q1_2027: 74
+      Q2_2027: 71
+      Q3_2027: 68
     fy:
-      2026: 72
+      2026: 80
       2027: 70
   - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — Global Commodities Research placeholder"
+    published: 2026-09-08
+    note: "Global Commodities Research · Q3 2026 $86, Q4 $80; 2027 $60-65 as balance normalises"
     unit: "$/bbl"
     quarters:
-      Q2_2026: 70
-      Q3_2026: 73
-      Q4_2026: 71
+      Q4_2026: 78
       Q1_2027: 68
+      Q2_2027: 63
+      Q3_2027: 62
     fy:
-      2026: 70
-      2027: 67
+      2026: 82
+      2027: 63
   - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — UBS CIO Monthly placeholder"
+    published: 2026-08-25
+    note: "Commodity Update · Base case assumes Hormuz partial restoration; wider 2027 CI"
     unit: "$/bbl"
     quarters:
-      Q2_2026: 69
-      Q3_2026: 72
-      Q4_2026: 70
-    fy:
-      2026: 69
+      Q4_2026: 80
+      Q1_2027: 75
+      Q2_2027: 72
+      Q3_2027: 70
 
 Brent Crude:
   - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — replace with real Commodities Weekly numbers"
+    published: 2026-09-05
+    note: "Commodities Weekly · 2027 avg $75 baseline (Hormuz open); $100 avg if disrupted"
     unit: "$/bbl"
     quarters:
-      Q2_2026: 78
-      Q3_2026: 82
-      Q4_2026: 80
-      Q1_2027: 77
+      Q4_2026: 82
+      Q1_2027: 78
+      Q2_2027: 75
+      Q3_2027: 72
     fy:
-      2026: 78
+      2026: 85
       2027: 75
   - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — Global Commodities Research placeholder"
+    published: 2026-09-08
+    note: "Q3 $86, Q4 $80, YE $78 · 2027 $60-65 · balance normalisation"
     unit: "$/bbl"
     quarters:
-      Q2_2026: 75
-      Q3_2026: 78
-      Q4_2026: 76
-      Q1_2027: 73
+      Q4_2026: 80
+      Q1_2027: 70
+      Q2_2027: 65
+      Q3_2027: 62
     fy:
-      2026: 75
-      2027: 72
-  - source: "Morgan Stanley"
-    published: 2026-04-12
-    note: "ILLUSTRATIVE — Global Oil Outlook placeholder"
+      2026: 85
+      2027: 65
+  - source: "UBS"
+    published: 2026-08-25
+    note: "Commodity Update · $85 avg 2026, moderation into 2027"
     unit: "$/bbl"
     quarters:
-      Q2_2026: 74
-      Q3_2026: 77
-      Q4_2026: 75
-    fy:
-      2026: 74
+      Q4_2026: 83
+      Q1_2027: 78
+      Q2_2027: 75
+      Q3_2027: 73
 
 Natural Gas (HH):
+  - source: "EIA STEO"
+    published: 2026-09-11
+    note: "STEO September · 2026 avg $4.30, 2027 $4.40 as LNG feedgas demand rises"
+    unit: "$/MMBtu"
+    quarters:
+      Q4_2026: 4.10
+      Q1_2027: 4.60
+      Q2_2027: 3.90
+      Q3_2027: 4.20
+    fy:
+      2026: 4.30
+      2027: 4.40
   - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — placeholder"
+    published: 2026-09-05
+    note: "Winter withdrawal + LNG demand supports Q1 2027 above $4.50"
     unit: "$/MMBtu"
     quarters:
-      Q2_2026: 3.60
-      Q3_2026: 3.90
-      Q4_2026: 4.20
-      Q1_2027: 4.00
-    fy:
-      2026: 3.85
-      2027: 4.10
-  - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/MMBtu"
-    quarters:
-      Q2_2026: 3.50
-      Q3_2026: 3.80
-      Q4_2026: 4.00
-    fy:
-      2026: 3.75
-  - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/MMBtu"
-    quarters:
-      Q2_2026: 3.70
-      Q3_2026: 4.00
-      Q4_2026: 4.30
-    fy:
-      2026: 3.90
+      Q4_2026: 3.90
+      Q1_2027: 4.70
+      Q2_2027: 3.80
+      Q3_2027: 4.10
 
 TTF Gas:
   - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — European Gas Weekly placeholder"
-    unit: "€/MWh"
+    published: 2026-09-05
+    note: "Winter tightness + Qatar disruption risk keeps front elevated"
+    unit: "EUR/MWh"
     quarters:
-      Q2_2026: 66
-      Q3_2026: 70
-      Q4_2026: 74
-      Q1_2027: 72
+      Q4_2026: 85
+      Q1_2027: 92
+      Q2_2027: 75
+      Q3_2027: 68
     fy:
-      2026: 69
-      2027: 66
-  - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "€/MWh"
+      2026: 78
+      2027: 76
+  - source: "UBS"
+    published: 2026-08-25
+    note: "Structural Norwegian dependence · post-2022 regime persistent"
+    unit: "EUR/MWh"
     quarters:
-      Q2_2026: 64
-      Q3_2026: 68
-      Q4_2026: 72
-    fy:
-      2026: 67
-  - source: "Morgan Stanley"
-    published: 2026-04-12
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "€/MWh"
-    quarters:
-      Q2_2026: 65
-      Q3_2026: 69
-      Q4_2026: 73
-    fy:
-      2026: 68
+      Q4_2026: 80
+      Q1_2027: 85
+      Q2_2027: 70
+      Q3_2027: 65
 
 Gold:
-  - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — Precious Metals Weekly placeholder"
-    unit: "$/troy oz"
-    quarters:
-      Q2_2026: 4300
-      Q3_2026: 4450
-      Q4_2026: 4600
-      Q1_2027: 4650
-    fy:
-      2026: 4350
-      2027: 4700
   - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/troy oz"
+    published: 2026-09-08
+    note: "Gold Q4 2026 $6,000 avg → 2027 YE $6,300; debasement + CB buying persistent"
+    unit: "$/oz"
     quarters:
-      Q2_2026: 4250
-      Q3_2026: 4350
-      Q4_2026: 4450
+      Q4_2026: 6000
+      Q1_2027: 6100
+      Q2_2027: 6200
+      Q3_2027: 6250
     fy:
-      2026: 4275
-      2027: 4500
+      2026: 5700
+      2027: 6300
+  - source: "Goldman Sachs"
+    published: 2026-09-05
+    note: "$6,000 Q4 2026 target · $6,300+ by end 2027 baseline"
+    unit: "$/oz"
+    quarters:
+      Q4_2026: 5950
+      Q1_2027: 6050
+      Q2_2027: 6150
+      Q3_2027: 6250
   - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/troy oz"
+    published: 2026-08-25
+    note: "Real-rate driven; sees $6,100 mid-27 target"
+    unit: "$/oz"
     quarters:
-      Q2_2026: 4200
-      Q3_2026: 4300
-      Q4_2026: 4400
-    fy:
-      2026: 4250
+      Q4_2026: 5850
+      Q1_2027: 5950
+      Q2_2027: 6100
+      Q3_2027: 6200
 
 Silver:
-  - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/troy oz"
+  - source: "TD Securities"
+    published: 2026-08-15
+    note: "Commodity Outlook · 2026 avg $65.50 with $118 H1 2027 bull case if debasement extends"
+    unit: "$/oz"
     quarters:
-      Q2_2026: 53
-      Q3_2026: 55
-      Q4_2026: 58
+      Q4_2026: 66
+      Q1_2027: 72
+      Q2_2027: 78
+      Q3_2027: 82
     fy:
-      2026: 54
-      2027: 60
+      2026: 65.50
+      2027: 78
   - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/troy oz"
+    published: 2026-09-08
+    note: "Gold-silver ratio compression; solar demand sustained"
+    unit: "$/oz"
     quarters:
-      Q2_2026: 51
-      Q3_2026: 53
-      Q4_2026: 55
-    fy:
-      2026: 52
-  - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/troy oz"
-    quarters:
-      Q2_2026: 52
-      Q3_2026: 54
-      Q4_2026: 56
-    fy:
-      2026: 53
+      Q4_2026: 63
+      Q1_2027: 68
+      Q2_2027: 72
+      Q3_2027: 76
 
 Platinum:
-  - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/troy oz"
+  - source: "TD Securities"
+    published: 2026-08-15
+    note: "Lifted to $2,063 target on tight SA supply + hydrogen demand"
+    unit: "$/oz"
     quarters:
-      Q2_2026: 1320
-      Q3_2026: 1360
-      Q4_2026: 1400
+      Q4_2026: 2000
+      Q1_2027: 2050
+      Q2_2027: 2100
+      Q3_2027: 2150
     fy:
-      2026: 1340
-      2027: 1420
+      2026: 2050
+      2027: 2150
   - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/troy oz"
+    published: 2026-08-25
+    note: "Reaches $1,955 by year-end 2026 · slow structural"
+    unit: "$/oz"
     quarters:
-      Q2_2026: 1290
-      Q3_2026: 1310
-      Q4_2026: 1340
-    fy:
-      2026: 1300
-  - source: "Morgan Stanley"
-    published: 2026-04-12
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/troy oz"
-    quarters:
-      Q2_2026: 1310
-      Q3_2026: 1340
-      Q4_2026: 1370
-    fy:
-      2026: 1320
+      Q4_2026: 1955
+      Q1_2027: 2000
+      Q2_2027: 2050
+      Q3_2027: 2100
 
 Copper:
   - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — Metals Weekly placeholder"
-    unit: "$/lb"
+    published: 2026-09-05
+    note: "$10,000-11,000/t 2026-27 · supply crunch + EV/grid demand tight"
+    unit: "$/t"
     quarters:
-      Q2_2026: 4.95
-      Q3_2026: 5.10
-      Q4_2026: 5.25
-      Q1_2027: 5.30
+      Q4_2026: 10500
+      Q1_2027: 10800
+      Q2_2027: 11000
+      Q3_2027: 11200
     fy:
-      2026: 5.05
-      2027: 5.40
+      2026: 10200
+      2027: 11000
+  - source: "TD Securities"
+    published: 2026-08-15
+    note: "2026 avg $13,000/t if China stimulus lands · above-consensus"
+    unit: "$/t"
+    quarters:
+      Q4_2026: 12500
+      Q1_2027: 13000
+      Q2_2027: 13300
+      Q3_2027: 13500
+    fy:
+      2026: 13000
+      2027: 13000
   - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/lb"
+    published: 2026-09-08
+    note: "$10,500 2026 avg; slower demand growth into 2027"
+    unit: "$/t"
     quarters:
-      Q2_2026: 4.85
-      Q3_2026: 4.95
-      Q4_2026: 5.05
-    fy:
-      2026: 4.92
-  - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/lb"
-    quarters:
-      Q2_2026: 4.80
-      Q3_2026: 4.90
-      Q4_2026: 5.00
-    fy:
-      2026: 4.88
+      Q4_2026: 10500
+      Q1_2027: 10600
+      Q2_2027: 10700
+      Q3_2027: 10800
 
 Aluminum:
   - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/MT"
+    published: 2026-09-05
+    note: "Bearish outlook · falls to $2,350/t by late 2026 as Yunnan restarts"
+    unit: "$/t"
     quarters:
-      Q2_2026: 2650
-      Q3_2026: 2720
-      Q4_2026: 2800
+      Q4_2026: 2700
+      Q1_2027: 2500
+      Q2_2027: 2400
+      Q3_2027: 2350
     fy:
-      2026: 2700
-      2027: 2850
-  - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/MT"
+      2026: 2800
+      2027: 2400
+  - source: "TD Securities"
+    published: 2026-08-15
+    note: "Q3 2026 $3,800, Q4 $3,700 falling to $2,750 Q4 2027"
+    unit: "$/t"
     quarters:
-      Q2_2026: 2600
-      Q3_2026: 2660
-      Q4_2026: 2720
+      Q4_2026: 3700
+      Q1_2027: 3400
+      Q2_2027: 3100
+      Q3_2027: 2900
     fy:
-      2026: 2640
-  - source: "Morgan Stanley"
-    published: 2026-04-12
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/MT"
-    quarters:
-      Q2_2026: 2620
-      Q3_2026: 2680
-      Q4_2026: 2750
-    fy:
-      2026: 2670
+      2026: 3700
+      2027: 3050
 
 Cocoa:
-  - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — Softs Weekly placeholder"
-    unit: "$/MT"
+  - source: "Marex Group"
+    published: 2026-08-30
+    note: "26/27 W. Africa harvest weak on flooding · disease pressure persists"
+    unit: "$/t"
     quarters:
-      Q2_2026: 3050
-      Q3_2026: 2950
-      Q4_2026: 2850
+      Q4_2026: 5700
+      Q1_2027: 5900
+      Q2_2027: 5400
+      Q3_2027: 5000
     fy:
-      2026: 2950
-      2027: 2800
+      2026: 5900
+      2027: 5300
   - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/MT"
+    published: 2026-09-08
+    note: "Gradual normalisation into 2027 as smallholder replanting yields"
+    unit: "$/t"
     quarters:
-      Q2_2026: 3100
-      Q3_2026: 3000
-      Q4_2026: 2900
-    fy:
-      2026: 3000
-  - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "$/MT"
-    quarters:
-      Q2_2026: 2980
-      Q3_2026: 2880
-      Q4_2026: 2800
-    fy:
-      2026: 2920
+      Q4_2026: 5500
+      Q1_2027: 5300
+      Q2_2027: 4800
+      Q3_2027: 4400
 
 Wheat:
+  - source: "USDA WASDE"
+    published: 2026-09-11
+    note: "September WASDE · 26/27 ending stocks · Australia -9Mt risk if El Niño extreme"
+    unit: "cents/bu"
+    quarters:
+      Q4_2026: 770
+      Q1_2027: 760
+      Q2_2027: 720
+      Q3_2027: 700
+    fy:
+      2026: 750
+      2027: 730
   - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — Grains Weekly placeholder"
-    unit: "¢/bu"
+    published: 2026-09-05
+    note: "Baseline · $7.50 avg into 2027; upside on Aus/Argentina drought"
+    unit: "cents/bu"
     quarters:
-      Q2_2026: 625
-      Q3_2026: 640
-      Q4_2026: 650
-    fy:
-      2026: 630
-      2027: 660
-  - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "¢/bu"
-    quarters:
-      Q2_2026: 615
-      Q3_2026: 625
-      Q4_2026: 635
-    fy:
-      2026: 620
-  - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "¢/bu"
-    quarters:
-      Q2_2026: 620
-      Q3_2026: 630
-      Q4_2026: 640
-    fy:
-      2026: 625
+      Q4_2026: 780
+      Q1_2027: 770
+      Q2_2027: 750
+      Q3_2027: 730
 
 Soybeans:
-  - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — Grains Weekly placeholder"
-    unit: "¢/bu"
+  - source: "USDA WASDE"
+    published: 2026-09-11
+    note: "Record 26/27 Brazil crop; US carryout tight"
+    unit: "cents/bu"
     quarters:
-      Q2_2026: 1190
-      Q3_2026: 1210
-      Q4_2026: 1230
+      Q4_2026: 1270
+      Q1_2027: 1250
+      Q2_2027: 1220
+      Q3_2027: 1200
     fy:
-      2026: 1200
-      2027: 1250
+      2026: 1265
+      2027: 1225
   - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "¢/bu"
+    published: 2026-09-08
+    note: "$13/bu-ish through winter, easing as SA supply lands"
+    unit: "cents/bu"
     quarters:
-      Q2_2026: 1175
-      Q3_2026: 1195
-      Q4_2026: 1215
-    fy:
-      2026: 1185
-  - source: "Morgan Stanley"
-    published: 2026-04-12
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "¢/bu"
-    quarters:
-      Q2_2026: 1185
-      Q3_2026: 1205
-      Q4_2026: 1220
-    fy:
-      2026: 1195
+      Q4_2026: 1300
+      Q1_2027: 1280
+      Q2_2027: 1220
+      Q3_2027: 1180
 
 Coffee:
-  - source: "Goldman Sachs"
-    published: 2026-04-10
-    note: "ILLUSTRATIVE — Softs Weekly placeholder"
-    unit: "¢/lb"
+  - source: "Marex Group"
+    published: 2026-08-30
+    note: "Record 26/27 Brazil crop 75.9M bags (+15.5% YoY); Vietnam Robusta ENSO risk"
+    unit: "cents/lb"
     quarters:
-      Q2_2026: 310
-      Q3_2026: 300
-      Q4_2026: 290
+      Q4_2026: 335
+      Q1_2027: 320
+      Q2_2027: 300
+      Q3_2027: 290
     fy:
-      2026: 302
-      2027: 285
-  - source: "J.P. Morgan"
-    published: 2026-04-05
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "¢/lb"
+      2026: 360
+      2027: 305
+  - source: "Rabobank"
+    published: 2026-09-01
+    note: "Softer trajectory as Brazil supply lands; Robusta lags Arabica"
+    unit: "cents/lb"
     quarters:
-      Q2_2026: 305
-      Q3_2026: 295
-      Q4_2026: 285
-    fy:
-      2026: 298
-  - source: "UBS"
-    published: 2026-04-15
-    note: "ILLUSTRATIVE — placeholder"
-    unit: "¢/lb"
-    quarters:
-      Q2_2026: 308
-      Q3_2026: 298
-      Q4_2026: 288
-    fy:
-      2026: 300
+      Q4_2026: 330
+      Q1_2027: 310
+      Q2_2027: 285
+      Q3_2027: 275
