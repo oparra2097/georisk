@@ -252,6 +252,79 @@ def _adjusted_shift(class_balance_log_odds: float, years_eq: int) -> float:
     return class_balance_log_odds * sens
 
 
+# ── Discounted-hazard multi-horizon transform (Tellimer PD deck) ─────────
+#
+# The Tellimer sovereign PD deck (Sep 2026) derives 3-year and 5-year PDs
+# from the fitted 1-year PD via a fixed-power transform:
+#
+#     PD(T) = 1 - (1 - PD_1y)^alpha_T
+#
+# where alpha_T < T. This encodes "default risk is front-loaded — if a
+# country hasn't defaulted quickly, its per-year conditional hazard
+# declines". A constant hazard (independence) would give alpha_T = T; the
+# discounted alphas below give roughly one-third of the compounded hazard
+# for the 3Y horizon and one-third for the 5Y horizon.
+#
+# The reference alphas were back-solved from monthly (PD1y, PD3y, PD5y)
+# figures in the Angola history sheet Tellimer distributed: three
+# distinct PD levels (Feb 2020 low, Jun 2020 mid, Jan 2021 high) all
+# gave alpha_3 ≈ 1.39 and alpha_5 ≈ 1.62. These stay constant here as
+# global defaults; a per-panel refit is exposed via
+# ``fit_hazard_alphas`` in fit.py once the historical panel is on disk.
+
+ALPHA_3Y = 1.39
+ALPHA_5Y = 1.62
+
+
+def derive_multi_horizon_pd(pd_1y: Optional[float],
+                            alpha_3: float = ALPHA_3Y,
+                            alpha_5: float = ALPHA_5Y) -> Dict[str, Optional[float]]:
+    """Return {'pd_1y', 'pd_3y', 'pd_5y'} from a 1-year PD via the
+    Tellimer discounted-hazard transform.
+
+    Guarantees monotonicity (pd_5y >= pd_3y >= pd_1y) as long as
+    alpha_5 > alpha_3 > 1. Returns None values on invalid input rather
+    than raising, so the dashboard never 500s on a missing/degenerate
+    upstream PD.
+    """
+    if pd_1y is None:
+        return {'pd_1y': None, 'pd_3y': None, 'pd_5y': None}
+    try:
+        p1 = float(pd_1y)
+    except (TypeError, ValueError):
+        return {'pd_1y': None, 'pd_3y': None, 'pd_5y': None}
+    if math.isnan(p1):
+        return {'pd_1y': None, 'pd_3y': None, 'pd_5y': None}
+    # Clamp to [0, 1) so log/exp stay finite.
+    p1 = max(0.0, min(0.999999, p1))
+    survival = 1.0 - p1
+    # (1 - p1)^alpha via math.pow, guarded for the p1==0 edge.
+    if survival == 0.0:
+        return {'pd_1y': 1.0, 'pd_3y': 1.0, 'pd_5y': 1.0}
+    pd_3y = 1.0 - math.pow(survival, max(1.0, alpha_3))
+    pd_5y = 1.0 - math.pow(survival, max(alpha_3, alpha_5))
+    return {'pd_1y': p1, 'pd_3y': pd_3y, 'pd_5y': pd_5y}
+
+
+def multi_horizon_thresholds() -> Dict[str, Dict[str, float]]:
+    """Tellimer's operational threshold ladder for the dashboard chart.
+
+    Each entry: ``{lower, upper, label}``. ``lower`` marks the start of
+    'informative' territory, ``upper`` the escalation to 'confirmation'.
+    Above 50% across all horizons is 'highly likely crisis'.
+    """
+    return {
+        '1y': {'lower': 0.40, 'upper': 0.50,
+               'label': 'Crisis confirmation'},
+        '3y': {'lower': 0.20, 'upper': 0.30,
+               'label': 'Medium-term stress'},
+        '5y': {'lower': 0.20, 'upper': 0.25,
+               'label': 'Structural fragility'},
+        'all': {'lower': 0.50, 'upper': 0.50,
+                'label': 'Highly likely crisis'},
+    }
+
+
 # Reserve-currency-status logit discount. The macro feature panel
 # (debt/GDP, fiscal balance, etc.) penalises USA / Japan / eurozone /
 # UK for elevated debt without crediting the structural funding
@@ -679,6 +752,29 @@ def score_panel(panel: Dict, horizon_years: int = 1,
             horizon_key = f'pd_{years_eq}y'
             if horizon_key in model_rating:
                 model_rating[horizon_key] = round(model_pd, 4)
+
+            # Tellimer discounted-hazard transform (deck §5): derive the
+            # OTHER two horizons from the fitted PD so the term
+            # structure is coherent (monotonic + front-loaded) instead
+            # of the flat bucket-table PDs that would otherwise fill
+            # pd_3y / pd_5y when we only fit at 1Y. Back to a 1Y PD via
+            # the inverse if we fit at a longer horizon.
+            if years_eq == 1:
+                p1 = model_pd
+            elif years_eq == 3:
+                p1 = 1.0 - math.pow(max(1e-9, 1.0 - model_pd), 1.0 / ALPHA_3Y)
+            elif years_eq == 5:
+                p1 = 1.0 - math.pow(max(1e-9, 1.0 - model_pd), 1.0 / ALPHA_5Y)
+            else:
+                p1 = None
+            if p1 is not None:
+                derived = derive_multi_horizon_pd(p1)
+                for k in ('pd_1y', 'pd_3y', 'pd_5y'):
+                    if derived.get(k) is not None and k in model_rating:
+                        model_rating[k] = round(derived[k], 4)
+                model_rating['multi_horizon_source'] = 'discounted_hazard'
+                model_rating['alpha_3'] = ALPHA_3Y
+                model_rating['alpha_5'] = ALPHA_5Y
 
         # Fresh-onset PD channel (Bloomberg / Moody's CreditEdge
         # convention: P(new default starts in next h years | currently

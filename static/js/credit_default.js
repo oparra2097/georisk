@@ -709,10 +709,30 @@
       ? Math.max(1, Math.round(rawHorizon / 4))
       : rawHorizon;
     const years = h.history.map((r) => r.year);
+    // Tellimer discounted-hazard payload: the API now returns pd_1y,
+    // pd_3y and pd_5y per row (derived from the fitted 1Y via the
+    // fixed-power transform). Fall back to model_pd if a legacy fit
+    // hasn't been re-scored yet.
+    const pd1 = h.history.map((r) => (r.pd_1y != null ? r.pd_1y * 100 : (r.model_pd != null && horizon === 1 ? r.model_pd * 100 : null)));
+    const pd3 = h.history.map((r) => (r.pd_3y != null ? r.pd_3y * 100 : null));
+    const pd5 = h.history.map((r) => (r.pd_5y != null ? r.pd_5y * 100 : null));
     const pd = h.history.map((r) => (r.model_pd != null ? r.model_pd * 100 : null));
     const composite = h.history.map((r) => (r.composite_score != null ? r.composite_score : null));
     const yMin = Math.min(...years);
     const yMax = Math.max(...years);
+
+    // Tellimer's operational threshold ladder (deck §10):
+    //   5Y >= 20-25% → structural fragility
+    //   3Y >= 20-30% → medium-term stress
+    //   1Y >= 40-50% → crisis confirmation
+    //   50% across all horizons → highly likely crisis
+    // The server returns these under h.thresholds so we don't hardcode.
+    const thresholds = h.thresholds || {
+      '1y': { lower: 0.40, upper: 0.50, label: 'Crisis confirmation' },
+      '3y': { lower: 0.20, upper: 0.30, label: 'Medium-term stress' },
+      '5y': { lower: 0.20, upper: 0.25, label: 'Structural fragility' },
+    };
+    const activeThreshold = thresholds[`${horizon}y`] || thresholds['1y'];
 
     // Default-event spans → vertical red bands. We restrict to events
     // that count as a hard credit event in the model's binary target so
@@ -861,42 +881,118 @@
         ctx.restore();
       },
       afterDatasetsDraw(chart) {
-        // 3. Default-territory threshold line at 50% PD.
+        // Tellimer threshold band: shaded region between `lower` and
+        // `upper` of the ACTIVE horizon's operational threshold. Plus a
+        // solid line at 50% for the "highly likely crisis" cross-horizon
+        // marker. Bands are horizon-coloured so users can see at a glance
+        // which threshold class applies (5Y=blue, 3Y=amber, 1Y=red).
         const { ctx, chartArea, scales } = chart;
         if (!chartArea || !scales.y) return;
-        if (scales.y.max < DEFAULT_PD_THRESHOLD_PCT) return;
-        const y = scales.y.getPixelForValue(DEFAULT_PD_THRESHOLD_PCT);
-        if (y < chartArea.top || y > chartArea.bottom) return;
-        ctx.save();
-        ctx.strokeStyle = 'rgba(220, 38, 38, 0.55)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(chartArea.left, y);
-        ctx.lineTo(chartArea.right, y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(220, 38, 38, 0.85)';
-        ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(`Default threshold (${DEFAULT_PD_THRESHOLD_PCT}%)`, chartArea.left + 6, y - 2);
-        ctx.restore();
+        const bandColorByHorizon = { 1: 'rgba(220, 38, 38, 0.10)',
+                                     3: 'rgba(245, 158, 11, 0.10)',
+                                     5: 'rgba(59, 130, 246, 0.10)' };
+        const strokeByHorizon = { 1: 'rgba(220, 38, 38, 0.55)',
+                                  3: 'rgba(245, 158, 11, 0.55)',
+                                  5: 'rgba(59, 130, 246, 0.55)' };
+        const lowerPct = (activeThreshold.lower || 0) * 100;
+        const upperPct = (activeThreshold.upper || 0) * 100;
+        if (upperPct > 0 && upperPct <= scales.y.max) {
+          const yLo = scales.y.getPixelForValue(lowerPct);
+          const yUp = scales.y.getPixelForValue(upperPct);
+          const top = Math.min(yLo, yUp);
+          const bot = Math.max(yLo, yUp);
+          ctx.save();
+          ctx.fillStyle = bandColorByHorizon[horizon] || 'rgba(59, 130, 246, 0.10)';
+          ctx.fillRect(chartArea.left, top, chartArea.right - chartArea.left, bot - top);
+          // Band label — right-aligned so it stays away from the event
+          // bands and the legend at bottom.
+          ctx.fillStyle = strokeByHorizon[horizon] || 'rgba(59, 130, 246, 0.85)';
+          ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+          ctx.textBaseline = 'bottom';
+          ctx.textAlign = 'right';
+          ctx.fillText(
+            `${activeThreshold.label || 'threshold'} · ${lowerPct.toFixed(0)}-${upperPct.toFixed(0)}%`,
+            chartArea.right - 6, top - 2,
+          );
+          ctx.textAlign = 'left';
+          ctx.restore();
+        }
+        // 50% cross-horizon "highly likely crisis" line, on top of the band.
+        if (50 < scales.y.max) {
+          const y = scales.y.getPixelForValue(50);
+          if (y >= chartArea.top && y <= chartArea.bottom) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(220, 38, 38, 0.75)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(chartArea.left, y);
+            ctx.lineTo(chartArea.right, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(220, 38, 38, 0.9)';
+            ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('Highly likely crisis (50%)', chartArea.left + 6, y - 2);
+            ctx.restore();
+          }
+        }
       },
     };
 
     if (historyChart) historyChart.destroy();
 
-    const datasets = [{
-      label: `Model PD ${horizon}y (%)`,
-      data: pd,
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59, 130, 246, 0.18)',
-      tension: 0.2,
-      spanGaps: true,
-      pointRadius: 2,
-      fill: true,
-      yAxisID: 'y',
-    }];
+    // Tellimer's layered warning view: show all three horizons at once
+    // so the term-structure progression (5Y structural → 3Y stress →
+    // 1Y imminent) is visible on one chart. The horizon toggle keeps
+    // control of which horizon's threshold band is highlighted.
+    const datasets = [];
+    if (pd1.some((v) => v != null)) {
+      datasets.push({
+        label: 'PD 1y (%)',
+        data: pd1,
+        borderColor: '#dc2626',   // red — imminent risk
+        backgroundColor: horizon === 1 ? 'rgba(220, 38, 38, 0.14)' : 'transparent',
+        borderWidth: horizon === 1 ? 2.4 : 1.5,
+        tension: 0.2, spanGaps: true, pointRadius: 1.6,
+        fill: horizon === 1, yAxisID: 'y',
+      });
+    }
+    if (pd3.some((v) => v != null)) {
+      datasets.push({
+        label: 'PD 3y (%)',
+        data: pd3,
+        borderColor: '#f59e0b',   // amber — medium-term stress
+        backgroundColor: horizon === 3 ? 'rgba(245, 158, 11, 0.14)' : 'transparent',
+        borderWidth: horizon === 3 ? 2.4 : 1.5,
+        tension: 0.2, spanGaps: true, pointRadius: 1.4,
+        fill: horizon === 3, yAxisID: 'y',
+      });
+    }
+    if (pd5.some((v) => v != null)) {
+      datasets.push({
+        label: 'PD 5y (%)',
+        data: pd5,
+        borderColor: '#3b82f6',   // blue — structural fragility
+        backgroundColor: horizon === 5 ? 'rgba(59, 130, 246, 0.14)' : 'transparent',
+        borderWidth: horizon === 5 ? 2.4 : 1.5,
+        tension: 0.2, spanGaps: true, pointRadius: 1.4,
+        fill: horizon === 5, yAxisID: 'y',
+      });
+    }
+    // If the API only returned a scalar model_pd (legacy fit before
+    // discounted-hazard rollout), plot just that so the chart still
+    // renders — but with a warning label so users know the term
+    // structure isn't available yet.
+    if (!datasets.length) {
+      datasets.push({
+        label: `Model PD ${horizon}y (%) — legacy fit`,
+        data: pd,
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.18)',
+        tension: 0.2, spanGaps: true, pointRadius: 2, fill: true, yAxisID: 'y',
+      });
+    }
     if (composite.some((v) => v != null)) {
       datasets.push({
         label: 'Composite z-score (50 = panel median)',

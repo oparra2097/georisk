@@ -396,10 +396,32 @@ def get_country_history(iso3: str, horizon_years: int = 1,
         rating = rating_model._letter_and_pd(
             score, defaulted=False, calibrated_buckets=cal_buckets,
         )
+        # Tellimer discounted-hazard: convert the fitted PD to a 1-year
+        # PD (inverting the transform if this was fit at a longer
+        # horizon) then derive the full {1y, 3y, 5y} term structure so
+        # the chart can render all three lines coherently on the same
+        # panel — matching the Zambia / Lebanon case-study charts in
+        # the Tellimer deck.
+        if horizon_years == 1:
+            p1 = model_pd
+        elif horizon_years == 3:
+            p1 = 1.0 - math.pow(
+                max(1e-9, 1.0 - model_pd), 1.0 / rating_model.ALPHA_3Y,
+            )
+        elif horizon_years == 5:
+            p1 = 1.0 - math.pow(
+                max(1e-9, 1.0 - model_pd), 1.0 / rating_model.ALPHA_5Y,
+            )
+        else:
+            p1 = model_pd
+        derived_pds = rating_model.derive_multi_horizon_pd(p1)
         record = {
             'year': int(row['year']),
             'model_pd': round(model_pd, 5),
             'model_score': round(score, 3),
+            'pd_1y': round(derived_pds['pd_1y'], 5) if derived_pds['pd_1y'] is not None else None,
+            'pd_3y': round(derived_pds['pd_3y'], 5) if derived_pds['pd_3y'] is not None else None,
+            'pd_5y': round(derived_pds['pd_5y'], 5) if derived_pds['pd_5y'] is not None else None,
             'composite_score': round(composite_score, 2) if composite_score is not None else None,
             'pm_notch': rating['pm_notch'],
             'pm_numeric': rating['pm_numeric'],
@@ -446,6 +468,12 @@ def get_country_history(iso3: str, horizon_years: int = 1,
             'as_of': agency.get('as_of'),
         },
         'agency_history': cd_agency_history.get_country_history(iso3),
+        'thresholds': rating_model.multi_horizon_thresholds(),
+        'hazard_alphas': {
+            'alpha_3': rating_model.ALPHA_3Y,
+            'alpha_5': rating_model.ALPHA_5Y,
+            'source': 'Tellimer discounted-hazard back-solved from Angola panel',
+        },
     }
 
     with _cache_lock:
