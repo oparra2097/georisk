@@ -212,12 +212,19 @@ def get_country_history(iso3: str, horizon_years: int = 1,
     country_region = panel_country.get('region') or ''
     cal_buckets = cal_by_region.get(country_region) or cal_global
 
-    # If the persisted fit is a GBM with a saved tree-ensemble pickle,
-    # score the per-period history through the actual model so the chart
-    # shows the real GBM trajectory (the linear-importance fallback
-    # collapsed everything to ~base-rate PD).
+    # If the persisted fit is a stacked (Tellimer two-tier) model, prefer
+    # its bundled pickle so the historical chart runs the actual Tier 2
+    # tree ensemble (initialised from Tier 1) with temperature scaling.
+    # Otherwise fall back to the plain-GBM tree ensemble, or finally the
+    # linear-importance approximation below.
     gbm_payload = None
-    if fit_state.get('estimator') == 'gbm' and fit_state.get('model_pickle'):
+    stacked_bundle = None
+    if fit_state.get('estimator') == 'stacked' and cadence != 'quarterly':
+        stacked_bundle = cd_fit.load_stacked_model(horizon_years)
+        if stacked_bundle:
+            stacked_bundle['scaler'] = stacked_bundle.get('scaler') or scaler
+            stacked_bundle['medians'] = stacked_bundle.get('medians') or medians
+    if not stacked_bundle and fit_state.get('estimator') == 'gbm' and fit_state.get('model_pickle'):
         if cadence == 'quarterly':
             loaded = cd_fit.load_gbm_model_quarterly(horizon_years)
         else:
@@ -250,7 +257,22 @@ def get_country_history(iso3: str, horizon_years: int = 1,
     history = []
     for _, row in sub.iterrows():
         proba = None
-        if gbm_payload is not None:
+        # Stacked (Tellimer): score through the actual tier-1+tier-2 bundle
+        # so temperature-scaled PDs land on the chart. Cheapest way to
+        # avoid duplicating the vector-build boilerplate is to hand
+        # score_stacked a dict per row.
+        if stacked_bundle is not None:
+            country_features = {
+                feat: (row.get(feat) if row.get(feat) is not None else None)
+                for feat in stacked_bundle.get('features') or []
+            }
+            try:
+                proba = float(cd_fit.score_stacked(country_features, stacked_bundle))
+            except Exception as e:  # noqa: BLE001
+                print(f'[credit_default.service] history stacked score failed for {iso3}: {e}')
+                stacked_bundle = None
+                proba = None
+        elif gbm_payload is not None:
             # Build standardized feature vector and run predict_proba.
             # Wrapped because sklearn version mismatches between the
             # build and runtime environments cause predict_proba to
@@ -288,7 +310,14 @@ def get_country_history(iso3: str, horizon_years: int = 1,
         if proba is not None:
             proba = min(max(proba, 1e-9), 1.0 - 1e-9)
             bal_logit = math.log(proba / (1.0 - proba))
-            adj = bal_logit + class_shift
+            # score_stacked already returns a temperature-scaled PD
+            # calibrated on GroupKFold OOS — adding class_shift on top
+            # would double-correct the natural-rate offset. Every other
+            # path (plain GBM, linear approximation) still needs it.
+            if stacked_bundle is not None:
+                adj = bal_logit
+            else:
+                adj = bal_logit + class_shift
         else:
             z = intercept
             for feat, coef in coefs.items():

@@ -42,7 +42,23 @@ def _load_fit_state(horizon_years: int = 1, cadence: str = 'annual',
     if cadence == 'quarterly':
         # Quarterly fits are state-mode only for now.
         return cd_fit.load_state_quarterly(horizon_years)
+    # Prefer the Tellimer-style stacked model when a state file exists —
+    # falls back to the legacy per-estimator states so nothing breaks
+    # when only fit_gbm or fit_logit has been run for this horizon.
+    if label_mode == 'state':
+        stacked = cd_fit.load_stacked_state(horizon_years)
+        if stacked and stacked.get('coefficients'):
+            return stacked
     return cd_fit.load_state(horizon_years, label_mode=label_mode)
+
+
+def _load_stacked_bundle(horizon_years: int = 1):
+    """Load the tier1+tier2+T pickle if a stacked model is on disk."""
+    try:
+        from backend.credit_default import fit as cd_fit
+    except Exception:
+        return None
+    return cd_fit.load_stacked_model(horizon_years)
 
 
 def _onset_pd_for_country(indicators, shadow, horizon_years: int):

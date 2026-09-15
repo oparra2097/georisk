@@ -683,6 +683,479 @@ def load_gbm_model(horizon_years: int, label_mode: str = 'state'):
         return None
 
 
+# ── Two-tier stacked model (Tellimer 2025) ──────────────────────────────
+#
+# Architecture:
+#   Tier 1: sign-constrained logistic regression (existing _fit_logit_...).
+#           Produces an interpretable macro baseline.
+#   Tier 2: GradientBoostingClassifier with init=Tier1. sklearn's `init`
+#           argument makes the GBM's starting logit equal to Tier 1's
+#           logit(p) — so the trees only learn the *residual* correction
+#           on top of the baseline, exactly matching the Tellimer paper's
+#           residual-boosting formulation.
+#   Calibration: temperature scaling. A single T > 0 divides the pre-
+#           sigmoid logit before it's exponentiated, fitted to minimise
+#           NLL on the GroupKFold OOS holdout.
+#   Training filter: rows within N years *after* a default onset are
+#           dropped (Tellimer 2.3 — the 12-month post-default window
+#           carries collapse/restructuring dynamics that don't
+#           generalise to early-warning prediction).
+#
+# The persisted state file is `fit_state_stacked_h{H}.json`; the
+# accompanying pickle is `fit_model_stacked_h{H}.pkl` and bundles
+# {tier1_coefs, tier1_intercept, tier2_model, features, temperature}.
+
+
+def _post_default_exclusion_mask(iso_years_df,
+                                 years_after: int = 1) -> "np.ndarray":
+    """Return a boolean mask of rows to KEEP (True = keep, False = drop).
+
+    Drops any (iso3, year) row within ``years_after`` years *after* a
+    default onset in that country. Tellimer 2.3 uses 12 months post-
+    default; on our annual grain that means we exclude the default year
+    itself AND the ``years_after`` subsequent years.
+    """
+    import numpy as np
+    if iso_years_df is None or len(iso_years_df) == 0:
+        return np.array([], dtype=bool)
+
+    onsets = cd_defaults.default_starts_by_country()  # {iso3: {start_year, ...}}
+    iso_arr = iso_years_df['iso3'].values
+    year_arr = iso_years_df['year'].values
+    keep = np.ones(len(iso_years_df), dtype=bool)
+    for i in range(len(iso_years_df)):
+        iso = iso_arr[i]
+        yr = int(year_arr[i])
+        starts = onsets.get(iso)
+        if not starts:
+            continue
+        for s in starts:
+            # Drop [s, s+years_after].  s itself is 'inside default onset'
+            # and s+1..s+years_after is the post-default recovery window.
+            if s <= yr <= (s + years_after):
+                keep[i] = False
+                break
+    return keep
+
+
+class _LogitInitEstimator:
+    """sklearn-compatible init estimator wrapping a pre-fit logit.
+
+    ``GradientBoostingClassifier(init=self)`` uses this estimator's
+    ``predict_proba`` output as the starting point for the boosting
+    sequence — trees then learn residuals on top of the logit baseline,
+    which is exactly the Tellimer paper's Tier-1 → Tier-2 handoff.
+
+    Implements the minimal sklearn classifier interface required by
+    the boosting framework (get_params / set_params / fit / predict /
+    predict_proba / classes_) without inheriting from BaseEstimator, so
+    we can pickle without pulling in a sklearn version pin.
+    """
+
+    def __init__(self, coefs=None, intercept=0.0):
+        # Kept as raw arrays (not attrs starting with '_') so sklearn's
+        # clone() round-trip works.
+        self.coefs = coefs
+        self.intercept = float(intercept)
+        # sklearn checks these attributes when using init estimators.
+        import numpy as np
+        self.classes_ = np.array([0, 1])
+        self.n_classes_ = 2
+
+    def get_params(self, deep=True):  # noqa: ARG002
+        return {'coefs': self.coefs, 'intercept': self.intercept}
+
+    def set_params(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+        return self
+
+    def fit(self, X, y=None, sample_weight=None):  # noqa: ARG002
+        # Already fit; nothing to do. Just record classes_ from y if
+        # sklearn hands it in (some paths reset it).
+        import numpy as np
+        if y is not None:
+            self.classes_ = np.unique(y)
+            self.n_classes_ = len(self.classes_)
+        return self
+
+    def predict_proba(self, X):
+        import numpy as np
+        X = np.asarray(X, dtype=float)
+        z = X @ np.asarray(self.coefs, dtype=float) + self.intercept
+        # Numerically-safe sigmoid.
+        p = np.where(
+            z >= 0,
+            1.0 / (1.0 + np.exp(-z)),
+            np.exp(z) / (1.0 + np.exp(z)),
+        )
+        return np.column_stack([1.0 - p, p])
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+
+
+def _fit_temperature(logits, y_true) -> float:
+    """Fit a single temperature parameter T > 0 by minimising NLL of
+    sigmoid(logit / T) vs y_true. Returns T. T > 1 flattens over-
+    confident predictions; T < 1 sharpens under-confident ones."""
+    import numpy as np
+    from scipy.optimize import minimize_scalar
+
+    logits = np.asarray(logits, dtype=float)
+    y = np.asarray(y_true, dtype=float)
+
+    def neg_ll(t):
+        if t <= 0:
+            return 1e12
+        z = logits / t
+        # log(sigmoid(z))  = -log(1+exp(-z))
+        # log(1-sigmoid(z)) = -log(1+exp(z))
+        # np.logaddexp(0, x) = log(1+exp(x)), stable for all x.
+        log_sig = -np.logaddexp(0.0, -z)
+        log_one_minus_sig = -np.logaddexp(0.0, z)
+        return float(-np.sum(y * log_sig + (1.0 - y) * log_one_minus_sig))
+
+    result = minimize_scalar(
+        neg_ll, bounds=(0.05, 10.0), method='bounded',
+        options={'xatol': 1e-4},
+    )
+    return float(max(result.x, 0.05))
+
+
+def _fit_stacked_oos_and_temperature(
+    X, y, meta, features, tier1_coefs, tier1_intercept, sign_vec,
+    n_estimators, max_depth, learning_rate, scale_pos_weight,
+    n_splits: int = 5,
+):
+    """GroupKFold-by-country OOS evaluation for the stacked model +
+    temperature scaling on the concatenated holdout logits. Returns
+    ``{auc, brier, method, n_folds, temperature}``. Broken out from
+    the main fit_stacked function so failures on tiny panels degrade
+    gracefully instead of aborting the whole train."""
+    import numpy as np
+    from sklearn.model_selection import GroupKFold
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.metrics import roc_auc_score, brier_score_loss
+
+    groups = meta['iso_years']['iso3'].values
+    n_countries = len(set(groups))
+    n_folds = min(n_splits, max(2, n_countries))
+    if n_countries < 3 or int(y.sum()) < 2:
+        return {'method': 'none', 'auc': None, 'brier': None,
+                'n_folds': 0, 'temperature': 1.0}
+
+    gkf = GroupKFold(n_splits=n_folds)
+    holdout_logits = []
+    holdout_y = []
+    aucs, briers = [], []
+    for tr, te in gkf.split(X, y, groups=groups):
+        y_tr = y.values[tr]
+        # Skip degenerate folds (all one class in test).
+        if len(set(y.values[te])) < 2 or int(y_tr.sum()) < 1:
+            continue
+        # Re-fit Tier 1 on this fold's training rows only. Copy the
+        # sign vector so the constraint stays honoured.
+        try:
+            beta_fold, b_fold, _ = _fit_logit_sign_constrained(
+                X.values[tr], y_tr, sign_vec,
+            )
+        except Exception:  # noqa: BLE001
+            continue
+        init_fold = _LogitInitEstimator(coefs=beta_fold, intercept=b_fold)
+        model_fold = GradientBoostingClassifier(
+            n_estimators=n_estimators, max_depth=max_depth,
+            learning_rate=learning_rate, subsample=0.8,
+            max_features='sqrt', random_state=42, min_samples_leaf=20,
+            init=init_fold,
+        )
+        sw = np.where(y_tr == 1, scale_pos_weight, 1.0)
+        try:
+            model_fold.fit(X.values[tr], y_tr, sample_weight=sw)
+            proba_te = model_fold.predict_proba(X.values[te])[:, 1]
+        except Exception as e:  # noqa: BLE001
+            print(f'[credit_default.fit] stacked OOS fold failed: {e}')
+            continue
+
+        # Turn probability back into logit for temperature fit later.
+        proba_te = np.clip(proba_te, 1e-6, 1.0 - 1e-6)
+        logit_te = np.log(proba_te / (1.0 - proba_te))
+        holdout_logits.extend(logit_te.tolist())
+        holdout_y.extend(y.values[te].tolist())
+        try:
+            aucs.append(float(roc_auc_score(y.values[te], proba_te)))
+            briers.append(float(brier_score_loss(y.values[te], proba_te)))
+        except ValueError:
+            continue
+
+    if not holdout_logits:
+        return {'method': 'groupkfold_failed', 'auc': None, 'brier': None,
+                'n_folds': 0, 'temperature': 1.0}
+
+    temperature = _fit_temperature(holdout_logits, holdout_y)
+    return {
+        'method': 'groupkfold_by_iso3', 'n_folds': len(aucs),
+        'auc': float(np.mean(aucs)) if aucs else None,
+        'brier': float(np.mean(briers)) if briers else None,
+        'temperature': temperature,
+        'holdout_n': len(holdout_logits),
+    }
+
+
+def fit_stacked(horizon_years: int = 1, years_back: int = 25,
+                n_estimators: int = 300, max_depth: int = 3,
+                learning_rate: float = 0.05,
+                exclude_post_default_years: int = 1) -> Dict:
+    """Fit the two-tier stacked (logit → GBM residuals) model.
+
+    Steps (matches Tellimer 2025 §2.3):
+      1. Build training panel.
+      2. Drop rows within `exclude_post_default_years` years AFTER any
+         default onset (paper: 12 months).
+      3. Fit Tier-1 sign-constrained logit.
+      4. Fit Tier-2 GBM with init=Tier1 so trees learn residuals.
+      5. GroupKFold-by-country OOS → concatenated holdout logits.
+      6. Temperature-scale on holdout to calibrate.
+      7. Persist state (JSON) + bundled pickle (both tiers + T).
+    """
+    import numpy as np
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.metrics import roc_auc_score, brier_score_loss
+    from sklearn.inspection import permutation_importance
+
+    X, y, features, meta = build_training_panel(
+        years_back, horizon_years, label_mode='state',
+    )
+
+    # ── Post-default row exclusion ───────────────────────────────────
+    if exclude_post_default_years > 0:
+        keep_mask = _post_default_exclusion_mask(
+            meta['iso_years'], years_after=exclude_post_default_years,
+        )
+        if keep_mask.sum() >= 50 and keep_mask.sum() > int(y.sum()):
+            # Only apply if we still have enough rows AND we haven't
+            # accidentally dropped every event.
+            X = X.loc[keep_mask].reset_index(drop=True)
+            y = y.loc[keep_mask].reset_index(drop=True)
+            meta['iso_years'] = meta['iso_years'].loc[keep_mask].reset_index(drop=True)
+            meta['n_obs'] = int(len(X))
+            meta['n_events'] = int(y.sum())
+
+    # ── Tier 1: sign-constrained logit ───────────────────────────────
+    sign_vec = np.array([
+        +1.0 if SCAFFOLD_HIGHER_IS_WORSE.get(f, True) else -1.0
+        for f in features
+    ])
+    tier1_beta, tier1_intercept, tier1_proba = _fit_logit_sign_constrained(
+        X.values, y.values, sign_vec,
+    )
+    tier1_coefs: Dict[str, float] = {
+        f: float(tier1_beta[i]) for i, f in enumerate(features)
+    }
+
+    # ── Tier 2: GBM initialised from Tier 1 ──────────────────────────
+    n_pos = int(y.sum())
+    n_neg = int(len(y) - n_pos)
+    scale_pos_weight = n_neg / max(1, n_pos)
+    sample_weight = np.where(y.values == 1, scale_pos_weight, 1.0)
+
+    init_estimator = _LogitInitEstimator(
+        coefs=tier1_beta, intercept=tier1_intercept,
+    )
+    tier2 = GradientBoostingClassifier(
+        n_estimators=n_estimators, max_depth=max_depth,
+        learning_rate=learning_rate, subsample=0.8,
+        max_features='sqrt', random_state=42, min_samples_leaf=20,
+        init=init_estimator,
+    )
+    tier2.fit(X.values, y.values, sample_weight=sample_weight)
+    proba = tier2.predict_proba(X.values)[:, 1]
+    auc_in = float(roc_auc_score(y.values, proba)) if 0 < n_pos < len(y) else None
+
+    # Permutation importance for interpretability (same as fit_gbm).
+    try:
+        perm = permutation_importance(
+            tier2, X.values, y.values, n_repeats=5,
+            random_state=42, scoring='roc_auc',
+        )
+        importance = {
+            f: float(perm.importances_mean[i]) for i, f in enumerate(features)
+        }
+    except Exception as e:  # noqa: BLE001
+        print(f'[credit_default.fit] stacked permutation-importance failed: {e}')
+        importance = {f: abs(tier1_coefs[f]) for f in features}
+
+    # ── OOS evaluation + temperature scaling ────────────────────────
+    oos = _fit_stacked_oos_and_temperature(
+        X, y, meta, features, tier1_coefs, tier1_intercept, sign_vec,
+        n_estimators, max_depth, learning_rate, scale_pos_weight,
+    )
+    temperature = float(oos.get('temperature') or 1.0)
+
+    # Natural-rate log-odds shift (same convention as logit / gbm paths).
+    pd_log_odds_shift = (
+        math.log(max(1, n_pos) / max(1, n_neg)) if n_pos and n_neg else 0.0
+    )
+
+    # Re-run bucket / PD calibration on the T-scaled probabilities so
+    # the empirical hazard table matches what the dashboard will show.
+    proba_scaled = 1.0 / (1.0 + np.exp(-np.log(
+        np.clip(proba, 1e-9, 1 - 1e-9) / (1 - np.clip(proba, 1e-9, 1 - 1e-9))
+    ) / temperature))
+    pd_calibration = _calibrate_pd_buckets(proba_scaled, y.values)
+    rating_buckets = _calibrate_rating_buckets(
+        meta['iso_years'], proba_scaled, horizon_years=horizon_years,
+        class_balance_log_odds=pd_log_odds_shift,
+    )
+
+    # ── Persist ──────────────────────────────────────────────────────
+    import pickle
+    model_filename = f'fit_model_stacked_h{horizon_years}.pkl'
+    model_path = _FIT_DIR / model_filename
+    with open(model_path, 'wb') as pf:
+        pickle.dump({
+            'tier1_coefs': tier1_beta.tolist(),
+            'tier1_intercept': float(tier1_intercept),
+            'tier2_model': tier2,
+            'features': features,
+            'temperature': temperature,
+        }, pf)
+
+    state = {
+        'estimator': 'stacked',
+        'method': 'tier1=sign-constrained logit; tier2=GBM(init=tier1) on residuals; T-scaled',
+        'horizon_years': horizon_years,
+        'tier1_coefficients': tier1_coefs,
+        'tier1_intercept': float(tier1_intercept),
+        'coefficients': tier1_coefs,   # keep at top-level so existing serving code that reads coefficients still finds them for the linear approximation fallback
+        'intercept': float(tier1_intercept),
+        'feature_importance': importance,
+        'class_balance_log_odds': float(pd_log_odds_shift),
+        'temperature': temperature,
+        'scaler': meta['scaler'],
+        'medians': meta['medians'],
+        'pd_calibration': pd_calibration,
+        'rating_buckets': rating_buckets,
+        'auc_in_sample': auc_in,
+        'auc_oos': oos.get('auc'),
+        'brier_oos': oos.get('brier'),
+        'oos_method': oos.get('method'),
+        'oos_n_folds': oos.get('n_folds'),
+        'oos_holdout_n': oos.get('holdout_n'),
+        'n_obs': meta['n_obs'],
+        'n_events': meta['n_events'],
+        'exclude_post_default_years': exclude_post_default_years,
+        'trained_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'hyperparams': {
+            'n_estimators': n_estimators, 'max_depth': max_depth,
+            'learning_rate': learning_rate,
+            'scale_pos_weight': scale_pos_weight,
+        },
+        'model_pickle': model_filename,
+    }
+
+    stacked_path = _FIT_DIR / f'fit_state_stacked_h{horizon_years}.json'
+    serializable = {k: v for k, v in state.items() if k != 'iso_years'}
+    with open(stacked_path, 'w') as f:
+        json.dump(serializable, f, indent=2)
+    print(f'[credit_default.fit] wrote {stacked_path}')
+
+    return state
+
+
+def load_stacked_state(horizon_years: int = 1) -> Optional[Dict]:
+    path = _FIT_DIR / f'fit_state_stacked_h{horizon_years}.json'
+    if not path.exists():
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def load_stacked_model(horizon_years: int):
+    """Load bundled stacked pickle. Returns
+    ``{tier1_coefs, tier1_intercept, tier2_model, features, temperature}``
+    or ``None`` on any failure (missing file, pickle mismatch)."""
+    import pickle
+    path = _FIT_DIR / f'fit_model_stacked_h{horizon_years}.pkl'
+    if not path.exists():
+        return None
+    try:
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+    except Exception as e:  # noqa: BLE001
+        print(f'[credit_default.fit] load_stacked_model({horizon_years}) failed: {e}')
+        return None
+
+
+def score_stacked(country_features: Dict[str, Optional[float]],
+                  bundle: Dict) -> float:
+    """Score one country through the two-tier stacked model. Returns PD
+    (temperature-scaled). Handles missing indicator values by median-
+    imputing from the stored medians dict. Kept separate from
+    ``score_with_state`` so the linear-approximation fallback in the
+    latter isn't tempted to run when we have a real GBM available."""
+    import numpy as np
+    tier2 = bundle.get('tier2_model')
+    features = bundle.get('features') or []
+    tier1_coefs = np.asarray(bundle.get('tier1_coefs') or [], dtype=float)
+    tier1_intercept = float(bundle.get('tier1_intercept') or 0.0)
+    temperature = float(bundle.get('temperature') or 1.0)
+    scaler = bundle.get('scaler') or {}
+    medians = bundle.get('medians') or {}
+
+    # Build standardized feature vector.
+    vec = []
+    for feat in features:
+        raw = country_features.get(feat)
+        if raw is None or (isinstance(raw, float) and math.isnan(raw)):
+            raw = medians.get(feat)
+        if raw is None:
+            vec.append(0.0)
+            continue
+        s = scaler.get(feat) or {}
+        mean = float(s.get('mean', 0.0))
+        std = float(s.get('std', 1.0)) or 1.0
+        z = (raw - mean) / std
+        # Match the Z_CLIP in rating_model so scoring here can't blow
+        # up on values the training panel never saw.
+        try:
+            from backend.credit_default.rating_model import Z_CLIP
+        except Exception:  # noqa: BLE001
+            Z_CLIP = 3.0
+        if z > Z_CLIP:
+            z = Z_CLIP
+        elif z < -Z_CLIP:
+            z = -Z_CLIP
+        vec.append(z)
+
+    x = np.array([vec], dtype=float)
+    if tier2 is None:
+        # Bundle missing tree ensemble — fall back to Tier 1 only.
+        # x @ tier1_coefs has shape (1,), so extract the scalar.
+        z_total = float((x @ tier1_coefs)[0] + tier1_intercept)
+    else:
+        try:
+            proba = float(tier2.predict_proba(x)[0, 1])
+            proba = min(max(proba, 1e-9), 1.0 - 1e-9)
+            z_total = math.log(proba / (1.0 - proba))
+        except Exception as e:  # noqa: BLE001
+            print(f'[credit_default.fit] score_stacked tier2 predict failed: {e}')
+            z_total = float((x @ tier1_coefs)[0] + tier1_intercept)
+
+    # Temperature scaling.
+    if temperature and temperature > 0:
+        z_total = z_total / temperature
+
+    try:
+        pd_hat = 1.0 / (1.0 + math.exp(-z_total))
+    except OverflowError:
+        pd_hat = 0.0 if z_total < 0 else 1.0
+    return pd_hat
+
+
 # ── PD calibration ──────────────────────────────────────────────────────
 
 

@@ -47,13 +47,18 @@ def parse_horizons_quarters(raw: str):
 def parse_estimators(raw: str):
     if raw == 'both':
         return ['logit', 'gbm']
+    if raw == 'all':
+        return ['logit', 'gbm', 'stacked']
     return [raw]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description='Fit sovereign credit-default model')
-    parser.add_argument('--estimator', choices=['logit', 'gbm', 'both'],
-                        default='logit')
+    parser.add_argument('--estimator', choices=['logit', 'gbm', 'stacked', 'both', 'all'],
+                        default='stacked',
+                        help='"stacked" runs the Tellimer-style two-tier model (default); '
+                             '"all" runs logit + gbm + stacked for comparison; '
+                             '"both" runs logit + gbm only (legacy).')
     parser.add_argument('--horizon', default='1',
                         help='Comma-separated horizons (years). Use "all" for 1,3,5.')
     parser.add_argument('--years-back', type=int, default=25,
@@ -88,6 +93,10 @@ def main() -> int:
             try:
                 if est == 'logit':
                     state = cd_fit.fit_logit(horizon_years=h, years_back=args.years_back)
+                elif est == 'stacked':
+                    state = cd_fit.fit_stacked(
+                        horizon_years=h, years_back=args.years_back,
+                    )
                 else:
                     state = cd_fit.fit_gbm(
                         horizon_years=h, years_back=args.years_back,
@@ -102,6 +111,7 @@ def main() -> int:
                 'auc_oos': state.get('auc_oos'),
                 'brier_oos': state.get('brier_oos'),
                 'oos_method': state.get('oos_method'),
+                'temperature': state.get('temperature'),
                 'n_obs': state.get('n_obs'),
                 'n_events': state.get('n_events'),
                 'top_features': sorted(
