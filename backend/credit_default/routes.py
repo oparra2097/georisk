@@ -61,6 +61,31 @@ def table():
     })
 
 
+@credit_default_bp.route('/watchlist')
+def watchlist():
+    """Dashboard headline: imminent risk + rating deterioration lists.
+
+    Query params:
+      - top_n              : how many sovereigns per band (default 10, cap 30)
+      - deterioration_scan : how many top-PD countries to scan for YoY change
+                              (default 25, cap 60). Larger values catch
+                              improvements in more rapidly-changing sovereigns
+                              but slow the first cold-cache request.
+      - cadence, horizon   : same semantics as the other endpoints.
+    """
+    from flask import request
+    cadence, horizon = _parse_cadence_args()
+    try:
+        top_n = max(3, min(30, int(request.args.get('top_n') or 10)))
+        scan_n = max(top_n, min(60, int(request.args.get('deterioration_scan') or 25)))
+    except (TypeError, ValueError):
+        top_n, scan_n = 10, 25
+    return jsonify(service.get_watchlist(
+        top_n=top_n, deterioration_scan_n=scan_n,
+        cadence=cadence, horizon=horizon,
+    ))
+
+
 @credit_default_bp.route('/country/<iso3>')
 def country(iso3: str):
     cadence, horizon = _parse_cadence_args()

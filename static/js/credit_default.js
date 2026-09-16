@@ -31,9 +31,13 @@
         horizon: String(_yearsToCadenceHorizon(years || 1)),
       })}`,
     dashboard: () => `/api/credit-default/dashboard${_qs()}`,
+    watchlist: () => `/api/credit-default/watchlist${_qs()}`,
   };
 
   let historyChart = null;
+  let watchlistImminentChart = null;
+  let watchlistDeteriorationChart = null;
+  let watchlistThresholds = null;
 
   // Indicator labels mirror backend INDICATORS — kept in JS for the
   // contribution panel so we don't make an extra round-trip.
@@ -80,6 +84,8 @@
     search: '',
     historyHorizon: 1,    // 1y by default, toggleable to 3y / 5y
     cadence: 'annual',    // 'annual' | 'quarterly' — switches fit_state file
+    watchlistMode: 'imminent',   // 'imminent' | 'stress_3y' | 'fragility_5y'
+    watchlistData: null,         // last fetched /api/credit-default/watchlist
   };
 
   // Agency consensus notch (1=AAA, 22=D) → benchmark default probability
@@ -116,7 +122,9 @@
     bindToolbar();
     bindTable();
     bindMethodology();
+    bindWatchlist();
     fetchTable();
+    fetchWatchlist();
   });
 
   function fetchTable() {
@@ -134,6 +142,206 @@
           `<tr><td colspan="13" class="cd-loading">Failed to load: ${escapeHtml(String(err))}</td></tr>`;
       });
   }
+
+  // ── Watchlist (imminent risk + deterioration bar charts) ────────────
+  function bindWatchlist() {
+    document.querySelectorAll('[data-watchlist-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-watchlist-mode]').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.watchlistMode = btn.dataset.watchlistMode;
+        renderWatchlistImminent();
+      });
+    });
+  }
+
+  function fetchWatchlist() {
+    fetch(API.watchlist())
+      .then((r) => r.json())
+      .then((data) => {
+        state.watchlistData = data;
+        watchlistThresholds = data.thresholds || null;
+        renderWatchlistImminent();
+        renderWatchlistDeterioration();
+      })
+      .catch((err) => {
+        console.warn('[credit-default] watchlist fetch failed:', err);
+      });
+  }
+
+  // Threshold colour bands per horizon — mirrors the drilldown chart
+  // palette. Green for below the operational threshold, amber inside
+  // the band, red above 'highly likely crisis' (50%).
+  const WATCHLIST_HORIZON_KEYS = {
+    imminent: { field: 'pd_1y', thresholdKey: '1y', label: 'PD 1Y' },
+    stress_3y: { field: 'pd_3y', thresholdKey: '3y', label: 'PD 3Y' },
+    fragility_5y: { field: 'pd_5y', thresholdKey: '5y', label: 'PD 5Y' },
+  };
+
+  function colorForPd(pdFrac, thresholdKey) {
+    if (pdFrac == null || isNaN(pdFrac)) return 'rgba(148, 163, 184, 0.55)';
+    const p = pdFrac * 100;
+    const band = (watchlistThresholds || {})[thresholdKey] || {};
+    const lower = (band.lower || 0.2) * 100;
+    const upper = (band.upper || 0.3) * 100;
+    if (p >= 50) return 'rgba(220, 38, 38, 0.85)';       // red — highly likely crisis
+    if (p >= upper) return 'rgba(220, 38, 38, 0.55)';    // red — above threshold
+    if (p >= lower) return 'rgba(245, 158, 11, 0.75)';   // amber — in band
+    return 'rgba(16, 185, 129, 0.65)';                   // green — below threshold
+  }
+
+  function renderWatchlistImminent() {
+    const canvas = document.getElementById('cd-watchlist-canvas-imminent');
+    const empty = document.getElementById('cd-watchlist-imminent-empty');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const data = state.watchlistData;
+    if (!data) return;
+    const spec = WATCHLIST_HORIZON_KEYS[state.watchlistMode] || WATCHLIST_HORIZON_KEYS.imminent;
+    const rows = data[state.watchlistMode] || [];
+    if (!rows.length) {
+      canvas.style.display = 'none';
+      if (empty) empty.hidden = false;
+      if (watchlistImminentChart) { watchlistImminentChart.destroy(); watchlistImminentChart = null; }
+      return;
+    }
+    canvas.style.display = '';
+    if (empty) empty.hidden = true;
+    const labels = rows.map((r) => `${flagEmoji(r.iso3)} ${r.name || r.iso3}`);
+    const values = rows.map((r) => (r[spec.field] != null ? r[spec.field] * 100 : 0));
+    const iso3s = rows.map((r) => r.iso3);
+    const bg = values.map((v, i) => colorForPd(rows[i][spec.field], spec.thresholdKey));
+
+    if (watchlistImminentChart) watchlistImminentChart.destroy();
+    watchlistImminentChart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: spec.label,
+          data: values,
+          backgroundColor: bg,
+          borderColor: bg.map((c) => c.replace(/[\d.]+\)$/, '1)')),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick(evt, elements) {
+          if (!elements.length) return;
+          selectCountry(iso3s[elements[0].index]);
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            max: Math.max(60, Math.ceil(Math.max(...values) / 10) * 10),
+            ticks: { callback: (v) => `${v}%`, color: '#9ca3af', font: { size: 10 } },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            title: { display: true, text: spec.label, color: '#e5e7eb', font: { size: 11 } },
+          },
+          y: {
+            ticks: { color: '#e5e7eb', font: { size: 11 } },
+            grid: { display: false },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label(ctx) { return `${ctx.parsed.x.toFixed(2)}%`; },
+              afterBody(ctxs) {
+                if (!ctxs.length) return '';
+                const r = rows[ctxs[0].dataIndex];
+                const bits = [];
+                if (r.agency_sp) bits.push(`S&P: ${r.agency_sp}`);
+                if (r.pm_notch) bits.push(`Model: ${r.pm_notch}`);
+                if (r.region) bits.push(r.region);
+                return bits;
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  function renderWatchlistDeterioration() {
+    const canvas = document.getElementById('cd-watchlist-canvas-deterioration');
+    const empty = document.getElementById('cd-watchlist-deterioration-empty');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const rows = (state.watchlistData && state.watchlistData.deterioration) || [];
+    if (!rows.length) {
+      canvas.style.display = 'none';
+      if (empty) empty.hidden = false;
+      if (watchlistDeteriorationChart) { watchlistDeteriorationChart.destroy(); watchlistDeteriorationChart = null; }
+      return;
+    }
+    canvas.style.display = '';
+    if (empty) empty.hidden = true;
+    const labels = rows.map((r) => `${flagEmoji(r.iso3)} ${r.name || r.iso3}`);
+    const values = rows.map((r) => r.delta_pp || 0);
+    const iso3s = rows.map((r) => r.iso3);
+    // Positive delta = deteriorating (red); negative delta = improving (green).
+    const bg = values.map((v) => v >= 0 ? 'rgba(220, 38, 38, 0.75)' : 'rgba(16, 185, 129, 0.70)');
+
+    if (watchlistDeteriorationChart) watchlistDeteriorationChart.destroy();
+    watchlistDeteriorationChart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'PD 1Y Δ (pp)',
+          data: values,
+          backgroundColor: bg,
+          borderColor: bg.map((c) => c.replace(/[\d.]+\)$/, '1)')),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick(evt, elements) {
+          if (!elements.length) return;
+          selectCountry(iso3s[elements[0].index]);
+        },
+        scales: {
+          x: {
+            ticks: { callback: (v) => `${v}pp`, color: '#9ca3af', font: { size: 10 } },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            title: { display: true, text: 'YoY PD 1Y change (pp)', color: '#e5e7eb', font: { size: 11 } },
+          },
+          y: {
+            ticks: { color: '#e5e7eb', font: { size: 11 } },
+            grid: { display: false },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label(ctx) {
+                const r = rows[ctx.dataIndex];
+                const sign = ctx.parsed.x >= 0 ? '+' : '';
+                return `${sign}${ctx.parsed.x.toFixed(2)}pp  (${(r.pd_1y_prior * 100).toFixed(1)}% → ${(r.pd_1y_latest * 100).toFixed(1)}%)`;
+              },
+              afterBody(ctxs) {
+                if (!ctxs.length) return '';
+                const r = rows[ctxs[0].dataIndex];
+                return [
+                  `${r.prior_period || ''} → ${r.latest_period || ''}`,
+                  r.agency_sp ? `S&P: ${r.agency_sp}` : '',
+                  r.region || '',
+                ].filter(Boolean);
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
 
   // ── Toolbar bindings ────────────────────────────────────────────────
   function bindToolbar() {
@@ -189,6 +397,7 @@
           // Re-fetch the table at the new cadence so PD columns and the
           // Watch indicator reflect the active fit_state.
           fetchTable();
+          fetchWatchlist();
           if (state.selectedIso3) {
             loadDetail(state.selectedIso3);
           }

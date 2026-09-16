@@ -192,6 +192,79 @@
   font-size: var(--cd-fs-xs); color: var(--cd-text-mute);
 }
 
+/* ── Watchlist (imminent risk + deterioration) ───────────────────────── */
+.cd-watchlist {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin: 16px 0 20px;
+}
+@media (max-width: 960px) {
+  .cd-watchlist { grid-template-columns: 1fr; }
+}
+.cd-page[data-view="detail"] .cd-watchlist { display: none; }
+
+.cd-watchlist-panel {
+  background: var(--cd-surface);
+  border: 1px solid var(--cd-border);
+  border-radius: 10px;
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cd-watchlist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 28px;
+}
+.cd-watchlist-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cd-text);
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+.cd-watchlist-sub {
+  font-size: 11px;
+  color: var(--cd-text-mute);
+  font-weight: 500;
+}
+.cd-watchlist-tabs .cd-toggle {
+  min-width: 34px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cd-watchlist-chart-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 260px;
+}
+.cd-watchlist-chart-wrap canvas {
+  width: 100% !important;
+  height: 260px !important;
+}
+.cd-watchlist-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cd-text-mute);
+  font-size: 12px;
+  padding: 20px;
+  text-align: center;
+}
+.cd-watchlist-note {
+  font-size: 11px;
+  color: var(--cd-text-mute);
+  margin: 0;
+  line-height: 1.4;
+}
+
 /* Table */
 .cd-table-wrap {
   background: var(--cd-surface); border: 1px solid var(--cd-border);

@@ -69,6 +69,54 @@
     <button id="cd-methodology-btn" class="cd-link-btn">Methodology</button>
   </div>
 
+  <section class="cd-watchlist" aria-label="Watchlist: imminent risk and deterioration">
+    <div class="cd-watchlist-panel" id="cd-watchlist-imminent">
+      <header class="cd-watchlist-head">
+        <h3 class="cd-watchlist-title">Imminent default risk</h3>
+        <div class="cd-toggle-group cd-watchlist-tabs" role="tablist" aria-label="Watchlist horizon">
+          <button class="cd-toggle active" data-watchlist-mode="imminent"
+                  title="Top 10 by 12-month PD — near-term crisis risk">1Y</button>
+          <button class="cd-toggle" data-watchlist-mode="stress_3y"
+                  title="Top 10 by 3-year PD — medium-term stress channel">3Y</button>
+          <button class="cd-toggle" data-watchlist-mode="fragility_5y"
+                  title="Top 10 by 5-year PD — structural fragility channel">5Y</button>
+        </div>
+      </header>
+      <div class="cd-watchlist-chart-wrap">
+        <canvas id="cd-watchlist-canvas-imminent" role="img"
+                aria-label="Top 10 sovereigns by current probability of default"></canvas>
+        <div class="cd-watchlist-empty" id="cd-watchlist-imminent-empty" hidden>
+          No sovereigns exceed the imminent-risk threshold at the moment.
+        </div>
+      </div>
+      <p class="cd-watchlist-note">
+        Coloured bands: green = below the operational threshold; amber =
+        in threshold band (Tellimer 20–30% for 3Y, 20–25% for 5Y,
+        40–50% for 1Y); red = crisis confirmation (&gt;50%). Click a bar
+        to open the country drilldown.
+      </p>
+    </div>
+
+    <div class="cd-watchlist-panel" id="cd-watchlist-deterioration">
+      <header class="cd-watchlist-head">
+        <h3 class="cd-watchlist-title">Rating deterioration (YoY)</h3>
+        <span class="cd-watchlist-sub">1Y PD change vs prior year</span>
+      </header>
+      <div class="cd-watchlist-chart-wrap">
+        <canvas id="cd-watchlist-canvas-deterioration" role="img"
+                aria-label="Top 10 sovereigns by year-over-year PD change"></canvas>
+        <div class="cd-watchlist-empty" id="cd-watchlist-deterioration-empty" hidden>
+          Not enough historical data to compute deterioration yet.
+        </div>
+      </div>
+      <p class="cd-watchlist-note">
+        Bars &gt; 0 = credit deteriorating (PD rising). Scans the top 25
+        by current 1Y PD and ranks by 12-month change so the fastest
+        movers surface, not just the highest-level sovereigns.
+      </p>
+    </div>
+  </section>
+
   <section class="cd-table-wrap cd-browse-table" aria-label="Sovereign credit table">
     <table class="cd-table" id="cd-table">
       <thead>

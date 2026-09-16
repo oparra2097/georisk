@@ -534,6 +534,125 @@ def get_table_rows(cadence: str = 'annual', horizon: int = 1) -> List[Dict]:
     return rows
 
 
+# ── Watchlist (dashboard headline: imminent risk + deterioration) ───────
+_WATCHLIST_TTL = 30 * 60   # 30 minutes
+
+
+def get_watchlist(top_n: int = 10,
+                  deterioration_scan_n: int = 25,
+                  cadence: str = 'annual',
+                  horizon: int = 1) -> Dict:
+    """Return the dashboard watchlist: top-N sovereigns by current PD at
+    each horizon, plus top-N by year-over-year PD deterioration.
+
+    Four lists:
+
+      * ``imminent``     — top N by current PD 1Y. The "AIG watchlist":
+                           sovereigns most likely to default in the next
+                           12 months.
+      * ``stress_3y``    — top N by current PD 3Y (12-36 month medium-
+                           term stress channel, per Tellimer §5).
+      * ``fragility_5y`` — top N by current PD 5Y (36-60 month
+                           structural fragility channel).
+      * ``deterioration``— top N by YoY change in PD 1Y (percentage
+                           points). Scans the top {deterioration_scan_n}
+                           by current PD and diffs the last two years'
+                           historical PDs so we surface the sovereigns
+                           moving fastest, not just those at the top.
+
+    Cached for 30 minutes at the same (cadence, horizon) grain the
+    request came in on.
+    """
+    cache_key = f'watchlist_{cadence}_h{horizon}_n{top_n}_scan{deterioration_scan_n}'
+    with _cache_lock:
+        cached = _cache.get(cache_key)
+        cached_ts = _cache.get(f'{cache_key}_ts', 0)
+    if cached and (time.time() - cached_ts) < _WATCHLIST_TTL:
+        return cached
+
+    rows = get_table_rows(cadence=cadence, horizon=horizon)
+
+    def _top(field: str, n: int):
+        eligible = [r for r in rows
+                    if r.get(field) is not None and not r.get('defaulted')]
+        eligible.sort(key=lambda r: r[field], reverse=True)
+        return eligible[:n]
+
+    imminent = _top('pd_1y', top_n)
+    stress_3y = _top('pd_3y', top_n)
+    fragility_5y = _top('pd_5y', top_n)
+    deterioration = _compute_yoy_deterioration(
+        rows, deterioration_scan_n, top_n, cadence, horizon,
+    )
+
+    out = {
+        'as_of': cd_data.get_panel().get('as_of'),
+        'cadence': cadence,
+        'horizon_years': horizon,
+        'imminent': imminent,
+        'stress_3y': stress_3y,
+        'fragility_5y': fragility_5y,
+        'deterioration': deterioration,
+        'thresholds': rating_model.multi_horizon_thresholds(),
+    }
+    with _cache_lock:
+        _cache[cache_key] = out
+        _cache[f'{cache_key}_ts'] = time.time()
+    return out
+
+
+def _compute_yoy_deterioration(rows: List[Dict], scan_n: int, top_n: int,
+                               cadence: str, horizon: int) -> List[Dict]:
+    """Scan the top {scan_n} sovereigns by current PD 1Y, pull each of
+    their historical PD 1Y trajectories, compute the YoY delta between
+    the last two observations, and return the top {top_n} sovereigns by
+    delta. Skips countries with no history, in-default flag, or where
+    the scoring path fails.
+
+    Uses ``get_country_history`` under the hood, which is 30-min cached
+    per (iso3, cadence, horizon) — so a cold watchlist call may take
+    several seconds on first hit but subsequent calls are cheap.
+    """
+    candidates = [r for r in rows
+                  if r.get('pd_1y') is not None and not r.get('defaulted')]
+    candidates.sort(key=lambda r: r['pd_1y'], reverse=True)
+    candidates = candidates[:scan_n]
+
+    scored: List[Dict] = []
+    for r in candidates:
+        try:
+            hist = get_country_history(
+                r['iso3'], horizon_years=horizon, cadence=cadence,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f'[credit_default.service] watchlist history failed for {r["iso3"]}: {e}')
+            continue
+        if not hist:
+            continue
+        h = hist.get('history') or []
+        # Need at least two observations to compute a delta.
+        if len(h) < 2:
+            continue
+        latest = h[-1].get('pd_1y') or h[-1].get('model_pd')
+        prior = h[-2].get('pd_1y') or h[-2].get('model_pd')
+        if latest is None or prior is None:
+            continue
+        delta_pp = float(latest - prior) * 100.0
+        latest_period = h[-1].get('period') or str(h[-1].get('year', ''))
+        prior_period = h[-2].get('period') or str(h[-2].get('year', ''))
+        scored.append({
+            **r,
+            'pd_1y_latest': round(float(latest), 4),
+            'pd_1y_prior': round(float(prior), 4),
+            'delta_pp': round(delta_pp, 2),
+            'latest_period': latest_period,
+            'prior_period': prior_period,
+        })
+    # Rank by biggest deterioration first (positive delta = getting worse).
+    scored.sort(key=lambda r: r['delta_pp'], reverse=True)
+    return scored[:top_n]
+
+
 def _summarize(scored: Dict) -> Dict:
     countries = scored.get('countries') or {}
     pds: List[float] = []
