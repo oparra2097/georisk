@@ -199,3 +199,47 @@ def export_xlsx():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True, download_name=fname,
     )
+
+
+@credit_default_bp.route('/structural-overlay/<iso3>')
+def structural_overlay_for(iso3: str):
+    """Return the structural overlay flags + notch adjustments for one
+    country. See backend/credit_default/structural_overlay.py for the
+    penalty ladder."""
+    from backend.credit_default import structural_overlay as cd_overlay
+    entry = cd_overlay.get_overlay_for(iso3)
+    if not entry:
+        return jsonify({'iso3': iso3.upper(), 'overlay': None,
+                        'note': 'country not in overlay CSV'})
+    total, breakdown = cd_overlay.compute_notch_adjustment(iso3)
+    return jsonify({
+        'iso3': iso3.upper(),
+        'flags': {k: v for k, v in entry.items() if k != 'notes'},
+        'notes': entry.get('notes'),
+        'adjustment_notches': total,
+        'breakdown': breakdown,
+    })
+
+
+@credit_default_bp.route('/structural-overlay')
+def structural_overlay_all():
+    """Return the full structural overlay CSV as JSON so a frontend can
+    render the whole panel of flagged countries at once."""
+    from backend.credit_default import structural_overlay as cd_overlay
+    from backend.credit_default.structural_overlay import _load_overlay_csv
+    data = _load_overlay_csv()
+    out = []
+    for iso3 in sorted(data.keys()):
+        total, breakdown = cd_overlay.compute_notch_adjustment(iso3)
+        entry = data[iso3]
+        out.append({
+            'iso3': iso3,
+            'flags': {k: v for k, v in entry.items() if k != 'notes'},
+            'notes': entry.get('notes'),
+            'adjustment_notches': total,
+        })
+    return jsonify({
+        'countries': out,
+        'notch_per_flag': cd_overlay.NOTCH_PER_FLAG,
+        'max_adjustment': cd_overlay.MAX_NOTCH_ADJUSTMENT,
+    })

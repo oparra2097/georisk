@@ -18,6 +18,7 @@ from backend.credit_default import data as cd_data
 from backend.credit_default import defaults as cd_defaults
 from backend.credit_default import fit as cd_fit
 from backend.credit_default import rating_model
+from backend.credit_default import structural_overlay as cd_overlay
 
 
 _cache: Dict[str, object] = {}
@@ -165,7 +166,21 @@ def get_country(iso3: str, cadence: str = 'annual',
     if len(iso3) != 3:
         return None
     dash = get_dashboard(cadence=cadence, horizon=horizon)
-    return (dash.get('countries') or {}).get(iso3)
+    country = (dash.get('countries') or {}).get(iso3)
+    if country is None:
+        return None
+
+    # Attach the structural overlay (SIDS / LLDC / conflict / political
+    # shock / export-concentration adjustments) alongside the fitted
+    # rating. Never overrides the model output — the frontend renders
+    # both side-by-side so underwriters see the raw and the adjusted
+    # call. get_overlay_for returns None for countries not in the CSV.
+    rating = country.get('rating') or {}
+    overlay = cd_overlay.apply_overlay(iso3, rating.get('pm_numeric'))
+    if overlay:
+        rating['structural_overlay'] = overlay
+        country['rating'] = rating
+    return country
 
 
 def get_country_history(iso3: str, horizon_years: int = 1,

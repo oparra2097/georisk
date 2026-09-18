@@ -18,6 +18,7 @@ data/*
 !data/imf_programs.csv
 !data/fx_debt_share.csv
 !data/sovereign_bond_yields.csv
+!data/structural_risk_overlay.csv
 !data/credit_default_fit/
 !data/credit_default_fit/*.json
 !data/credit_default_fit/*.pkl

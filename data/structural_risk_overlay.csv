@@ -1,0 +1,126 @@
+# Structural risk overlay — factors the macro-only model can't capture.
+#
+# Each column is a boolean (Y/N) or magnitude. The overlay module applies a
+# small notch penalty per active flag; totals are capped at +6 notches so a
+# country with every risk flag active can move at most 6 grades from the
+# base model rating.
+#
+# Notch adjustments (defined in structural_overlay.py):
+#   sids                  = +2 notches   (small-island economy — hurricanes,
+#                                          tourism concentration, thin export
+#                                          base)
+#   lldc                  = +1 notch     (landlocked — freight-cost premium,
+#                                          single-corridor dependence)
+#   active_conflict       = +3 notches   (ongoing civil war, active border war
+#                                          or occupation)
+#   political_shock_recent= +2 notches   (coup / regime change / mass violence
+#                                          against govt within the last 18mo)
+#   export_conc_high      = +1 notch     (>50% of goods exports in one HS-2
+#                                          chapter OR >30% GDP in tourism)
+#
+# Columns:
+#   iso3                     — ISO-3 sovereign code
+#   sids                     — Y/N (UN SIDS list)
+#   lldc                     — Y/N (UN LLDC list)
+#   active_conflict          — Y/N
+#   political_shock_recent   — Y/N (rolled off if >18mo since event)
+#   export_conc_high         — Y/N
+#   notes                    — free text; kept for audit
+#
+# Updated by hand; refresh quarterly. This file is a display/qualitative
+# overlay, NOT a fitting target. Base model rating stays exactly as fitted;
+# the overlay is applied on top and shown separately in the UI so
+# underwriters can see the raw model call AND the structural-adjusted call.
+iso3,sids,lldc,active_conflict,political_shock_recent,export_conc_high,notes
+ATG,Y,N,N,N,Y,SIDS + tourism (>50% GDP); hurricane exposure
+BHS,Y,N,N,N,Y,SIDS + tourism concentration
+BRB,Y,N,N,N,Y,SIDS + tourism concentration
+BLZ,Y,N,N,N,Y,SIDS + tourism concentration
+CPV,Y,N,N,N,Y,SIDS + tourism/remittance
+COM,Y,N,N,N,Y,SIDS + vanilla/clove single-crop
+DMA,Y,N,N,N,Y,SIDS + banana concentration
+DOM,Y,N,N,N,N,SIDS
+FJI,Y,N,N,N,Y,SIDS + tourism/sugar
+GRD,Y,N,N,N,Y,SIDS + nutmeg/tourism
+GNB,Y,N,N,N,Y,SIDS + cashew single-crop
+GUY,Y,N,N,N,Y,SIDS + oil concentration (post-2020)
+HTI,Y,N,N,Y,N,SIDS + gang-driven insecurity 2024-
+JAM,Y,N,N,N,Y,SIDS + tourism/bauxite
+MDV,Y,N,N,N,Y,SIDS + tourism (>50% GDP)
+MUS,Y,N,N,N,N,SIDS
+PNG,Y,N,N,N,Y,SIDS + LNG/mining concentration
+WSM,Y,N,N,N,Y,SIDS + remittance
+STP,Y,N,N,N,Y,SIDS + cocoa
+SYC,Y,N,N,N,Y,SIDS + tourism/tuna
+SLB,Y,N,N,N,Y,SIDS + timber/fisheries
+KNA,Y,N,N,N,Y,SIDS + tourism
+LCA,Y,N,N,N,Y,SIDS + tourism
+VCT,Y,N,N,N,Y,SIDS + tourism/banana
+SUR,Y,N,N,N,Y,SIDS + gold/oil
+TLS,Y,N,N,N,Y,SIDS + oil single-source
+TTO,Y,N,N,N,Y,SIDS + energy concentration
+VUT,Y,N,N,N,Y,SIDS + tourism
+KIR,Y,N,N,N,Y,SIDS
+MHL,Y,N,N,N,Y,SIDS
+FSM,Y,N,N,N,Y,SIDS
+NRU,Y,N,N,N,Y,SIDS
+PLW,Y,N,N,N,Y,SIDS
+TON,Y,N,N,N,Y,SIDS
+TUV,Y,N,N,N,Y,SIDS
+# ── LLDCs ──
+AFG,N,Y,Y,N,Y,LLDC + Taliban rule + conflict
+ARM,N,Y,N,N,N,LLDC
+AZE,N,Y,N,N,Y,LLDC + oil concentration
+BTN,N,Y,N,N,Y,LLDC + hydropower single-export + India dependency
+BOL,N,Y,N,N,Y,LLDC + gas/minerals concentration
+BWA,N,Y,N,N,Y,LLDC + diamonds single-commodity
+BFA,N,Y,Y,Y,Y,LLDC + Sahel jihadist conflict + junta 2022+ + gold
+BDI,N,Y,N,N,Y,LLDC + coffee/tea single-crop
+CAF,N,Y,Y,N,N,LLDC + ongoing UN peacekeeping mission
+TCD,N,Y,N,N,Y,LLDC + oil concentration
+ETH,N,Y,Y,N,Y,LLDC + Tigray/Amhara conflict + coffee
+SWZ,N,Y,N,N,N,LLDC
+KAZ,N,Y,N,N,Y,LLDC + oil concentration
+KGZ,N,Y,N,N,N,LLDC
+LAO,N,Y,N,N,Y,LLDC + hydropower + Chinese debt
+LSO,N,Y,N,N,Y,LLDC + textile/water-sale to SA
+MWI,N,Y,N,N,Y,LLDC + tobacco single-crop
+MLI,N,Y,Y,Y,Y,LLDC + Sahel jihadist + junta 2020+ + gold
+MDA,N,Y,N,N,N,LLDC
+MNG,N,Y,N,N,Y,LLDC + copper/coal
+NPL,N,Y,N,Y,N,LLDC + Sept 2025 Gen Z protests displaced government
+NER,N,Y,Y,Y,Y,LLDC + Sahel + junta 2023 + uranium
+MKD,N,Y,N,N,N,LLDC
+PRY,N,Y,N,N,Y,LLDC + soy concentration
+RWA,N,Y,N,N,N,LLDC
+SSD,N,Y,Y,N,Y,LLDC + civil war + oil
+TJK,N,Y,N,N,N,LLDC
+TKM,N,Y,N,N,Y,LLDC + gas concentration
+UGA,N,Y,N,N,N,LLDC
+UZB,N,Y,N,N,Y,LLDC + gas/cotton
+ZMB,N,Y,N,N,Y,LLDC + copper concentration
+ZWE,N,Y,N,N,Y,LLDC + tobacco/gold + hyperinflation history
+# ── Active conflict / recent political shock (not in SIDS or LLDC lists) ──
+UKR,N,N,Y,N,Y,Russia war + grain concentration
+RUS,N,N,Y,N,Y,Ukraine war + oil concentration + sanctions
+SDN,N,N,Y,Y,N,Civil war since April 2023 + military junta
+SYR,N,N,Y,Y,Y,Civil war + Assad regime fall 2024 + regime transition
+YEM,N,N,Y,N,N,Ongoing civil war
+MMR,N,N,Y,Y,N,2021 coup still + civil war (not landlocked but land-bordered)
+IRQ,N,N,Y,N,Y,Post-ISIS + oil concentration
+LBY,N,N,Y,N,Y,Internal divisions + oil concentration
+VEN,N,N,N,N,Y,Oil concentration + prolonged crisis
+LBN,N,N,N,Y,N,Political stalemate + Israeli border conflict
+IRN,N,N,N,N,Y,Oil concentration + sanctions + Israeli tensions
+ISR,N,N,Y,N,N,Gaza/Lebanon border conflict 2023-
+# ── Major single-commodity exporters not otherwise flagged ──
+NGA,N,N,N,N,Y,Oil >85% exports; Boko Haram in northeast
+KWT,N,N,N,N,Y,Oil >90% exports
+SAU,N,N,N,N,Y,Oil >60% exports
+QAT,N,N,N,N,Y,LNG concentration
+ARE,N,N,N,N,Y,Oil/gas + reexports
+OMN,N,N,N,N,Y,Oil concentration
+BHR,N,N,N,N,Y,Oil concentration
+DZA,N,N,N,N,Y,Oil/gas concentration
+AGO,N,N,N,N,Y,Oil >90% exports
+GHA,N,N,N,N,Y,Gold/cocoa/oil concentration
