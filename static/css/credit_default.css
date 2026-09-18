@@ -575,3 +575,157 @@
 .cd-method-body code {
   background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 12px;
 }
+
+/* ── Responsive: tablet & mobile ─────────────────────────────────────── */
+
+/* Reduce padding so we get real screen width back below 900px */
+@media (max-width: 900px) {
+  .cd-page {
+    padding: 16px 12px 40px;
+  }
+  .cd-title {
+    font-size: 22px;
+  }
+  .cd-subtitle {
+    font-size: 12px;
+  }
+  .cd-header {
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 14px;
+  }
+  .cd-status {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .cd-status-item {
+    padding: 6px 10px;
+    min-width: 72px;
+  }
+  .cd-status-value {
+    font-size: 16px;
+  }
+  .cd-status-label {
+    font-size: 9px;
+  }
+
+  /* Toolbar wraps so the cadence / filter chips stack cleanly */
+  .cd-toolbar {
+    gap: 8px;
+  }
+  #cd-search, #cd-region-filter {
+    flex: 1 1 160px;
+    min-width: 0;
+    font-size: 13px;
+  }
+  .cd-toggle-group {
+    flex: 0 0 auto;
+  }
+  .cd-toggle {
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+}
+
+/* Full mobile — one column, tighter grids */
+@media (max-width: 640px) {
+  .cd-page {
+    padding: 12px 8px 32px;
+  }
+  .cd-title {
+    font-size: 20px;
+  }
+  .cd-status {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    width: 100%;
+    gap: 6px;
+  }
+  .cd-status-item {
+    min-width: 0;
+    padding: 6px 10px;
+  }
+  .cd-export-btn {
+    grid-column: span 2;
+    justify-content: center;
+    padding: 8px 12px;
+  }
+
+  /* Watchlist stacks; charts get tighter min-height */
+  .cd-watchlist {
+    gap: 12px;
+    margin: 12px 0;
+  }
+  .cd-watchlist-panel {
+    padding: 10px 12px;
+  }
+  .cd-watchlist-title {
+    font-size: 12px;
+  }
+  .cd-watchlist-chart-wrap,
+  .cd-watchlist-chart-wrap canvas {
+    min-height: 220px;
+  }
+  .cd-watchlist-chart-wrap canvas {
+    height: 220px !important;
+  }
+  .cd-watchlist-tabs .cd-toggle {
+    padding: 3px 7px;
+    font-size: 10px;
+    min-width: 28px;
+  }
+  .cd-watchlist-note {
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  /* Table: horizontal scroll instead of wrapping */
+  .cd-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cd-table {
+    font-size: 11px;
+    min-width: 640px;
+  }
+  .cd-table th, .cd-table td {
+    padding: 6px 8px;
+  }
+
+  /* Detail view: sidebar becomes a horizontal scroller */
+  .cd-detail-view {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+    min-height: auto;
+  }
+  .cd-detail-sidebar {
+    position: static;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  /* Methodology dialog fits smaller screens */
+  .cd-dialog {
+    max-width: 96vw;
+  }
+}
+
+/* Extra-small phones (<380px) — even tighter */
+@media (max-width: 380px) {
+  .cd-page {
+    padding: 10px 6px 24px;
+  }
+  .cd-status {
+    grid-template-columns: 1fr 1fr;
+  }
+  .cd-title {
+    font-size: 18px;
+  }
+  .cd-watchlist-chart-wrap,
+  .cd-watchlist-chart-wrap canvas {
+    min-height: 200px;
+    height: 200px !important;
+  }
+}

@@ -198,10 +198,16 @@
     if (!data) return;
     const spec = WATCHLIST_HORIZON_KEYS[state.watchlistMode] || WATCHLIST_HORIZON_KEYS.imminent;
     const rows = data[state.watchlistMode] || [];
+    // Belt-and-braces: destroy any prior chart FIRST, then decide whether
+    // to render or show empty state. Previously the canvas display was
+    // set to 'none' but Chart.js kept a live instance drawing into an
+    // off-screen buffer, and if a horizon toggle switched back to a mode
+    // with data, the stale chart briefly flashed before the new one
+    // rendered.
+    if (watchlistImminentChart) { watchlistImminentChart.destroy(); watchlistImminentChart = null; }
     if (!rows.length) {
       canvas.style.display = 'none';
       if (empty) empty.hidden = false;
-      if (watchlistImminentChart) { watchlistImminentChart.destroy(); watchlistImminentChart = null; }
       return;
     }
     canvas.style.display = '';
@@ -271,10 +277,11 @@
     const empty = document.getElementById('cd-watchlist-deterioration-empty');
     if (!canvas || typeof Chart === 'undefined') return;
     const rows = (state.watchlistData && state.watchlistData.deterioration) || [];
+    // Destroy any prior chart before deciding empty vs render.
+    if (watchlistDeteriorationChart) { watchlistDeteriorationChart.destroy(); watchlistDeteriorationChart = null; }
     if (!rows.length) {
       canvas.style.display = 'none';
       if (empty) empty.hidden = false;
-      if (watchlistDeteriorationChart) { watchlistDeteriorationChart.destroy(); watchlistDeteriorationChart = null; }
       return;
     }
     canvas.style.display = '';
@@ -329,11 +336,19 @@
               afterBody(ctxs) {
                 if (!ctxs.length) return '';
                 const r = rows[ctxs[0].dataIndex];
-                return [
-                  `${r.prior_period || ''} → ${r.latest_period || ''}`,
-                  r.agency_sp ? `S&P: ${r.agency_sp}` : '',
-                  r.region || '',
-                ].filter(Boolean);
+                const lines = [`${r.prior_period || ''} → ${r.latest_period || ''}`];
+                // Include the RATING notch delta alongside the PD delta —
+                // if the model rating moved, that's often more actionable
+                // for underwriters than the raw PD change.
+                if (r.prior_pm_notch && r.latest_pm_notch) {
+                  const nd = r.notch_delta;
+                  const arrow = nd == null ? '=' : (nd > 0 ? '↓' : (nd < 0 ? '↑' : '='));
+                  const ndTxt = nd == null ? '' : (nd === 0 ? ' (aligned)' : ` (${nd > 0 ? '+' : ''}${nd} notches)`);
+                  lines.push(`Rating: ${r.prior_pm_notch} ${arrow} ${r.latest_pm_notch}${ndTxt}`);
+                }
+                if (r.agency_sp) lines.push(`S&P: ${r.agency_sp}`);
+                if (r.region) lines.push(r.region);
+                return lines.filter(Boolean);
               },
             },
           },
@@ -951,9 +966,22 @@
     // running in parallel) — we merge them into a single band per
     // overlapping cluster so the chart doesn't end up as a wall of
     // stacked transparent reds with overlapping labels.
+    //
+    // Also: only paint bands for spells whose ONSET falls within the
+    // visible window. Long-running HIPC-era Paris Club / arrears spells
+    // (BDI 1985-ongoing, CAF 1970-ongoing, MMR 1976-ongoing) would
+    // otherwise clamp to the full [yMin, yMax] range and fill the entire
+    // chart red — hiding the actual PD trajectory the user is trying to
+    // read. Only *new* onsets are informative event markers.
     const HARD_EVENT_TYPES = new Set(['default', 'restructuring', 'arrears']);
     const rawBands = (h.default_events || [])
       .filter((e) => HARD_EVENT_TYPES.has(e.event_type))
+      .filter((e) => {
+        // Skip spells that started before the chart's visible window —
+        // otherwise they clamp to yMin and merge into a giant band.
+        const s = e.start_year || 0;
+        return s >= yMin;
+      })
       .map((e) => {
         const start = Math.max(yMin, e.start_year || yMin);
         const end = Math.min(yMax, e.end_year || yMax);
@@ -966,7 +994,11 @@
     const eventBands = [];
     rawBands.forEach((b) => {
       const last = eventBands[eventBands.length - 1];
-      if (last && b.start <= last.end + 1) {
+      // Merge overlapping bands only when they truly overlap. The old
+      // "+1 tolerance" was tuning for annual grain but ended up merging
+      // decade-scale spells that share a boundary. Strict overlap keeps
+      // the visual honest.
+      if (last && b.start <= last.end) {
         last.end = Math.max(last.end, b.end);
         last.types.add(b.type);
       } else {

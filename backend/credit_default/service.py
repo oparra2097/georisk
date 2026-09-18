@@ -179,8 +179,135 @@ def get_country(iso3: str, cadence: str = 'annual',
     overlay = cd_overlay.apply_overlay(iso3, rating.get('pm_numeric'))
     if overlay:
         rating['structural_overlay'] = overlay
-        country['rating'] = rating
+
+    # Attach YoY rating deterioration (current vs prior year model
+    # notch + PD) so the drilldown UI can flag "improving" / "stable" /
+    # "deteriorating" without a second round-trip.
+    deterioration = compute_country_deterioration(
+        iso3, horizon_years=horizon, cadence=cadence,
+    )
+    if deterioration:
+        rating['deterioration'] = deterioration
+
+    country['rating'] = rating
     return country
+
+
+def compute_country_deterioration(iso3: str, horizon_years: int = 1,
+                                  cadence: str = 'annual') -> Optional[Dict]:
+    """Compare the country's current rating to its prior year (and 3-year
+    baseline where available) using the model's own historical scores.
+
+    Returns::
+
+        {
+          'current_period': '2026',
+          'current_pm_notch': '5-',
+          'current_pm_numeric': 13,
+          'current_pd_1y': 0.184,
+          'prior_period': '2025',
+          'prior_pm_notch': '5+',
+          'prior_pm_numeric': 11,
+          'prior_pd_1y': 0.145,
+          'yoy_notch_delta': +2,       # positive = deteriorating
+          'yoy_pd_delta_pp': +3.9,     # positive = deteriorating (in pp)
+          'three_yr_notch_delta': +4,  # over 3 years, if available
+          'three_yr_pd_delta_pp': +7.2,
+          'verdict': 'deteriorating',  # 'deteriorating' | 'stable' | 'improving'
+          'trajectory': [              # last 5 years for the mini-chart
+            {'period': '2022', 'pm_notch': '4+', 'pm_numeric': 8,  'pd_1y': 0.083},
+            ...
+          ],
+        }
+
+    Returns ``None`` if the country has no fitted historical scores
+    (needs get_country_history to return at least 2 rows).
+    """
+    try:
+        hist = get_country_history(iso3, horizon_years=horizon_years, cadence=cadence)
+    except Exception as e:  # noqa: BLE001
+        print(f'[credit_default.service] deterioration history failed for {iso3}: {e}')
+        return None
+    if not hist:
+        return None
+    h = (hist.get('history') or [])
+    if len(h) < 2:
+        return None
+
+    current = h[-1]
+    prior = h[-2]
+    curr_num = current.get('pm_numeric')
+    prior_num = prior.get('pm_numeric')
+    curr_pd = current.get('pd_1y') or current.get('model_pd')
+    prior_pd = prior.get('pd_1y') or prior.get('model_pd')
+
+    yoy_notch = None
+    if curr_num is not None and prior_num is not None:
+        yoy_notch = int(curr_num) - int(prior_num)
+    yoy_pd_pp = None
+    if curr_pd is not None and prior_pd is not None:
+        yoy_pd_pp = round((float(curr_pd) - float(prior_pd)) * 100.0, 2)
+
+    # 3-year baseline
+    three_yr_notch = None
+    three_yr_pd_pp = None
+    if len(h) >= 4:
+        three_prior = h[-4]
+        tp_num = three_prior.get('pm_numeric')
+        tp_pd = three_prior.get('pd_1y') or three_prior.get('model_pd')
+        if curr_num is not None and tp_num is not None:
+            three_yr_notch = int(curr_num) - int(tp_num)
+        if curr_pd is not None and tp_pd is not None:
+            three_yr_pd_pp = round((float(curr_pd) - float(tp_pd)) * 100.0, 2)
+
+    verdict = _deterioration_verdict(yoy_notch, yoy_pd_pp)
+    trajectory = [
+        {
+            'period': r.get('period') or str(r.get('year', '')),
+            'pm_notch': r.get('pm_notch'),
+            'pm_numeric': r.get('pm_numeric'),
+            'pd_1y': r.get('pd_1y') or r.get('model_pd'),
+        }
+        for r in h[-5:]
+    ]
+
+    return {
+        'current_period': current.get('period') or str(current.get('year', '')),
+        'current_pm_notch': current.get('pm_notch'),
+        'current_pm_numeric': curr_num,
+        'current_pd_1y': curr_pd,
+        'prior_period': prior.get('period') or str(prior.get('year', '')),
+        'prior_pm_notch': prior.get('pm_notch'),
+        'prior_pm_numeric': prior_num,
+        'prior_pd_1y': prior_pd,
+        'yoy_notch_delta': yoy_notch,
+        'yoy_pd_delta_pp': yoy_pd_pp,
+        'three_yr_notch_delta': three_yr_notch,
+        'three_yr_pd_delta_pp': three_yr_pd_pp,
+        'verdict': verdict,
+        'trajectory': trajectory,
+    }
+
+
+def _deterioration_verdict(notch_delta, pd_delta_pp) -> str:
+    """Classify YoY movement. Both are 'positive = worse credit'.
+
+    Rules of thumb: any 2+ notch downgrade OR 3pp+ PD rise = deteriorating;
+    ≥1-notch upgrade OR ≥2pp PD drop = improving; else stable.
+    """
+    if notch_delta is not None:
+        if notch_delta >= 2:
+            return 'deteriorating'
+        if notch_delta <= -2:
+            return 'improving'
+    if pd_delta_pp is not None:
+        if pd_delta_pp >= 3.0:
+            return 'deteriorating'
+        if pd_delta_pp <= -2.0:
+            return 'improving'
+    if notch_delta is not None and abs(notch_delta) >= 1:
+        return 'deteriorating' if notch_delta > 0 else 'improving'
+    return 'stable'
 
 
 def get_country_history(iso3: str, horizon_years: int = 1,
@@ -655,11 +782,21 @@ def _compute_yoy_deterioration(rows: List[Dict], scan_n: int, top_n: int,
         delta_pp = float(latest - prior) * 100.0
         latest_period = h[-1].get('period') or str(h[-1].get('year', ''))
         prior_period = h[-2].get('period') or str(h[-2].get('year', ''))
+        # Also compute the RATING notch delta so the watchlist can
+        # surface trajectory in both the PD and the model-notch space.
+        latest_num = h[-1].get('pm_numeric')
+        prior_num = h[-2].get('pm_numeric')
+        notch_delta = None
+        if latest_num is not None and prior_num is not None:
+            notch_delta = int(latest_num) - int(prior_num)
         scored.append({
             **r,
             'pd_1y_latest': round(float(latest), 4),
             'pd_1y_prior': round(float(prior), 4),
             'delta_pp': round(delta_pp, 2),
+            'notch_delta': notch_delta,
+            'latest_pm_notch': h[-1].get('pm_notch'),
+            'prior_pm_notch': h[-2].get('pm_notch'),
             'latest_period': latest_period,
             'prior_period': prior_period,
         })
