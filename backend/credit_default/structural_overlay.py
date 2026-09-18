@@ -167,6 +167,51 @@ def compute_notch_adjustment(iso3: str) -> Tuple[int, List[Dict]]:
     return total, breakdown
 
 
+def _has_hard_external_default(iso3: str, current_year: Optional[int] = None) -> bool:
+    """True iff the country has an ACTIVE hard external default per CRAG.
+
+    Hard external default = ``event_type == 'default'`` with instrument in
+    {external_bond, mixed}, and end_year is either blank (ongoing) or ≥
+    current_year - 1. Paris Club rescheduling, London Club bank-loan
+    restructuring, and domestic arrears are NOT hard external defaults —
+    they signal distress but the country is still servicing its
+    hard-currency bonds.
+
+    Used by ``apply_overlay`` to cap the overlay-adjusted rating at
+    CC (PM 8) unless the country is genuinely in Eurobond default.
+    """
+    try:
+        from backend.credit_default import defaults as cd_defaults
+        import time as _t
+        if current_year is None:
+            current_year = _t.localtime().tm_year
+        events = cd_defaults.load_events(include_distress=False)
+        for ev in events:
+            if ev.get('iso3') != iso3.upper():
+                continue
+            if ev.get('event_type') != 'default':
+                continue
+            # Restrict to external instruments — domestic hard defaults
+            # (e.g. GKO 1998) are also hard defaults, so we keep those too.
+            instrument = (ev.get('instrument') or '').lower()
+            if 'external' not in instrument and 'mixed' not in instrument and instrument != 'domestic':
+                continue
+            end = ev.get('end_year')
+            # Ongoing spell (end blank) or spell that reached the last
+            # panel year — count as active.
+            if end is None or int(end) >= (current_year - 1):
+                return True
+        return False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+# PM notch numeric ceiling when NOT in hard default. 18 = CC = "default
+# imminent". The overlay can push a country to CC but not to SD (19) or
+# D (20) unless CRAG confirms an actual hard-currency default event.
+NOTCH_CAP_NO_HARD_DEFAULT = 18
+
+
 def apply_overlay(iso3: str, base_pm_numeric: Optional[int]) -> Dict:
     """Apply the structural overlay to a base rating.
 
@@ -182,6 +227,8 @@ def apply_overlay(iso3: str, base_pm_numeric: Optional[int]) -> Dict:
           'breakdown': [{flag, penalty, description}, ...],
           'notes': str,             # analyst notes from the CSV
           'capped_at_max': bool,    # True if we hit MAX_NOTCH_ADJUSTMENT
+          'capped_at_cc': bool,     # True if the hard-default cap kicked in
+          'hard_default_active': bool,  # True if CRAG shows a live external default
         }
 
     Returns ``None`` if the country isn't in the overlay file OR
@@ -195,15 +242,31 @@ def apply_overlay(iso3: str, base_pm_numeric: Optional[int]) -> Dict:
     total, breakdown = compute_notch_adjustment(iso3)
     if not breakdown:
         return None
-    adjusted = min(20, max(1, int(base_pm_numeric) + total))
+
+    hard_default = _has_hard_external_default(iso3)
+    raw_adjusted = min(20, max(1, int(base_pm_numeric) + total))
+    # Cap at CC (18) unless there's a confirmed hard external default —
+    # per the AIG ORR mapping, ORR 8 = CC = "default imminent, not yet
+    # in one"; only ORR 9 (SD/RD/C) and ORR 10 (D) represent actual
+    # default states.
+    if hard_default:
+        adjusted = raw_adjusted
+        capped_at_cc = False
+    else:
+        adjusted = min(raw_adjusted, NOTCH_CAP_NO_HARD_DEFAULT)
+        capped_at_cc = raw_adjusted > NOTCH_CAP_NO_HARD_DEFAULT
+
     return {
         'base_pm_numeric': int(base_pm_numeric),
         'base_pm_notch': _NUM_TO_NOTCH.get(int(base_pm_numeric)),
         'adjustment_notches': total,
+        'raw_adjusted_pm_numeric': raw_adjusted,
         'adjusted_pm_numeric': adjusted,
         'adjusted_pm_notch': _NUM_TO_NOTCH.get(adjusted),
         'adjusted_sp_equiv': _SP_EQUIV_BY_NUM.get(adjusted),
         'breakdown': breakdown,
         'notes': entry.get('notes') or '',
         'capped_at_max': total >= MAX_NOTCH_ADJUSTMENT,
+        'capped_at_cc': capped_at_cc,
+        'hard_default_active': hard_default,
     }
