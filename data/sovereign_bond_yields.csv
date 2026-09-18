@@ -1,0 +1,57 @@
+# Sovereign bond yield seed file — USD-denominated benchmark issues where
+# available, local-currency 10Y otherwise (with the `currency` column noting
+# which). Values are hand-curated snapshots for demonstration; refresh from
+# Bloomberg / TR / EMBI+ for production use.
+#
+# Columns:
+#   iso3            — ISO-3 sovereign code
+#   currency        — 'USD' (hard-currency Eurobond spread over UST 10Y)
+#                     or the local-currency ticker for 10Y govie
+#   maturity_years  — benchmark tenor (usually 10)
+#   yield_pct       — quoted yield (as %)
+#   as_of           — snapshot date (YYYY-MM-DD)
+#   note            — optional
+#
+# The bond_trades.py loader auto-computes spread over the current UST 10Y
+# yield (loaded from FRED via em_fx_rates.py), so this file only needs the
+# ABSOLUTE yield — not the spread. If you know the spread directly (e.g.
+# from an EMBI+ book), leave yield_pct blank and add a `spread_bps` column.
+iso3,currency,maturity_years,yield_pct,as_of,note
+USA,USD,10,4.20,2026-09-18,UST 10Y benchmark
+DEU,EUR,10,2.60,2026-09-18,Bund 10Y
+GBR,GBP,10,4.30,2026-09-18,Gilt 10Y
+JPN,JPY,10,1.60,2026-09-18,JGB 10Y
+BRA,USD,10,7.20,2026-09-18,USD sovereign
+MEX,USD,10,6.40,2026-09-18,USD sovereign
+COL,USD,10,7.80,2026-09-18,USD sovereign
+CHL,USD,10,5.30,2026-09-18,USD sovereign
+PER,USD,10,6.10,2026-09-18,USD sovereign
+ARG,USD,10,14.50,2026-09-18,USD restructured
+TUR,USD,10,7.90,2026-09-18,USD sovereign
+ZAF,USD,10,7.60,2026-09-18,USD sovereign
+IND,USD,10,5.60,2026-09-18,USD sovereign
+IDN,USD,10,5.80,2026-09-18,USD sovereign
+PHL,USD,10,5.50,2026-09-18,USD sovereign
+VNM,USD,10,5.20,2026-09-18,USD sovereign
+EGY,USD,10,9.30,2026-09-18,USD sovereign
+NGA,USD,10,10.60,2026-09-18,USD sovereign
+GHA,USD,10,12.80,2026-09-18,Post-restructuring 2024
+KEN,USD,10,9.90,2026-09-18,USD sovereign
+LKA,USD,10,11.40,2026-09-18,Post-restructuring 2024
+PAK,USD,10,11.20,2026-09-18,USD sovereign
+UKR,USD,10,15.60,2026-09-18,USD sovereign
+POL,USD,10,4.80,2026-09-18,USD sovereign
+HUN,USD,10,5.30,2026-09-18,USD sovereign
+ROU,USD,10,5.60,2026-09-18,USD sovereign
+SAU,USD,10,5.10,2026-09-18,USD sovereign
+QAT,USD,10,4.70,2026-09-18,USD sovereign
+ARE,USD,10,4.60,2026-09-18,USD sovereign
+OMN,USD,10,6.30,2026-09-18,USD sovereign
+JOR,USD,10,7.20,2026-09-18,USD sovereign
+MAR,USD,10,5.40,2026-09-18,USD sovereign
+DOM,USD,10,6.70,2026-09-18,USD sovereign
+GTM,USD,10,6.30,2026-09-18,USD sovereign
+CRI,USD,10,6.30,2026-09-18,USD sovereign
+PAN,USD,10,6.60,2026-09-18,USD sovereign
+JAM,USD,10,7.40,2026-09-18,USD sovereign
+SLV,USD,10,10.10,2026-09-18,USD sovereign
