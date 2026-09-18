@@ -4,33 +4,25 @@ Fetches indicator data (e.g. NGDP_RPCH = real GDP growth) for all countries.
 """
 
 import time
-import threading
 import requests
 
-_cache = {}
-_cache_lock = threading.Lock()
-_CACHE_TTL = 86400  # 24 hours
+from backend.data_sources._cache import cached
 
 # IMF WEO API base
 _WEO_API = 'https://www.imf.org/external/datamapper/api/v1'
 
 
+@cached(namespace='imf_weo', ttl=86400, disk=True)
 def get_weo_data(indicator='NGDP_RPCH'):
-    """Fetch WEO data for the given indicator. Returns cached if fresh."""
-    cache_key = f'weo_{indicator}'
+    """Fetch WEO data for the given indicator. Returns cached if fresh.
 
-    with _cache_lock:
-        if cache_key in _cache:
-            entry = _cache[cache_key]
-            if time.time() - entry['ts'] < _CACHE_TTL:
-                return entry['data']
-
-    data = _fetch_weo(indicator)
-
-    with _cache_lock:
-        _cache[cache_key] = {'data': data, 'ts': time.time()}
-
-    return data
+    The shared ``@cached`` decorator handles TTL, disk persistence
+    (survives redeploys via ``Config.DATA_DIR/imf_weo_cache/``), per-key
+    locking and stale-serve-on-error — so if a fresh fetch fails but
+    we already had a prior successful payload, callers get the prior
+    payload rather than an empty error dict.
+    """
+    return _fetch_weo(indicator)
 
 
 def _fetch_weo(indicator):
@@ -99,6 +91,11 @@ def _fetch_weo(indicator):
 
     except Exception as e:
         print(f'[WEO] Error fetching {indicator}: {e}')
+        # Return an empty-error dict so existing callers can keep
+        # doing ``data.get('countries')`` without exception handling.
+        # The @cached decorator will still serve a PRIOR successful
+        # payload if one exists on disk — this fallback only lands
+        # when we have nothing cached at all.
         return {
             'countries': {},
             'years': [],

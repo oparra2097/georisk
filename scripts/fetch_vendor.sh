@@ -31,6 +31,13 @@ mkdir -p "$VENDOR/world-atlas"
 curl -sSL "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json" \
   -o "$VENDOR/world-atlas/countries-110m.json"
 
+echo "→ us-atlas states-10m.json + counties-10m.json (house_prices choropleth)"
+mkdir -p "$VENDOR/us-atlas"
+curl -sSL "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json" \
+  -o "$VENDOR/us-atlas/states-10m.json"
+curl -sSL "https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json" \
+  -o "$VENDOR/us-atlas/counties-10m.json"
+
 echo
 echo "Vendored files:"
 ls -lh "$VENDOR"/*.js "$VENDOR/world-atlas/"*.json

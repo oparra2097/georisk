@@ -484,7 +484,7 @@ const DataCenterMap = {
 
   async loadStates() {
     try {
-      const us = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json');
+      const us = await d3.json('/static/vendor/us-atlas/states-10m.json');
       const states = topojson.feature(us, us.objects.states);
       const nation = topojson.mesh(us, us.objects.states, (a, b) => a !== b);
 

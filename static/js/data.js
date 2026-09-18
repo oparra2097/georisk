@@ -3175,7 +3175,7 @@
         const filteredSet = new Set(filtered.map(([iso3]) => iso3));
 
         try {
-            const world = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+            const world = await d3.json('/static/vendor/world-atlas/countries-110m.json');
             const geoCountries = topojson.feature(world, world.objects.countries);
 
             const paths = g.selectAll('path.sd-country')

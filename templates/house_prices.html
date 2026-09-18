@@ -350,8 +350,8 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<script src="/static/vendor/d3.v7.min.js"></script>
+<script src="/static/vendor/topojson-client.min.js"></script>
 <script>
 (function() {
   const API = '/api/house-prices';
@@ -717,7 +717,7 @@
     map.path = d3.geoPath(map.projection);
 
     try {
-      map.statesTopo = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json');
+      map.statesTopo = await d3.json('/static/vendor/us-atlas/states-10m.json');
     } catch (e) {
       $('hp-map-overlay').textContent = 'Map topology failed to load.';
       console.error('topojson load:', e);
@@ -898,7 +898,7 @@
       $('hp-map-overlay').classList.remove('hidden');
       $('hp-map-overlay').textContent = 'Loading county geometries…';
       try {
-        map.countiesTopo = await d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json');
+        map.countiesTopo = await d3.json('/static/vendor/us-atlas/counties-10m.json');
       } catch (e) {
         $('hp-map-overlay').textContent = 'County topology failed to load.';
         return;

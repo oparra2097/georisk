@@ -2,7 +2,7 @@ services:
   - type: web
     name: georisk-monitor
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && bash scripts/fetch_vendor.sh || true
     startCommand: gunicorn app:create_app() --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     disk:
       name: georisk-data
