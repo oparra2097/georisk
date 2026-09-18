@@ -1,0 +1,219 @@
+/*
+ * /commodities — dedicated dashboard for oil & gas, agriculture, metals
+ * and the fertilizer / EM-inflation corridor.
+ *
+ * Dark theme with local `--co-*` tokens sourced from the site's global
+ * `--bg-*` / `--text-*` / `--accent` vars.
+ */
+
+.co-page {
+  --co-bg:            var(--bg-primary,    #0a0e1a);
+  --co-surface:       var(--bg-secondary,  #111827);
+  --co-surface-2:     #1a2035;
+  --co-border:        var(--border,        #1f2937);
+  --co-text:          var(--text-primary,  #e5e7eb);
+  --co-text-dim:      var(--text-secondary,#9ca3af);
+  --co-text-mute:     var(--text-muted,    #6b7280);
+  --co-accent:        var(--accent,        #3b82f6);
+  --co-accent-soft:   rgba(59, 130, 246, 0.15);
+  --co-good:          #10b981;
+  --co-bad:           #ef4444;
+
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  color: var(--co-text);
+}
+
+.co-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--co-border);
+}
+.co-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--co-text);
+  letter-spacing: -0.01em;
+}
+.co-subtitle {
+  font-size: 13px;
+  color: var(--co-text-dim);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 780px;
+}
+
+/* Segmented tabs */
+.co-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--co-border);
+  margin: 24px 0 20px;
+  overflow-x: auto;
+}
+.co-tab {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--co-text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .1s, border-color .1s;
+}
+.co-tab:hover { color: var(--co-text); }
+.co-tab.active {
+  color: var(--co-accent);
+  border-bottom-color: var(--co-accent);
+}
+
+/* Card grid */
+.co-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+.co-card {
+  background: var(--co-surface);
+  border: 1px solid var(--co-border);
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color .15s;
+}
+.co-card:hover { border-color: var(--co-accent); }
+.co-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--co-text);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  letter-spacing: -0.01em;
+}
+.co-card-title .commodity-ticker {
+  font-size: 11px;
+  color: var(--co-text-mute);
+  font-weight: 500;
+}
+
+/* Scenario chips */
+.co-scenarios {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--co-border);
+}
+.co-scenario {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+.co-scenario.base {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+.co-scenario.bull {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.co-scenario.bear {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.co-scenario .label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--co-text-mute);
+}
+.co-scenario.base .label { color: var(--co-accent); }
+.co-scenario.bull .label { color: var(--co-good); }
+.co-scenario.bear .label { color: var(--co-bad); }
+.co-scenario .value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--co-text);
+}
+.co-scenario .horizon {
+  font-size: 10px;
+  color: var(--co-text-mute);
+}
+
+/* Links row */
+.co-links {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  flex-wrap: wrap;
+}
+.co-links a {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--co-surface-2);
+  color: var(--co-text-dim);
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid var(--co-border);
+  transition: background .1s, color .1s, border-color .1s;
+}
+.co-links a:hover {
+  background: var(--co-accent);
+  color: #fff;
+  border-color: var(--co-accent);
+}
+
+.co-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--co-text-mute);
+  font-size: 13px;
+}
+
+/* Methodology drawer */
+.co-methodology {
+  background: var(--co-surface-2);
+  border: 1px solid var(--co-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-top: 24px;
+}
+.co-methodology summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--co-text);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.co-methodology[open] summary {
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--co-border);
+  padding-bottom: 10px;
+}
+.co-methodology .content {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--co-text-dim);
+  white-space: pre-wrap;
+}
+.co-methodology .content code {
+  background: var(--co-surface);
+  color: var(--co-accent);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}

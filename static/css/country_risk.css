@@ -1,0 +1,168 @@
+/*
+ * /country-risk — parent surface for GeoRisk, Sovereign Credit Default,
+ * EM FX & Rates, and EM External Vulnerability.
+ *
+ * Dark theme mirroring credit_default.css. Local `--cr-*` tokens
+ * source from the site's global `--bg-*` / `--text-*` / `--accent`
+ * vars with hardcoded fallbacks, so the page still renders coherently
+ * if site.css fails to load.
+ */
+
+.cr-page {
+  --cr-bg:            var(--bg-primary,    #0a0e1a);
+  --cr-surface:       var(--bg-secondary,  #111827);
+  --cr-surface-2:     #1a2035;
+  --cr-border:        var(--border,        #1f2937);
+  --cr-border-strong: #2a3245;
+  --cr-text:          var(--text-primary,  #e5e7eb);
+  --cr-text-dim:      var(--text-secondary,#9ca3af);
+  --cr-text-mute:     var(--text-muted,    #6b7280);
+  --cr-accent:        var(--accent,        #3b82f6);
+  --cr-accent-soft:   rgba(59, 130, 246, 0.12);
+  --cr-good:          #10b981;
+  --cr-bad:           #ef4444;
+  --cr-warn:          #f59e0b;
+
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  color: var(--cr-text);
+}
+
+.cr-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--cr-border);
+}
+.cr-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--cr-text);
+  letter-spacing: -0.01em;
+}
+.cr-subtitle {
+  font-size: 13px;
+  color: var(--cr-text-dim);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 780px;
+}
+
+/* Headline stats row */
+.cr-headline {
+  background: var(--cr-surface-2);
+  border: 1px solid var(--cr-border);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 24px 0;
+}
+.cr-headline h2 {
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 14px;
+  color: var(--cr-text-mute);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cr-headline-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.cr-headline-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cr-headline-item .val {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cr-accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.cr-headline-item .lbl {
+  font-size: 11px;
+  color: var(--cr-text-dim);
+}
+.cr-headline-item .sub {
+  font-size: 11px;
+  color: var(--cr-text-mute);
+}
+
+/* Product cards */
+.cr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+.cr-card {
+  background: var(--cr-surface);
+  border: 1px solid var(--cr-border);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .15s, box-shadow .15s;
+}
+.cr-card:hover {
+  border-color: var(--cr-accent);
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.15);
+}
+.cr-card-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cr-accent);
+  font-weight: 700;
+  margin: 0;
+}
+.cr-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--cr-text);
+  letter-spacing: -0.01em;
+}
+.cr-card-desc {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--cr-text-dim);
+  margin: 0;
+  flex: 1;
+}
+.cr-card-stats {
+  display: flex;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cr-border);
+}
+.cr-stat {
+  display: flex;
+  flex-direction: column;
+}
+.cr-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cr-text);
+  font-variant-numeric: tabular-nums;
+}
+.cr-stat-label {
+  font-size: 10px;
+  color: var(--cr-text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.cr-card-cta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cr-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
