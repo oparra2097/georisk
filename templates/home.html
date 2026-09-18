@@ -1,11 +1,144 @@
 {% extends "base.html" %}
-{% block title %}Parra Macro - Macro Research & Geopolitical Risk{% endblock %}
+{% block title %}Parra Macro — Country Risk & Commodities Strategy{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/home.css">
+<style>
+  /* Hero — macro strategist positioning */
+  .home-hero {
+    max-width: 1200px; margin: 32px auto 12px; padding: 0 24px;
+  }
+  .home-hero-eyebrow {
+    color: #6b7280; font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; font-weight: 600; margin: 0 0 8px;
+  }
+  .home-hero-title {
+    font-size: clamp(28px, 4.5vw, 44px); font-weight: 700;
+    letter-spacing: -0.02em; line-height: 1.12; margin: 0 0 16px;
+    color: #111827;
+  }
+  .home-hero-title .accent { color: #dc2626; }
+  .home-hero-lede {
+    font-size: 16px; color: #374151; line-height: 1.6; max-width: 680px;
+    margin: 0 0 20px;
+  }
+  .home-hero-cta {
+    display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+  }
+  .home-cta-primary {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 18px; background: #111827; color: #fff;
+    border-radius: 8px; text-decoration: none; font-weight: 600;
+    font-size: 14px; transition: background .1s;
+  }
+  .home-cta-primary:hover { background: #dc2626; }
+  .home-cta-secondary {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 18px; background: #fff; color: #111827;
+    border: 1px solid #d1d5db; border-radius: 8px;
+    text-decoration: none; font-weight: 600; font-size: 14px;
+  }
+  .home-hero-substack {
+    display: inline-flex; align-items: center; gap: 8px; margin-left: auto;
+    font-size: 12px; color: #6b7280;
+  }
+  .home-hero-substack a {
+    color: #dc2626; text-decoration: none; font-weight: 600;
+  }
+  @media (max-width: 720px) {
+    .home-hero { margin: 20px auto 8px; padding: 0 16px; }
+    .home-hero-substack { margin-left: 0; margin-top: 8px; }
+  }
+
+  /* This week's trades strip */
+  .home-trades-strip {
+    max-width: 1200px; margin: 8px auto 24px; padding: 0 24px;
+  }
+  .home-trades-title {
+    display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px;
+  }
+  .home-trades-title h2 {
+    font-size: 15px; font-weight: 700; margin: 0; color: #111827;
+    letter-spacing: -0.005em;
+  }
+  .home-trades-title a {
+    font-size: 12px; color: #6b7280; text-decoration: none;
+    margin-left: auto;
+  }
+  .home-trades-title a:hover { color: #dc2626; }
+  .home-trades-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+  }
+  .home-trade-card {
+    padding: 14px 16px; background: #fff; border: 1px solid #e5e7eb;
+    border-radius: 8px; text-decoration: none; color: inherit;
+    display: block; transition: border-color .1s, box-shadow .1s;
+  }
+  .home-trade-card:hover {
+    border-color: #111827; box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .home-trade-side {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .home-trade-side.long  { background: #d1fae5; color: #065f46; }
+  .home-trade-side.short { background: #fee2e2; color: #991b1b; }
+  .home-trade-country {
+    font-size: 15px; font-weight: 600; margin: 6px 0 4px; color: #111827;
+  }
+  .home-trade-detail {
+    font-size: 12px; color: #6b7280; display: flex; gap: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+  .home-trade-edge { color: #111827; font-weight: 600; }
+</style>
 {% endblock %}
 
 {% block content %}
+<!-- Hero -->
+<section class="home-hero">
+  <p class="home-hero-eyebrow">Oscar Parra · Macro strategist</p>
+  <h1 class="home-hero-title">
+    Country risk &amp; commodities, called with
+    <span class="accent">data</span>.
+  </h1>
+  <p class="home-hero-lede">
+    Sovereign PDs and 1-10 internal ratings for ~190 countries, EM FX &amp;
+    rates screens, oil/gas/agriculture/metals forecasts with named
+    scenarios, and a weekly trade-ideas board tying it all together.
+    Published models, transparent methodology, monthly Substack.
+  </p>
+  <div class="home-hero-cta">
+    <a href="/trades" class="home-cta-primary">
+      Trade ideas
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </a>
+    <a href="/country-risk" class="home-cta-secondary">Country risk</a>
+    <a href="/commodities" class="home-cta-secondary">Commodities</a>
+    <span class="home-hero-substack">
+      New posts monthly on
+      <a href="https://theparrable.substack.com" target="_blank" rel="noopener">Substack →</a>
+    </span>
+  </div>
+</section>
+
+<!-- This week's trades -->
+<section class="home-trades-strip">
+  <div class="home-trades-title">
+    <h2>This week's trades</h2>
+    <a href="/trades">Open trade ideas board &rarr;</a>
+  </div>
+  <div class="home-trades-grid" id="home-trades-grid">
+    <div class="home-trade-card">
+      <div class="home-trade-detail">Loading model-vs-market signals…</div>
+    </div>
+  </div>
+</section>
+
 <!-- Scrolling Ticker Bar -->
 <div class="ticker-bar">
     <div class="ticker-track" id="ticker-track">
@@ -151,6 +284,42 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="/static/vendor/chart.umd.js"></script>
 <script src="/static/js/home.js"></script>
+<script>
+  // Populate "This week's trades" strip. Reads the bond-trade ranker
+  // and picks the top 3 by |edge|. On any error, we hide the strip so
+  // a fetch failure doesn't leave a stale loading state.
+  (function () {
+    const grid = document.getElementById('home-trades-grid');
+    if (!grid) return;
+    fetch('/api/credit-default/bond-trades?top_n=3&deterioration_scan=1')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) throw new Error('no data');
+        const rows = [
+          ...(data.longs || []).slice(0, 2).map((r) => ({ ...r, side: 'LONG' })),
+          ...(data.shorts || []).slice(0, 1).map((r) => ({ ...r, side: 'SHORT' })),
+        ];
+        if (!rows.length) {
+          document.querySelector('.home-trades-strip').style.display = 'none';
+          return;
+        }
+        grid.innerHTML = rows.map((r) => `
+          <a href="/trades" class="home-trade-card">
+            <span class="home-trade-side ${r.side === 'LONG' ? 'long' : 'short'}">${r.side}</span>
+            <div class="home-trade-country">${r.name || r.iso3}</div>
+            <div class="home-trade-detail">
+              <span>${r.spread_bps}bp spread</span>
+              <span class="home-trade-edge">${r.edge_pp > 0 ? '+' : ''}${r.edge_pp}pp edge</span>
+              <span>${r.pm_notch || '—'}</span>
+            </div>
+          </a>
+        `).join('');
+      })
+      .catch(() => {
+        document.querySelector('.home-trades-strip').style.display = 'none';
+      });
+  })();
+</script>
 {% endblock %}

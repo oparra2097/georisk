@@ -206,6 +206,46 @@ def create_app():
     def em_fx_rates():
         return render_template('em_fx_rates.html', active_page='em-fx-rates')
 
+    # ── New product hubs (Sept 2026 rebrand) ─────────────────────────────
+    # /country-risk, /commodities, /trades sit as top-level nav destinations
+    # elevating the country-risk and commodities products (previously buried
+    # under /data or reachable only via /models) and adding a dedicated trade
+    # ideas board. Every legacy URL keeps working — these are additive.
+
+    @app.route('/country-risk')
+    @social_or_login_required
+    def country_risk():
+        return render_template('country_risk.html', active_page='country-risk')
+
+    @app.route('/commodities')
+    @app.route('/commodities/<commodity>')
+    def commodities(commodity=None):
+        return render_template('commodities.html', active_page='commodities',
+                               focus_commodity=commodity)
+
+    @app.route('/trades')
+    @social_or_login_required
+    def trades():
+        return render_template('trades.html', active_page='trades')
+
+    # Legacy /data/commodities/* deep-links → new /commodities page. The
+    # data-state.js on /data will still resolve subpaths for legacy embeds
+    # but a fresh visitor lands on the dedicated page.
+    from flask import redirect
+    @app.route('/data/commodities')
+    @app.route('/data/commodities/<slug>')
+    def _legacy_commodities(slug=None):
+        if not slug:
+            return redirect('/commodities', code=301)
+        # Map old dataset slugs (forecast-oil / forecast-ag / etc.) to
+        # commodity-family keys the new page recognises via ?focus=.
+        mapping = {
+            'forecast-oil': 'wti_crude', 'forecast-ag': 'wheat',
+            'forecast-metals': 'copper', 'fertilizer-em-inflation': 'fertilizer',
+        }
+        commodity = mapping.get(slug, slug)
+        return redirect(f'/commodities/{commodity}', code=301)
+
     # ── Init ─────────────────────────────────────────────────────────────
     init_auth_db()
     init_scheduler(app)

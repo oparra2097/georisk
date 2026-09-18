@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Country Risk — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cr-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+  .cr-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
+  .cr-title { font-size: 26px; font-weight: 700; margin: 0 0 6px; color: #111827; }
+  .cr-subtitle { font-size: 13px; color: #6b7280; line-height: 1.55; margin: 0; max-width: 780px; }
+
+  .cr-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 18px; margin-top: 24px;
+  }
+  .cr-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 20px; display: flex; flex-direction: column; gap: 12px;
+    text-decoration: none; color: inherit; transition: border-color .15s, box-shadow .15s;
+  }
+  .cr-card:hover {
+    border-color: #111827; box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+  }
+  .cr-card-eyebrow {
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #6b7280; font-weight: 600; margin: 0;
+  }
+  .cr-card-title { font-size: 18px; font-weight: 700; margin: 0; color: #111827; }
+  .cr-card-desc { font-size: 13px; line-height: 1.55; color: #4b5563; margin: 0; flex: 1; }
+  .cr-card-stats { display: flex; gap: 16px; padding-top: 8px; border-top: 1px solid #f3f4f6; }
+  .cr-stat { display: flex; flex-direction: column; }
+  .cr-stat-value { font-size: 16px; font-weight: 700; color: #111827; font-variant-numeric: tabular-nums; }
+  .cr-stat-label { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; }
+  .cr-card-cta {
+    font-size: 12px; font-weight: 600; color: #dc2626; display: inline-flex;
+    align-items: center; gap: 4px;
+  }
+
+  .cr-headline {
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 20px; margin: 24px 0;
+  }
+  .cr-headline h2 { font-size: 13px; font-weight: 700; margin: 0 0 12px; color: #111827; letter-spacing: -0.005em; }
+  .cr-headline-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .cr-headline-item { display: flex; flex-direction: column; gap: 3px; }
+  .cr-headline-item .val { font-size: 22px; font-weight: 700; color: #dc2626; font-variant-numeric: tabular-nums; }
+  .cr-headline-item .lbl { font-size: 11px; color: #6b7280; }
+  .cr-headline-item .sub { font-size: 11px; color: #9ca3af; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cr-page">
+  <header class="cr-header">
+    <h1 class="cr-title">Country risk</h1>
+    <p class="cr-subtitle">
+      Three lenses on sovereign risk: real-time geopolitical scoring driven by
+      news signals, forward-looking probability of default and 1-10 internal
+      rating for ~190 sovereigns, and EM external vulnerability with
+      import-cover and short-term debt / reserves stress. Each dashboard
+      keeps its own detail view — this is the parent surface.
+    </p>
+  </header>
+
+  <!-- Headline stats -->
+  <section class="cr-headline">
+    <h2>Today's risk headlines</h2>
+    <div class="cr-headline-row" id="cr-headline">
+      <div class="cr-headline-item">
+        <span class="val" id="cr-hotspots">—</span>
+        <span class="lbl">GeoRisk hotspots</span>
+        <span class="sub">Score &ge; 70</span>
+      </div>
+      <div class="cr-headline-item">
+        <span class="val" id="cr-imminent">—</span>
+        <span class="lbl">Imminent PD leader</span>
+        <span class="sub">Highest 1Y PD</span>
+      </div>
+      <div class="cr-headline-item">
+        <span class="val" id="cr-in-default">—</span>
+        <span class="lbl">Sovereigns in default</span>
+        <span class="sub">CRAG live spell</span>
+      </div>
+      <div class="cr-headline-item">
+        <span class="val" id="cr-avg-pd">—</span>
+        <span class="lbl">Panel avg PD 1Y</span>
+        <span class="sub">~190 countries</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Product cards -->
+  <div class="cr-grid">
+
+    <a href="/georisk" class="cr-card">
+      <p class="cr-card-eyebrow">Real-time · News-driven</p>
+      <h3 class="cr-card-title">GeoRisk Monitor</h3>
+      <p class="cr-card-desc">
+        Composite country risk index combining World Bank governance indicators
+        (30%) with a live GDELT + news-sentiment signal (70%). Six risk
+        dimensions per country, 15-minute refresh, hotspot alerts.
+      </p>
+      <div class="cr-card-stats">
+        <div class="cr-stat"><span class="cr-stat-value">51</span><span class="cr-stat-label">Countries</span></div>
+        <div class="cr-stat"><span class="cr-stat-value">6</span><span class="cr-stat-label">Indicators</span></div>
+        <div class="cr-stat"><span class="cr-stat-value">15m</span><span class="cr-stat-label">Refresh</span></div>
+      </div>
+      <span class="cr-card-cta">Open dashboard &rarr;</span>
+    </a>
+
+    <a href="/credit-default" class="cr-card">
+      <p class="cr-card-eyebrow">Forward-looking · Fundamentals</p>
+      <h3 class="cr-card-title">Sovereign Credit Default</h3>
+      <p class="cr-card-desc">
+        Probability of default and 1-10 internal rating (with +/− on 2-6) for
+        ~190 sovereigns. Two-tier logit + gradient boost on macro / external /
+        fiscal indicators plus structural overlays for SIDS / LLDC / conflict.
+        Discounted-hazard 1Y / 3Y / 5Y term structure.
+      </p>
+      <div class="cr-card-stats">
+        <div class="cr-stat"><span class="cr-stat-value">~190</span><span class="cr-stat-label">Sovereigns</span></div>
+        <div class="cr-stat"><span class="cr-stat-value">3</span><span class="cr-stat-label">Horizons</span></div>
+        <div class="cr-stat"><span class="cr-stat-value">20</span><span class="cr-stat-label">Notch ladder</span></div>
+      </div>
+      <span class="cr-card-cta">Open dashboard &rarr;</span>
+    </a>
+
+    <a href="/em-fx-rates" class="cr-card">
+      <p class="cr-card-eyebrow">Market-pricing · Carry &amp; duration</p>
+      <h3 class="cr-card-title">EM FX &amp; Rates</h3>
+      <p class="cr-card-desc">
+        Spot + 1w / 1m / YTD / 1y moves for the major EM currencies vs USD,
+        the US Treasury curve, EM 10Y government-bond yields (FRED / OECD where
+        available), and rolling beta of each currency to the dollar and to oil.
+        Carry, duration and convexity screens surface trade opportunities.
+      </p>
+      <div class="cr-card-stats">
+        <div class="cr-stat"><span class="cr-stat-value">9</span><span class="cr-stat-label">EM 10Y yields</span></div>
+        <div class="cr-stat"><span class="cr-stat-value">daily</span><span class="cr-stat-label">Refresh</span></div>
+        <div class="cr-stat"><span class="cr-stat-value">3</span><span class="cr-stat-label">Screens</span></div>
+      </div>
+      <span class="cr-card-cta">Open dashboard &rarr;</span>
+    </a>
+
+    <a href="/data/trade/em-vulnerability" class="cr-card">
+      <p class="cr-card-eyebrow">Balance sheet · Bubble chart</p>
+      <h3 class="cr-card-title">EM External Vulnerability</h3>
+      <p class="cr-card-desc">
+        Foreign reserves / short-term external debt (X) vs basic balance
+        (current account + FDI) as a share of GDP (Y). GDP size drives bubble
+        size. IMF IFS quarterly overlay upgrades where available; sovereigns
+        with vulnerable balance sheets sit in the bottom-left quadrant.
+      </p>
+      <div class="cr-card-stats">
+        <div class="cr-stat"><span class="cr-stat-value">40+</span><span class="cr-stat-label">EMs</span></div>
+        <div class="cr-stat"><span class="cr-stat-value">2</span><span class="cr-stat-label">Dims</span></div>
+        <div class="cr-stat"><span class="cr-stat-value">quarterly</span><span class="cr-stat-label">Refresh</span></div>
+      </div>
+      <span class="cr-card-cta">Open chart &rarr;</span>
+    </a>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Populate the four headline stats from the existing product APIs.
+  // Each fetch is independent — a single failure doesn't blank the row.
+
+  // GeoRisk hotspots
+  fetch('/api/hotspots')
+    .then((r) => r.json())
+    .then((d) => {
+      const n = (d.hotspots || []).length;
+      document.getElementById('cr-hotspots').textContent = n;
+    })
+    .catch(() => document.getElementById('cr-hotspots').textContent = '—');
+
+  // Sovereign PD summary
+  fetch('/api/credit-default/dashboard')
+    .then((r) => r.json())
+    .then((d) => {
+      const summary = d.summary || {};
+      const countries = d.countries || {};
+      // Find the highest PD 1Y country name.
+      let top = { pd: -1, name: '' };
+      Object.values(countries).forEach((c) => {
+        const p = (c.rating || {}).pd_1y;
+        if (p != null && p > top.pd && !((c.rating || {}).defaulted)) {
+          top = { pd: p, name: c.name || c.iso3 };
+        }
+      });
+      const el = document.getElementById('cr-imminent');
+      if (top.name) el.textContent = `${top.name} (${(top.pd*100).toFixed(0)}%)`;
+      document.getElementById('cr-in-default').textContent = summary.in_default != null ? summary.in_default : '—';
+      document.getElementById('cr-avg-pd').textContent = summary.avg_pd_1y != null ? `${(summary.avg_pd_1y*100).toFixed(1)}%` : '—';
+    })
+    .catch(() => {});
+</script>
+{% endblock %}

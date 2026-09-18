@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Commodities — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cm-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+  .cm-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
+  .cm-title { font-size: 26px; font-weight: 700; margin: 0 0 6px; color: #111827; }
+  .cm-subtitle { font-size: 13px; color: #6b7280; line-height: 1.55; margin: 0; max-width: 780px; }
+
+  .cm-tabs {
+    display: flex; gap: 4px; border-bottom: 1px solid #e5e7eb;
+    margin: 24px 0 20px; overflow-x: auto;
+  }
+  .cm-tab {
+    padding: 10px 18px; font-size: 13px; font-weight: 600;
+    background: transparent; border: 0; border-bottom: 2px solid transparent;
+    color: #6b7280; cursor: pointer; white-space: nowrap;
+    transition: color .1s, border-color .1s;
+  }
+  .cm-tab:hover { color: #111827; }
+  .cm-tab.active { color: #dc2626; border-bottom-color: #dc2626; }
+
+  .cm-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+  }
+  .cm-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 18px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .cm-card-title {
+    font-size: 16px; font-weight: 700; margin: 0; color: #111827;
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  }
+  .cm-card-title .commodity-ticker { font-size: 11px; color: #6b7280; font-weight: 500; }
+  .cm-scenarios {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    padding-top: 8px; border-top: 1px solid #f3f4f6;
+  }
+  .cm-scenario { display: flex; flex-direction: column; padding: 6px 8px; border-radius: 6px; }
+  .cm-scenario.base  { background: #f3f4f6; }
+  .cm-scenario.bull  { background: #d1fae5; }
+  .cm-scenario.bear  { background: #fee2e2; }
+  .cm-scenario .label {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #6b7280;
+  }
+  .cm-scenario.bull .label { color: #065f46; }
+  .cm-scenario.bear .label { color: #991b1b; }
+  .cm-scenario .value {
+    font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+    color: #111827;
+  }
+  .cm-scenario .horizon { font-size: 10px; color: #6b7280; }
+
+  .cm-links {
+    display: flex; gap: 8px; padding-top: 8px; flex-wrap: wrap;
+  }
+  .cm-links a {
+    font-size: 11px; padding: 4px 10px; border-radius: 4px;
+    background: #f3f4f6; color: #4b5563; text-decoration: none;
+    font-weight: 600;
+  }
+  .cm-links a:hover { background: #111827; color: #fff; }
+
+  .cm-empty { padding: 40px; text-align: center; color: #6b7280; font-size: 13px; }
+
+  .cm-methodology {
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 16px 20px; margin-top: 24px;
+  }
+  .cm-methodology summary {
+    font-size: 13px; font-weight: 600; color: #111827; cursor: pointer;
+    padding: 4px 0;
+  }
+  .cm-methodology[open] summary { margin-bottom: 12px; }
+  .cm-methodology .content {
+    font-size: 12px; line-height: 1.6; color: #374151;
+    white-space: pre-wrap;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cm-page">
+  <header class="cm-header">
+    <h1 class="cm-title">Commodities</h1>
+    <p class="cm-subtitle">
+      Scenario-based forecasts across oil &amp; gas, agriculture, metals and
+      the fertilizer / EM-inflation corridor. Base / Bull / Bear scenarios
+      with named shocks (OPEC surprise, ENSO ONI, WASDE stocks, harvest
+      shock) run through the same underlying SARIMAX + GARCH stack, with
+      VECM cointegration for oil-benchmark spreads. Anchored to the
+      forward curve, then diverges by scenario.
+    </p>
+  </header>
+
+  <div class="cm-tabs" role="tablist" aria-label="Commodity group">
+    <button class="cm-tab active" data-group="all">All</button>
+    <button class="cm-tab" data-group="energy">Oil &amp; Gas</button>
+    <button class="cm-tab" data-group="agriculture">Agriculture</button>
+    <button class="cm-tab" data-group="metals">Metals</button>
+    <button class="cm-tab" data-group="fertilizer">Fertilizer &amp; EM Inflation</button>
+  </div>
+
+  <div class="cm-grid" id="cm-grid">
+    <div class="cm-empty">Loading commodity forecasts…</div>
+  </div>
+
+  <details class="cm-methodology">
+    <summary>Methodology overview</summary>
+    <div class="content" id="cm-methodology-content">
+      Load a specific commodity's methodology by clicking a card above. Each
+      forecast documents its data sources, drivers, model choices, and known
+      caveats. Files live under <code>docs/commodities/*.md</code>.
+    </div>
+  </details>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Group each commodity into a tab. This mirrors the taxonomy in
+  // backend/data_sources/commodities_forecast.py, kept in sync by hand.
+  const GROUPS = {
+    'wti crude': 'energy', 'brent crude': 'energy',
+    'natural gas hh': 'energy', 'ttf gas': 'energy',
+    'wheat': 'agriculture', 'soybeans': 'agriculture',
+    'coffee': 'agriculture', 'cocoa': 'agriculture',
+    'copper': 'metals', 'gold': 'metals', 'silver': 'metals',
+    'platinum': 'metals', 'aluminum': 'metals',
+    'fertilizer': 'fertilizer', 'urea': 'fertilizer', 'dap': 'fertilizer',
+  };
+
+  const state = { group: 'all', data: null };
+
+  fetch('/api/forecasts')
+    .then((r) => (r.ok ? r.json() : Promise.reject('load failed')))
+    .then((data) => {
+      state.data = data;
+      renderGrid();
+    })
+    .catch((err) => {
+      document.getElementById('cm-grid').innerHTML =
+        `<div class="cm-empty">Failed to load forecasts. ${err}</div>`;
+    });
+
+  document.querySelectorAll('.cm-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.cm-tab').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.group = btn.dataset.group;
+      renderGrid();
+    });
+  });
+
+  function renderGrid() {
+    const grid = document.getElementById('cm-grid');
+    if (!state.data) return;
+    // The /api/forecasts payload shape is { commodities: {name: {...}} } or an
+    // array of commodities. Handle both defensively.
+    const rows = Array.isArray(state.data.commodities)
+      ? state.data.commodities
+      : Object.entries(state.data.commodities || state.data || {}).map(([name, v]) => ({ name, ...v }));
+
+    if (!rows.length) {
+      grid.innerHTML = '<div class="cm-empty">No forecasts available.</div>';
+      return;
+    }
+
+    const filtered = state.group === 'all'
+      ? rows
+      : rows.filter((r) => (GROUPS[(r.name || '').toLowerCase()] || 'other') === state.group);
+
+    if (!filtered.length) {
+      grid.innerHTML = '<div class="cm-empty">No commodities in this group yet.</div>';
+      return;
+    }
+
+    grid.innerHTML = filtered.map((r) => cardHtml(r)).join('');
+    grid.querySelectorAll('.cm-load-methodology').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const commodity = btn.dataset.commodity;
+        loadMethodology(commodity);
+      });
+    });
+  }
+
+  function cardHtml(r) {
+    const name = r.name || r.commodity || 'Commodity';
+    const slug = (name || '').toLowerCase().replace(/\s+/g, '_');
+    const base = (r.scenarios && r.scenarios.base && r.scenarios.base.horizon_1y) ||
+                 (r.forecast && r.forecast.base && r.forecast.base['1y']) || null;
+    const bull = (r.scenarios && r.scenarios.bull && r.scenarios.bull.horizon_1y) ||
+                 (r.forecast && r.forecast.bull && r.forecast.bull['1y']) || null;
+    const bear = (r.scenarios && r.scenarios.bear && r.scenarios.bear.horizon_1y) ||
+                 (r.forecast && r.forecast.bear && r.forecast.bear['1y']) || null;
+    const ticker = r.symbol || r.ticker || '';
+    return `
+      <div class="cm-card">
+        <h3 class="cm-card-title">
+          <span>${name}</span>
+          <span class="commodity-ticker">${ticker}</span>
+        </h3>
+        <div class="cm-scenarios">
+          <div class="cm-scenario base">
+            <span class="label">Base 1Y</span>
+            <span class="value">${base != null ? fmtPrice(base) : '—'}</span>
+            <span class="horizon">consensus</span>
+          </div>
+          <div class="cm-scenario bull">
+            <span class="label">Bull 1Y</span>
+            <span class="value">${bull != null ? fmtPrice(bull) : '—'}</span>
+            <span class="horizon">upside</span>
+          </div>
+          <div class="cm-scenario bear">
+            <span class="label">Bear 1Y</span>
+            <span class="value">${bear != null ? fmtPrice(bear) : '—'}</span>
+            <span class="horizon">downside</span>
+          </div>
+        </div>
+        <div class="cm-links">
+          <a href="/data/commodities/forecast-${slug.startsWith('wti')||slug.startsWith('brent')||slug.startsWith('natural')||slug.startsWith('ttf') ? 'oil' : slug.startsWith('wheat')||slug.startsWith('soybeans')||slug.startsWith('coffee')||slug.startsWith('cocoa') ? 'ag' : slug.startsWith('copper')||slug.startsWith('gold')||slug.startsWith('silver')||slug.startsWith('platinum')||slug.startsWith('aluminum') ? 'metals' : slug.startsWith('fertilizer') ? 'fertilizer' : slug}">Full forecast &rarr;</a>
+          <a href="#methodology" class="cm-load-methodology" data-commodity="${slug}">Methodology</a>
+        </div>
+      </div>
+    `;
+  }
+
+  function fmtPrice(v) {
+    if (typeof v !== 'number') return '—';
+    if (v >= 1000) return v.toFixed(0);
+    if (v >= 10) return v.toFixed(1);
+    return v.toFixed(2);
+  }
+
+  function loadMethodology(commodity) {
+    const wrap = document.getElementById('cm-methodology-content');
+    const details = document.querySelector('.cm-methodology');
+    wrap.textContent = 'Loading…';
+    details.setAttribute('open', '');
+    fetch(`/api/forecasts/methodology/${commodity}`)
+      .then((r) => (r.ok ? r.text() : Promise.reject(r.status)))
+      .then((md) => { wrap.textContent = md; })
+      .catch(() => { wrap.textContent = 'No methodology doc for this commodity yet.'; });
+  }
+</script>
+{% endblock %}

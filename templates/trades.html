@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Trade Ideas — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<style>
+  .trades-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+  .trades-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
+  .trades-title { font-size: 26px; font-weight: 700; margin: 0 0 6px; color: #111827; }
+  .trades-subtitle { font-size: 13px; color: #6b7280; line-height: 1.55; margin: 0; max-width: 780px; }
+
+  .trades-section { margin-top: 28px; }
+  .trades-section-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .trades-section-title { font-size: 15px; font-weight: 700; margin: 0; color: #111827; }
+  .trades-section-note { font-size: 11px; color: #6b7280; margin-left: auto; }
+
+  table.trades-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .trades-table thead th {
+    text-align: left; padding: 8px 10px; font-size: 11px; color: #6b7280;
+    text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap; font-weight: 600;
+  }
+  .trades-table thead th.num { text-align: right; }
+  .trades-table tbody td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
+  .trades-table tbody td.num { text-align: right; }
+  .trades-table tbody tr:hover { background: #f9fafb; }
+  .trades-table td a { color: #111827; text-decoration: none; font-weight: 600; }
+  .trades-table td a:hover { color: #dc2626; }
+
+  .side-chip {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+  }
+  .side-chip.long { background: #d1fae5; color: #065f46; }
+  .side-chip.short { background: #fee2e2; color: #991b1b; }
+  .side-chip.hold { background: #f3f4f6; color: #6b7280; }
+
+  .empty-state { padding: 24px; color: #6b7280; font-size: 13px; text-align: center; }
+  .empty-state a { color: #dc2626; text-decoration: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="trades-page">
+  <header class="trades-header">
+    <h1 class="trades-title">Trade ideas</h1>
+    <p class="trades-subtitle">
+      Model-versus-market signals across sovereign bonds, EM FX and commodities.
+      All rankings compare our fitted model output to the market's implied
+      pricing — LONG when the market prices more risk than the model, SHORT
+      when it prices less. Updated hourly.
+    </p>
+  </header>
+
+  <!-- Sovereign bond trades -->
+  <section class="trades-section">
+    <div class="trades-section-head">
+      <h2 class="trades-section-title">Sovereign bond trades</h2>
+      <span class="trades-section-note" id="bond-note">Loading…</span>
+    </div>
+    <table class="trades-table" id="bond-table">
+      <thead>
+        <tr>
+          <th>Side</th>
+          <th>Country</th>
+          <th>Model</th>
+          <th class="num">Yield</th>
+          <th class="num">Spread (bps)</th>
+          <th class="num">Model PD</th>
+          <th class="num">Market PD</th>
+          <th class="num">Edge (pp)</th>
+        </tr>
+      </thead>
+      <tbody id="bond-tbody">
+        <tr><td colspan="8" class="empty-state">Loading bond-trade signals…</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- EM FX beta screen -->
+  <section class="trades-section">
+    <div class="trades-section-head">
+      <h2 class="trades-section-title">EM FX — carry &amp; duration</h2>
+      <span class="trades-section-note">Full screen: <a href="/em-fx-rates" style="color:#dc2626;text-decoration:none;font-weight:600">Open EM FX &amp; Rates →</a></span>
+    </div>
+    <div class="empty-state" id="fx-block">
+      Full carry and duration ranking lives on the <a href="/em-fx-rates">EM FX &amp; Rates dashboard</a>.
+      Interactive charts show 1w / 1m / YTD / 1y FX moves, US Treasury curve, EM 10Y yields
+      (FRED where available) and rolling beta of each EM currency to the dollar and to oil.
+    </div>
+  </section>
+
+  <!-- Commodities directional views -->
+  <section class="trades-section">
+    <div class="trades-section-head">
+      <h2 class="trades-section-title">Commodities — directional views</h2>
+      <span class="trades-section-note">Full dashboard: <a href="/commodities" style="color:#dc2626;text-decoration:none;font-weight:600">Open commodities →</a></span>
+    </div>
+    <div class="empty-state" id="commodities-block">
+      Live scenarios (Base / Bull / Bear + user-editable shocks) and 12–24 month
+      forecasts for oil, gas, agriculture and metals live on the
+      <a href="/commodities">commodities dashboard</a>. Named scenarios
+      compare against consensus.
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  fetch('/api/credit-default/bond-trades?top_n=12&deterioration_scan=1')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      const tbody = document.getElementById('bond-tbody');
+      const note = document.getElementById('bond-note');
+      if (!data) throw new Error('no data');
+      const rows = [
+        ...(data.longs || []).map((r) => ({ ...r, side: 'LONG' })),
+        ...(data.shorts || []).map((r) => ({ ...r, side: 'SHORT' })),
+      ];
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No signals above the current edge threshold. Widen with ?min_edge=1.0.</td></tr>';
+        note.textContent = 'no signals';
+        return;
+      }
+      note.textContent = `UST 10Y benchmark ${data.summary.benchmark_ust_10y_pct}% · LGD ${(data.summary.lgd_assumption*100).toFixed(0)}% · ${data.summary.n_covered} sovereigns covered`;
+      tbody.innerHTML = rows.map((r) => `
+        <tr>
+          <td><span class="side-chip ${r.side.toLowerCase()}">${r.side}</span></td>
+          <td><a href="/country-risk?iso3=${r.iso3}">${r.name || r.iso3}</a></td>
+          <td>${r.pm_notch || '—'}</td>
+          <td class="num">${r.yield_pct != null ? r.yield_pct.toFixed(2) + '%' : '—'}</td>
+          <td class="num">${r.spread_bps != null ? r.spread_bps.toFixed(0) : '—'}</td>
+          <td class="num">${r.model_pd != null ? (r.model_pd*100).toFixed(2) + '%' : '—'}</td>
+          <td class="num">${r.market_pd != null ? (r.market_pd*100).toFixed(2) + '%' : '—'}</td>
+          <td class="num" style="font-weight:600">${r.edge_pp > 0 ? '+' : ''}${r.edge_pp}</td>
+        </tr>
+      `).join('');
+    })
+    .catch(() => {
+      document.getElementById('bond-tbody').innerHTML =
+        '<tr><td colspan="8" class="empty-state">Failed to load bond-trade signals. Retry in a moment.</td></tr>';
+      document.getElementById('bond-note').textContent = 'error';
+    });
+</script>
+{% endblock %}

@@ -154,6 +154,33 @@ def meta_for_path(path: str) -> dict:
             "og_url": path,
         }
 
+    if path.startswith("/country-risk"):
+        return {
+            **base,
+            "og_title": "Country Risk — Parra Macro",
+            "og_description": "Three lenses on sovereign risk: real-time geopolitical scoring, forward-looking probability of default and 1-10 internal rating for ~190 sovereigns, and EM external vulnerability. Published research from a macro strategist.",
+            "og_image": "/og/preview.png?chart=country-risk",
+            "og_url": path,
+        }
+
+    if path.startswith("/commodities"):
+        return {
+            **base,
+            "og_title": "Commodities — Parra Macro",
+            "og_description": "Scenario forecasts across oil, gas, agriculture and metals with named shocks (OPEC surprise, ENSO, WASDE stocks, harvest). SARIMAX + GARCH with VECM cointegration, anchored to the forward curve.",
+            "og_image": "/og/preview.png?chart=commodities",
+            "og_url": path,
+        }
+
+    if path.startswith("/trades"):
+        return {
+            **base,
+            "og_title": "Trade Ideas — Parra Macro",
+            "og_description": "Model-vs-market signals across sovereign bonds, EM FX and commodities. LONG when the market prices more risk than the model, SHORT when it prices less.",
+            "og_image": "/og/preview.png?chart=trades",
+            "og_url": path,
+        }
+
     if path.startswith("/models"):
         return {
             **base,

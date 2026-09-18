@@ -19,9 +19,16 @@ data/*
 !data/fx_debt_share.csv
 !data/sovereign_bond_yields.csv
 !data/structural_risk_overlay.csv
+# Track only the hot-path fit-state (h1) so the deployed dashboard has
+# something to load on cold boot. Everything else (h3, h5, onset,
+# quarterly bundles, and any horizon-3/5/onset pickles) is regenerated
+# by scripts/fit_credit_default.py and stored on the Render persistent
+# disk under Config.DATA_DIR — no need to bloat the repo with 3+ MB of
+# runtime pickles.
 !data/credit_default_fit/
-!data/credit_default_fit/*.json
-!data/credit_default_fit/*.pkl
+data/credit_default_fit/*
+!data/credit_default_fit/fit_state_h1.json
+!data/credit_default_fit/fit_model_h1.pkl
 
 # Commodity model cache artifacts (regenerated on monthly refit)
 backend/cache/commodity_models/*.pkl
