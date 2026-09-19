@@ -4,95 +4,194 @@
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/home.css">
 <style>
-  /* Hero — macro strategist positioning */
+  /* Hero — legible on dark #0a0e1a */
   .home-hero {
-    max-width: 1200px; margin: 32px auto 12px; padding: 0 24px;
+    max-width: 1200px;
+    margin: 48px auto 24px;
+    padding: 0 24px;
   }
   .home-hero-eyebrow {
-    color: #6b7280; font-size: 11px; letter-spacing: 0.14em;
-    text-transform: uppercase; font-weight: 600; margin: 0 0 8px;
+    color: var(--text-secondary, #9ca3af);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin: 0 0 12px;
   }
   .home-hero-title {
-    font-size: clamp(28px, 4.5vw, 44px); font-weight: 700;
-    letter-spacing: -0.02em; line-height: 1.12; margin: 0 0 16px;
-    color: #111827;
-  }
-  .home-hero-title .accent { color: #dc2626; }
-  .home-hero-lede {
-    font-size: 16px; color: #374151; line-height: 1.6; max-width: 680px;
+    font-size: clamp(32px, 5vw, 54px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
     margin: 0 0 20px;
+    color: var(--text-primary, #e5e7eb);
+  }
+  .home-hero-title .accent { color: var(--accent, #3b82f6); }
+  .home-hero-lede {
+    font-size: 17px;
+    color: #d1d5db;
+    line-height: 1.6;
+    max-width: 60ch;
+    margin: 0 0 28px;
   }
   .home-hero-cta {
     display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
   }
   .home-cta-primary {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 18px; background: #111827; color: #fff;
-    border-radius: 8px; text-decoration: none; font-weight: 600;
-    font-size: 14px; transition: background .1s;
+    padding: 11px 20px;
+    background: var(--accent, #3b82f6); color: #fff;
+    border-radius: 8px; text-decoration: none;
+    font-weight: 600; font-size: 14px;
+    transition: filter .1s;
   }
-  .home-cta-primary:hover { background: #dc2626; }
-  .home-cta-secondary {
+  .home-cta-primary:hover { filter: brightness(1.1); }
+  .home-cta-ghost {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 18px; background: #fff; color: #111827;
-    border: 1px solid #d1d5db; border-radius: 8px;
-    text-decoration: none; font-weight: 600; font-size: 14px;
+    padding: 10px 18px;
+    background: transparent; color: var(--accent, #3b82f6);
+    border: 1px solid var(--accent, #3b82f6);
+    border-radius: 8px; text-decoration: none;
+    font-weight: 600; font-size: 14px;
+    transition: background .1s;
   }
+  .home-cta-ghost:hover { background: rgba(59, 130, 246, 0.12); }
   .home-hero-substack {
-    display: inline-flex; align-items: center; gap: 8px; margin-left: auto;
-    font-size: 12px; color: #6b7280;
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-left: auto; font-size: 12px;
+    color: var(--text-secondary, #9ca3af);
   }
   .home-hero-substack a {
-    color: #dc2626; text-decoration: none; font-weight: 600;
+    color: var(--accent, #3b82f6); text-decoration: none; font-weight: 600;
   }
   @media (max-width: 720px) {
-    .home-hero { margin: 20px auto 8px; padding: 0 16px; }
-    .home-hero-substack { margin-left: 0; margin-top: 8px; }
+    .home-hero { margin: 24px auto 16px; padding: 0 16px; }
+    .home-hero-substack { margin-left: 0; margin-top: 4px; width: 100%; }
   }
 
-  /* This week's trades strip */
-  .home-trades-strip {
-    max-width: 1200px; margin: 8px auto 24px; padding: 0 24px;
+  /* This week's call — single big trade card */
+  .home-call {
+    max-width: 1200px; margin: 32px auto; padding: 0 24px;
   }
-  .home-trades-title {
+  .home-call-eyebrow-row {
     display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px;
   }
-  .home-trades-title h2 {
-    font-size: 15px; font-weight: 700; margin: 0; color: #111827;
-    letter-spacing: -0.005em;
+  .home-call-eyebrow-row h2 {
+    font-size: 12px; font-weight: 700; margin: 0;
+    color: var(--text-muted, #6b7280);
+    letter-spacing: 0.06em; text-transform: uppercase;
   }
-  .home-trades-title a {
-    font-size: 12px; color: #6b7280; text-decoration: none;
-    margin-left: auto;
+  .home-call-eyebrow-row a {
+    font-size: 12px; color: var(--text-secondary, #9ca3af);
+    text-decoration: none; margin-left: auto;
   }
-  .home-trades-title a:hover { color: #dc2626; }
-  .home-trades-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px;
+  .home-call-eyebrow-row a:hover { color: var(--accent, #3b82f6); }
+  .home-call-card {
+    background: var(--bg-secondary, #111827);
+    border: 1px solid var(--border, #1f2937);
+    border-left: 3px solid var(--accent, #3b82f6);
+    border-radius: 12px; padding: 28px;
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 24px; align-items: center;
+    text-decoration: none; color: inherit;
+    transition: border-color .15s;
   }
-  .home-trade-card {
-    padding: 14px 16px; background: #fff; border: 1px solid #e5e7eb;
-    border-radius: 8px; text-decoration: none; color: inherit;
-    display: block; transition: border-color .1s, box-shadow .1s;
+  .home-call-card:hover {
+    border-color: var(--accent, #3b82f6);
+    border-left-color: var(--accent, #3b82f6);
   }
-  .home-trade-card:hover {
-    border-color: #111827; box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-  }
-  .home-trade-side {
-    display: inline-block; font-size: 10px; font-weight: 700;
+  .home-call-body { min-width: 0; }
+  .home-call-side {
+    display: inline-block;
+    padding: 4px 10px; border-radius: 4px;
+    font-size: 11px; font-weight: 700;
     letter-spacing: 0.08em; text-transform: uppercase;
-    padding: 2px 8px; border-radius: 4px;
+    background: rgba(16, 185, 129, 0.15); color: #10b981;
+    margin-bottom: 10px;
   }
-  .home-trade-side.long  { background: #d1fae5; color: #065f46; }
-  .home-trade-side.short { background: #fee2e2; color: #991b1b; }
-  .home-trade-country {
-    font-size: 15px; font-weight: 600; margin: 6px 0 4px; color: #111827;
+  .home-call-side.short {
+    background: rgba(239, 68, 68, 0.15); color: #ef4444;
   }
-  .home-trade-detail {
-    font-size: 12px; color: #6b7280; display: flex; gap: 16px;
-    font-variant-numeric: tabular-nums;
+  .home-call-country {
+    font-size: 28px; font-weight: 700;
+    color: var(--text-primary, #e5e7eb);
+    margin: 0 0 6px; letter-spacing: -0.02em;
   }
-  .home-trade-edge { color: #111827; font-weight: 600; }
+  .home-call-thesis {
+    font-size: 14px; color: var(--text-secondary, #9ca3af);
+    line-height: 1.55; margin: 0 0 16px; max-width: 60ch;
+  }
+  .home-call-stats {
+    display: flex; gap: 28px;
+    font-variant-numeric: tabular-nums; flex-wrap: wrap;
+  }
+  .home-call-stat { display: flex; flex-direction: column; }
+  .home-call-stat .lbl {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted, #6b7280); margin-bottom: 3px;
+  }
+  .home-call-stat .val {
+    font-size: 16px; font-weight: 600;
+    color: var(--text-primary, #e5e7eb);
+  }
+  .home-call-stat.edge .val { color: #10b981; }
+  .home-call-arrow {
+    font-size: 24px; color: var(--accent, #3b82f6);
+    align-self: center;
+  }
+  .home-call-loading {
+    padding: 24px;
+    color: var(--text-muted, #6b7280);
+    font-size: 13px; text-align: center;
+  }
+  @media (max-width: 720px) {
+    .home-call-card { grid-template-columns: 1fr; padding: 20px; }
+    .home-call-country { font-size: 22px; }
+    .home-call-arrow { display: none; }
+  }
+
+  /* Latest note — single card linking to Substack */
+  .home-latest {
+    max-width: 1200px; margin: 24px auto 60px; padding: 0 24px;
+  }
+  .home-latest-head {
+    display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px;
+  }
+  .home-latest-head h2 {
+    font-size: 12px; font-weight: 700; margin: 0;
+    color: var(--text-muted, #6b7280);
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .home-latest-head a {
+    font-size: 12px; color: var(--text-secondary, #9ca3af);
+    text-decoration: none; margin-left: auto;
+  }
+  .home-latest-card {
+    background: var(--bg-secondary, #111827);
+    border: 1px solid var(--border, #1f2937);
+    border-radius: 10px; padding: 20px;
+    text-decoration: none;
+    display: flex; align-items: center; gap: 16px;
+    transition: border-color .15s;
+  }
+  .home-latest-card:hover { border-color: var(--accent, #3b82f6); }
+  .home-latest-body { min-width: 0; flex: 1; }
+  .home-latest-kicker {
+    font-size: 10px; color: var(--text-muted, #6b7280);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .home-latest-card h3 {
+    font-size: 16px; font-weight: 600; margin: 0;
+    color: var(--text-primary, #e5e7eb); line-height: 1.35;
+  }
+  .home-latest-card p {
+    font-size: 13px; color: var(--text-secondary, #9ca3af);
+    margin: 6px 0 0; line-height: 1.5;
+  }
+  .home-latest-card .arrow {
+    color: var(--accent, #3b82f6); font-size: 22px; font-weight: 600;
+  }
 </style>
 {% endblock %}
 
@@ -106,9 +205,8 @@
   </h1>
   <p class="home-hero-lede">
     Sovereign PDs and 1-10 internal ratings for ~190 countries, EM FX &amp;
-    rates screens, oil/gas/agriculture/metals forecasts with named
-    scenarios, and a weekly trade-ideas board tying it all together.
-    Published models, transparent methodology, monthly Substack.
+    rates screens, and named-scenario forecasts for oil, gas, agriculture
+    and metals. One weekly trade board tying it all together.
   </p>
   <div class="home-hero-cta">
     <a href="/trades" class="home-cta-primary">
@@ -117,8 +215,8 @@
         <path d="M5 12h14M12 5l7 7-7 7"/>
       </svg>
     </a>
-    <a href="/country-risk" class="home-cta-secondary">Country risk</a>
-    <a href="/commodities" class="home-cta-secondary">Commodities</a>
+    <a href="/country-risk" class="home-cta-ghost">Country risk</a>
+    <a href="/commodities" class="home-cta-ghost">Commodities</a>
     <span class="home-hero-substack">
       New posts monthly on
       <a href="https://theparrable.substack.com" target="_blank" rel="noopener">Substack →</a>
@@ -126,199 +224,109 @@
   </div>
 </section>
 
-<!-- This week's trades -->
-<section class="home-trades-strip">
-  <div class="home-trades-title">
-    <h2>This week's trades</h2>
-    <a href="/trades">Open trade ideas board &rarr;</a>
-  </div>
-  <div class="home-trades-grid" id="home-trades-grid">
-    <div class="home-trade-card">
-      <div class="home-trade-detail">Loading model-vs-market signals…</div>
-    </div>
-  </div>
-</section>
-
 <!-- Scrolling Ticker Bar -->
 <div class="ticker-bar">
-    <div class="ticker-track" id="ticker-track">
-        <span class="ticker-loading">Loading market data...</span>
-    </div>
+  <div class="ticker-track" id="ticker-track">
+    <span class="ticker-loading">Loading market data...</span>
+  </div>
 </div>
 
-<!-- Market Overview -->
-<section class="section">
-    <div class="section-header">
-        <span class="section-label">Markets</span>
-        <span class="section-timestamp" id="market-timestamp"></span>
-        <a href="/api/markets/export" class="export-btn-home" title="Download Excel">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Excel
-        </a>
-    </div>
-    <div class="market-grid" id="market-grid">
-        <div class="market-loading"><div class="spinner"></div></div>
-    </div>
-
-    <!-- Expandable Market Chart -->
-    <div class="market-chart-panel" id="market-chart-panel" style="display:none;">
-        <div class="market-chart-header">
-            <div class="market-chart-title">
-                <span id="chart-symbol-name"></span>
-                <span class="market-chart-price" id="chart-price"></span>
-                <span class="market-chart-change" id="chart-change"></span>
-            </div>
-            <div class="market-chart-timeframes" id="chart-timeframes">
-                <button class="tf-btn" data-period="1d">1D</button>
-                <button class="tf-btn" data-period="5d">1W</button>
-                <button class="tf-btn active" data-period="1mo">1M</button>
-                <button class="tf-btn" data-period="1y">1Y</button>
-                <button class="tf-btn" data-period="5y">5Y</button>
-                <button class="tf-btn" data-period="10y">10Y</button>
-            </div>
-            <button class="market-chart-close" id="chart-close-btn">&times;</button>
-        </div>
-        <div class="market-chart-container">
-            <canvas id="market-history-chart"></canvas>
-            <div class="chart-loading" id="market-chart-loading" style="display:none;">
-                <div class="spinner"></div>
-            </div>
-        </div>
-    </div>
+<!-- This week's call — one big trade card -->
+<section class="home-call">
+  <div class="home-call-eyebrow-row">
+    <h2>This week's call</h2>
+    <a href="/trades">See full ranking &rarr;</a>
+  </div>
+  <div id="home-call-slot">
+    <div class="home-call-loading">Loading top model-vs-market signal…</div>
+  </div>
 </section>
 
-<!-- Latest Research -->
-<section class="section" id="latest-research-section" style="display:none;">
-    <div class="section-header">
-        <span class="section-label">Latest Research</span>
-        <a href="/research" class="section-link">View all &rarr;</a>
+<!-- Latest note -->
+<section class="home-latest">
+  <div class="home-latest-head">
+    <h2>Latest note</h2>
+    <a href="/research">All research &rarr;</a>
+  </div>
+  <a href="https://theparrable.substack.com" target="_blank" rel="noopener" class="home-latest-card">
+    <div class="home-latest-body">
+      <div class="home-latest-kicker">Substack · The Parrable</div>
+      <h3>Monthly macro notes on country risk, EM FX, and commodities</h3>
+      <p>Sovereign rating changes, deterioration screens, scenario forecasts and the model-versus-market trade board — delivered monthly.</p>
     </div>
-    <div id="latest-post"></div>
-</section>
-
-<!-- Tools -->
-<section class="section section-tools">
-    <div class="section-header">
-        <span class="section-label">Tools</span>
-    </div>
-    <div class="project-row">
-        <a href="/georisk" class="project-card-compact">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-ico">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
-            </svg>
-            <div class="project-text">
-                <span class="project-name-sm">GeoRisk Monitor</span>
-                <span class="project-desc-sm">Real-time geopolitical risk scoring &mdash; 51 countries, 6 indicators</span>
-            </div>
-            <span class="project-arrow">&rarr;</span>
-        </a>
-
-        <a href="/macro-model" class="project-card-compact">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-ico">
-                <path d="M3 3v18h18"/>
-                <path d="M7 15l4-6 4 4 5-8"/>
-            </svg>
-            <div class="project-text">
-                <span class="project-name-sm">US Macro Model <span style="font-size:9px;padding:1px 5px;background:#3b82f622;color:#3b82f6;border-radius:3px;margin-left:4px;text-transform:uppercase;letter-spacing:0.04em;">Restricted</span></span>
-                <span class="project-desc-sm">FRB/US-lite reduced-form model &mdash; 11 equations, forecast + shock scenarios</span>
-            </div>
-            <span class="project-arrow">&rarr;</span>
-        </a>
-
-        <a href="/house-prices" class="project-card-compact">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-ico">
-                <path d="M3 12l9-9 9 9"/>
-                <path d="M5 10v10h14V10"/>
-                <path d="M9 20v-6h6v6"/>
-            </svg>
-            <div class="project-text">
-                <span class="project-name-sm">US House Prices <span style="font-size:9px;padding:1px 5px;background:#10b98122;color:#10b981;border-radius:3px;margin-left:4px;text-transform:uppercase;letter-spacing:0.04em;">Restricted</span></span>
-                <span class="project-desc-sm">FHFA + Case-Shiller + Zillow &mdash; region, state, MSA, county, ZIP</span>
-            </div>
-            <span class="project-arrow">&rarr;</span>
-        </a>
-
-        <a href="/credit-default" class="project-card-compact">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-ico">
-                <path d="M12 2L4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z"/>
-                <path d="M9 12l2 2 4-4"/>
-            </svg>
-            <div class="project-text">
-                <span class="project-name-sm">Sovereign Credit Default <span style="font-size:9px;padding:1px 5px;background:#5b21b622;color:#7c3aed;border-radius:3px;margin-left:4px;text-transform:uppercase;letter-spacing:0.04em;">Beta</span></span>
-                <span class="project-desc-sm">PD + 1-10 internal rating &mdash; macro-only model, agency comparison, shadow debt overlay</span>
-            </div>
-            <span class="project-arrow">&rarr;</span>
-        </a>
-
-        <a href="/em-fx-rates" class="project-card-compact">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-ico">
-                <path d="M3 17l5-5 4 4 8-9"/>
-                <path d="M16 7h5v5"/>
-                <path d="M3 21h18"/>
-            </svg>
-            <div class="project-text">
-                <span class="project-name-sm">EM FX &amp; Rates <span style="font-size:9px;padding:1px 5px;background:#5b21b622;color:#7c3aed;border-radius:3px;margin-left:4px;text-transform:uppercase;letter-spacing:0.04em;">Beta</span></span>
-                <span class="project-desc-sm">Beta opportunity screen &mdash; carry, duration &amp; convexity across major EMs</span>
-            </div>
-            <span class="project-arrow">&rarr;</span>
-        </a>
-
-        <a href="/research" class="project-card-compact">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-ico">
-                <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-            </svg>
-            <div class="project-text">
-                <span class="project-name-sm">Macro Research</span>
-                <span class="project-desc-sm">Analysis on global macro themes and policy</span>
-            </div>
-            <span class="project-arrow">&rarr;</span>
-        </a>
-    </div>
+    <span class="arrow">&rarr;</span>
+  </a>
 </section>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/vendor/chart.umd.js"></script>
 <script src="/static/js/home.js"></script>
 <script>
-  // Populate "This week's trades" strip. Reads the bond-trade ranker
-  // and picks the top 3 by |edge|. On any error, we hide the strip so
-  // a fetch failure doesn't leave a stale loading state.
+  // Fetch the top LONG bond trade to back the "This week's call" card.
+  // On any error or empty result we hide the section so the user isn't
+  // left staring at a spinner.
   (function () {
-    const grid = document.getElementById('home-trades-grid');
-    if (!grid) return;
-    fetch('/api/credit-default/bond-trades?top_n=3&deterioration_scan=1')
+    const slot = document.getElementById('home-call-slot');
+    if (!slot) return;
+    fetch('/api/credit-default/bond-trades?top_n=1&deterioration_scan=0')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) throw new Error('no data');
-        const rows = [
-          ...(data.longs || []).slice(0, 2).map((r) => ({ ...r, side: 'LONG' })),
-          ...(data.shorts || []).slice(0, 1).map((r) => ({ ...r, side: 'SHORT' })),
-        ];
-        if (!rows.length) {
-          document.querySelector('.home-trades-strip').style.display = 'none';
+        const longs = data.longs || [];
+        const shorts = data.shorts || [];
+        // Prefer the top LONG; fall back to top SHORT if no longs.
+        const pick = longs.length
+          ? { ...longs[0], side: 'LONG' }
+          : (shorts.length ? { ...shorts[0], side: 'SHORT' } : null);
+        if (!pick) {
+          document.querySelector('.home-call').style.display = 'none';
           return;
         }
-        grid.innerHTML = rows.map((r) => `
-          <a href="/trades" class="home-trade-card">
-            <span class="home-trade-side ${r.side === 'LONG' ? 'long' : 'short'}">${r.side}</span>
-            <div class="home-trade-country">${r.name || r.iso3}</div>
-            <div class="home-trade-detail">
-              <span>${r.spread_bps}bp spread</span>
-              <span class="home-trade-edge">${r.edge_pp > 0 ? '+' : ''}${r.edge_pp}pp edge</span>
-              <span>${r.pm_notch || '—'}</span>
+        const modelPd = pick.model_pd != null ? (pick.model_pd * 100).toFixed(1) + '%' : '—';
+        const marketPd = pick.market_pd != null ? (pick.market_pd * 100).toFixed(1) + '%' : '—';
+        const spread = pick.spread_bps != null ? pick.spread_bps.toFixed(0) + 'bp' : '—';
+        const edge = pick.edge_pp != null
+          ? (pick.edge_pp > 0 ? '+' : '') + pick.edge_pp + 'pp'
+          : '—';
+        const country = pick.name || pick.iso3 || 'Sovereign';
+        const rating = pick.pm_notch || '';
+        const sideClass = pick.side === 'SHORT' ? 'short' : '';
+        const thesis = pick.side === 'LONG'
+          ? `Market prices ${marketPd} PD at ${spread} spread; the model puts fair PD at ${modelPd} — spread pays the risk plus edge.`
+          : `Market prices ${marketPd} PD at ${spread} spread; the model puts fair PD at ${modelPd} — spread is too tight for the risk carried.`;
+        slot.innerHTML = `
+          <a href="/trades" class="home-call-card">
+            <div class="home-call-body">
+              <span class="home-call-side ${sideClass}">${pick.side} · ${rating}</span>
+              <h3 class="home-call-country">${country}</h3>
+              <p class="home-call-thesis">${thesis}</p>
+              <div class="home-call-stats">
+                <div class="home-call-stat">
+                  <span class="lbl">Model PD</span>
+                  <span class="val">${modelPd}</span>
+                </div>
+                <div class="home-call-stat">
+                  <span class="lbl">Market PD</span>
+                  <span class="val">${marketPd}</span>
+                </div>
+                <div class="home-call-stat">
+                  <span class="lbl">Spread</span>
+                  <span class="val">${spread}</span>
+                </div>
+                <div class="home-call-stat edge">
+                  <span class="lbl">Edge</span>
+                  <span class="val">${edge}</span>
+                </div>
+              </div>
             </div>
+            <span class="home-call-arrow">&rarr;</span>
           </a>
-        `).join('');
+        `;
       })
       .catch(() => {
-        document.querySelector('.home-trades-strip').style.display = 'none';
+        // Hide the section rather than showing a broken state.
+        const section = document.querySelector('.home-call');
+        if (section) section.style.display = 'none';
       });
   })();
 </script>

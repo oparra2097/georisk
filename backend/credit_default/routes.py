@@ -86,6 +86,46 @@ def watchlist():
     ))
 
 
+@credit_default_bp.route('/bond-trades')
+def bond_trades():
+    """Rank sovereign bond trades by (market_pd − model_pd).
+
+    Query params:
+      - top_n       : longs/shorts per side (default 10, cap 50)
+      - min_edge / min_edge_pct : filter |edge| in pp (default 2.0)
+      - horizon     : 1 / 3 / 5 (via ``_parse_cadence_args``)
+      - lgd         : loss-given-default (default 0.60)
+      - deterioration_scan : accepted for URL compatibility with other
+                             endpoints, no-op here.
+    """
+    from backend.credit_default.bond_trades import get_bond_trades
+
+    _, horizon = _parse_cadence_args()
+    try:
+        top_n = max(1, min(50, int(request.args.get('top_n', 10))))
+    except (TypeError, ValueError):
+        top_n = 10
+    min_edge_raw = request.args.get('min_edge_pct')
+    if min_edge_raw is None:
+        min_edge_raw = request.args.get('min_edge')
+    try:
+        min_edge_pct = float(min_edge_raw) if min_edge_raw is not None else 2.0
+    except (TypeError, ValueError):
+        min_edge_pct = 2.0
+    try:
+        lgd = float(request.args.get('lgd', 0.60))
+        if not (0.0 < lgd < 1.0):
+            lgd = 0.60
+    except (TypeError, ValueError):
+        lgd = 0.60
+    return jsonify(get_bond_trades(
+        top_n=top_n,
+        lgd=lgd,
+        min_edge_pct=min_edge_pct,
+        horizon=horizon,
+    ))
+
+
 @credit_default_bp.route('/country/<iso3>')
 def country(iso3: str):
     cadence, horizon = _parse_cadence_args()

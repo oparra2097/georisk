@@ -1,0 +1,165 @@
+/*
+ * /trades — aggregated trade-ideas board (sovereign bonds, EM FX,
+ * commodities) surfacing model-versus-market signals.
+ *
+ * Dark theme with local `--tr-*` tokens sourced from the site's global
+ * `--bg-*` / `--text-*` / `--accent` vars.
+ */
+
+.tr-page {
+  --tr-bg:            var(--bg-primary,    #0a0e1a);
+  --tr-surface:       var(--bg-secondary,  #111827);
+  --tr-surface-2:     #1a2035;
+  --tr-border:        var(--border,        #1f2937);
+  --tr-text:          var(--text-primary,  #e5e7eb);
+  --tr-text-dim:      var(--text-secondary,#9ca3af);
+  --tr-text-mute:     var(--text-muted,    #6b7280);
+  --tr-accent:        var(--accent,        #3b82f6);
+  --tr-accent-soft:   rgba(59, 130, 246, 0.12);
+  --tr-good:          #10b981;
+  --tr-bad:           #ef4444;
+
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  color: var(--tr-text);
+}
+
+.tr-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--tr-border);
+}
+.tr-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--tr-text);
+  letter-spacing: -0.01em;
+}
+.tr-subtitle {
+  font-size: 13px;
+  color: var(--tr-text-dim);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 780px;
+}
+
+/* Section blocks */
+.tr-section { margin-top: 28px; }
+.tr-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.tr-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--tr-text);
+  letter-spacing: -0.005em;
+}
+.tr-section-note {
+  font-size: 11px;
+  color: var(--tr-text-dim);
+  margin-left: auto;
+}
+.tr-section-note a {
+  color: var(--tr-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.tr-section-note a:hover { text-decoration: underline; }
+
+/* Table wrapper — dark surface + rounded corners.
+   overflow-x: auto so 8-column tables scroll horizontally on mobile
+   instead of clipping the trailing columns. The right-edge fade
+   (mask-image) hints at the scrollable content on narrow viewports. */
+.tr-table-wrap {
+  background: var(--tr-surface);
+  border: 1px solid var(--tr-border);
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+@media (max-width: 720px) {
+  .tr-table-wrap:has(table) {
+    mask-image: linear-gradient(to right, black 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 92%, transparent 100%);
+  }
+}
+table.tr-table {
+  width: 100%;
+  min-width: 640px; /* 8 columns need room; wrapper scrolls on narrow viewports */
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.tr-table thead th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--tr-text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--tr-border);
+  white-space: nowrap;
+  font-weight: 600;
+  background: var(--tr-surface-2);
+}
+.tr-table thead th.num { text-align: right; }
+.tr-table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--tr-border);
+  color: var(--tr-text);
+}
+.tr-table tbody td.num { text-align: right; }
+.tr-table tbody tr:last-child td { border-bottom: 0; }
+.tr-table tbody tr:hover { background: var(--tr-surface-2); }
+.tr-table td a {
+  color: var(--tr-text);
+  text-decoration: none;
+  font-weight: 600;
+}
+.tr-table td a:hover { color: var(--tr-accent); }
+
+/* Long / short pill */
+.tr-side {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tr-side.long {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--tr-good);
+}
+.tr-side.short {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--tr-bad);
+}
+.tr-side.hold {
+  background: var(--tr-surface-2);
+  color: var(--tr-text-mute);
+}
+
+.tr-edge-pos { color: var(--tr-good); font-weight: 700; }
+.tr-edge-neg { color: var(--tr-bad); font-weight: 700; }
+
+.tr-empty {
+  padding: 24px;
+  color: var(--tr-text-mute);
+  font-size: 13px;
+  text-align: center;
+}
+.tr-empty a {
+  color: var(--tr-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.tr-empty a:hover { text-decoration: underline; }

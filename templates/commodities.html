@@ -2,91 +2,14 @@
 {% block title %}Commodities — Parra Macro{% endblock %}
 
 {% block extra_css %}
-<style>
-  .cm-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
-  .cm-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
-  .cm-title { font-size: 26px; font-weight: 700; margin: 0 0 6px; color: #111827; }
-  .cm-subtitle { font-size: 13px; color: #6b7280; line-height: 1.55; margin: 0; max-width: 780px; }
-
-  .cm-tabs {
-    display: flex; gap: 4px; border-bottom: 1px solid #e5e7eb;
-    margin: 24px 0 20px; overflow-x: auto;
-  }
-  .cm-tab {
-    padding: 10px 18px; font-size: 13px; font-weight: 600;
-    background: transparent; border: 0; border-bottom: 2px solid transparent;
-    color: #6b7280; cursor: pointer; white-space: nowrap;
-    transition: color .1s, border-color .1s;
-  }
-  .cm-tab:hover { color: #111827; }
-  .cm-tab.active { color: #dc2626; border-bottom-color: #dc2626; }
-
-  .cm-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 18px;
-  }
-  .cm-card {
-    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
-    padding: 18px; display: flex; flex-direction: column; gap: 10px;
-  }
-  .cm-card-title {
-    font-size: 16px; font-weight: 700; margin: 0; color: #111827;
-    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-  }
-  .cm-card-title .commodity-ticker { font-size: 11px; color: #6b7280; font-weight: 500; }
-  .cm-scenarios {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
-    padding-top: 8px; border-top: 1px solid #f3f4f6;
-  }
-  .cm-scenario { display: flex; flex-direction: column; padding: 6px 8px; border-radius: 6px; }
-  .cm-scenario.base  { background: #f3f4f6; }
-  .cm-scenario.bull  { background: #d1fae5; }
-  .cm-scenario.bear  { background: #fee2e2; }
-  .cm-scenario .label {
-    font-size: 9px; font-weight: 700; letter-spacing: 0.06em;
-    text-transform: uppercase; color: #6b7280;
-  }
-  .cm-scenario.bull .label { color: #065f46; }
-  .cm-scenario.bear .label { color: #991b1b; }
-  .cm-scenario .value {
-    font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
-    color: #111827;
-  }
-  .cm-scenario .horizon { font-size: 10px; color: #6b7280; }
-
-  .cm-links {
-    display: flex; gap: 8px; padding-top: 8px; flex-wrap: wrap;
-  }
-  .cm-links a {
-    font-size: 11px; padding: 4px 10px; border-radius: 4px;
-    background: #f3f4f6; color: #4b5563; text-decoration: none;
-    font-weight: 600;
-  }
-  .cm-links a:hover { background: #111827; color: #fff; }
-
-  .cm-empty { padding: 40px; text-align: center; color: #6b7280; font-size: 13px; }
-
-  .cm-methodology {
-    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
-    padding: 16px 20px; margin-top: 24px;
-  }
-  .cm-methodology summary {
-    font-size: 13px; font-weight: 600; color: #111827; cursor: pointer;
-    padding: 4px 0;
-  }
-  .cm-methodology[open] summary { margin-bottom: 12px; }
-  .cm-methodology .content {
-    font-size: 12px; line-height: 1.6; color: #374151;
-    white-space: pre-wrap;
-  }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/commodities.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="cm-page">
-  <header class="cm-header">
-    <h1 class="cm-title">Commodities</h1>
-    <p class="cm-subtitle">
+<div class="co-page">
+  <header class="co-header">
+    <h1 class="co-title">Commodities</h1>
+    <p class="co-subtitle">
       Scenario-based forecasts across oil &amp; gas, agriculture, metals and
       the fertilizer / EM-inflation corridor. Base / Bull / Bear scenarios
       with named shocks (OPEC surprise, ENSO ONI, WASDE stocks, harvest
@@ -96,21 +19,21 @@
     </p>
   </header>
 
-  <div class="cm-tabs" role="tablist" aria-label="Commodity group">
-    <button class="cm-tab active" data-group="all">All</button>
-    <button class="cm-tab" data-group="energy">Oil &amp; Gas</button>
-    <button class="cm-tab" data-group="agriculture">Agriculture</button>
-    <button class="cm-tab" data-group="metals">Metals</button>
-    <button class="cm-tab" data-group="fertilizer">Fertilizer &amp; EM Inflation</button>
+  <div class="co-tabs" role="tablist" aria-label="Commodity group">
+    <button class="co-tab active" data-group="all">All</button>
+    <button class="co-tab" data-group="energy">Oil &amp; Gas</button>
+    <button class="co-tab" data-group="agriculture">Agriculture</button>
+    <button class="co-tab" data-group="metals">Metals</button>
+    <button class="co-tab" data-group="fertilizer">Fertilizer &amp; EM Inflation</button>
   </div>
 
-  <div class="cm-grid" id="cm-grid">
-    <div class="cm-empty">Loading commodity forecasts…</div>
+  <div class="co-grid" id="co-grid">
+    <div class="co-empty">Loading commodity forecasts…</div>
   </div>
 
-  <details class="cm-methodology">
+  <details class="co-methodology">
     <summary>Methodology overview</summary>
-    <div class="content" id="cm-methodology-content">
+    <div class="content" id="co-methodology-content">
       Load a specific commodity's methodology by clicking a card above. Each
       forecast documents its data sources, drivers, model choices, and known
       caveats. Files live under <code>docs/commodities/*.md</code>.
@@ -142,13 +65,13 @@
       renderGrid();
     })
     .catch((err) => {
-      document.getElementById('cm-grid').innerHTML =
-        `<div class="cm-empty">Failed to load forecasts. ${err}</div>`;
+      document.getElementById('co-grid').innerHTML =
+        `<div class="co-empty">Failed to load forecasts. ${err}</div>`;
     });
 
-  document.querySelectorAll('.cm-tab').forEach((btn) => {
+  document.querySelectorAll('.co-tab').forEach((btn) => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.cm-tab').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('.co-tab').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       state.group = btn.dataset.group;
       renderGrid();
@@ -156,16 +79,16 @@
   });
 
   function renderGrid() {
-    const grid = document.getElementById('cm-grid');
+    const grid = document.getElementById('co-grid');
     if (!state.data) return;
-    // The /api/forecasts payload shape is { commodities: {name: {...}} } or an
-    // array of commodities. Handle both defensively.
+    // /api/forecasts payload can be { commodities: {...} } (dict), an array,
+    // or a flat object. Normalize into an array.
     const rows = Array.isArray(state.data.commodities)
       ? state.data.commodities
       : Object.entries(state.data.commodities || state.data || {}).map(([name, v]) => ({ name, ...v }));
 
     if (!rows.length) {
-      grid.innerHTML = '<div class="cm-empty">No forecasts available.</div>';
+      grid.innerHTML = '<div class="co-empty">No forecasts available.</div>';
       return;
     }
 
@@ -174,12 +97,12 @@
       : rows.filter((r) => (GROUPS[(r.name || '').toLowerCase()] || 'other') === state.group);
 
     if (!filtered.length) {
-      grid.innerHTML = '<div class="cm-empty">No commodities in this group yet.</div>';
+      grid.innerHTML = '<div class="co-empty">No commodities in this group yet.</div>';
       return;
     }
 
     grid.innerHTML = filtered.map((r) => cardHtml(r)).join('');
-    grid.querySelectorAll('.cm-load-methodology').forEach((btn) => {
+    grid.querySelectorAll('.co-load-methodology').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         const commodity = btn.dataset.commodity;
@@ -199,31 +122,31 @@
                  (r.forecast && r.forecast.bear && r.forecast.bear['1y']) || null;
     const ticker = r.symbol || r.ticker || '';
     return `
-      <div class="cm-card">
-        <h3 class="cm-card-title">
+      <div class="co-card">
+        <h3 class="co-card-title">
           <span>${name}</span>
           <span class="commodity-ticker">${ticker}</span>
         </h3>
-        <div class="cm-scenarios">
-          <div class="cm-scenario base">
+        <div class="co-scenarios">
+          <div class="co-scenario base">
             <span class="label">Base 1Y</span>
             <span class="value">${base != null ? fmtPrice(base) : '—'}</span>
             <span class="horizon">consensus</span>
           </div>
-          <div class="cm-scenario bull">
+          <div class="co-scenario bull">
             <span class="label">Bull 1Y</span>
             <span class="value">${bull != null ? fmtPrice(bull) : '—'}</span>
             <span class="horizon">upside</span>
           </div>
-          <div class="cm-scenario bear">
+          <div class="co-scenario bear">
             <span class="label">Bear 1Y</span>
             <span class="value">${bear != null ? fmtPrice(bear) : '—'}</span>
             <span class="horizon">downside</span>
           </div>
         </div>
-        <div class="cm-links">
+        <div class="co-links">
           <a href="/data/commodities/forecast-${slug.startsWith('wti')||slug.startsWith('brent')||slug.startsWith('natural')||slug.startsWith('ttf') ? 'oil' : slug.startsWith('wheat')||slug.startsWith('soybeans')||slug.startsWith('coffee')||slug.startsWith('cocoa') ? 'ag' : slug.startsWith('copper')||slug.startsWith('gold')||slug.startsWith('silver')||slug.startsWith('platinum')||slug.startsWith('aluminum') ? 'metals' : slug.startsWith('fertilizer') ? 'fertilizer' : slug}">Full forecast &rarr;</a>
-          <a href="#methodology" class="cm-load-methodology" data-commodity="${slug}">Methodology</a>
+          <a href="#methodology" class="co-load-methodology" data-commodity="${slug}">Methodology</a>
         </div>
       </div>
     `;
@@ -237,8 +160,8 @@
   }
 
   function loadMethodology(commodity) {
-    const wrap = document.getElementById('cm-methodology-content');
-    const details = document.querySelector('.cm-methodology');
+    const wrap = document.getElementById('co-methodology-content');
+    const details = document.querySelector('.co-methodology');
     wrap.textContent = 'Loading…';
     details.setAttribute('open', '');
     fetch(`/api/forecasts/methodology/${commodity}`)
