@@ -72,15 +72,27 @@
 }
 .tr-section-note a:hover { text-decoration: underline; }
 
-/* Table wrapper — dark surface + rounded corners */
+/* Table wrapper — dark surface + rounded corners.
+   overflow-x: auto so 8-column tables scroll horizontally on mobile
+   instead of clipping the trailing columns. The right-edge fade
+   (mask-image) hints at the scrollable content on narrow viewports. */
 .tr-table-wrap {
   background: var(--tr-surface);
   border: 1px solid var(--tr-border);
   border-radius: 10px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+@media (max-width: 720px) {
+  .tr-table-wrap:has(table) {
+    mask-image: linear-gradient(to right, black 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 92%, transparent 100%);
+  }
 }
 table.tr-table {
   width: 100%;
+  min-width: 640px; /* 8 columns need room; wrapper scrolls on narrow viewports */
   border-collapse: collapse;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
