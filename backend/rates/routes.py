@@ -29,10 +29,12 @@ from backend.data_sources.rates_futures import get_fed_funds_curve
 from backend.data_sources import fred_client
 from backend.rates.fedwatch import compute_fedwatch
 from backend.rates.fomc_calendar import get_upcoming_meetings
+from backend.rates import em_rates_service, em_config
 
 logger = logging.getLogger(__name__)
 
 us_rates_bp = Blueprint('us_rates', __name__)
+em_rates_bp = Blueprint('em_rates', __name__)
 
 
 def _get_current_target_mid() -> float:
@@ -213,4 +215,69 @@ def edge():
         'anchor_date': curve_payload.get('anchor_date'),
         'target_mid': target_mid,
         'error': error,
+    })
+
+
+# ── EM rates blueprint (mounted at /api/em-rates in app.py) ─────────────
+
+@em_rates_bp.route('/panel')
+def em_panel():
+    """LATAM + Asia top 6 direction grid.
+
+    Returns the full 12-country panel: current policy rate, real rate,
+    CPI YoY, next meeting date, Taylor-rule direction call, and 10Y
+    yield + deltas. See ``em_rates_service.get_panel`` for the payload
+    shape.
+    """
+    return jsonify(em_rates_service.get_panel())
+
+
+@em_rates_bp.route('/country/<iso3>')
+def em_country(iso3: str):
+    """Full detail for one country — history vectors + fit diagnostics.
+
+    Used by the drill-down chart on ``/em-rates`` and (later) by a
+    ``/em-rates/<iso3>`` deep-link page.
+    """
+    detail = em_rates_service.get_country_detail(iso3.upper())
+    if detail is None:
+        return jsonify({'error': f'unknown country {iso3}'}), 404
+    return jsonify(detail)
+
+
+@em_rates_bp.route('/methodology')
+def em_methodology():
+    """Taylor rule spec + per-country target CPI and neutral rate table.
+    Static — no fetches. Refresh yearly by editing ``em_config.py``."""
+    rows = []
+    for iso3, cfg in em_config.COUNTRIES.items():
+        rows.append({
+            'iso3': iso3,
+            'name': cfg['name'],
+            'region': em_config.region_of(iso3),
+            'cb_name': cfg['cb_name'],
+            'rate_name': cfg['rate_name'],
+            'target_cpi': cfg.get('target_cpi'),
+            'neutral_r': cfg.get('neutral_r'),
+            'note': cfg.get('note'),
+        })
+    return jsonify({
+        'countries': rows,
+        'rule': {
+            'form': 'r_t = ρ·r_{t-1} + (1-ρ)·[α + β_π·(π−π*) + β_y·y_gap] + ε',
+            'guardrails': {
+                'rho_bounds': [0.5, 0.98],
+                'beta_pi_min': 0.5,
+                'beta_y_min': 0.0,
+                'min_obs': 60,
+            },
+            'notes': [
+                'One inertial Taylor rule fit per country on 15-20y monthly panel.',
+                'β_π enforces the Taylor principle: > 0.5 or the term is dropped.',
+                'β_y ≥ 0 or dropped. y_gap is currently a zero placeholder — '
+                'output-gap proxy pending IMF IFS AIP_IX ingest.',
+                'Fits cache 30 days on disk under Config.DATA_DIR/em_rates_fit_cache/.',
+                'Direction bucketing: >75bp = ±50, >25bp = ±25, else HOLD.',
+            ],
+        },
     })

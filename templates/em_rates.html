@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}EM Rates — LATAM + Asia — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/em_rates.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="emr-page">
+  <header class="emr-header">
+    <h1 class="emr-title">EM rates — LATAM + Asia</h1>
+    <p class="emr-subtitle">
+      Policy rate direction and 10Y yield direction for the LATAM top 6
+      (Brazil, Mexico, Colombia, Chile, Peru, Argentina) and Asia top 6
+      (China, India, South Korea, Indonesia, Thailand, Philippines).
+      Model side is a per-country inertial Taylor rule fit on 15–20y
+      of monthly policy rate + CPI history. See methodology below.
+      Divergent calls feed <a href="/trades" style="color:var(--accent,#3b82f6);text-decoration:none">/trades</a>.
+    </p>
+  </header>
+
+  <!-- Panel summary -->
+  <section class="emr-hero" id="emr-hero">
+    <div class="emr-hero-item">
+      <span class="lbl">Panel policy stance</span>
+      <span class="val" id="hero-stance">—</span>
+      <span class="sub" id="hero-stance-sub">Model direction calls across 12 CBs</span>
+    </div>
+    <div class="emr-hero-item">
+      <span class="lbl">Hikes / Holds / Cuts</span>
+      <span class="val" id="hero-counts">—</span>
+      <span class="sub">Country count in each bucket</span>
+    </div>
+    <div class="emr-hero-item">
+      <span class="lbl">Panel avg policy rate</span>
+      <span class="val" id="hero-avg-rate">—</span>
+      <span class="sub">12-country simple mean</span>
+    </div>
+    <div class="emr-hero-item">
+      <span class="lbl">Panel avg CPI YoY</span>
+      <span class="val" id="hero-avg-cpi">—</span>
+      <span class="sub">12-country simple mean</span>
+    </div>
+  </section>
+
+  <!-- Region tabs -->
+  <div class="emr-region-tabs" role="tablist">
+    <button class="emr-region-tab active" data-region="all">All</button>
+    <button class="emr-region-tab" data-region="LATAM">LATAM</button>
+    <button class="emr-region-tab" data-region="Asia">Asia</button>
+  </div>
+
+  <!-- LATAM -->
+  <section class="emr-region" data-region="LATAM">
+    <h2 class="emr-region-title">
+      LATAM top 6
+      <span class="count">Brazil · Mexico · Colombia · Chile · Peru · Argentina</span>
+    </h2>
+    <div class="emr-region-grid">
+      <div class="emr-block">
+        <div class="emr-block-head">Policy rate + direction</div>
+        <div class="emr-table-wrap">
+          <table class="emr-table" data-table="policy" data-region="LATAM">
+            <thead>
+              <tr>
+                <th>Country</th>
+                <th class="num">Current</th>
+                <th class="num">Real</th>
+                <th class="num">CPI YoY</th>
+                <th>Next FOMC-style</th>
+                <th>Model call</th>
+                <th class="num">Gap (bp)</th>
+              </tr>
+            </thead>
+            <tbody data-region-body="LATAM-policy">
+              <tr><td colspan="7" class="emr-empty">Loading policy grid…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="emr-block">
+        <div class="emr-block-head">10Y sovereign yield direction</div>
+        <div class="emr-table-wrap">
+          <table class="emr-table" data-table="yield" data-region="LATAM">
+            <thead>
+              <tr>
+                <th>Country</th>
+                <th class="num">10Y</th>
+                <th class="num">Δ 3M</th>
+                <th class="num">Δ 12M</th>
+                <th>Direction</th>
+              </tr>
+            </thead>
+            <tbody data-region-body="LATAM-yield">
+              <tr><td colspan="5" class="emr-empty">Loading yield grid…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Asia -->
+  <section class="emr-region" data-region="Asia">
+    <h2 class="emr-region-title">
+      Asia top 6
+      <span class="count">China · India · South Korea · Indonesia · Thailand · Philippines</span>
+    </h2>
+    <div class="emr-region-grid">
+      <div class="emr-block">
+        <div class="emr-block-head">Policy rate + direction</div>
+        <div class="emr-table-wrap">
+          <table class="emr-table" data-table="policy" data-region="Asia">
+            <thead>
+              <tr>
+                <th>Country</th>
+                <th class="num">Current</th>
+                <th class="num">Real</th>
+                <th class="num">CPI YoY</th>
+                <th>Next meeting</th>
+                <th>Model call</th>
+                <th class="num">Gap (bp)</th>
+              </tr>
+            </thead>
+            <tbody data-region-body="Asia-policy">
+              <tr><td colspan="7" class="emr-empty">Loading policy grid…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="emr-block">
+        <div class="emr-block-head">10Y sovereign yield direction</div>
+        <div class="emr-table-wrap">
+          <table class="emr-table" data-table="yield" data-region="Asia">
+            <thead>
+              <tr>
+                <th>Country</th>
+                <th class="num">10Y</th>
+                <th class="num">Δ 3M</th>
+                <th class="num">Δ 12M</th>
+                <th>Direction</th>
+              </tr>
+            </thead>
+            <tbody data-region-body="Asia-yield">
+              <tr><td colspan="5" class="emr-empty">Loading yield grid…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <details class="emr-methodology">
+    <summary>Methodology</summary>
+    <div class="content">
+      <p><strong>Model side.</strong> Per-country inertial Taylor rule:
+        <code>r_t = ρ·r_{t-1} + (1−ρ)·[α + β_π·(π − π*) + β_y·y_gap] + ε</code>.
+        Fit by OLS on 15-20 years of monthly policy-rate + CPI-YoY
+        history. Sign constraints: <code>β_π &ge; 0.5</code> (Taylor
+        principle) or the term drops; <code>β_y &ge; 0</code> or the
+        term drops; <code>ρ ∈ [0.5, 0.98]</code>.</p>
+      <p><strong>Direction bucketing.</strong>
+        <code>gap = implied − current</code>. If |gap| &gt; 75bp →
+        ±50bp call. If &gt; 25bp → ±25bp call. Otherwise HOLD.
+        Confidence: HIGH if |gap| &gt; 50bp <em>and</em> r² &gt; 0.85,
+        MEDIUM if |gap| &gt; 25bp <em>and</em> r² &gt; 0.70,
+        else LOW.</p>
+      <p><strong>10Y direction.</strong> Not a fitted model — a
+        heuristic that combines the policy-rate call with the 3M yield
+        move: policy HIKE + yield up ≥ 30bp → HIGHER; policy CUT +
+        yield down ≥ 30bp → LOWER; policy HOLD + |Δ3M| &lt; 30bp →
+        SIDEWAYS; else MIXED.</p>
+      <p><strong>Data.</strong> Policy rates: FRED OECD / IMF policy
+        rate series (primary), IMF IFS <code>FIPR_PA</code>
+        (fallback). CPI YoY: FRED OECD <code>CPALTT01</code> series or
+        computed from IMF IFS <code>PCPI_IX</code>. 10Y yields:
+        yfinance <code>&lt;iso2&gt;10YT=X</code> tickers, FRED
+        <code>IRLTLT01</code> fallback. Meeting calendars hardcoded
+        annually against each central bank's published schedule.</p>
+      <p><strong>Country configuration</strong> — inflation targets and
+        neutral real rate estimates below are from IMF / central-bank
+        working papers. Refresh annually.</p>
+      <table id="emr-config-table">
+        <thead>
+          <tr>
+            <th>Country</th><th>CB</th><th>Rate</th>
+            <th>Target CPI</th><th>Neutral r</th>
+          </tr>
+        </thead>
+        <tbody id="emr-config-tbody">
+          <tr><td colspan="5">Loading config…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/em_rates.js') }}"></script>
+{% endblock %}
