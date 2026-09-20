@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}US Rates — Fed Funds Futures + FedWatch — Parra Macro{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/us_rates.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="usr-page">
+  <header class="usr-header">
+    <h1 class="usr-title">US rates — fed funds futures</h1>
+    <p class="usr-subtitle">
+      Fed funds futures curve overlaid on the FRB/US-lite macro model's
+      p10-p90 fed funds fan. The market side is CME ZQ contracts (implied
+      rate = 100 − settle). The model side is the reduced-form inertial
+      Taylor rule from <a href="/macro-model" style="color:var(--accent,#3b82f6);text-decoration:none">/macro-model</a>.
+      A CME FedWatch–style probability grid decomposes each contract into
+      per-meeting hike / hold / cut buckets. Divergent contracts feed
+      <a href="/trades" style="color:var(--accent,#3b82f6);text-decoration:none">/trades</a>.
+    </p>
+  </header>
+
+  <!-- Hero strip -->
+  <section class="usr-hero" id="usr-hero">
+    <div class="usr-hero-item">
+      <span class="lbl">Target range midpoint</span>
+      <span class="val" id="hero-target">—</span>
+      <span class="sub">Current fed funds target midpoint</span>
+    </div>
+    <div class="usr-hero-item">
+      <span class="lbl">Next FOMC</span>
+      <span class="val" id="hero-next-meeting">—</span>
+      <span class="sub" id="hero-next-days">—</span>
+    </div>
+    <div class="usr-hero-item">
+      <span class="lbl">Market implies</span>
+      <span class="val accent" id="hero-market-call">—</span>
+      <span class="sub" id="hero-market-detail">—</span>
+    </div>
+    <div class="usr-hero-item">
+      <span class="lbl">Model implies</span>
+      <span class="val accent" id="hero-model-call">—</span>
+      <span class="sub" id="hero-model-detail">—</span>
+    </div>
+  </section>
+
+  <!-- Fan chart: model band + market line -->
+  <section class="usr-section">
+    <div class="usr-section-head">
+      <h2 class="usr-section-title">Path — market vs. model (next ~24 months)</h2>
+      <span class="usr-section-note" id="chart-note">Loading…</span>
+    </div>
+    <div class="usr-chart-host" id="usr-chart">
+      <div class="usr-empty">Loading fed funds path…</div>
+    </div>
+    <div class="usr-chart-legend">
+      <span><span class="dot market"></span>Market (fed funds futures / ZQ)</span>
+      <span><span class="dot model"></span>Model p50 (FRB/US-lite Taylor rule)</span>
+      <span><span class="dot band"></span>Model p10–p90 band</span>
+      <span style="margin-left:auto"><span class="dot" style="background:var(--usr-good, #10b981)"></span>Spot (FRED DFF)</span>
+    </div>
+  </section>
+
+  <!-- FedWatch grid -->
+  <section class="usr-section">
+    <div class="usr-section-head">
+      <h2 class="usr-section-title">FedWatch — per-meeting probability grid</h2>
+      <span class="usr-section-note" id="fedwatch-note">Loading…</span>
+    </div>
+    <div class="usr-fedwatch-wrap">
+      <table class="usr-fedwatch-grid" id="usr-fedwatch">
+        <thead>
+          <tr>
+            <th>Meeting</th>
+            <th class="bucket-cut">−50bp</th>
+            <th class="bucket-cut">−25bp</th>
+            <th>Hold</th>
+            <th class="bucket-hike">+25bp</th>
+            <th class="bucket-hike">+50bp</th>
+          </tr>
+        </thead>
+        <tbody id="fedwatch-tbody">
+          <tr><td colspan="6" class="usr-empty">Loading probabilities…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Edge table -->
+  <section class="usr-section">
+    <div class="usr-section-head">
+      <h2 class="usr-section-title">Edge — where the model disagrees with the market</h2>
+      <span class="usr-section-note"><a href="/trades" style="color:var(--accent,#3b82f6);text-decoration:none;font-weight:600">Open trade board →</a></span>
+    </div>
+    <div class="usr-edge-wrap">
+      <table class="usr-edge" id="usr-edge">
+        <thead>
+          <tr>
+            <th>Meeting</th>
+            <th>Direction</th>
+            <th class="num">Market post-rate</th>
+            <th class="num">Model post-rate</th>
+            <th class="num">Edge (bp)</th>
+          </tr>
+        </thead>
+        <tbody id="edge-tbody">
+          <tr><td colspan="5" class="usr-empty">Loading model comparison…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <details class="usr-methodology">
+    <summary>Methodology</summary>
+    <div class="content">
+      <p><strong>Market side.</strong> CME ZQ (fed funds) monthly contracts
+        via Yahoo Finance, refreshed every 6 hours. Implied rate =
+        <code>100 − settle_price</code>. Each contract prices the AVERAGE
+        effective fed funds rate over its contract month.</p>
+      <p><strong>Model side.</strong> Reduced-form Engle-Granger–estimated
+        inertial Taylor rule from the FRB/US-lite panel at
+        <code>/macro-model</code>. Fed funds is one of 11 endogenous
+        equations. Bands are bootstrap draws (p10 / p50 / p90).</p>
+      <p><strong>FedWatch decomposition.</strong> Each ZQ contract's
+        month-average is decomposed into pre-meeting and post-meeting
+        daily rates via the calendar-day-weighted identity
+        <code>implied = (d_before/d_total)·pre_rate + (d_after/d_total)·post_rate</code>.
+        The delta between the post-meeting and pre-meeting rate is
+        bucketed linearly across ±25 / hold / ±50 so the expected value
+        of the bucketed distribution equals the observed delta. Standard
+        <a href="https://www.cmegroup.com/education/tools-and-applications/fedwatch-tool.html"
+           style="color:var(--accent,#3b82f6);text-decoration:none" target="_blank" rel="noopener">CME
+        methodology</a>.</p>
+      <p><strong>Edge.</strong> Model p50 at the meeting date (linear
+        interpolation between quarter-end points) minus market
+        post-rate. Positive → model expects higher, market is dovish,
+        <em>short duration</em>. Negative → model expects lower, market
+        is hawkish, <em>long duration</em>.</p>
+    </div>
+  </details>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/vendor/d3.v7.min.js"></script>
+<script src="{{ url_for('static', filename='js/us_rates.js') }}"></script>
+{% endblock %}
