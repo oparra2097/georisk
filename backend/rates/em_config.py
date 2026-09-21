@@ -41,6 +41,11 @@ _LATAM = {
         'yahoo_10y': 'BR10YT=X',
         'fred_10y': 'IRLTLT01BRM156N',
         'ifs_policy': 'FIPR_PA', 'ifs_cpi': 'PCPI_IX',
+        'strategist_expected': {
+            'direction': 'HIKE', 'magnitude_bp': 25,
+            'as_of': '2026-09-21',
+            'note': 'Fiscal deterioration + BRL pass-through push BCB back to hikes despite disinflation',
+        },
     },
     'MEX': {
         'name': 'Mexico', 'iso2': 'MX', 'ccy': 'MXN',
@@ -61,6 +66,11 @@ _LATAM = {
         'yahoo_10y': 'CO10YT=X',
         'fred_10y': 'IRLTLT01COM156N',
         'ifs_policy': 'FIPR_PA', 'ifs_cpi': 'PCPI_IX',
+        'strategist_expected': {
+            'direction': 'HIKE', 'magnitude_bp': 25,
+            'as_of': '2026-09-21',
+            'note': 'Sticky services CPI + fiscal slippage; BanRep pauses easing and turns hawkish',
+        },
     },
     'CHL': {
         'name': 'Chile', 'iso2': 'CL', 'ccy': 'CLP',
@@ -98,6 +108,21 @@ _LATAM = {
 # ── Asia top 6 ─────────────────────────────────────────────────────────
 
 _ASIA = {
+    'JPN': {
+        'name': 'Japan', 'iso2': 'JP', 'ccy': 'JPY',
+        'cb_name': 'BOJ', 'cb_url': 'https://www.boj.or.jp',
+        'rate_name': 'Uncollateralized overnight call rate',
+        'target_cpi': 2.0,        # 2% price stability target
+        'neutral_r': 0.5,         # low, decades of ZIRP
+        'yahoo_10y': 'JP10YT=X',
+        'fred_10y': 'IRLTLT01JPM156N',
+        'ifs_policy': 'FIPR_PA', 'ifs_cpi': 'PCPI_IX',
+        'strategist_expected': {
+            'direction': 'HIKE', 'magnitude_bp': 25,
+            'as_of': '2026-09-21',
+            'note': 'BOJ normalisation continues; sustained wage growth + 2% CPI keep the hiking cycle alive',
+        },
+    },
     'CHN': {
         'name': 'China', 'iso2': 'CN', 'ccy': 'CNY',
         'cb_name': 'PBoC', 'cb_url': 'http://www.pbc.gov.cn',
@@ -127,6 +152,11 @@ _ASIA = {
         'yahoo_10y': 'KR10YT=X',
         'fred_10y': 'IRLTLT01KRM156N',
         'ifs_policy': 'FIPR_PA', 'ifs_cpi': 'PCPI_IX',
+        'strategist_expected': {
+            'direction': 'HIKE', 'magnitude_bp': 25,
+            'as_of': '2026-09-21',
+            'note': 'FX weakness + household debt vulnerability tilt BOK back to hikes over easing',
+        },
     },
     'IDN': {
         'name': 'Indonesia', 'iso2': 'ID', 'ccy': 'IDR',

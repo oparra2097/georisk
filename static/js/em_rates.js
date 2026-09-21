@@ -84,6 +84,43 @@
       const nextMeeting = r.next_meeting ? formatShortDate(r.next_meeting) : '—';
       const fitBadge = r.fit_ok === false
         ? '<span class="emr-fit-issue" title="Fit failed">fit</span>' : '';
+
+      // Strategist expected direction (optional override per country).
+      const strat = r.strategist_expected || null;
+      let stratChip = '';
+      let divergenceFlag = '';
+      if (strat && strat.direction) {
+        const sDir = strat.direction;
+        const sCls = sDir === 'HIKE' ? 'hike' : (sDir === 'CUT' ? 'cut' : 'hold');
+        const sLbl = strat.magnitude_bp
+          ? `${sDir} ${strat.magnitude_bp > 0 ? '+' : ''}${strat.magnitude_bp}bp`
+          : sDir;
+        stratChip = `<span class="emr-chip strategist ${sCls}" title="${escapeAttr(strat.note || '')}">${sLbl}</span>`;
+        if (sDir !== dir) {
+          const flagTitle = `Model: ${dir}. Strategist: ${sDir}. ${strat.note || ''}`;
+          divergenceFlag = `<span class="emr-divergence-flag" title="${escapeAttr(flagTitle)}">⚡ divergence</span>`;
+        }
+      }
+      const callCell = strat
+        ? `
+          <div class="emr-call-stack">
+            <div class="emr-call-row">
+              <span class="emr-call-label">Model</span>
+              <span class="emr-chip ${dirCls}">${dirLabel}</span>
+              <span class="emr-conf-dot ${confCls}" title="Confidence: ${model.confidence || 'LOW'}"></span>
+            </div>
+            <div class="emr-call-row">
+              <span class="emr-call-label">Strat</span>
+              ${stratChip}
+            </div>
+            ${divergenceFlag}
+          </div>
+        `
+        : `
+          <span class="emr-chip ${dirCls}">${dirLabel}</span>
+          <span class="emr-conf-dot ${confCls}" title="Confidence: ${model.confidence || 'LOW'}"></span>
+        `;
+
       return `
         <tr>
           <td>
@@ -96,10 +133,7 @@
           <td class="num">${fmtRate(r.real_rate)}</td>
           <td class="num">${fmtRate(r.cpi_yoy)}</td>
           <td>${nextMeeting}</td>
-          <td>
-            <span class="emr-chip ${dirCls}">${dirLabel}</span>
-            <span class="emr-conf-dot ${confCls}" title="Confidence: ${model.confidence || 'LOW'}"></span>
-          </td>
+          <td>${callCell}</td>
           <td class="num ${gapCls}">${gapStr}</td>
         </tr>
       `;
@@ -190,6 +224,11 @@
     if (v > 15) return 'emr-delta-up';
     if (v < -15) return 'emr-delta-down';
     return 'emr-delta-flat';
+  }
+  function escapeAttr(s) {
+    return (s || '').toString()
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
   function formatShortDate(iso) {
     try {

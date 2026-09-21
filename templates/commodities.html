@@ -10,21 +10,20 @@
   <header class="co-header">
     <h1 class="co-title">Commodities</h1>
     <p class="co-subtitle">
-      Scenario-based forecasts across oil &amp; gas, agriculture, metals and
-      the fertilizer / EM-inflation corridor. Base / Bull / Bear scenarios
-      with named shocks (OPEC surprise, ENSO ONI, WASDE stocks, harvest
-      shock) run through the same underlying SARIMAX + GARCH stack, with
-      VECM cointegration for oil-benchmark spreads. Anchored to the
-      forward curve, then diverges by scenario.
+      Scenario-based forecasts across oil &amp; gas, agriculture and
+      metals. Each commodity shows the group's three scenarios (Base /
+      Severe / Worst for oil, Bear / Base / Bull for ag and metals)
+      with year-end FY price levels. Underlying stack: SARIMAX(1,0,1)
+      + GARCH(1,1) with 95% CI bootstrap and hardcoded scenario
+      targets as a fallback.
     </p>
   </header>
 
   <div class="co-tabs" role="tablist" aria-label="Commodity group">
     <button class="co-tab active" data-group="all">All</button>
-    <button class="co-tab" data-group="energy">Oil &amp; Gas</button>
-    <button class="co-tab" data-group="agriculture">Agriculture</button>
-    <button class="co-tab" data-group="metals">Metals</button>
-    <button class="co-tab" data-group="fertilizer">Fertilizer &amp; EM Inflation</button>
+    <button class="co-tab" data-group="Oil &amp; Gas">Oil &amp; Gas</button>
+    <button class="co-tab" data-group="Agriculture">Agriculture</button>
+    <button class="co-tab" data-group="Metals">Metals</button>
   </div>
 
   <div class="co-grid" id="co-grid">
@@ -44,17 +43,14 @@
 
 {% block scripts %}
 <script>
-  // Group each commodity into a tab. This mirrors the taxonomy in
-  // backend/data_sources/commodities_forecast.py, kept in sync by hand.
-  const GROUPS = {
-    'wti crude': 'energy', 'brent crude': 'energy',
-    'natural gas hh': 'energy', 'ttf gas': 'energy',
-    'wheat': 'agriculture', 'soybeans': 'agriculture',
-    'coffee': 'agriculture', 'cocoa': 'agriculture',
-    'copper': 'metals', 'gold': 'metals', 'silver': 'metals',
-    'platinum': 'metals', 'aluminum': 'metals',
-    'fertilizer': 'fertilizer', 'urea': 'fertilizer', 'dap': 'fertilizer',
-  };
+  // ── Commodity page ── consumes /api/forecasts's real shape:
+  //   data.groups[groupName].commodities[commodityName]
+  // Each commodity has:
+  //   { ticker, unit, latest_close, scenarios: {scenarioName: {Q1..Q4, FY, FY2, ...}} }
+  // The scenario NAMES are per-group (Oil & Gas uses Base Case / Severe Case /
+  // Worst Case; Ag + Metals use Bear / Base / Bull). We render each group's
+  // scenarios in the order the backend gives us via scenario_order (minus
+  // "Actual"), using group.colors for the pill color.
 
   const state = { group: 'all', data: null };
 
@@ -81,85 +77,141 @@
   function renderGrid() {
     const grid = document.getElementById('co-grid');
     if (!state.data) return;
-    // /api/forecasts payload can be { commodities: {...} } (dict), an array,
-    // or a flat object. Normalize into an array.
-    const rows = Array.isArray(state.data.commodities)
-      ? state.data.commodities
-      : Object.entries(state.data.commodities || state.data || {}).map(([name, v]) => ({ name, ...v }));
 
+    const groups = (state.data.groups) || {};
+    const groupNames = Object.keys(groups);
+    if (!groupNames.length) {
+      grid.innerHTML = '<div class="co-empty">No forecast groups returned by the API. Retry in a moment or open <a href="/data">/data</a> for the full view.</div>';
+      return;
+    }
+
+    // Flatten into { group, name, commodity, scenarioOrder, scenarioLabels, colors }
+    const rows = [];
+    for (const gName of groupNames) {
+      if (state.group !== 'all' && state.group !== gName) continue;
+      const g = groups[gName] || {};
+      const commodities = g.commodities || {};
+      for (const [cName, c] of Object.entries(commodities)) {
+        rows.push({
+          group: gName,
+          name: cName,
+          commodity: c,
+          scenarioOrder: (g.scenario_order || []).filter((s) => s !== 'Actual'),
+          scenarioLabels: g.scenario_labels || {},
+          colors: g.colors || {},
+        });
+      }
+    }
     if (!rows.length) {
-      grid.innerHTML = '<div class="co-empty">No forecasts available.</div>';
+      grid.innerHTML = '<div class="co-empty">No commodities in this group.</div>';
       return;
     }
-
-    const filtered = state.group === 'all'
-      ? rows
-      : rows.filter((r) => (GROUPS[(r.name || '').toLowerCase()] || 'other') === state.group);
-
-    if (!filtered.length) {
-      grid.innerHTML = '<div class="co-empty">No commodities in this group yet.</div>';
-      return;
-    }
-
-    grid.innerHTML = filtered.map((r) => cardHtml(r)).join('');
-    grid.querySelectorAll('.co-load-methodology').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const commodity = btn.dataset.commodity;
-        loadMethodology(commodity);
-      });
-    });
+    grid.innerHTML = rows.map(cardHtml).join('');
   }
 
-  function cardHtml(r) {
-    const name = r.name || r.commodity || 'Commodity';
-    const slug = (name || '').toLowerCase().replace(/\s+/g, '_');
-    const base = (r.scenarios && r.scenarios.base && r.scenarios.base.horizon_1y) ||
-                 (r.forecast && r.forecast.base && r.forecast.base['1y']) || null;
-    const bull = (r.scenarios && r.scenarios.bull && r.scenarios.bull.horizon_1y) ||
-                 (r.forecast && r.forecast.bull && r.forecast.bull['1y']) || null;
-    const bear = (r.scenarios && r.scenarios.bear && r.scenarios.bear.horizon_1y) ||
-                 (r.forecast && r.forecast.bear && r.forecast.bear['1y']) || null;
-    const ticker = r.symbol || r.ticker || '';
+  function cardHtml(row) {
+    const c = row.commodity || {};
+    const unit = c.unit ? ` <span class="commodity-unit">${escapeHtml(c.unit)}</span>` : '';
+    const latest = c.latest_close != null
+      ? `<span class="commodity-spot" title="Latest close">${fmtPrice(c.latest_close)}${unit}</span>`
+      : '';
+    const scenarios = c.scenarios || {};
+    const chips = row.scenarioOrder.map((sName) => {
+      const s = scenarios[sName] || {};
+      const val = pickHorizon(s);
+      const cls = sceneChipClass(sName);
+      const title = (row.scenarioLabels[sName] || '').replace(/"/g, '&quot;');
+      const shortLbl = shortLabel(sName);
+      return `
+        <div class="co-scenario ${cls}" title="${title}">
+          <span class="label">${escapeHtml(shortLbl)}</span>
+          <span class="value">${val != null ? fmtPrice(val) : '—'}</span>
+          <span class="horizon">${horizonLabel(s)}</span>
+        </div>
+      `;
+    }).join('');
+    const slug = row.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
     return `
       <div class="co-card">
         <h3 class="co-card-title">
-          <span>${name}</span>
-          <span class="commodity-ticker">${ticker}</span>
+          <span>${escapeHtml(row.name)}</span>
+          ${latest || `<span class="commodity-ticker">${escapeHtml(c.ticker || '')}</span>`}
         </h3>
-        <div class="co-scenarios">
-          <div class="co-scenario base">
-            <span class="label">Base 1Y</span>
-            <span class="value">${base != null ? fmtPrice(base) : '—'}</span>
-            <span class="horizon">consensus</span>
-          </div>
-          <div class="co-scenario bull">
-            <span class="label">Bull 1Y</span>
-            <span class="value">${bull != null ? fmtPrice(bull) : '—'}</span>
-            <span class="horizon">upside</span>
-          </div>
-          <div class="co-scenario bear">
-            <span class="label">Bear 1Y</span>
-            <span class="value">${bear != null ? fmtPrice(bear) : '—'}</span>
-            <span class="horizon">downside</span>
-          </div>
+        <div class="co-scenarios ${row.scenarioOrder.length === 3 ? 'three' : ''}">
+          ${chips}
         </div>
         <div class="co-links">
-          <a href="/data/commodities/forecast-${slug.startsWith('wti')||slug.startsWith('brent')||slug.startsWith('natural')||slug.startsWith('ttf') ? 'oil' : slug.startsWith('wheat')||slug.startsWith('soybeans')||slug.startsWith('coffee')||slug.startsWith('cocoa') ? 'ag' : slug.startsWith('copper')||slug.startsWith('gold')||slug.startsWith('silver')||slug.startsWith('platinum')||slug.startsWith('aluminum') ? 'metals' : slug.startsWith('fertilizer') ? 'fertilizer' : slug}">Full forecast &rarr;</a>
+          <a href="/data/commodities/forecast-${groupSlug(row.group)}">Full forecast &rarr;</a>
           <a href="#methodology" class="co-load-methodology" data-commodity="${slug}">Methodology</a>
         </div>
       </div>
     `;
   }
 
+  // Pick a 1Y-ahead point out of the scenario row. Backend rows are keyed
+  // by quarter (Q1..Q4) + FY + FY2. FY = end of forecast year, FY2 = next.
+  function pickHorizon(scenarioRow) {
+    if (!scenarioRow) return null;
+    if (scenarioRow.FY != null) return scenarioRow.FY;
+    if (scenarioRow.FY2 != null) return scenarioRow.FY2;
+    // Fall back to the last numeric quarter value in the row.
+    for (const key of ['Q4', 'Q3', 'Q2', 'Q1']) {
+      if (scenarioRow[key] != null) return scenarioRow[key];
+    }
+    return null;
+  }
+
+  function horizonLabel(scenarioRow) {
+    if (!scenarioRow) return '';
+    if (scenarioRow.FY != null) return 'FY end';
+    if (scenarioRow.FY2 != null) return 'FY next';
+    return 'latest Q';
+  }
+
+  // Map any group's scenario name to the {base, bull, bear} chip theme.
+  // Oil & Gas: Base = normal, Severe = middle upside, Worst = tail upside.
+  // Ag / Metals: Bear = low, Base = middle, Bull = high.
+  function sceneChipClass(scenarioName) {
+    const s = scenarioName.toLowerCase();
+    if (s.includes('worst') || s.includes('bear')) return 'bear';
+    if (s.includes('severe') || s.includes('bull')) return 'bull';
+    if (s.includes('base')) return 'base';
+    return 'base';
+  }
+
+  // Shorter label for the chip. Groups vary: strip "Case" for oil,
+  // leave the short Bear/Base/Bull labels alone for ag/metals.
+  function shortLabel(scenarioName) {
+    return scenarioName.replace(' Case', '');
+  }
+
+  function groupSlug(groupName) {
+    const g = groupName.toLowerCase();
+    if (g.includes('oil') || g.includes('gas')) return 'oil';
+    if (g.includes('agri'))  return 'ag';
+    if (g.includes('metal')) return 'metals';
+    return g.replace(/\s+/g, '-');
+  }
+
   function fmtPrice(v) {
-    if (typeof v !== 'number') return '—';
+    if (typeof v !== 'number' || isNaN(v)) return '—';
     if (v >= 1000) return v.toFixed(0);
     if (v >= 10) return v.toFixed(1);
     return v.toFixed(2);
   }
 
-  function loadMethodology(commodity) {
+  function escapeHtml(s) {
+    return (s || '').toString()
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
+  // Methodology drawer — served by /api/forecasts/methodology/<commodity>.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.co-load-methodology');
+    if (!btn) return;
+    e.preventDefault();
+    const commodity = btn.dataset.commodity;
     const wrap = document.getElementById('co-methodology-content');
     const details = document.querySelector('.co-methodology');
     wrap.textContent = 'Loading…';
@@ -168,6 +220,6 @@
       .then((r) => (r.ok ? r.text() : Promise.reject(r.status)))
       .then((md) => { wrap.textContent = md; })
       .catch(() => { wrap.textContent = 'No methodology doc for this commodity yet.'; });
-  }
+  });
 </script>
 {% endblock %}

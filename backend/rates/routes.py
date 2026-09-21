@@ -260,6 +260,7 @@ def em_methodology():
             'target_cpi': cfg.get('target_cpi'),
             'neutral_r': cfg.get('neutral_r'),
             'note': cfg.get('note'),
+            'strategist_expected': cfg.get('strategist_expected'),
         })
     return jsonify({
         'countries': rows,

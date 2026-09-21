@@ -38,6 +38,12 @@ from typing import Dict, List
 # approximations.
 
 _MEETINGS: Dict[str, List[date]] = {
+    'JPN': [
+        # BOJ meetings — 8 per year, second day (announcement day).
+        date(2026, 1, 23), date(2026, 3, 18), date(2026, 5, 1), date(2026, 6, 17),
+        date(2026, 7, 31), date(2026, 9, 18), date(2026, 10, 30), date(2026, 12, 18),
+        date(2027, 1, 22), date(2027, 3, 17),
+    ],
     'BRA': [
         date(2026, 1, 28), date(2026, 3, 18), date(2026, 5, 6), date(2026, 6, 17),
         date(2026, 7, 29), date(2026, 9, 16), date(2026, 10, 28), date(2026, 12, 9),

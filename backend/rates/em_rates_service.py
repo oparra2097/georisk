@@ -177,6 +177,7 @@ def _country_row(iso3: str, cfg: dict) -> dict:
         'yield_direction': yield_direction,
         'fit_ok': fit_res.get('fit_error') is None,
         'r_squared': fit_res.get('r_squared'),
+        'strategist_expected': cfg.get('strategist_expected'),
         'errors': errors,
     }
 

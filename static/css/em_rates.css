@@ -166,6 +166,42 @@ table.emr-table {
 .emr-chip.cut  { background: rgba(16, 185, 129, 0.15); color: var(--emr-good); }
 .emr-chip.hold { background: var(--emr-surface-2); color: var(--emr-text-dim); }
 
+/* Strategist expected chip — outlined variant so it visually reads as
+ * commentary rather than another model output. */
+.emr-chip.strategist {
+  background: transparent;
+  border: 1px solid;
+  padding: 2px 8px;
+  font-size: 9px;
+  opacity: 0.9;
+}
+.emr-chip.strategist.hike { border-color: var(--emr-bad); color: var(--emr-bad); }
+.emr-chip.strategist.cut  { border-color: var(--emr-good); color: var(--emr-good); }
+.emr-chip.strategist.hold { border-color: var(--emr-text-mute); color: var(--emr-text-dim); }
+
+/* Model + strategist stack (both chips in the same table cell) */
+.emr-call-stack {
+  display: flex; flex-direction: column; gap: 4px;
+  align-items: flex-start;
+}
+.emr-call-row {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.emr-call-label {
+  font-size: 9px; color: var(--emr-text-mute);
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+  min-width: 42px;
+}
+.emr-divergence-flag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 6px; margin-top: 2px;
+  background: rgba(245, 158, 11, 0.15); color: var(--emr-warn);
+  border-radius: 3px;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  cursor: help;
+}
+
 /* 10Y direction chips (slightly softer than policy chips) */
 .emr-chip.higher   { background: rgba(239, 68, 68, 0.12); color: var(--emr-bad); }
 .emr-chip.lower    { background: rgba(16, 185, 129, 0.12); color: var(--emr-good); }

@@ -167,36 +167,62 @@
       document.getElementById('bond-note').textContent = 'error';
     });
 
-  // EM rates — central bank direction calls (top 3 by |gap|)
+  // EM rates — central bank direction calls
+  // Rank blends model conviction and strategist divergences so a
+  // strategist-flagged HIKE against a model HOLD gets surfaced even
+  // when the fitted gap is small.
   fetch('/api/em-rates/panel')
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       const tbody = document.getElementById('em-rates-tbody');
       if (!data) throw new Error('no data');
-      const rows = (data.countries || []).filter((c) => {
-        const m = c.model || {};
-        return m.gap_bp != null && m.direction && m.direction !== 'HOLD';
-      });
-      rows.sort((a, b) => Math.abs(b.model.gap_bp) - Math.abs(a.model.gap_bp));
-      const top = rows.slice(0, 3);
+
+      // Score each country: divergence = 1 (strategist ≠ model), else 0.
+      // Rank: divergences first, then by |model.gap_bp| descending.
+      const scored = (data.countries || [])
+        .map((c) => {
+          const m = c.model || {};
+          const strat = c.strategist_expected;
+          const stratDir = strat && strat.direction;
+          const modelDir = m.direction;
+          const divergent = !!(stratDir && modelDir && stratDir !== modelDir);
+          const modelInteresting = m.gap_bp != null && modelDir && modelDir !== 'HOLD';
+          return {
+            c, m, strat,
+            divergent, modelInteresting,
+            score: divergent
+              ? 1000 + Math.abs(m.gap_bp || 0)
+              : (modelInteresting ? Math.abs(m.gap_bp || 0) : -1),
+          };
+        })
+        .filter((row) => row.divergent || row.modelInteresting)
+        .sort((a, b) => b.score - a.score);
+
+      const top = scored.slice(0, 4);
       if (!top.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="tr-empty">All 12 CBs near-neutral. <a href="/em-rates">Open the full board &rarr;</a></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="tr-empty">All 13 CBs near-neutral. <a href="/em-rates">Open the full board &rarr;</a></td></tr>';
         return;
       }
-      tbody.innerHTML = top.map((r) => {
-        const m = r.model || {};
-        const dir = m.direction || 'HOLD';
+      tbody.innerHTML = top.map((row) => {
+        const r = row.c;
+        const m = row.m;
+        const strat = row.strat;
+        // If strategist call diverges, prefer showing THEIR direction as the
+        // conviction (with a small marker); else show the model direction.
+        const dir = row.divergent ? strat.direction : (m.direction || 'HOLD');
         const sideCls = dir === 'HIKE' ? 'short' : (dir === 'CUT' ? 'long' : 'hold');
-        const dirLbl = m.magnitude_bp
-          ? `${dir} ${m.magnitude_bp > 0 ? '+' : ''}${m.magnitude_bp}bp`
+        const magBp = row.divergent ? strat.magnitude_bp : m.magnitude_bp;
+        const dirLbl = magBp
+          ? `${dir} ${magBp > 0 ? '+' : ''}${magBp}bp`
           : dir;
         const gap = m.gap_bp;
-        const gapCls = gap > 0 ? 'tr-edge-pos' : (gap < 0 ? 'tr-edge-neg' : '');
-        const gapStr = (gap > 0 ? '+' : '') + gap.toFixed(0);
+        const gapCls = gap == null ? '' : gap > 0 ? 'tr-edge-pos' : (gap < 0 ? 'tr-edge-neg' : '');
+        const gapStr = gap == null ? '—' : (gap > 0 ? '+' : '') + gap.toFixed(0);
         const nextMtg = r.next_meeting || '—';
+        const marker = row.divergent ? ' <span title="strategist diverges from model" style="color:#f59e0b">⚡</span>' : '';
         return `
           <tr>
-            <td><span class="tr-side ${sideCls}">${dirLbl}</span></td>
+            <td><span class="tr-side ${sideCls}">${dirLbl}</span>${marker}</td>
             <td><a href="/em-rates">${r.name}</a></td>
             <td class="num">${r.current_rate != null ? r.current_rate.toFixed(2) + '%' : '—'}</td>
             <td class="num">${m.implied_rate != null ? m.implied_rate.toFixed(2) + '%' : '—'}</td>
