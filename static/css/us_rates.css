@@ -1,0 +1,302 @@
+/*
+ * /us-rates — fed funds futures market vs. macro-model overlay,
+ * plus a CME FedWatch-style per-FOMC-meeting probability grid.
+ *
+ * Dark theme with local `--usr-*` tokens sourced from the site's
+ * global --bg-* / --text-* / --accent vars (fallbacks hardcoded so
+ * the page still renders coherently if site.css fails to load).
+ */
+
+.usr-page {
+  --usr-bg:            var(--bg-primary,    #0a0e1a);
+  --usr-surface:       var(--bg-secondary,  #111827);
+  --usr-surface-2:     #1a2035;
+  --usr-border:        var(--border,        #1f2937);
+  --usr-border-strong: #2a3245;
+  --usr-text:          var(--text-primary,  #e5e7eb);
+  --usr-text-dim:      var(--text-secondary,#9ca3af);
+  --usr-text-mute:     var(--text-muted,    #6b7280);
+  --usr-accent:        var(--accent,        #3b82f6);
+  --usr-accent-soft:   rgba(59, 130, 246, 0.15);
+  --usr-good:          #10b981;
+  --usr-bad:           #ef4444;
+  --usr-warn:          #f59e0b;
+
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  color: var(--usr-text);
+}
+
+.usr-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--usr-border);
+}
+.usr-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--usr-text);
+  letter-spacing: -0.01em;
+}
+.usr-subtitle {
+  font-size: 13px;
+  color: var(--usr-text-dim);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 780px;
+}
+
+/* Hero strip: current target, next meeting, headline probability */
+.usr-hero {
+  background: var(--usr-surface-2);
+  border: 1px solid var(--usr-border);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+.usr-hero-item { display: flex; flex-direction: column; gap: 4px; }
+.usr-hero-item .lbl {
+  font-size: 10px;
+  color: var(--usr-text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+.usr-hero-item .val {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--usr-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.usr-hero-item .val.accent { color: var(--usr-accent); }
+.usr-hero-item .sub {
+  font-size: 12px;
+  color: var(--usr-text-dim);
+}
+
+/* Section blocks */
+.usr-section { margin-top: 32px; }
+.usr-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.usr-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--usr-text);
+  letter-spacing: -0.005em;
+}
+.usr-section-note {
+  font-size: 11px;
+  color: var(--usr-text-dim);
+  margin-left: auto;
+}
+
+/* Curve chart host */
+.usr-chart-host {
+  background: var(--usr-surface);
+  border: 1px solid var(--usr-border);
+  border-radius: 10px;
+  padding: 20px;
+  min-height: 360px;
+}
+.usr-chart-host svg { display: block; width: 100%; height: auto; }
+.usr-chart-legend {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  font-size: 12px;
+  color: var(--usr-text-dim);
+}
+.usr-chart-legend .dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.usr-chart-legend .dot.market { background: var(--usr-accent); }
+.usr-chart-legend .dot.model  { background: var(--usr-warn); }
+.usr-chart-legend .dot.band   { background: rgba(245, 158, 11, 0.25); }
+
+/* D3 element styling — matched via CSS classes set in JS */
+.usr-chart-host .grid-line { stroke: var(--usr-border); stroke-width: 1; stroke-dasharray: 2 3; }
+.usr-chart-host .axis-line { stroke: var(--usr-border-strong); stroke-width: 1; }
+.usr-chart-host .axis-label { fill: var(--usr-text-mute); font-size: 11px; }
+.usr-chart-host .fan-band { fill: rgba(245, 158, 11, 0.15); stroke: none; }
+.usr-chart-host .model-line { stroke: var(--usr-warn); stroke-width: 2; fill: none; }
+.usr-chart-host .market-line { stroke: var(--usr-accent); stroke-width: 2.5; fill: none; }
+.usr-chart-host .market-dot { fill: var(--usr-accent); }
+.usr-chart-host .spot-dot { fill: var(--usr-good); stroke: var(--usr-bg); stroke-width: 2; }
+
+/* FedWatch grid — heatmap table */
+.usr-fedwatch-wrap {
+  background: var(--usr-surface);
+  border: 1px solid var(--usr-border);
+  border-radius: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+table.usr-fedwatch-grid {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.usr-fedwatch-grid thead th {
+  text-align: center;
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--usr-text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--usr-border);
+  white-space: nowrap;
+  font-weight: 600;
+  background: var(--usr-surface-2);
+}
+.usr-fedwatch-grid thead th:first-child { text-align: left; padding-left: 16px; }
+.usr-fedwatch-grid thead th.bucket-cut  { color: var(--usr-good); }
+.usr-fedwatch-grid thead th.bucket-hike { color: var(--usr-bad); }
+.usr-fedwatch-grid tbody td {
+  padding: 12px;
+  border-bottom: 1px solid var(--usr-border);
+  text-align: center;
+  color: var(--usr-text);
+}
+.usr-fedwatch-grid tbody td:first-child {
+  text-align: left;
+  padding-left: 16px;
+  font-weight: 600;
+}
+.usr-fedwatch-grid tbody tr:last-child td { border-bottom: 0; }
+.usr-fedwatch-grid .meeting-date {
+  font-size: 13px;
+  color: var(--usr-text);
+}
+.usr-fedwatch-grid .meeting-post {
+  font-size: 11px;
+  color: var(--usr-text-dim);
+  display: block;
+  font-weight: 400;
+  margin-top: 2px;
+}
+.usr-fedwatch-grid .prob-cell {
+  position: relative;
+  font-weight: 600;
+}
+/* Probability heatmap opacity. JS sets `style="--p:0.42"` per cell.  */
+.usr-fedwatch-grid .prob-cut  { background: rgba(16, 185, 129, calc(0.05 + var(--p, 0) * 0.55)); }
+.usr-fedwatch-grid .prob-hold { background: rgba(107, 114, 128, calc(0.05 + var(--p, 0) * 0.35)); }
+.usr-fedwatch-grid .prob-hike { background: rgba(239, 68, 68,  calc(0.05 + var(--p, 0) * 0.55)); }
+.usr-fedwatch-grid .prob-cell.leading {
+  outline: 1px solid var(--usr-accent);
+  outline-offset: -1px;
+}
+
+/* Edge table — model vs market */
+.usr-edge-wrap {
+  background: var(--usr-surface);
+  border: 1px solid var(--usr-border);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+table.usr-edge {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.usr-edge thead th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--usr-text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--usr-border);
+  white-space: nowrap;
+  font-weight: 600;
+  background: var(--usr-surface-2);
+}
+.usr-edge thead th.num { text-align: right; }
+.usr-edge tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--usr-border);
+  color: var(--usr-text);
+}
+.usr-edge tbody td.num { text-align: right; }
+.usr-edge tbody tr:last-child td { border-bottom: 0; }
+.usr-edge-side {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.usr-edge-side.short {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--usr-bad);
+}
+.usr-edge-side.long {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--usr-good);
+}
+
+/* Methodology drawer */
+.usr-methodology {
+  background: var(--usr-surface-2);
+  border: 1px solid var(--usr-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-top: 32px;
+}
+.usr-methodology summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--usr-text);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.usr-methodology[open] summary {
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--usr-border);
+  padding-bottom: 10px;
+}
+.usr-methodology .content {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--usr-text-dim);
+}
+.usr-methodology .content code {
+  background: var(--usr-surface);
+  color: var(--usr-accent);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.usr-methodology .content p { margin: 0 0 10px; }
+.usr-methodology .content p:last-child { margin-bottom: 0; }
+
+/* Empty / error states */
+.usr-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--usr-text-mute);
+  font-size: 13px;
+}

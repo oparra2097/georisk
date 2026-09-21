@@ -28,6 +28,8 @@
   .model-card.card-lm::before     { background: #0891b2; }
   .model-card.card-cpi::before    { background: #8b5cf6; }
   .model-card.card-fx::before     { background: #14b8a6; }
+  .model-card.card-rates::before  { background: #3b82f6; }
+  .model-card.card-emrates::before { background: #0ea5e9; }
 
   .model-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .model-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0; }
@@ -40,6 +42,8 @@
   .card-lm .model-icon     { background: #0891b218; color: #0891b2; }
   .card-cpi .model-icon    { background: #8b5cf618; color: #8b5cf6; }
   .card-fx .model-icon     { background: #14b8a618; color: #14b8a6; }
+  .card-rates .model-icon  { background: #3b82f618; color: #3b82f6; }
+  .card-emrates .model-icon { background: #0ea5e918; color: #0ea5e9; }
 
   .model-name { font-size: 17px; font-weight: 600; margin: 0; color: #111827; }
   .model-tagline { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
@@ -120,6 +124,59 @@
         <div class="model-stat"><span class="num">7</span><span class="lbl">Shock types</span></div>
       </div>
       <span class="model-cta">Open Macro Model <span class="arrow">&rarr;</span></span>
+    </a>
+
+    <!-- US Rates -->
+    <a href="/us-rates" class="model-card card-rates">
+      <div class="model-card-top">
+        <div class="model-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 3v18h18"/>
+            <path d="M6 17l4-6 3 4 5-9"/>
+            <path d="M14 3h5v5"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="model-name">US Rates</h3>
+          <p class="model-tagline">Fed funds futures vs. macro-model &middot; FedWatch grid</p>
+        </div>
+        <span class="model-badge badge-restricted">Restricted</span>
+        <span class="model-badge badge-beta">Beta</span>
+      </div>
+      <p class="model-desc">CME fed funds futures curve overlaid on the FRB/US-lite macro model's fed funds p10-p90 fan, plus a CME FedWatch-style per-FOMC-meeting probability grid. Divergent contracts (model vs. market) get promoted to /trades as macro trade ideas.</p>
+      <div class="model-stats">
+        <div class="model-stat"><span class="num">15</span><span class="lbl">ZQ contracts</span></div>
+        <div class="model-stat"><span class="num">8</span><span class="lbl">FOMC meetings</span></div>
+        <div class="model-stat"><span class="num">5</span><span class="lbl">Prob buckets</span></div>
+      </div>
+      <span class="model-cta">Open US Rates <span class="arrow">&rarr;</span></span>
+    </a>
+
+    <!-- EM Rates -->
+    <a href="/em-rates" class="model-card card-emrates">
+      <div class="model-card-top">
+        <div class="model-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20"/>
+            <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+            <path d="M7 18l3-3 3 2 4-5"/>
+          </svg>
+        </div>
+        <div>
+          <h3 class="model-name">EM Rates</h3>
+          <p class="model-tagline">LATAM + Asia top 6 &middot; Taylor rule direction call</p>
+        </div>
+        <span class="model-badge badge-restricted">Restricted</span>
+        <span class="model-badge badge-beta">Beta</span>
+      </div>
+      <p class="model-desc">Per-country inertial Taylor rule for the 12 major EM central banks (Brazil, Mexico, Colombia, Chile, Peru, Argentina, China, India, South Korea, Indonesia, Thailand, Philippines). Direction call (HIKE / HOLD / CUT + magnitude) against current policy rate; 10Y yield direction derived from the policy call plus the 3-month yield move.</p>
+      <div class="model-stats">
+        <div class="model-stat"><span class="num">12</span><span class="lbl">Central banks</span></div>
+        <div class="model-stat"><span class="num">15-20&thinsp;y</span><span class="lbl">Fit sample</span></div>
+        <div class="model-stat"><span class="num">30&thinsp;d</span><span class="lbl">Refit cadence</span></div>
+      </div>
+      <span class="model-cta">Open EM Rates <span class="arrow">&rarr;</span></span>
     </a>
 
     <!-- House Prices -->

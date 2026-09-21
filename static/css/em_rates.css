@@ -1,0 +1,248 @@
+/*
+ * /em-rates — LATAM + Asia top 6 policy-rate direction + 10Y yield
+ * direction grid. Two regions, four tables, dark theme.
+ *
+ * Local `--emr-*` tokens sourced from the site's global --bg-* /
+ * --text-* / --accent vars with hardcoded fallbacks.
+ */
+
+.emr-page {
+  --emr-bg:            var(--bg-primary,    #0a0e1a);
+  --emr-surface:       var(--bg-secondary,  #111827);
+  --emr-surface-2:     #1a2035;
+  --emr-border:        var(--border,        #1f2937);
+  --emr-text:          var(--text-primary,  #e5e7eb);
+  --emr-text-dim:      var(--text-secondary,#9ca3af);
+  --emr-text-mute:     var(--text-muted,    #6b7280);
+  --emr-accent:        var(--accent,        #3b82f6);
+  --emr-good:          #10b981;
+  --emr-bad:           #ef4444;
+  --emr-warn:          #f59e0b;
+
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  color: var(--emr-text);
+}
+
+.emr-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--emr-border);
+}
+.emr-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--emr-text);
+  letter-spacing: -0.01em;
+}
+.emr-subtitle {
+  font-size: 13px;
+  color: var(--emr-text-dim);
+  line-height: 1.55;
+  margin: 0;
+  max-width: 780px;
+}
+
+/* Hero summary strip */
+.emr-hero {
+  background: var(--emr-surface-2);
+  border: 1px solid var(--emr-border);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+}
+.emr-hero-item { display: flex; flex-direction: column; gap: 4px; }
+.emr-hero-item .lbl {
+  font-size: 10px; color: var(--emr-text-mute);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+}
+.emr-hero-item .val {
+  font-size: 22px; font-weight: 700; color: var(--emr-text);
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.emr-hero-item .val.hike { color: var(--emr-bad); }
+.emr-hero-item .val.cut  { color: var(--emr-good); }
+.emr-hero-item .val.hold { color: var(--emr-text-dim); }
+.emr-hero-item .sub { font-size: 12px; color: var(--emr-text-dim); }
+
+/* Region tabs */
+.emr-region-tabs {
+  display: flex; gap: 4px;
+  border-bottom: 1px solid var(--emr-border);
+  margin: 16px 0 20px;
+}
+.emr-region-tab {
+  padding: 10px 18px; font-size: 13px; font-weight: 600;
+  background: transparent; border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--emr-text-dim); cursor: pointer; white-space: nowrap;
+  transition: color .1s, border-color .1s;
+}
+.emr-region-tab:hover { color: var(--emr-text); }
+.emr-region-tab.active {
+  color: var(--emr-accent); border-bottom-color: var(--emr-accent);
+}
+
+/* Region section */
+.emr-region { margin-top: 24px; }
+.emr-region-title {
+  font-size: 15px; font-weight: 700; margin: 0 0 14px;
+  color: var(--emr-text); letter-spacing: -0.005em;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.emr-region-title .count {
+  font-size: 11px; color: var(--emr-text-mute);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+}
+
+/* Two-column layout within a region: policy + 10y side-by-side on desktop */
+.emr-region-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+@media (min-width: 1080px) {
+  .emr-region-grid { grid-template-columns: 1.4fr 1fr; }
+}
+.emr-block {
+  background: var(--emr-surface);
+  border: 1px solid var(--emr-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.emr-block-head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--emr-border);
+  background: var(--emr-surface-2);
+  font-size: 12px; font-weight: 700;
+  color: var(--emr-text-mute);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.emr-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.emr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 520px;
+}
+.emr-table thead th {
+  text-align: left; padding: 10px 12px;
+  font-size: 10px; color: var(--emr-text-mute);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--emr-border);
+  white-space: nowrap; font-weight: 600;
+}
+.emr-table thead th.num { text-align: right; }
+.emr-table tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--emr-border);
+  color: var(--emr-text);
+}
+.emr-table tbody td.num { text-align: right; }
+.emr-table tbody tr:last-child td { border-bottom: 0; }
+.emr-table tbody tr:hover { background: var(--emr-surface-2); }
+.emr-table .country {
+  font-weight: 600;
+  display: flex; flex-direction: column;
+}
+.emr-table .country .name { color: var(--emr-text); }
+.emr-table .country .cb {
+  font-size: 11px; color: var(--emr-text-mute); font-weight: 500;
+}
+
+/* Direction chip */
+.emr-chip {
+  display: inline-block; padding: 3px 10px; border-radius: 4px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.emr-chip.hike { background: rgba(239, 68, 68, 0.15); color: var(--emr-bad); }
+.emr-chip.cut  { background: rgba(16, 185, 129, 0.15); color: var(--emr-good); }
+.emr-chip.hold { background: var(--emr-surface-2); color: var(--emr-text-dim); }
+
+/* 10Y direction chips (slightly softer than policy chips) */
+.emr-chip.higher   { background: rgba(239, 68, 68, 0.12); color: var(--emr-bad); }
+.emr-chip.lower    { background: rgba(16, 185, 129, 0.12); color: var(--emr-good); }
+.emr-chip.sideways { background: var(--emr-surface-2); color: var(--emr-text-dim); }
+.emr-chip.mixed    { background: rgba(245, 158, 11, 0.15); color: var(--emr-warn); }
+.emr-chip.unknown  { background: var(--emr-surface-2); color: var(--emr-text-mute); }
+
+/* Confidence dot */
+.emr-conf-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-left: 6px; vertical-align: middle;
+}
+.emr-conf-dot.high { background: var(--emr-good); }
+.emr-conf-dot.medium { background: var(--emr-warn); }
+.emr-conf-dot.low { background: var(--emr-text-mute); }
+
+/* Yield delta cell coloring */
+.emr-delta-up   { color: var(--emr-bad);  font-weight: 600; }
+.emr-delta-down { color: var(--emr-good); font-weight: 600; }
+.emr-delta-flat { color: var(--emr-text-dim); }
+
+/* Model gap coloring */
+.emr-gap-hike { color: var(--emr-bad); font-weight: 600; }
+.emr-gap-cut  { color: var(--emr-good); font-weight: 600; }
+.emr-gap-hold { color: var(--emr-text-dim); }
+
+/* Fit issues badge */
+.emr-fit-issue {
+  display: inline-block; margin-left: 8px;
+  font-size: 10px; padding: 1px 6px;
+  background: rgba(245, 158, 11, 0.15); color: var(--emr-warn);
+  border-radius: 3px; text-transform: uppercase;
+  letter-spacing: 0.04em; font-weight: 700;
+}
+
+.emr-empty {
+  padding: 40px; text-align: center;
+  color: var(--emr-text-mute); font-size: 13px;
+}
+
+/* Methodology drawer */
+.emr-methodology {
+  background: var(--emr-surface-2);
+  border: 1px solid var(--emr-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-top: 32px;
+}
+.emr-methodology summary {
+  font-size: 13px; font-weight: 600; color: var(--emr-text);
+  cursor: pointer; padding: 4px 0;
+}
+.emr-methodology[open] summary {
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--emr-border);
+  padding-bottom: 10px;
+}
+.emr-methodology .content {
+  font-size: 12px; line-height: 1.6; color: var(--emr-text-dim);
+}
+.emr-methodology .content code {
+  background: var(--emr-surface); color: var(--emr-accent);
+  padding: 1px 6px; border-radius: 3px; font-size: 11px;
+}
+.emr-methodology .content p { margin: 0 0 10px; }
+.emr-methodology .content p:last-child { margin-bottom: 0; }
+.emr-methodology .content table {
+  width: 100%; border-collapse: collapse; margin-top: 8px;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.emr-methodology .content th,
+.emr-methodology .content td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--emr-border);
+  text-align: left; color: var(--emr-text-dim);
+}
+.emr-methodology .content th {
+  font-weight: 700; color: var(--emr-text-mute);
+  text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px;
+}
