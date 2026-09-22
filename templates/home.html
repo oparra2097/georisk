@@ -200,6 +200,68 @@
     .home-call-arrow { display: none; }
   }
 
+  /* "As of" badge — surfaces yield vintage on every call so stale
+     rows are visible at a glance. */
+  .home-call-asof {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; margin-left: 8px;
+    background: rgba(107, 114, 128, 0.2);
+    color: var(--text-muted, #6b7280);
+    border-radius: 3px;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    vertical-align: middle;
+  }
+
+  /* Secondary call cards — top SHORT + second-best LONG below the
+     featured card. Same style, ~60% size. */
+  .home-call-secondary-row {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 12px; margin-top: 12px;
+  }
+  .home-call-card-mini {
+    background: var(--bg-secondary, #111827);
+    border: 1px solid var(--border, #1f2937);
+    border-left: 3px solid var(--accent, #3b82f6);
+    border-radius: 10px; padding: 16px 18px;
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 12px; align-items: center;
+    text-decoration: none; color: inherit;
+    transition: border-color .15s;
+    min-width: 0;
+  }
+  .home-call-card-mini:hover {
+    border-color: var(--accent, #3b82f6);
+    border-left-color: var(--accent, #3b82f6);
+  }
+  .home-call-card-mini.short-card { border-left-color: #ef4444; }
+  .home-call-card-mini.short-card:hover { border-left-color: #ef4444; }
+  .home-call-card-mini .home-call-side { margin-bottom: 6px; font-size: 10px; }
+  .home-call-card-mini .home-call-country {
+    font-size: 18px; margin: 0 0 4px;
+  }
+  .home-call-card-mini .home-call-mini-stats {
+    display: flex; gap: 14px;
+    font-variant-numeric: tabular-nums; font-size: 12px;
+    color: var(--text-secondary, #9ca3af);
+  }
+  .home-call-card-mini .home-call-mini-stats .lbl {
+    color: var(--text-muted, #6b7280); font-size: 9px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    display: block; font-weight: 700; margin-bottom: 1px;
+  }
+  .home-call-card-mini .home-call-mini-stats .val {
+    color: var(--text-primary, #e5e7eb); font-weight: 600;
+  }
+  .home-call-card-mini .home-call-mini-stats .val.edge { color: #10b981; }
+  .home-call-card-mini .home-call-arrow { font-size: 18px; }
+  .home-call-card-mini.short-card .home-call-arrow { color: #ef4444; }
+  @media (max-width: 720px) {
+    .home-call-secondary-row { grid-template-columns: 1fr; }
+    .home-call-card-mini { padding: 14px 16px; }
+    .home-call-card-mini .home-call-arrow { display: none; }
+  }
+
   /* Latest note — single card linking to Substack */
   .home-latest {
     max-width: 1200px; margin: 24px auto 60px; padding: 0 24px;
@@ -303,15 +365,16 @@
   <span class="hf-arrow">&rarr;</span>
 </a>
 
-<!-- This week's call — one big trade card -->
+<!-- This week's calls — featured card + 2 secondaries -->
 <section class="home-call">
   <div class="home-call-eyebrow-row">
-    <h2>This week's call</h2>
+    <h2>This week's calls</h2>
     <a href="/trades">See full ranking &rarr;</a>
   </div>
   <div id="home-call-slot">
-    <div class="home-call-loading">Loading top model-vs-market signal…</div>
+    <div class="home-call-loading">Loading model-vs-market signals…</div>
   </div>
+  <div id="home-call-secondary-slot" class="home-call-secondary-row" style="display:none"></div>
 </section>
 
 <!-- Latest note -->
@@ -334,72 +397,122 @@
 {% block scripts %}
 <script src="/static/js/home.js"></script>
 <script>
-  // Fetch the top LONG bond trade to back the "This week's call" card.
-  // On any error or empty result we hide the section so the user isn't
-  // left staring at a spinner.
+  // Fetch top-3 bond trades for the "This week's calls" section.
+  // Featured card: top LONG. Below: top SHORT + second-best LONG.
+  // Empty results at any tier gracefully collapse.
   (function () {
     const slot = document.getElementById('home-call-slot');
+    const secondary = document.getElementById('home-call-secondary-slot');
     if (!slot) return;
-    fetch('/api/credit-default/bond-trades?top_n=1&deterioration_scan=0')
+    fetch('/api/credit-default/bond-trades?top_n=3&deterioration_scan=0')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) throw new Error('no data');
-        const longs = data.longs || [];
-        const shorts = data.shorts || [];
-        // Prefer the top LONG; fall back to top SHORT if no longs.
-        const pick = longs.length
-          ? { ...longs[0], side: 'LONG' }
-          : (shorts.length ? { ...shorts[0], side: 'SHORT' } : null);
-        if (!pick) {
+        const longs = (data.longs || []).map((r) => ({ ...r, side: 'LONG' }));
+        const shorts = (data.shorts || []).map((r) => ({ ...r, side: 'SHORT' }));
+
+        // Featured pick: top LONG, else top SHORT.
+        const featured = longs[0] || shorts[0] || null;
+        if (!featured) {
           document.querySelector('.home-call').style.display = 'none';
           return;
         }
-        const modelPd = pick.model_pd != null ? (pick.model_pd * 100).toFixed(1) + '%' : '—';
-        const marketPd = pick.market_pd != null ? (pick.market_pd * 100).toFixed(1) + '%' : '—';
-        const spread = pick.spread_bps != null ? pick.spread_bps.toFixed(0) + 'bp' : '—';
-        const edge = pick.edge_pp != null
-          ? (pick.edge_pp > 0 ? '+' : '') + pick.edge_pp + 'pp'
-          : '—';
-        const country = pick.name || pick.iso3 || 'Sovereign';
-        const rating = pick.pm_notch || '';
-        const sideClass = pick.side === 'SHORT' ? 'short' : '';
-        const thesis = pick.side === 'LONG'
-          ? `Market prices ${marketPd} PD at ${spread} spread; the model puts fair PD at ${modelPd} — spread pays the risk plus edge.`
-          : `Market prices ${marketPd} PD at ${spread} spread; the model puts fair PD at ${modelPd} — spread is too tight for the risk carried.`;
-        slot.innerHTML = `
-          <a href="/trades" class="home-call-card">
-            <div class="home-call-body">
-              <span class="home-call-side ${sideClass}">${pick.side} · ${rating}</span>
-              <h3 class="home-call-country">${country}</h3>
-              <p class="home-call-thesis">${thesis}</p>
-              <div class="home-call-stats">
-                <div class="home-call-stat">
-                  <span class="lbl">Model PD</span>
-                  <span class="val">${modelPd}</span>
-                </div>
-                <div class="home-call-stat">
-                  <span class="lbl">Market PD</span>
-                  <span class="val">${marketPd}</span>
-                </div>
-                <div class="home-call-stat">
-                  <span class="lbl">Spread</span>
-                  <span class="val">${spread}</span>
-                </div>
-                <div class="home-call-stat edge">
-                  <span class="lbl">Edge</span>
-                  <span class="val">${edge}</span>
-                </div>
-              </div>
-            </div>
-            <span class="home-call-arrow">&rarr;</span>
-          </a>
-        `;
+        slot.innerHTML = renderFeatured(featured);
+
+        // Secondary row: top SHORT + second LONG (skip whichever is the
+        // featured pick).
+        const secondaryPicks = [];
+        if (featured.side === 'LONG') {
+          if (shorts[0]) secondaryPicks.push(shorts[0]);
+          if (longs[1])  secondaryPicks.push(longs[1]);
+        } else {
+          if (longs[0])  secondaryPicks.push(longs[0]);
+          if (shorts[1]) secondaryPicks.push(shorts[1]);
+        }
+        if (secondaryPicks.length) {
+          secondary.innerHTML = secondaryPicks.map(renderMini).join('');
+          secondary.style.display = '';
+        }
       })
       .catch(() => {
-        // Hide the section rather than showing a broken state.
         const section = document.querySelector('.home-call');
         if (section) section.style.display = 'none';
       });
+
+    function fmtPd(v)     { return v != null ? (v * 100).toFixed(1) + '%' : '—'; }
+    function fmtSpread(v) { return v != null ? v.toFixed(0) + 'bp' : '—'; }
+    function fmtEdge(v)   { return v != null ? (v > 0 ? '+' : '') + v + 'pp' : '—'; }
+
+    function renderFeatured(pick) {
+      const modelPd = fmtPd(pick.model_pd);
+      const marketPd = fmtPd(pick.market_pd);
+      const spread = fmtSpread(pick.spread_bps);
+      const edge = fmtEdge(pick.edge_pp);
+      const country = pick.name || pick.iso3 || 'Sovereign';
+      const rating = pick.pm_notch || '';
+      const sideClass = pick.side === 'SHORT' ? 'short' : '';
+      const asOfBadge = pick.as_of
+        ? `<span class="home-call-asof" title="Yield vintage — refresh if stale">as of ${pick.as_of}</span>`
+        : '';
+      const thesis = pick.side === 'LONG'
+        ? `Market prices ${marketPd} PD at ${spread} spread; the model puts fair PD at ${modelPd} — spread pays the risk plus edge.`
+        : `Market prices ${marketPd} PD at ${spread} spread; the model puts fair PD at ${modelPd} — spread is too tight for the risk carried.`;
+      return `
+        <a href="/trades" class="home-call-card">
+          <div class="home-call-body">
+            <span class="home-call-side ${sideClass}">${pick.side} · ${rating}</span>${asOfBadge}
+            <h3 class="home-call-country">${country}</h3>
+            <p class="home-call-thesis">${thesis}</p>
+            <div class="home-call-stats">
+              <div class="home-call-stat">
+                <span class="lbl">Model PD</span>
+                <span class="val">${modelPd}</span>
+              </div>
+              <div class="home-call-stat">
+                <span class="lbl">Market PD</span>
+                <span class="val">${marketPd}</span>
+              </div>
+              <div class="home-call-stat">
+                <span class="lbl">Spread</span>
+                <span class="val">${spread}</span>
+              </div>
+              <div class="home-call-stat edge">
+                <span class="lbl">Edge</span>
+                <span class="val">${edge}</span>
+              </div>
+            </div>
+          </div>
+          <span class="home-call-arrow">&rarr;</span>
+        </a>
+      `;
+    }
+
+    function renderMini(pick) {
+      const modelPd = fmtPd(pick.model_pd);
+      const marketPd = fmtPd(pick.market_pd);
+      const edge = fmtEdge(pick.edge_pp);
+      const country = pick.name || pick.iso3 || 'Sovereign';
+      const rating = pick.pm_notch || '';
+      const sideClass = pick.side === 'SHORT' ? 'short' : '';
+      const cardCls = pick.side === 'SHORT' ? 'short-card' : '';
+      const asOfBadge = pick.as_of
+        ? `<span class="home-call-asof">${pick.as_of}</span>`
+        : '';
+      return `
+        <a href="/trades" class="home-call-card-mini ${cardCls}">
+          <div class="home-call-body">
+            <span class="home-call-side ${sideClass}">${pick.side} · ${rating}</span>${asOfBadge}
+            <h3 class="home-call-country">${country}</h3>
+            <div class="home-call-mini-stats">
+              <div><span class="lbl">Model</span><span class="val">${modelPd}</span></div>
+              <div><span class="lbl">Market</span><span class="val">${marketPd}</span></div>
+              <div><span class="lbl">Edge</span><span class="val edge">${edge}</span></div>
+            </div>
+          </div>
+          <span class="home-call-arrow">&rarr;</span>
+        </a>
+      `;
+    }
   })();
 
   // Fed funds strip — current target, next FOMC, market call, model call.
