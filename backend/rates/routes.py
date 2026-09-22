@@ -37,17 +37,42 @@ us_rates_bp = Blueprint('us_rates', __name__)
 em_rates_bp = Blueprint('em_rates', __name__)
 
 
+from backend.data_sources._cache import cached
+
+
+@cached(namespace='us_target_mid', ttl=6 * 3600, disk=True)
 def _get_current_target_mid() -> float:
     """Current fed funds target range midpoint in %.
 
-    Priority: FRED DFEDTARU + DFEDTARL (official target range) →
-    FRED DFF (effective rate, usually within 10bp of the midpoint) →
-    a sensible 2026-era default (4.375% = 4.25–4.50 range midpoint).
+    Priority:
+      1. ``FED_TARGET_MID_OVERRIDE`` env var (or ``Config`` attribute)
+         — manual escape hatch. Set this whenever the Fed moves and
+         the FRED path stops matching reality. Overrides FRED.
+      2. FRED ``DFEDTARU`` + ``DFEDTARL`` / 2 (official target range).
+      3. FRED ``DFF`` (effective rate — usually within 10bp of midpoint).
+      4. Hardcoded default ``3.875`` (mid of 3.75-4.00 post-Sept 2026
+         cut). Refresh this the next time the Fed moves.
 
-    The value is the pre-meeting anchor for the FedWatch decomposition.
-    Within-quarter drift on this value is negligible; a stale midpoint
-    of ±5bp changes the fedwatch buckets by <1pp probability shift.
+    Cached 6h on disk so ``/fedwatch`` and ``/edge`` don't triple-hit
+    FRED per request.
     """
+    import os
+
+    # 1. Manual override
+    override = os.environ.get('FED_TARGET_MID_OVERRIDE', '').strip()
+    if not override:
+        try:
+            from config import Config
+            override = str(getattr(Config, 'FED_TARGET_MID_OVERRIDE', '') or '').strip()
+        except Exception:  # noqa: BLE001
+            pass
+    if override:
+        try:
+            return float(override)
+        except (TypeError, ValueError):
+            logger.warning(f'FED_TARGET_MID_OVERRIDE={override!r} not a float; ignoring')
+
+    # 2. FRED official target range
     try:
         _, up = fred_client.fetch_latest_value('DFEDTARU')
         _, lo = fred_client.fetch_latest_value('DFEDTARL')
@@ -55,13 +80,19 @@ def _get_current_target_mid() -> float:
             return (float(up) + float(lo)) / 2.0
     except Exception as e:  # noqa: BLE001
         logger.debug(f'DFEDTARU/DFEDTARL lookup failed: {e}')
+
+    # 3. FRED effective rate
     try:
         _, dff = fred_client.fetch_latest_value('DFF')
         if dff is not None:
             return float(dff)
     except Exception as e:  # noqa: BLE001
         logger.debug(f'DFF lookup failed: {e}')
-    return 4.375
+
+    # 4. Hardcoded fallback — mid of the current 3.75-4.00 range.
+    # BUMP THIS EACH TIME THE FED MOVES if you can't rely on FRED being
+    # reachable + fresh. Also settable via FED_TARGET_MID_OVERRIDE.
+    return 3.875
 
 
 def _interpolate_p50(model_bands: list[dict], meeting_iso: str) -> Optional[float]:

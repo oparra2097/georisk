@@ -3,6 +3,11 @@
 # which). Values are hand-curated snapshots for demonstration; refresh from
 # Bloomberg / TR / EMBI+ for production use.
 #
+# ⚠ REFRESH THIS FILE MONTHLY. Stale yields bias the bond-trade ranker —
+# a yield 100bp too wide inflates market_pd, which can trigger spurious
+# LONG signals. Whenever you refresh, bump the `as_of` date on each row
+# you touched and log the source (JPM EMBI+ book / Bloomberg / TR).
+#
 # Columns:
 #   iso3            — ISO-3 sovereign code
 #   currency        — 'USD' (hard-currency Eurobond spread over UST 10Y)
@@ -36,7 +41,7 @@ VNM,USD,10,5.20,2026-09-18,USD sovereign
 EGY,USD,10,9.30,2026-09-18,USD sovereign
 NGA,USD,10,10.60,2026-09-18,USD sovereign
 GHA,USD,10,12.80,2026-09-18,Post-restructuring 2024
-KEN,USD,10,9.90,2026-09-18,USD sovereign
+KEN,USD,10,8.75,2026-09-22,USD sovereign
 LKA,USD,10,11.40,2026-09-18,Post-restructuring 2024
 PAK,USD,10,11.20,2026-09-18,USD sovereign
 UKR,USD,10,15.60,2026-09-18,USD sovereign
