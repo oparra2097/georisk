@@ -69,6 +69,56 @@
     .home-hero-substack { margin-left: 0; margin-top: 4px; width: 100%; }
   }
 
+  /* Fed funds strip — compact "US rate + direction" glance under the ticker */
+  .home-fedstrip {
+    max-width: 1200px;
+    margin: 20px auto 0;
+    padding: 16px 20px;
+    background: var(--bg-secondary, #111827);
+    border: 1px solid var(--border, #1f2937);
+    border-left: 3px solid var(--accent, #3b82f6);
+    border-radius: 10px;
+    display: flex; align-items: center; gap: 24px;
+    text-decoration: none; color: inherit;
+    transition: border-color .15s;
+    flex-wrap: wrap;
+  }
+  .home-fedstrip:hover { border-color: var(--accent, #3b82f6); }
+  .hf-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .hf-lbl {
+    font-size: 10px; color: var(--text-muted, #6b7280);
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+  }
+  .hf-val {
+    font-size: 15px; font-weight: 600; color: var(--text-primary, #e5e7eb);
+    font-variant-numeric: tabular-nums;
+  }
+  .hf-val.hike { color: #ef4444; }
+  .hf-val.cut  { color: #10b981; }
+  .hf-val.hold { color: var(--text-secondary, #9ca3af); }
+  .hf-divergence {
+    display: inline-flex; align-items: center;
+    padding: 3px 8px;
+    background: rgba(245, 158, 11, 0.15); color: #f59e0b;
+    border-radius: 4px;
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .hf-arrow {
+    margin-left: auto;
+    color: var(--accent, #3b82f6); font-size: 20px; font-weight: 600;
+  }
+  @media (max-width: 720px) {
+    .home-fedstrip {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px 20px;
+      margin: 16px 16px 0;
+    }
+    .hf-arrow { display: none; }
+    .hf-divergence { grid-column: 1 / -1; justify-self: start; }
+  }
+
   /* This week's call — single big trade card */
   .home-call {
     max-width: 1200px; margin: 32px auto; padding: 0 24px;
@@ -231,6 +281,28 @@
   </div>
 </div>
 
+<!-- Fed funds current + direction strip -->
+<a href="/us-rates" class="home-fedstrip" id="home-fedstrip">
+  <div class="hf-item">
+    <span class="hf-lbl">Fed funds target</span>
+    <span class="hf-val" id="hf-range">—</span>
+  </div>
+  <div class="hf-item">
+    <span class="hf-lbl">Next FOMC</span>
+    <span class="hf-val" id="hf-meeting">—</span>
+  </div>
+  <div class="hf-item">
+    <span class="hf-lbl">Market implies</span>
+    <span class="hf-val" id="hf-market">—</span>
+  </div>
+  <div class="hf-item">
+    <span class="hf-lbl">Model implies</span>
+    <span class="hf-val" id="hf-model">—</span>
+  </div>
+  <span class="hf-divergence" id="hf-divergence" hidden>&#9889; divergence</span>
+  <span class="hf-arrow">&rarr;</span>
+</a>
+
 <!-- This week's call — one big trade card -->
 <section class="home-call">
   <div class="home-call-eyebrow-row">
@@ -328,6 +400,91 @@
         const section = document.querySelector('.home-call');
         if (section) section.style.display = 'none';
       });
+  })();
+
+  // Fed funds strip — current target, next FOMC, market call, model call.
+  (function () {
+    const strip = document.getElementById('home-fedstrip');
+    if (!strip) return;
+    Promise.all([
+      fetch('/api/us-rates/fedwatch').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch('/api/us-rates/edge?top_n=1').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([fw, edge]) => {
+      if (!fw || fw.target_mid == null) { strip.style.display = 'none'; return; }
+      const lo = fw.target_mid - 0.125;
+      const hi = fw.target_mid + 0.125;
+      document.getElementById('hf-range').textContent = `${lo.toFixed(2)}–${hi.toFixed(2)}%`;
+
+      const near = (fw.grid || []).find((r) => r.probs);
+      if (!near) { strip.style.display = 'none'; return; }
+      document.getElementById('hf-meeting').textContent = fmtMeetingDate(near.meeting_date);
+
+      // Market call — top-probability bucket.
+      let top = null;
+      for (const label of Object.keys(near.probs || {})) {
+        const p = near.probs[label];
+        if (!top || p > top.p) top = { label, p };
+      }
+      const mktEl = document.getElementById('hf-market');
+      if (top) {
+        mktEl.textContent = `${bucketLabel(top.label)} · ${Math.round(top.p * 100)}%`;
+        mktEl.className = 'hf-val ' + bucketClass(top.label);
+      }
+
+      // Model call — from edge endpoint, matching the same meeting date.
+      const modelEl = document.getElementById('hf-model');
+      const modelForNext = ((edge || {}).edges || [])
+        .find((e) => e.meeting_date === near.meeting_date);
+      let modelDirection = null;
+      if (modelForNext) {
+        const deltaBp = (modelForNext.model_post_rate - near.pre_rate) * 100;
+        modelDirection = deltaCall(deltaBp);
+        modelEl.textContent = modelDirection;
+        modelEl.className = 'hf-val ' + directionClass(modelDirection);
+      } else {
+        modelEl.textContent = 'n/a';
+        modelEl.className = 'hf-val hold';
+      }
+
+      // Divergence: market top bucket direction != model direction.
+      if (top && modelDirection) {
+        const marketDir = bucketDirection(top.label);
+        if (marketDir !== modelDirection) {
+          document.getElementById('hf-divergence').hidden = false;
+        }
+      }
+    }).catch(() => { strip.style.display = 'none'; });
+
+    function fmtMeetingDate(iso) {
+      try {
+        const d = new Date(iso + 'T12:00:00Z');
+        return d.toLocaleDateString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+        });
+      } catch (e) { return iso; }
+    }
+    function bucketLabel(label) {
+      if (label === 'hold') return 'HOLD';
+      return label.replace('bp', 'bp') + (label.startsWith('-') ? ' cut' : ' hike');
+    }
+    function bucketClass(label) {
+      if (label === 'hold') return 'hold';
+      return label.startsWith('-') ? 'cut' : 'hike';
+    }
+    function bucketDirection(label) {
+      if (label === 'hold') return 'HOLD';
+      return label.startsWith('-') ? 'CUT' : 'HIKE';
+    }
+    function deltaCall(bp) {
+      const rounded = Math.round(bp / 25) * 25;
+      if (Math.abs(rounded) < 12.5) return 'HOLD';
+      return rounded > 0 ? `+${rounded}bp hike` : `${rounded}bp cut`;
+    }
+    function directionClass(call) {
+      if (call.includes('hike') || call.startsWith('HIKE')) return 'hike';
+      if (call.includes('cut')  || call.startsWith('CUT'))  return 'cut';
+      return 'hold';
+    }
   })();
 </script>
 {% endblock %}
