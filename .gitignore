@@ -19,6 +19,12 @@ data/*
 !data/fx_debt_share.csv
 !data/sovereign_bond_yields.csv
 !data/structural_risk_overlay.csv
+
+# GH Actions refresh_cache workflow commits pre-computed model outputs
+# here so Flask cold-boots with warm caches. Layout matches _cache.py:
+# data/cache/<namespace>_cache/<key>.json
+!data/cache/
+!data/cache/**
 # Track only the hot-path fit-state (h1) so the deployed dashboard has
 # something to load on cold boot. Everything else (h3, h5, onset,
 # quarterly bundles, and any horizon-3/5/onset pickles) is regenerated

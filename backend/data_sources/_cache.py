@@ -69,6 +69,25 @@ except Exception:  # noqa: BLE001
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'data',
     )
 
+# Repo cache dir — committed by the GH Actions refresh workflow. Serves
+# as a warm-seed source on cold boot; every namespace read checks BOTH
+# this location and Config.DATA_DIR and prefers the newer entry.
+_REPO_CACHE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'data', 'cache',
+)
+
+
+def _write_root() -> str:
+    """Directory where the ``@cached`` decorator's disk writes land.
+
+    Priority: ``CACHE_DIR_OVERRIDE`` env var (used by
+    ``scripts/refresh_cache.py`` to write directly into
+    ``data/cache/`` under the repo) → live ``_DATA_DIR``. Resolved
+    per-call so the env can be flipped in tests without a reimport.
+    """
+    return os.environ.get('CACHE_DIR_OVERRIDE') or _DATA_DIR
+
 
 # ── Per-namespace in-memory store ───────────────────────────────────────
 # _STORE[namespace] = {key: {'data': ..., 'ts': float}}. Each namespace
@@ -89,24 +108,36 @@ def _lock_for(namespace: str) -> threading.Lock:
         return lock
 
 
-def _disk_path(namespace: str, key: str) -> str:
+def _disk_path(namespace: str, key: str, root: Optional[str] = None) -> str:
     safe_key = key.replace('/', '_').replace('\\', '_')
-    return os.path.join(_DATA_DIR, f'{namespace}_cache', f'{safe_key}.json')
+    return os.path.join(root or _write_root(), f'{namespace}_cache', f'{safe_key}.json')
 
 
 def _load_from_disk(namespace: str, key: str) -> Tuple[Optional[Any], float]:
-    """Return ``(data, mtime)`` for the disk entry, or ``(None, 0)`` if
-    absent/corrupt."""
-    path = _disk_path(namespace, key)
-    if not os.path.exists(path):
+    """Return ``(data, mtime)`` for the newest available disk entry.
+
+    Checks both ``_write_root()/<namespace>_cache/<key>.json`` (live
+    Flask writes / persistent disk) and ``_REPO_CACHE_DIR/<namespace>_cache/
+    <key>.json`` (GH Actions committed snapshots) and returns whichever
+    has the newer ``ts`` payload. This lets the GH Actions refresh
+    warm-seed every namespace at deploy time without displacing
+    fresher live writes.
+    """
+    candidates: list[Tuple[Optional[Any], float]] = []
+    paths = {_disk_path(namespace, key), _disk_path(namespace, key, root=_REPO_CACHE_DIR)}
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, 'r') as f:
+                payload = json.load(f)
+            candidates.append((payload.get('data'), float(payload.get('ts') or 0.0)))
+        except (OSError, ValueError, json.JSONDecodeError) as e:
+            print(f'[_cache] disk read failed for {namespace}/{key} at {path}: {e}')
+    if not candidates:
         return None, 0.0
-    try:
-        with open(path, 'r') as f:
-            payload = json.load(f)
-        return payload.get('data'), float(payload.get('ts') or 0.0)
-    except (OSError, ValueError, json.JSONDecodeError) as e:
-        print(f'[_cache] disk read failed for {namespace}/{key}: {e}')
-        return None, 0.0
+    # Return the newest.
+    return max(candidates, key=lambda pair: pair[1])
 
 
 def _save_to_disk(namespace: str, key: str, data: Any, ts: float) -> None:
