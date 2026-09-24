@@ -1,0 +1,89 @@
+name: Refresh cache
+
+# Two crons + manual dispatch. The `all` scope every 4 h keeps
+# everything within a couple of hours of real. The `trades` daily
+# job (06:00 UTC ≈ 01:00 ET, before NY market open) guarantees the
+# trade-ideas board is fresh even if a 4 h run fails.
+#
+# On success the workflow commits any changed cache files under
+# `data/cache/` to `main`, which auto-triggers a Render deploy so
+# the new data goes live in ~3-5 min.
+
+on:
+  schedule:
+    - cron: '15 */4 * * *'   # every 4 h at :15 UTC — full refresh
+    - cron: '0 6 * * *'      # daily at 06:00 UTC — trades subset
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: 'Refresh scope: trades | all'
+        default: 'all'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-cache
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Decide scope
+        id: scope
+        run: |
+          # The 06:00 UTC daily cron → trades-only. Anything else
+          # (4 h cron OR manual dispatch) → full scope unless the
+          # dispatch input says otherwise.
+          if [ "${{ github.event.schedule }}" = "0 6 * * *" ]; then
+            echo "value=trades" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.inputs.scope }}" ]; then
+            echo "value=${{ github.event.inputs.scope }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=all" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run refresh
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          PYTHONUNBUFFERED: '1'
+        run: python scripts/refresh_cache.py --scope "${{ steps.scope.outputs.value }}"
+
+      - name: Commit + push cache
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Track only the cache directory (and the macro-model pickle
+          # under data/credit_default_fit/, which the fitter regenerates).
+          git add data/cache/ data/credit_default_fit/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "no cache diff, skipping commit"
+          else
+            git commit -m "Refresh cached data (${{ steps.scope.outputs.value }}) $(date -u +'%Y-%m-%d %H:%M UTC')"
+            # Retry the push a couple of times in case main advanced
+            # under us while we were computing.
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              git pull --rebase origin main
+              sleep $((attempt * 2))
+            done
+          fi
