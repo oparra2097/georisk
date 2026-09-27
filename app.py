@@ -137,9 +137,81 @@ def create_app():
     app.register_blueprint(sharing_bp)  # /og/* routes (public, no auth)
 
     # ── Routes ───────────────────────────────────────────────────────────
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeout
+    _HOME_SSR_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix='home-ssr')
+
+    def _timed_call(fn, timeout_sec: float = 1.5):
+        """Run ``fn()`` on the SSR pool with a hard timeout. On timeout
+        or exception we return None and the frontend falls back to its
+        async fetch. The background thread keeps running so the cache
+        warms up for the next visitor.
+
+        This is the guardrail that stops home-page SSR from blocking on
+        cold cache: if any compute path (yfinance ZQ curve, Taylor rule
+        fit, macro-model bootstrap) exceeds ``timeout_sec`` we abandon
+        the SSR payload for that piece rather than making the visitor
+        wait.
+        """
+        try:
+            return _HOME_SSR_POOL.submit(fn).result(timeout=timeout_sec)
+        except _FutTimeout:
+            return None
+        except Exception as _e:  # noqa: BLE001
+            app.logger.debug(f'SSR helper failed: {_e}')
+            return None
+
+    def _gather_home_data():
+        """Best-effort SSR payload for the home page.
+
+        Every sub-call runs through ``_timed_call`` with a short
+        (~1.5 s) timeout — a warm cache hit returns essentially
+        instantly, cold compute times out and returns None so the
+        page renders immediately and the client-side fetch takes
+        over. The abandoned compute keeps running in the pool and
+        populates the cache for the next visitor.
+        """
+        data = {'bond_trades': None, 'fedwatch': None, 'edge': None,
+                'target_mid': None}
+
+        def _load_bond_trades():
+            from backend.credit_default import bond_trades as _bt
+            return _bt.get_bond_trades(top_n=3, min_edge_pct=0.5)
+
+        def _load_fedwatch():
+            from backend.data_sources.rates_futures import get_fed_funds_curve
+            from backend.rates.fedwatch import compute_fedwatch
+            from backend.rates.fomc_calendar import get_upcoming_meetings
+            from backend.rates.routes import _get_current_target_mid
+            curve_payload = get_fed_funds_curve()
+            target_mid = _get_current_target_mid()
+            meetings = get_upcoming_meetings(n=8)
+            return {
+                'target_mid': target_mid,
+                'grid': compute_fedwatch(
+                    curve_payload.get('curve') or [],
+                    current_target_mid=target_mid,
+                    meetings=meetings,
+                ),
+                'spot': curve_payload.get('spot'),
+                'anchor_date': curve_payload.get('anchor_date'),
+            }
+
+        def _load_edge():
+            from backend.rates.routes import compute_edge
+            return compute_edge(top_n=1)
+
+        data['bond_trades'] = _timed_call(_load_bond_trades, timeout_sec=1.5)
+        fw = _timed_call(_load_fedwatch, timeout_sec=1.5)
+        if fw is not None:
+            data['fedwatch'] = fw
+            data['target_mid'] = fw.get('target_mid')
+        data['edge'] = _timed_call(_load_edge, timeout_sec=2.0)
+        return data
+
     @app.route('/')
     def home():
-        return render_template('home.html', active_page='home')
+        return render_template('home.html', active_page='home',
+                               home_data=_gather_home_data())
 
     @app.route('/georisk')
     def georisk():

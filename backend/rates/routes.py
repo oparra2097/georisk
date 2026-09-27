@@ -178,23 +178,16 @@ def fedwatch():
     })
 
 
-@us_rates_bp.route('/edge')
-def edge():
-    """Market vs. macro-model divergence, per FOMC meeting.
+def compute_edge(top_n: int = 3) -> dict:
+    """Market vs. macro-model divergence per FOMC meeting.
 
-    For each of the next 8 meetings, compare the market-implied
-    post-meeting rate (from the FedWatch decomposition) to the macro
-    model's fedfunds p50 interpolated to that meeting's date. Sort by
-    |edge_bp|, return the top N.
+    Pure compute, no request/response. Reused by ``/api/us-rates/edge``
+    (route wrapper below) AND by ``app._gather_home_data`` for SSR.
 
-    Positive ``edge_bp`` → model expects higher rates than the market;
-    the market is pricing too dovish, so SHORT DURATION is the trade.
-    Negative → market prices too hawkish, LONG DURATION.
+    Returns the same shape the endpoint returns::
+
+        {top_n, edges:[…], anchor_date, target_mid, error}
     """
-    try:
-        top_n = int(request.args.get('top_n', 3))
-    except (TypeError, ValueError):
-        top_n = 3
     top_n = max(1, min(10, top_n))
 
     curve_payload = get_fed_funds_curve()
@@ -240,13 +233,27 @@ def edge():
             })
         edges.sort(key=lambda e: abs(e['edge_bp']), reverse=True)
 
-    return jsonify({
+    return {
         'top_n': top_n,
         'edges': edges[:top_n],
         'anchor_date': curve_payload.get('anchor_date'),
         'target_mid': target_mid,
         'error': error,
-    })
+    }
+
+
+@us_rates_bp.route('/edge')
+def edge():
+    """Market vs. macro-model divergence, per FOMC meeting.
+
+    Thin route wrapper around ``compute_edge``. See the helper's
+    docstring for details.
+    """
+    try:
+        top_n = int(request.args.get('top_n', 3))
+    except (TypeError, ValueError):
+        top_n = 3
+    return jsonify(compute_edge(top_n=top_n))
 
 
 # ── EM rates blueprint (mounted at /api/em-rates in app.py) ─────────────
