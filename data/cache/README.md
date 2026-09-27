@@ -1,8 +1,31 @@
 # Cached model outputs
 
+## How to enable (one-time setup)
+
+Two steps in the GitHub UI:
+
+1. **Add `FRED_API_KEY`** — repo Settings → Secrets and variables →
+   Actions → **New repository secret**. Name: `FRED_API_KEY`,
+   value: the same FRED key configured on Render. Without this,
+   every FRED-derived fetch (Fed target midpoint, EM CPI, EM policy
+   rates via OECD, OECD 10Y yields) returns empty on the runner
+   and the corresponding cache files never populate.
+
+2. **Trigger the first refresh** — Actions → **Refresh cache** →
+   **Run workflow** → leave scope=all → Run. Runs in ~5-10 min.
+   When it completes, `data/cache/` fills with per-namespace
+   `<namespace>_cache/<key>.json` files. The workflow commits them
+   to main; Render auto-deploys with the warm cache in place.
+
+After that, the 4-hour cron keeps the full cache fresh and the
+06:00 UTC daily cron refreshes the trades subset (bond ranker,
+EM panel) before NY market open.
+
+## Layout
+
 This directory is populated by `.github/workflows/refresh_cache.yml`
 running `scripts/refresh_cache.py`. **Don't edit by hand** — commits
-land here every 4 hours from GH Actions.
+land here on cron.
 
 Layout mirrors `backend/data_sources/_cache.py`:
 

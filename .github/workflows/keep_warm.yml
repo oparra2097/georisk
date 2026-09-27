@@ -1,0 +1,36 @@
+name: Keep warm
+
+# Free-tier Render spins down after 15 min idle → 30-45 s cold TCP
+# for the first visitor after each idle window. This cron pings the
+# top-level pages every 10 min so the container never sleeps. Also
+# keeps the in-process @cached dict warm across every route by hitting
+# all three main URLs.
+#
+# GH Actions cron granularity is best-effort at ~10 min; occasional
+# gaps of 15-20 min happen when the queue is busy. Even a spotty
+# every-10-min ping cuts cold-start hits dramatically vs. no ping.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping home + rate pages
+        run: |
+          set -e
+          for target in \
+            https://parramacro.com/ \
+            https://parramacro.com/us-rates \
+            https://parramacro.com/em-rates ; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 60 "$target" || echo "000")
+            echo "$target → HTTP $code"
+          done

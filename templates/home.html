@@ -308,6 +308,9 @@
 {% endblock %}
 
 {% block content %}
+{% if home_data %}
+<script id="home-data" type="application/json">{{ home_data|tojson }}</script>
+{% endif %}
 <!-- Hero -->
 <section class="home-hero">
   <p class="home-hero-eyebrow">Oscar Parra · Macro strategist</p>
@@ -397,6 +400,17 @@
 {% block scripts %}
 <script src="/static/js/home.js"></script>
 <script>
+  // Server-side rendered payload (populated by app._gather_home_data).
+  // If present we skip the client fetches for those sections entirely;
+  // Fed strip + This week's calls render on first paint. Non-critical
+  // stuff (ticker, latest post) still fetches from home.js.
+  window.__HOME_DATA__ = (function () {
+    const el = document.getElementById('home-data');
+    if (!el) return null;
+    try { return JSON.parse(el.textContent); }
+    catch (_) { return null; }
+  })();
+
   // Fetch top-3 bond trades for the "This week's calls" section.
   // Featured card: top LONG. Below: top SHORT + second-best LONG.
   // Empty results at any tier gracefully collapse.
@@ -404,40 +418,50 @@
     const slot = document.getElementById('home-call-slot');
     const secondary = document.getElementById('home-call-secondary-slot');
     if (!slot) return;
+
+    // SSR fast path — if Flask injected the payload, use it directly
+    // and skip the network round-trip.
+    const ssr = (window.__HOME_DATA__ || {}).bond_trades;
+    if (ssr) { render(ssr); return; }
+
     fetch('/api/credit-default/bond-trades?top_n=3&deterioration_scan=0')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) throw new Error('no data');
-        const longs = (data.longs || []).map((r) => ({ ...r, side: 'LONG' }));
-        const shorts = (data.shorts || []).map((r) => ({ ...r, side: 'SHORT' }));
-
-        // Featured pick: top LONG, else top SHORT.
-        const featured = longs[0] || shorts[0] || null;
-        if (!featured) {
-          document.querySelector('.home-call').style.display = 'none';
-          return;
-        }
-        slot.innerHTML = renderFeatured(featured);
-
-        // Secondary row: top SHORT + second LONG (skip whichever is the
-        // featured pick).
-        const secondaryPicks = [];
-        if (featured.side === 'LONG') {
-          if (shorts[0]) secondaryPicks.push(shorts[0]);
-          if (longs[1])  secondaryPicks.push(longs[1]);
-        } else {
-          if (longs[0])  secondaryPicks.push(longs[0]);
-          if (shorts[1]) secondaryPicks.push(shorts[1]);
-        }
-        if (secondaryPicks.length) {
-          secondary.innerHTML = secondaryPicks.map(renderMini).join('');
-          secondary.style.display = '';
-        }
+        render(data);
       })
       .catch(() => {
         const section = document.querySelector('.home-call');
         if (section) section.style.display = 'none';
       });
+
+    function render(data) {
+      const longs = (data.longs || []).map((r) => ({ ...r, side: 'LONG' }));
+      const shorts = (data.shorts || []).map((r) => ({ ...r, side: 'SHORT' }));
+
+      // Featured pick: top LONG, else top SHORT.
+      const featured = longs[0] || shorts[0] || null;
+      if (!featured) {
+        document.querySelector('.home-call').style.display = 'none';
+        return;
+      }
+      slot.innerHTML = renderFeatured(featured);
+
+      // Secondary row: top SHORT + second LONG (skip whichever is the
+      // featured pick).
+      const secondaryPicks = [];
+      if (featured.side === 'LONG') {
+        if (shorts[0]) secondaryPicks.push(shorts[0]);
+        if (longs[1])  secondaryPicks.push(longs[1]);
+      } else {
+        if (longs[0])  secondaryPicks.push(longs[0]);
+        if (shorts[1]) secondaryPicks.push(shorts[1]);
+      }
+      if (secondaryPicks.length) {
+        secondary.innerHTML = secondaryPicks.map(renderMini).join('');
+        secondary.style.display = '';
+      }
+    }
 
     function fmtPd(v)     { return v != null ? (v * 100).toFixed(1) + '%' : '—'; }
     function fmtSpread(v) { return v != null ? v.toFixed(0) + 'bp' : '—'; }
@@ -519,10 +543,19 @@
   (function () {
     const strip = document.getElementById('home-fedstrip');
     if (!strip) return;
+
+    // SSR fast path — reuse the payload Flask already computed.
+    const ssrFw = (window.__HOME_DATA__ || {}).fedwatch;
+    const ssrEdge = (window.__HOME_DATA__ || {}).edge;
+    if (ssrFw) { populate(ssrFw, ssrEdge); return; }
+
     Promise.all([
       fetch('/api/us-rates/fedwatch').then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch('/api/us-rates/edge?top_n=1').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    ]).then(([fw, edge]) => {
+    ]).then(([fw, edge]) => { populate(fw, edge); })
+      .catch(() => { strip.style.display = 'none'; });
+
+    function populate(fw, edge) {
       if (!fw || fw.target_mid == null) { strip.style.display = 'none'; return; }
       const lo = fw.target_mid - 0.125;
       const hi = fw.target_mid + 0.125;
@@ -566,7 +599,7 @@
           document.getElementById('hf-divergence').hidden = false;
         }
       }
-    }).catch(() => { strip.style.display = 'none'; });
+    }
 
     function fmtMeetingDate(iso) {
       try {
