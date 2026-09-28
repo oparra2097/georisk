@@ -136,6 +136,20 @@
     text-decoration: none; margin-left: auto;
   }
   .home-call-eyebrow-row a:hover { color: var(--accent, #3b82f6); }
+  .home-call-eyebrow-block {
+    display: flex; flex-direction: column; gap: 3px; min-width: 0;
+  }
+  .home-call-freshness {
+    font-size: 11px;
+    color: var(--text-muted, #6b7280);
+    font-weight: 500;
+  }
+  .home-call-timestamp {
+    margin-left: 6px;
+    color: var(--accent, #3b82f6);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
   .home-call-card {
     background: var(--bg-secondary, #111827);
     border: 1px solid var(--border, #1f2937);
@@ -368,10 +382,54 @@
   <span class="hf-arrow">&rarr;</span>
 </a>
 
+<!-- Markets — live snapshot of today's market. home.js populates
+     #market-grid from /api/markets and drives the expandable Chart.js
+     panel (#market-chart-panel). -->
+<section class="section">
+  <div class="section-header">
+    <span class="section-label">Markets</span>
+    <span class="section-timestamp" id="market-timestamp"></span>
+  </div>
+  <div class="market-grid" id="market-grid">
+    <div class="market-loading"><div class="spinner"></div></div>
+  </div>
+
+  <div class="market-chart-panel" id="market-chart-panel" style="display:none;">
+    <div class="market-chart-header">
+      <div class="market-chart-title">
+        <span id="chart-symbol-name"></span>
+        <span class="market-chart-price" id="chart-price"></span>
+        <span class="market-chart-change" id="chart-change"></span>
+      </div>
+      <div class="market-chart-timeframes" id="chart-timeframes">
+        <button class="tf-btn" data-period="1d">1D</button>
+        <button class="tf-btn" data-period="5d">1W</button>
+        <button class="tf-btn active" data-period="1mo">1M</button>
+        <button class="tf-btn" data-period="1y">1Y</button>
+        <button class="tf-btn" data-period="5y">5Y</button>
+        <button class="tf-btn" data-period="10y">10Y</button>
+      </div>
+      <button class="market-chart-close" id="chart-close-btn">&times;</button>
+    </div>
+    <div class="market-chart-container">
+      <canvas id="market-history-chart"></canvas>
+      <div class="chart-loading" id="market-chart-loading" style="display:none;">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- This week's calls — featured card + 2 secondaries -->
 <section class="home-call">
   <div class="home-call-eyebrow-row">
-    <h2>This week's calls</h2>
+    <div class="home-call-eyebrow-block">
+      <h2>This week's calls</h2>
+      <span class="home-call-freshness">
+        Refreshed daily &middot; 06:00 UTC
+        <span class="home-call-timestamp" id="home-call-timestamp"></span>
+      </span>
+    </div>
     <a href="/trades">See full ranking &rarr;</a>
   </div>
   <div id="home-call-slot">
@@ -398,6 +456,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/vendor/chart.umd.js"></script>
 <script src="/static/js/home.js"></script>
 <script>
   // Server-side rendered payload (populated by app._gather_home_data).
@@ -436,6 +495,20 @@
       });
 
     function render(data) {
+      // Timestamp on the section header — from summary.as_of (added
+      // by bond_trades.py). Silently hide if missing.
+      const ts = data && data.summary && data.summary.as_of;
+      const tsEl = document.getElementById('home-call-timestamp');
+      if (tsEl && ts) {
+        try {
+          const d = new Date(ts);
+          tsEl.textContent = '· Last: ' + d.toLocaleString('en-US', {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            timeZone: 'UTC', timeZoneName: 'short',
+          });
+        } catch (_) { tsEl.textContent = ''; }
+      }
+
       const longs = (data.longs || []).map((r) => ({ ...r, side: 'LONG' }));
       const shorts = (data.shorts || []).map((r) => ({ ...r, side: 'SHORT' }));
 
