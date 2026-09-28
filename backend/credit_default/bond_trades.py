@@ -246,6 +246,7 @@ def get_bond_trades(top_n: int = 10,
             'horizon_years': horizon,
             'n_covered': len(combined),
             'min_edge_pp': min_edge_pct,
+            'as_of': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         },
     }
     with _cache_lock:
