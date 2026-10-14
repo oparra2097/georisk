@@ -218,7 +218,13 @@ class _Cache:
 _cache = _Cache()
 
 
-def _empty_result():
+def _empty_result(error_detail: str = None):
+    """Return an empty payload.
+
+    Critical: `meta.is_stale = True` so the UI's stale-data banner fires
+    on an empty response (otherwise the frontend sees a 200 with
+    `series: {}` and silently renders a blank page with no explanation).
+    """
     return {
         'series': {},
         'categories': {k: v['label'] for k, v in BLS_SERIES.items()},
@@ -227,7 +233,14 @@ def _empty_result():
         'kinds': {k: v['kind'] for k, v in BLS_SERIES.items()},
         'sector_keys': [k for k, v in BLS_SERIES.items() if v.get('sector')],
         'rankings': {'mom': [], 'yoy': []},
-        'meta': {'source': 'Bureau of Labor Statistics', 'error': 'No data available'},
+        'meta': {
+            'source': 'Bureau of Labor Statistics',
+            'error': error_detail or 'BLS fetch failed — no data available',
+            'is_stale': True,
+            'months_behind': -1,
+            'has_api_key': bool(get_bls_api_key()),
+            'latest_month': None,
+        },
     }
 
 

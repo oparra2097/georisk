@@ -150,33 +150,47 @@
 
   function renderStaleBanner() {
     const blsMeta = ((state.bundle.bls || {}).meta) || {};
+    const blsSeries = ((state.bundle.bls || {}).series) || {};
     const freshness = ((state.bundle.nowcast || {}).data_freshness) || {};
     const banner = document.getElementById('lm-stale-banner');
     if (!banner) return;
-    const blsStale = !!blsMeta.is_stale;
+    // Treat "zero series returned" the same as explicitly stale.  This
+    // catches the case where _fetch() returned None and the cache
+    // served _empty_result() — otherwise the banner would stay hidden
+    // and the page would look blank with no explanation.
+    const blsEmpty = Object.keys(blsSeries).length === 0;
+    const blsStale = !!blsMeta.is_stale || blsEmpty;
     const fredStale = !!freshness.is_stale;
     if (!blsStale && !fredStale) { banner.hidden = true; return; }
 
     const detail = document.getElementById('lm-stale-detail');
-    if (detail) detail.innerHTML = buildStaleDetail(blsMeta, freshness, '/api/labor-market/us/diagnostics');
+    if (detail) detail.innerHTML = buildStaleDetail(blsMeta, freshness, blsEmpty, '/api/labor-market/us/diagnostics');
     banner.hidden = false;
   }
 
-  function buildStaleDetail(blsMeta, freshness, diagUrl) {
+  function buildStaleDetail(blsMeta, freshness, blsEmpty, diagUrl) {
     const parts = [];
-    const blsStale = !!blsMeta.is_stale;
+    const blsStale = !!blsMeta.is_stale || blsEmpty;
     const fredStale = !!freshness.is_stale;
 
     // BLS feed (sectoral charts, KPIs)
     if (blsStale) {
-      const blsM = blsMeta.months_behind;
-      parts.push(`<strong>BLS feed:</strong> latest <code>${blsMeta.latest_month || 'unknown'}</code>` +
-        (blsM > 0 ? ` (${blsM} months behind).` : '.'));
-      if (blsMeta.has_api_key === false) {
-        parts.push('<code>BLS_API_KEY</code> not set on server.');
-      } else if (blsMeta.bls_api_status && blsMeta.bls_api_status !== 'REQUEST_SUCCEEDED') {
-        parts.push(`API status <code>${blsMeta.bls_api_status}</code>` +
-          (blsMeta.bls_api_message ? ` &mdash; ${blsMeta.bls_api_message}.` : '.'));
+      if (blsEmpty) {
+        parts.push(`<strong>BLS feed:</strong> no data returned from BLS.`);
+        if (blsMeta.error) parts.push(`<code>${blsMeta.error}</code>.`);
+        if (blsMeta.has_api_key === false) {
+          parts.push('<code>BLS_API_KEY</code> not set on server &mdash; add it in Render Environment.');
+        }
+      } else {
+        const blsM = blsMeta.months_behind;
+        parts.push(`<strong>BLS feed:</strong> latest <code>${blsMeta.latest_month || 'unknown'}</code>` +
+          (blsM > 0 ? ` (${blsM} months behind).` : '.'));
+        if (blsMeta.has_api_key === false) {
+          parts.push('<code>BLS_API_KEY</code> not set on server.');
+        } else if (blsMeta.bls_api_status && blsMeta.bls_api_status !== 'REQUEST_SUCCEEDED') {
+          parts.push(`API status <code>${blsMeta.bls_api_status}</code>` +
+            (blsMeta.bls_api_message ? ` &mdash; ${blsMeta.bls_api_message}.` : '.'));
+        }
       }
     }
 

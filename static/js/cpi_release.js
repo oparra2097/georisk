@@ -173,30 +173,47 @@
     if (!banner) return;
     const dMeta = ((state.bundle.detail || {}).meta) || {};
     const oMeta = ((state.bundle.overview || {}).meta) || {};
-    const stale = !!(dMeta.is_stale || oMeta.is_stale);
+    const dSeries = ((state.bundle.detail || {}).series) || {};
+    const oSeries = ((state.bundle.overview || {}).series) || {};
+    // Treat zero series the same as stale — otherwise an empty fetch
+    // response renders a blank page with no warning banner.
+    const empty = Object.keys(dSeries).length === 0 && Object.keys(oSeries).length === 0;
+    const stale = !!(dMeta.is_stale || oMeta.is_stale) || empty;
     if (!stale) { banner.hidden = true; return; }
 
     // Use whichever payload is most stale for the diagnostic.
     const worst = (dMeta.months_behind || 0) >= (oMeta.months_behind || 0) ? dMeta : oMeta;
     const detail = document.getElementById('cpi-stale-detail');
-    if (detail) detail.innerHTML = buildStaleDetail(worst, '/api/cpi/us/diagnostics');
+    if (detail) detail.innerHTML = buildStaleDetail(worst, empty, '/api/cpi/us/diagnostics');
     banner.hidden = false;
   }
 
-  function buildStaleDetail(meta, diagUrl) {
-    const months = meta.months_behind;
+  function buildStaleDetail(meta, empty, diagUrl) {
     const parts = [];
-    parts.push(`Latest BLS month: <code>${meta.latest_month || 'unknown'}</code>`);
-    if (months > 0) parts.push(`(${months} months behind today)`);
-    if (meta.has_api_key === false) {
-      parts.push('<br><strong>Root cause:</strong> <code>BLS_API_KEY</code> is not set on the server. ' +
-        'Unauthenticated BLS access is capped at 25 requests/day, which is being exhausted. ' +
-        'Add <code>BLS_API_KEY</code> to the Render environment.');
-    } else if (meta.bls_api_status && meta.bls_api_status !== 'REQUEST_SUCCEEDED') {
-      parts.push(`<br><strong>BLS API status:</strong> <code>${meta.bls_api_status}</code>` +
-        (meta.bls_api_message ? ` &mdash; ${meta.bls_api_message}` : ''));
+    if (empty) {
+      parts.push(`<strong>No CPI data returned from BLS.</strong>`);
+      if (meta.error) parts.push(`<code>${meta.error}</code>.`);
+      if (meta.has_api_key === false) {
+        parts.push('<code>BLS_API_KEY</code> not set on server &mdash; add it in Render Environment.');
+      } else if (meta.bls_api_status && meta.bls_api_status !== 'REQUEST_SUCCEEDED') {
+        parts.push(`BLS API status <code>${meta.bls_api_status}</code>` +
+          (meta.bls_api_message ? ` &mdash; ${meta.bls_api_message}` : '') + '.');
+      } else {
+        parts.push('Background refresh in progress &mdash; retry in 30&nbsp;min.');
+      }
     } else {
-      parts.push('. Background refresh in progress.');
+      const months = meta.months_behind;
+      parts.push(`Latest BLS month: <code>${meta.latest_month || 'unknown'}</code>`);
+      if (months > 0) parts.push(`(${months} months behind today)`);
+      if (meta.has_api_key === false) {
+        parts.push('<br><strong>Root cause:</strong> <code>BLS_API_KEY</code> is not set on the server. ' +
+          'Add <code>BLS_API_KEY</code> to the Render environment.');
+      } else if (meta.bls_api_status && meta.bls_api_status !== 'REQUEST_SUCCEEDED') {
+        parts.push(`<br><strong>BLS API status:</strong> <code>${meta.bls_api_status}</code>` +
+          (meta.bls_api_message ? ` &mdash; ${meta.bls_api_message}` : ''));
+      } else {
+        parts.push('. Background refresh in progress.');
+      }
     }
     parts.push(` <a href="${diagUrl}" target="_blank" rel="noopener" class="lm-stale-link">Run diagnostics &rarr;</a>`);
     return parts.join(' ');

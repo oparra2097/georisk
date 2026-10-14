@@ -124,7 +124,13 @@ def _empty_result():
         'series': {},
         'categories': {k: v['label'] for k, v in BLS_SERIES.items()},
         'colors': {k: v['color'] for k, v in BLS_SERIES.items()},
-        'meta': {'source': 'Bureau of Labor Statistics', 'error': 'No data available'}
+        'meta': {
+            'source': 'Bureau of Labor Statistics',
+            'error': 'BLS fetch failed — no data available',
+            'is_stale': True, 'months_behind': -1,
+            'has_api_key': bool(get_bls_api_key()),
+            'latest_month': None,
+        },
     }
 
 
@@ -312,7 +318,13 @@ def _empty_components_result():
         'series': {},
         'categories': {k: v['label'] for k, v in BLS_COMPONENTS.items()},
         'colors': {k: v['color'] for k, v in BLS_COMPONENTS.items()},
-        'meta': {'source': 'Bureau of Labor Statistics', 'error': 'No data available'}
+        'meta': {
+            'source': 'Bureau of Labor Statistics',
+            'error': 'BLS fetch failed — no data available',
+            'is_stale': True, 'months_behind': -1,
+            'has_api_key': bool(get_bls_api_key()),
+            'latest_month': None,
+        },
     }
 
 
@@ -556,7 +568,13 @@ def _empty_detail_result():
         'colors': {k: v['color'] for k, v in BLS_DETAIL_COMPONENTS.items()},
         'groups': {k: v['group'] for k, v in BLS_DETAIL_COMPONENTS.items()},
         'rankings': {'mom': [], 'yoy': []},
-        'meta': {'source': 'Bureau of Labor Statistics', 'error': 'No data available'},
+        'meta': {
+            'source': 'Bureau of Labor Statistics',
+            'error': 'BLS fetch failed — no data available',
+            'is_stale': True, 'months_behind': -1,
+            'has_api_key': bool(get_bls_api_key()),
+            'latest_month': None,
+        },
     }
 
 
