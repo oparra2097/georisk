@@ -239,15 +239,38 @@ function closeChartPanel() {
 }
 
 
+// Chart.js is loaded lazily — on-demand when the user clicks a market
+// card. Saves ~70 KB of upfront JS on every home visit. The returned
+// promise resolves to the global `Chart` constructor once the script
+// finishes loading.
+let _chartJsPromise = null;
+function ensureChartJs() {
+    if (_chartJsPromise) return _chartJsPromise;
+    _chartJsPromise = new Promise((resolve, reject) => {
+        if (typeof Chart !== 'undefined') return resolve(window.Chart);
+        const s = document.createElement('script');
+        s.src = '/static/vendor/chart.umd.js';
+        s.async = true;
+        s.onload  = () => resolve(window.Chart);
+        s.onerror = () => reject(new Error('chart.umd.js failed to load'));
+        document.head.appendChild(s);
+    });
+    return _chartJsPromise;
+}
+
+
 async function fetchAndRenderHistory(symbol, period) {
     const loading = document.getElementById('market-chart-loading');
     const canvas = document.getElementById('market-history-chart');
     if (loading) loading.style.display = '';
 
     try {
-        const resp = await fetch(`/api/markets/history?symbol=${encodeURIComponent(symbol)}&period=${period}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
+        // Load Chart.js (first click only) in parallel with the fetch.
+        const [, data] = await Promise.all([
+            ensureChartJs(),
+            fetch(`/api/markets/history?symbol=${encodeURIComponent(symbol)}&period=${period}`)
+                .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+        ]);
 
         if (loading) loading.style.display = 'none';
         renderHistoryChart(data);

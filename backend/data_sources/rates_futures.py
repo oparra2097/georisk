@@ -168,13 +168,19 @@ def get_fed_funds_curve(horizon_months: int = DEFAULT_HORIZON_MONTHS) -> dict:
     Cached 6h on disk (survives Render redeploys via ``Config.DATA_DIR``).
     """
     import time
+    from concurrent.futures import ThreadPoolExecutor
 
     anchor = date.today()
     months = _forward_months(anchor, horizon_months)
-    curve: list[dict] = []
 
-    for i, (yr, mo) in enumerate(months):
-        settle = _fetch_zq_with_fallback(yr, mo)
+    # Parallelize the per-contract yfinance fetches. Each call is
+    # independent and dominated by network latency (~1-2 s each),
+    # so 8 workers collapse ~30 s cold runtime to ~5 s.
+    with ThreadPoolExecutor(max_workers=8, thread_name_prefix='zq') as pool:
+        settles = list(pool.map(lambda ym: _fetch_zq_with_fallback(ym[0], ym[1]), months))
+
+    curve: list[dict] = []
+    for i, ((yr, mo), settle) in enumerate(zip(months, settles)):
         if settle is None:
             curve.append({
                 'contract': _contract_symbol(yr, mo, ''),

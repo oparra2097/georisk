@@ -289,13 +289,30 @@ a:hover {
     .nav-tabs {
         order: 3;
         width: 100%;
-        justify-content: center;
+        justify-content: flex-start;
         height: auto;
-        padding-bottom: 4px;
+        padding: 2px 4px 6px;
+        /* 9 nav items at mobile size wrap into 2-3 rows — switch to
+           a horizontal scroll with a right-edge fade hint. The user
+           swipes along the row instead of hunting across stacked
+           rows. */
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;    /* firefox */
+        scroll-snap-type: x proximity;
+        mask-image: linear-gradient(to right, black 90%, transparent 100%);
+        -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);
     }
+    .nav-tabs::-webkit-scrollbar { display: none; }
     .nav-tab {
-        padding: 6px 10px;
-        font-size: 11px;
+        padding: 10px 14px;    /* bigger tap target */
+        font-size: 12px;
+        white-space: nowrap;
+        scroll-snap-align: start;
+        flex-shrink: 0;
+        min-height: 44px;       /* enforce 44x44 tap target */
     }
     .nav-right {
         gap: 8px;
@@ -336,5 +353,15 @@ a:hover {
     }
     .site-footer {
         padding: 16px 12px;
+    }
+}
+
+/* iOS zoom suppression — any input/select/textarea with a font-size
+   below 16px triggers a disorienting zoom-in on focus. Force the
+   base at 16px on mobile viewports. Does not affect desktop since
+   those viewports don't trigger the behavior. */
+@media (max-width: 720px) {
+    input, select, textarea {
+        font-size: 16px;
     }
 }

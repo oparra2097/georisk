@@ -137,75 +137,74 @@ def create_app():
     app.register_blueprint(sharing_bp)  # /og/* routes (public, no auth)
 
     # ── Routes ───────────────────────────────────────────────────────────
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutTimeout
-    _HOME_SSR_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix='home-ssr')
-
-    def _timed_call(fn, timeout_sec: float = 1.5):
-        """Run ``fn()`` on the SSR pool with a hard timeout. On timeout
-        or exception we return None and the frontend falls back to its
-        async fetch. The background thread keeps running so the cache
-        warms up for the next visitor.
-
-        This is the guardrail that stops home-page SSR from blocking on
-        cold cache: if any compute path (yfinance ZQ curve, Taylor rule
-        fit, macro-model bootstrap) exceeds ``timeout_sec`` we abandon
-        the SSR payload for that piece rather than making the visitor
-        wait.
-        """
-        try:
-            return _HOME_SSR_POOL.submit(fn).result(timeout=timeout_sec)
-        except _FutTimeout:
-            return None
-        except Exception as _e:  # noqa: BLE001
-            app.logger.debug(f'SSR helper failed: {_e}')
-            return None
-
     def _gather_home_data():
         """Best-effort SSR payload for the home page.
 
-        Every sub-call runs through ``_timed_call`` with a short
-        (~1.5 s) timeout — a warm cache hit returns essentially
-        instantly, cold compute times out and returns None so the
-        page renders immediately and the client-side fetch takes
-        over. The abandoned compute keeps running in the pool and
-        populates the cache for the next visitor.
+        Uses ``cache_peek`` — reads the on-disk/in-memory cache only,
+        never falls through to compute. If the cache is cold for a
+        given piece, that field stays None and the frontend's async
+        fetch takes over, exactly as it did before SSR. This keeps
+        render time bounded (microseconds) regardless of cache state.
         """
+        from backend.data_sources._cache import cache_peek
         data = {'bond_trades': None, 'fedwatch': None, 'edge': None,
                 'target_mid': None}
 
-        def _load_bond_trades():
+        # bond-trades: @cached in bond_trades.py
+        try:
             from backend.credit_default import bond_trades as _bt
-            return _bt.get_bond_trades(top_n=3, min_edge_pct=0.5)
+            hit, val = cache_peek(_bt.get_bond_trades, top_n=3, min_edge_pct=0.5)
+            if hit:
+                data['bond_trades'] = val
+        except Exception as _e:  # noqa: BLE001
+            app.logger.debug(f'SSR bond_trades peek failed: {_e}')
 
-        def _load_fedwatch():
+        # fed funds curve: @cached in rates_futures.py.
+        # We also need target_mid (uncached helper that triggers FRED).
+        # Both reads go through cache_peek — if any is cold we leave
+        # the whole fedwatch block None so the JS fetches.
+        try:
             from backend.data_sources.rates_futures import get_fed_funds_curve
             from backend.rates.fedwatch import compute_fedwatch
             from backend.rates.fomc_calendar import get_upcoming_meetings
             from backend.rates.routes import _get_current_target_mid
-            curve_payload = get_fed_funds_curve()
-            target_mid = _get_current_target_mid()
-            meetings = get_upcoming_meetings(n=8)
-            return {
-                'target_mid': target_mid,
-                'grid': compute_fedwatch(
-                    curve_payload.get('curve') or [],
-                    current_target_mid=target_mid,
-                    meetings=meetings,
-                ),
-                'spot': curve_payload.get('spot'),
-                'anchor_date': curve_payload.get('anchor_date'),
-            }
+            curve_hit, curve_payload = cache_peek(get_fed_funds_curve)
+            mid_hit, target_mid = cache_peek(_get_current_target_mid)
+            if curve_hit and mid_hit:
+                meetings = get_upcoming_meetings(n=8)
+                data['fedwatch'] = {
+                    'target_mid': target_mid,
+                    'grid': compute_fedwatch(
+                        curve_payload.get('curve') or [],
+                        current_target_mid=target_mid,
+                        meetings=meetings,
+                    ),
+                    'spot': curve_payload.get('spot'),
+                    'anchor_date': curve_payload.get('anchor_date'),
+                }
+                data['target_mid'] = target_mid
+        except Exception as _e:  # noqa: BLE001
+            app.logger.debug(f'SSR fedwatch peek failed: {_e}')
 
-        def _load_edge():
+        # edge: compute_edge isn't @cached itself (it composes 2 cached
+        # calls + macro model bootstrap). Peek each dependency and only
+        # synthesize edge if all three are warm. Otherwise leave None
+        # for the client fetch to populate.
+        try:
+            from backend.data_sources.rates_futures import get_fed_funds_curve
+            from backend.rates.routes import _get_current_target_mid
             from backend.rates.routes import compute_edge
-            return compute_edge(top_n=1)
+            curve_hit, _ = cache_peek(get_fed_funds_curve)
+            mid_hit, _ = cache_peek(_get_current_target_mid)
+            # Macro model bootstrap isn't via @cached — skip the SSR
+            # path for edge entirely if either curve or mid is cold.
+            # The compute_edge function will still work from the client
+            # fetch and populate the cache; the next page load gets SSR.
+            if curve_hit and mid_hit:
+                data['edge'] = compute_edge(top_n=1)
+        except Exception as _e:  # noqa: BLE001
+            app.logger.debug(f'SSR edge peek failed: {_e}')
 
-        data['bond_trades'] = _timed_call(_load_bond_trades, timeout_sec=1.5)
-        fw = _timed_call(_load_fedwatch, timeout_sec=1.5)
-        if fw is not None:
-            data['fedwatch'] = fw
-            data['target_mid'] = fw.get('target_mid')
-        data['edge'] = _timed_call(_load_edge, timeout_sec=2.0)
         return data
 
     @app.route('/')
