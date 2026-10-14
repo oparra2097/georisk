@@ -216,6 +216,34 @@ def invalidate(namespace: str, key: Optional[str] = None) -> None:
             _STORE.get(namespace, {}).pop(key, None)
 
 
+def cache_peek(fn: Callable, *args, **kwargs) -> Tuple[bool, Any]:
+    """Peek at a ``@cached``-decorated function's current cache value
+    WITHOUT falling through to compute on miss.
+
+    Returns ``(hit, value)``. ``hit=True`` iff a fresh entry (within
+    the function's declared TTL) is in the in-memory store or on disk.
+    On miss returns ``(False, None)`` without executing ``fn``.
+
+    Used by SSR paths (``app._gather_home_data``) so a request-time
+    render never triggers live compute — if the cache has no fresh
+    entry, SSR returns None and the client-side fetch takes over
+    asynchronously, exactly as it does today without SSR.
+
+    The target function must have been decorated with ``@cached`` so
+    that its wrapper carries ``_cache_namespace`` / ``_cache_ttl`` /
+    ``_cache_disk`` / ``_cache_fn_name`` attributes (set by the
+    decorator below).
+    """
+    namespace = getattr(fn, '_cache_namespace', None)
+    ttl = getattr(fn, '_cache_ttl', None)
+    disk = getattr(fn, '_cache_disk', True)
+    fn_name = getattr(fn, '_cache_fn_name', None) or getattr(fn, '__name__', '')
+    if not namespace or ttl is None:
+        return False, None
+    key = _cache_key(fn_name, args, kwargs)
+    return cache_get(namespace, key, ttl, disk=disk)
+
+
 # ── Decorator ───────────────────────────────────────────────────────────
 
 
@@ -254,6 +282,12 @@ def cached(namespace: str, ttl: float, disk: bool = True,
                 raise
             cache_put(namespace, key, fresh, disk=disk)
             return fresh
+        # Expose cache metadata so cache_peek(wrapper, *args) can
+        # read the same (namespace, key) the wrapper writes.
+        wrapper._cache_namespace = namespace
+        wrapper._cache_ttl = ttl
+        wrapper._cache_disk = disk
+        wrapper._cache_fn_name = fn.__name__
         return wrapper
     return decorator
 

@@ -82,14 +82,16 @@ def get_panel() -> dict:
         }
     """
     import time
+    from concurrent.futures import ThreadPoolExecutor
 
-    rows: list[dict] = []
-    for iso3 in em_config.ALL_ISO3:
-        cfg = em_config.get_country(iso3)
-        if not cfg:
-            continue
-        row = _country_row(iso3, cfg)
-        rows.append(row)
+    # Each _country_row makes ~4 remote calls (FRED policy rate, FRED
+    # CPI, Taylor fit via @cached, yfinance 10Y). All I/O-bound and
+    # independent, so parallelize across the 13 countries. Collapses
+    # ~45 s serial to ~8 s wall-clock.
+    pairs = [(iso3, em_config.get_country(iso3)) for iso3 in em_config.ALL_ISO3]
+    pairs = [(iso3, cfg) for iso3, cfg in pairs if cfg]
+    with ThreadPoolExecutor(max_workers=8, thread_name_prefix='em-panel') as pool:
+        rows = list(pool.map(lambda ic: _country_row(ic[0], ic[1]), pairs))
 
     # Panel summary counts (only rows with a valid direction).
     dir_counts = {'HIKE': 0, 'HOLD': 0, 'CUT': 0}
