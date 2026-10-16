@@ -39,9 +39,9 @@ GROUP_SCENARIOS = {
             'Base Case': 0.70,
         },
         'labels': {
-            'Base Case':   'Gradual de-escalation · OPEC+ holds discipline · Brent normalises toward $72-78 by year-end',
-            'Severe Case': 'Strait of Hormuz disruption persists · No ceasefire · Brent $95-110 sustained into 2027',
-            'Worst Case':  'Iran targets critical ME production · Brent spikes >$130 then settles $105-112',
+            'Base Case':   'Hormuz partially restored · OPEC+ delivers 2027 surplus · Brent slides $73-80 · WTI $70-76',
+            'Severe Case': 'Hormuz choked points persist · Shadow fleet attrition · Brent $90-100 · Russia refining losses compound',
+            'Worst Case':  'Iran closes Hormuz · Saudi/UAE infrastructure strikes · Brent >$120 then settles $105-115',
         },
         'colors': {
             'Actual':       '#94a3b8',
@@ -58,9 +58,9 @@ GROUP_SCENARIOS = {
             'Bull': 0.25,
         },
         'labels': {
-            'Bear':  'Favourable weather globally · Bumper harvests · Ample supply depresses prices through 2027',
-            'Base':  'Normal seasonal patterns · Trend-line yields · Steady demand · Gradual recovery',
-            'Bull':  'El Niño drought in key growing regions · Supply shock · Export restrictions tighten',
+            'Bear':  'Brazil 26/27 coffee crop record (~70M bags) · US grain stocks rebuild · El Niño mild · Prices normalise lower',
+            'Base':  'El Niño peaks Nov 2026-Feb 2027 then fades · Mixed harvests · Brazil supply offsets West Africa shortfall',
+            'Bull':  'Very strong El Niño (81% prob per CPC) · W. Africa cocoa 25-30% below · Australia wheat shock · Export restrictions',
         },
         'colors': {
             'Actual':       '#94a3b8',
@@ -77,9 +77,9 @@ GROUP_SCENARIOS = {
             'Bull': 0.25,
         },
         'labels': {
-            'Bear':  'Risk-off pivot · Dollar strength · Demand slowdown · De-leveraging into 2027',
-            'Base':  'Steady macro · Moderate central bank buying · Gradual industrial recovery',
-            'Bull':  'Flight to safety · Speculative inflows · Central bank accumulation accelerates',
+            'Bear':  'Gold cycle tops · Fed stays hawkish longer · Dollar rallies · CB buying slows · Copper demand softens',
+            'Base':  'Fed easing resumes · CB gold buying ~1000t/yr · UBS gold path $4.6→5.4K · Copper $6.50/lb · Industrial normalisation',
+            'Bull':  'Debasement accelerates · Real rates deep negative · China stimulus revives copper · Silver squeeze on solar demand',
         },
         'colors': {
             'Actual':       '#94a3b8',
@@ -110,101 +110,122 @@ COMMODITIES = {
 
 # ── Scenario Price Targets ──────────────────────────────────────────────────
 # Absolute quarterly price targets per scenario.
-# Q1 values: None = use live YTD actual (current quarter only);
-#            number = used for next-year Q1 forecasts.
-# When Q1 is the current quarter the engine auto-fills from live data.
 # Scenario NAMES must match the keys in GROUP_SCENARIOS[group]['weights'].
+# Q4 → forecast Q+1 (Oct-Dec 2026). Q1/Q2/Q3 → 2027 forecast quarters.
+#
+# LAST REFRESH: 2026-10-16 — anchored on October-vintage published research:
+#   • Goldman Sachs Commodities Weekly (Jul/Sep 2026)
+#   • JPMorgan Global Research (Jul cut on gold; Sep refresh on oil)
+#   • UBS Global Wealth Management gold path ($4.6K Dec → $5.4K Sep 27)
+#   • EIA STEO + NGSA Winter Outlook (Permian supply surge story)
+#   • USDA WASDE October 2026 (soybean prod raised, wheat stocks up)
+#   • Conab / USDA FAS Brazil 26/27 coffee (record 67-76M bags)
+#   • Reuters cocoa poll (NY $6K/t YE); CPC El Niño 81% prob Oct-Dec
+#   • Trading Economics / Kitco spot (Oct 15, 2026)
 
 SCENARIO_TARGETS = {
     # ═══════════════════════════════════════════════════════════════════════════
-    # OIL & GAS — Geopolitical scenarios
-    # Brent: Base → $95-100 Q2, reverts to $75-80 Q4
-    # WTI tracks Brent with ~$5-7 discount
-    # TTF: Elevated due to Qatar bombing / longer-term production loss
+    # OIL & GAS — Hormuz tail-risk fading · 2027 surplus (IEA 3.2-3.7mbd) ·
+    # Russia refining losses · Permian gas glut.
+    # Goldman Q4 2026: Brent $80, WTI $76. 2027 avg Brent $75, WTI $70.
+    # JPM 2026 avg Brent $96 (incl. Hormuz blow-up months), WTI $89. 2027 $75/$70.
     # ═══════════════════════════════════════════════════════════════════════════
     'WTI Crude': {
-        'Base Case':   {'Q1': 68,  'Q2': 95,  'Q3': 83,  'Q4': 72},
-        'Severe Case': {'Q1': 90,  'Q2': 108, 'Q3': 104, 'Q4': 94},
-        'Worst Case':  {'Q1': 102, 'Q2': 124, 'Q3': 117, 'Q4': 107},
+        # Spot ~$82. Goldman 2027 avg $70. Bear tail: JPM "$30s risk" if OPEC break.
+        'Base Case':   {'Q4': 76,  'Q1': 72,  'Q2': 70,  'Q3': 68},
+        'Severe Case': {'Q4': 92,  'Q1': 92,  'Q2': 85,  'Q3': 80},
+        'Worst Case':  {'Q4': 115, 'Q1': 118, 'Q2': 108, 'Q3': 100},
     },
     'Brent Crude': {
-        'Base Case':   {'Q1': 74,  'Q2': 100, 'Q3': 87,  'Q4': 78},
-        'Severe Case': {'Q1': 96,  'Q2': 113, 'Q3': 110, 'Q4': 99},
-        'Worst Case':  {'Q1': 108, 'Q2': 130, 'Q3': 121, 'Q4': 112},
+        # Spot ~$86. Goldman Q4 $80 / 2027 avg $75. JPM 2026 $96, 2027 $75.
+        'Base Case':   {'Q4': 80,  'Q1': 76,  'Q2': 73,  'Q3': 72},
+        'Severe Case': {'Q4': 96,  'Q1': 98,  'Q2': 90,  'Q3': 85},
+        'Worst Case':  {'Q4': 120, 'Q1': 123, 'Q2': 112, 'Q3': 105},
     },
     'Natural Gas (HH)': {
-        'Base Case':   {'Q1': 3.80, 'Q2': 3.20, 'Q3': 3.40, 'Q4': 3.60},
-        'Severe Case': {'Q1': 4.50, 'Q2': 4.00, 'Q3': 4.40, 'Q4': 4.25},
-        'Worst Case':  {'Q1': 5.70, 'Q2': 4.90, 'Q3': 5.80, 'Q4': 5.50},
+        # Spot ~$2.88 Sep. EIA $3.43 avg 2026, $3.28 2027. EIR cut 2027 to $3.25.
+        # Permian supply surge > LNG demand growth. Winter forwards $3.43.
+        'Base Case':   {'Q4': 3.60, 'Q1': 4.00, 'Q2': 3.20, 'Q3': 3.40},
+        'Severe Case': {'Q4': 4.40, 'Q1': 5.00, 'Q2': 3.80, 'Q3': 4.10},
+        'Worst Case':  {'Q4': 5.80, 'Q1': 7.00, 'Q2': 4.80, 'Q3': 5.20},
     },
     'TTF Gas': {
-        # Elevated — Qatar production loss, structural supply deficit
-        'Base Case':   {'Q1': 68,  'Q2': 60,  'Q3': 64,  'Q4': 66},
-        'Severe Case': {'Q1': 84,  'Q2': 76,  'Q3': 87,  'Q4': 81},
-        'Worst Case':  {'Q1': 112, 'Q2': 98,  'Q3': 119, 'Q4': 108},
+        # Spot €81-85 Oct 15. Storage 73% vs 90% norm. Citi bear €56 Q4.
+        # Bull range €92 cold-snap. 2026 refill target cut from 90% to 80%.
+        'Base Case':   {'Q4': 78,  'Q1': 82,  'Q2': 68,  'Q3': 60},
+        'Severe Case': {'Q4': 95,  'Q1': 105, 'Q2': 85,  'Q3': 75},
+        'Worst Case':  {'Q4': 130, 'Q1': 150, 'Q2': 110, 'Q3': 95},
     },
     # ═══════════════════════════════════════════════════════════════════════════
-    # AGRICULTURE — Supply / Weather scenarios
-    # Bear = bumper harvest, oversupply depresses prices
-    # Bull = drought in key regions, supply shock, export restrictions
+    # AGRICULTURE — El Niño peak Nov 2026-Feb 2027 (81% prob per CPC).
+    # October WASDE raised US soybean prod (4.56Bbu, +0.3 yield) + wheat stocks → bearish.
+    # Record Brazil 26/27 coffee crop 67-76M bags (Conab-Marex range).
+    # Ivory Coast 26/27 cocoa 1.77-1.8Mt (−11-18% YoY); Ghana 580-650k.
     # ═══════════════════════════════════════════════════════════════════════════
     'Cocoa': {
-        'Bear':  {'Q1': 2650, 'Q2': 2780, 'Q3': 2590, 'Q4': 2690},
-        'Base':  {'Q1': 3050, 'Q2': 3065, 'Q3': 3000, 'Q4': 3100},
-        'Bull':  {'Q1': 4100, 'Q2': 3475, 'Q3': 3790, 'Q4': 3950},
+        # Spot ~$5,500 Oct. Reuters Jul poll: NY $6,000/t YE. CI/Ghana supply down.
+        'Bear':  {'Q4': 4500, 'Q1': 4000, 'Q2': 3800, 'Q3': 3600},
+        'Base':  {'Q4': 5500, 'Q1': 5700, 'Q2': 5300, 'Q3': 4800},
+        'Bull':  {'Q4': 7000, 'Q1': 7500, 'Q2': 7000, 'Q3': 6300},
     },
     'Wheat': {
-        'Bear':  {'Q1': 535, 'Q2': 555, 'Q3': 530, 'Q4': 545},
-        'Base':  {'Q1': 620, 'Q2': 615, 'Q3': 622, 'Q4': 628},
-        'Bull':  {'Q1': 700, 'Q2': 676, 'Q3': 736, 'Q4': 712},
+        # Dec futures 662-670¢/bu Oct. Oct WASDE raised US stocks (bearish).
+        # Bull: Australia -9Mt El Niño + Black Sea.
+        'Bear':  {'Q4': 580, 'Q1': 560, 'Q2': 550, 'Q3': 540},
+        'Base':  {'Q4': 670, 'Q1': 680, 'Q2': 670, 'Q3': 650},
+        'Bull':  {'Q4': 820, 'Q1': 880, 'Q2': 850, 'Q3': 800},
     },
     'Soybeans': {
-        'Bear':  {'Q1': 1055, 'Q2': 1090, 'Q3': 1045, 'Q4': 1070},
-        'Base':  {'Q1': 1200, 'Q2': 1185, 'Q3': 1195, 'Q4': 1207},
-        'Bull':  {'Q1': 1320, 'Q2': 1277, 'Q3': 1370, 'Q4': 1335},
+        # Oct WASDE prod 4.56Bbu +0.3 yield · $11.40 season avg. Futures ~1030-1060¢.
+        'Bear':  {'Q4': 1020, 'Q1': 1000, 'Q2': 980,  'Q3': 960},
+        'Base':  {'Q4': 1100, 'Q1': 1120, 'Q2': 1140, 'Q3': 1160},
+        'Bull':  {'Q4': 1280, 'Q1': 1350, 'Q2': 1370, 'Q3': 1350},
     },
     'Coffee': {
-        'Bear':  {'Q1': 265, 'Q2': 277, 'Q3': 259, 'Q4': 271},
-        'Base':  {'Q1': 305, 'Q2': 307, 'Q3': 304, 'Q4': 310},
-        'Bull':  {'Q1': 400, 'Q2': 346, 'Q3': 376, 'Q4': 391},
+        # Dec arabica 295-308¢/lb Oct. Record Brazil crop 67-76M bags → bearish 2027.
+        # Robusta ICE stocks 4-month high → extra downside pressure.
+        'Bear':  {'Q4': 250, 'Q1': 240, 'Q2': 230, 'Q3': 220},
+        'Base':  {'Q4': 295, 'Q1': 290, 'Q2': 280, 'Q3': 270},
+        'Bull':  {'Q4': 380, 'Q1': 410, 'Q2': 400, 'Q3': 370},
     },
     # ═══════════════════════════════════════════════════════════════════════════
-    # METALS — Speculative / Macro scenarios
-    # Bear = risk-off, dollar strength, demand slowdown
-    # Bull = flight to safety, speculative inflows, CB accumulation
-    # Gold Base: $5600 year-end, Bull: $6200 year-end
+    # METALS — Gold reset (JPM cut Q4 to $4,500 from $6,000 on Jul 3) ·
+    # UBS path $4.6K Dec → $5.4K Sep 27 · Copper record $6.89 Sep 9 (spot $6.53-6.66).
+    # Platinum weak (spot ~$1,600 Oct 15, 34-week low on aluminum).
     # ═══════════════════════════════════════════════════════════════════════════
     'Copper': {
-        'Bear':  {'Q1': 4.85, 'Q2': 5.03, 'Q3': 4.81, 'Q4': 4.92},
-        'Base':  {'Q1': 5.75, 'Q2': 5.63, 'Q3': 5.74, 'Q4': 5.80},
-        'Bull':  {'Q1': 6.80, 'Q2': 6.02, 'Q3': 6.45, 'Q4': 6.67},
+        # Spot $6.53-6.66/lb Oct. Record $6.89 Sep 9. Goldman $10-11k/t range.
+        # Structural EV/grid demand + Chile/Peru supply tight.
+        'Bear':  {'Q4': 5.80, 'Q1': 5.60, 'Q2': 5.40, 'Q3': 5.20},
+        'Base':  {'Q4': 6.50, 'Q1': 6.70, 'Q2': 6.80, 'Q3': 7.00},
+        'Bull':  {'Q4': 7.50, 'Q1': 8.00, 'Q2': 8.20, 'Q3': 8.50},
     },
     'Gold': {
-        'Bear':  {'Q1': 4400, 'Q2': 4550, 'Q3': 4380, 'Q4': 4500},
-        'Base':  {'Q1': 5700, 'Q2': 5100, 'Q3': 5350, 'Q4': 5600},
-        'Bull':  {'Q1': 6400, 'Q2': 5450, 'Q3': 5800, 'Q4': 6200},
+        # JPM Q4 2026 $4,500 (July cut from $6,000). Goldman $4,650-4,900.
+        # UBS Dec $4,600 → Mar 27 $5,000 → Sep 27 $5,400.
+        'Bear':  {'Q4': 4100, 'Q1': 4200, 'Q2': 4300, 'Q3': 4400},
+        'Base':  {'Q4': 4650, 'Q1': 4850, 'Q2': 5100, 'Q3': 5300},
+        'Bull':  {'Q4': 5200, 'Q1': 5500, 'Q2': 5800, 'Q3': 6000},
     },
-    # ── PLACEHOLDER TARGETS ────────────────────────────────────────────────
-    # Silver / Platinum / Aluminum were added in Phase 1. The quarterly
-    # numbers below are hand-picked anchors to make the UI render sensibly
-    # until the SARIMAX + GARCH model (Phase 4) replaces them with real
-    # posterior p2.5 / p50 / p97.5 draws. Do NOT cite these externally.
-    # Spot reference (Apr 2026): Silver ~$52/oz, Platinum ~$1300/oz,
-    # Aluminum ~$2600/MT.
     'Silver': {
-        'Bear':  {'Q1': 42, 'Q2': 44, 'Q3': 41, 'Q4': 43},
-        'Base':  {'Q1': 52, 'Q2': 54, 'Q3': 56, 'Q4': 58},
-        'Bull':  {'Q1': 65, 'Q2': 68, 'Q3': 72, 'Q4': 75},
+        # JPM: Q4 2026 $63/oz, 2026 avg $70, 2027 avg $63. Solar demand sustains.
+        'Bear':  {'Q4': 48, 'Q1': 50, 'Q2': 52, 'Q3': 54},
+        'Base':  {'Q4': 63, 'Q1': 65, 'Q2': 66, 'Q3': 63},
+        'Bull':  {'Q4': 80, 'Q1': 85, 'Q2': 90, 'Q3': 95},
     },
     'Platinum': {
-        'Bear':  {'Q1': 1080, 'Q2': 1120, 'Q3': 1060, 'Q4': 1100},
-        'Base':  {'Q1': 1300, 'Q2': 1330, 'Q3': 1360, 'Q4': 1400},
-        'Bull':  {'Q1': 1580, 'Q2': 1640, 'Q3': 1690, 'Q4': 1750},
+        # Spot $1,597-1,629 Oct 15 (fell 8.65% in 4 weeks). JPM $1,800 YE.
+        # SA power recovery + weak auto demand drag; H2 economy slow.
+        'Bear':  {'Q4': 1450, 'Q1': 1500, 'Q2': 1550, 'Q3': 1580},
+        'Base':  {'Q4': 1700, 'Q1': 1800, 'Q2': 1850, 'Q3': 1900},
+        'Bull':  {'Q4': 2050, 'Q1': 2150, 'Q2': 2200, 'Q3': 2300},
     },
     'Aluminum': {
-        'Bear':  {'Q1': 2250, 'Q2': 2320, 'Q3': 2210, 'Q4': 2280},
-        'Base':  {'Q1': 2600, 'Q2': 2650, 'Q3': 2680, 'Q4': 2720},
-        'Bull':  {'Q1': 3100, 'Q2': 3220, 'Q3': 3300, 'Q4': 3400},
+        # Spot $2,991/t Oct 15 — 34-week low. Goldman bear $2,350 late-26.
+        # TD $3,700 Q4 → $2,900 Q3 27. Yunnan hydro restarts weighing.
+        'Bear':  {'Q4': 2600, 'Q1': 2500, 'Q2': 2450, 'Q3': 2400},
+        'Base':  {'Q4': 3000, 'Q1': 3100, 'Q2': 3050, 'Q3': 3000},
+        'Bull':  {'Q4': 3600, 'Q1': 3800, 'Q2': 3900, 'Q3': 4000},
     },
 }
 
