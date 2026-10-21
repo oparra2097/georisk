@@ -32,7 +32,10 @@ from backend.data_sources.currency_debt import get_currency_debt
 from backend.data_sources.sovereign_debt import get_sovereign_debt_data
 from backend.data_sources.fertilizer_em_inflation import get_fertilizer_em_data
 from backend.data_sources.yale_tariff import get_yale_tariff_data
-from backend.data_sources.insurance_inflation import get_insurance_inflation_data
+from backend.data_sources.insurance_inflation import (
+    get_insurance_inflation_data,
+    diagnose_fetch as diagnose_insurance_fetch,
+)
 from backend.data_sources.em_vulnerability import get_em_vulnerability_data
 from backend.data_sources.em_reserves import get_em_reserves_data, refresh_cache as refresh_em_reserves
 from backend.data_sources.em_fx_rates import (
@@ -3338,6 +3341,14 @@ def get_insurance_inflation():
     """Return insurance/reinsurance inflation data (verified @aig.com or admin grant)."""
     data = get_insurance_inflation_data()
     return jsonify(data)
+
+
+@api_bp.route('/insurance-inflation/refresh', methods=['POST', 'GET'])
+@insurance_access_required
+def refresh_insurance_inflation():
+    """Force-refresh insurance inflation cache and return per-source diagnostic."""
+    diagnostic = diagnose_insurance_fetch()
+    return jsonify(diagnostic)
 
 
 @api_bp.route('/insurance-inflation/export')

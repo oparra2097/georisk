@@ -15,17 +15,23 @@ Thread-safe cache with 24-hour TTL.
 """
 
 import io
+import json
+import os
 import threading
 import time
 import logging
 import requests
 from datetime import datetime
 
+from config import Config
+
 logger = logging.getLogger(__name__)
 
 CACHE_TTL = 86400   # 24 hours
 RETRY_BACKOFF = 3600  # 1 hour after failure
 USER_AGENT = 'Mozilla/5.0 (compatible; ParraMacro/1.0)'
+
+INSURANCE_CACHE_FILE = os.path.join(Config.DATA_DIR, 'insurance_inflation_cache.json')
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 1 — Series definitions
@@ -904,14 +910,45 @@ def _fetch_all():
 # ══════════════════════════════════════════════════════════════════════════════
 
 class InsuranceInflationCache:
+    """File-backed cache for insurance inflation data.
+
+    Gunicorn on Render runs multiple workers, each with its own in-memory
+    cache. Persisting to ${DATA_DIR}/insurance_inflation_cache.json means
+    every worker reads from the same source of truth — one successful
+    fetch serves all workers immediately.
+    """
+
     def __init__(self):
         self._lock = threading.RLock()
         self._data = None
         self._last_fetch = 0
         self._last_fail = 0
+        self._load_from_disk()
+
+    def _load_from_disk(self):
+        if not os.path.exists(INSURANCE_CACHE_FILE):
+            return
+        try:
+            with open(INSURANCE_CACHE_FILE, 'r') as f:
+                wrapper = json.load(f)
+            self._data = wrapper.get('data')
+            self._last_fetch = float(wrapper.get('fetched_at', 0))
+        except (OSError, ValueError, json.JSONDecodeError):
+            logger.warning("Failed to load insurance_inflation cache from disk")
+
+    def _save_to_disk(self, data):
+        try:
+            os.makedirs(Config.DATA_DIR, exist_ok=True)
+            tmp = INSURANCE_CACHE_FILE + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump({'fetched_at': time.time(), 'data': data}, f)
+            os.replace(tmp, INSURANCE_CACHE_FILE)
+        except OSError as e:
+            logger.warning(f"Failed to persist insurance_inflation cache: {e}")
 
     def get(self):
         with self._lock:
+            self._load_from_disk()
             if self._data and (time.time() - self._last_fetch) < CACHE_TTL:
                 return self._data
             if self._last_fail and (time.time() - self._last_fail) < RETRY_BACKOFF:
@@ -922,10 +959,22 @@ class InsuranceInflationCache:
                 self._data = data
                 self._last_fetch = time.time()
                 self._last_fail = 0
+                self._save_to_disk(data)
             return data
         with self._lock:
             self._last_fail = time.time()
             return self._data or _empty_result()
+
+    def clear(self):
+        with self._lock:
+            self._data = None
+            self._last_fetch = 0
+            self._last_fail = 0
+            try:
+                if os.path.exists(INSURANCE_CACHE_FILE):
+                    os.remove(INSURANCE_CACHE_FILE)
+            except OSError:
+                pass
 
 
 _cache = InsuranceInflationCache()
@@ -944,3 +993,58 @@ def _empty_result():
 def get_insurance_inflation_data():
     """Public API: returns cached insurance inflation data."""
     return _cache.get()
+
+
+def refresh_cache():
+    """Clear cache and force a fresh fetch (writes to disk for all workers)."""
+    _cache.clear()
+    return _cache.get()
+
+
+def diagnose_fetch():
+    """Force-refresh and return a per-source summary of what was fetched.
+
+    Used by /api/insurance-inflation/refresh so admins can see at a glance
+    which upstream fetches succeeded, failed, or returned empty.
+    """
+    log = []
+    sources = {}
+
+    def _probe(name, fn):
+        t0 = time.time()
+        try:
+            result = fn()
+            # Many fetchers return (yoy, raw) tuples; others return dict
+            if isinstance(result, tuple):
+                yoy, raw = result
+                count = len(yoy) if isinstance(yoy, dict) else 0
+            else:
+                count = len(result) if isinstance(result, dict) else 0
+            dt = int((time.time() - t0) * 1000)
+            sources[name] = {'series_count': count, 'duration_ms': dt, 'ok': count > 0}
+            log.append(f'{name}: {count} series in {dt}ms')
+        except Exception as e:
+            dt = int((time.time() - t0) * 1000)
+            sources[name] = {'series_count': 0, 'duration_ms': dt, 'ok': False, 'error': str(e)[:200]}
+            log.append(f'{name}: EXCEPTION {type(e).__name__}: {str(e)[:150]}')
+
+    _probe('ons', _fetch_ons_series)
+    _probe('ons_opi', _fetch_construction_opi)
+    _probe('bls', _fetch_bls_series)
+    _probe('eurostat_hicp', _fetch_eurostat_hicp)
+    _probe('eurostat_ppi', _fetch_eurostat_ppi)
+    _probe('eurostat_construction', _fetch_eurostat_construction)
+    _probe('eurostat_lci', _fetch_eurostat_lci)
+
+    # Now force a full refresh and persist
+    _cache.clear()
+    data = _cache.get()
+
+    return {
+        'ok': bool(data and data.get('series')),
+        'total_series': len(data.get('series') or {}) if data else 0,
+        'total_series_raw': len(data.get('series_raw') or {}) if data else 0,
+        'sources': sources,
+        'log': log,
+        'meta': (data or {}).get('meta', {}),
+    }
