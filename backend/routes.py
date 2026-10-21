@@ -3014,9 +3014,11 @@ def export_yale_tariff_excel():
 
     data = get_yale_tariff_data()
     points = data.get('points', [])
+    collected = data.get('collected_series') or {}
+    collected_points = collected.get('points') or []
 
-    if not points:
-        return jsonify({'error': 'No Yale tariff data available'}), 404
+    if not points and not collected_points:
+        return jsonify({'error': 'No tariff data available'}), 404
 
     header_font = Font(bold=True, color='FFFFFF', size=11)
     header_fill = PatternFill(start_color='1E3A8A', end_color='1E3A8A', fill_type='solid')
@@ -3139,7 +3141,78 @@ def export_yale_tariff_excel():
     chart_anchor = f'A{len(points) + 7}'
     ws.add_chart(chart, chart_anchor)
 
-    # ── Sheet 2: Summary & Methodology ──────────────────────────────────
+    # ── Sheet 2: Collected Rate (Apollo/Slok monthly) ────────────────────
+    if collected_points:
+        ws_col = wb.create_sheet('Collected Rate (Apollo-Slok)')
+
+        ws_col.cell(row=1, column=1, value='Apollo / Torsten Slok — US Effective Tariff Rate (Collected)')
+        ws_col.cell(row=1, column=1).font = title_font
+        ws_col.merge_cells('A1:C1')
+
+        subtitle = collected.get('subtitle') or 'Monthly customs duties ÷ goods imports × 100'
+        ws_col.cell(row=2, column=1, value=subtitle)
+        ws_col.cell(row=2, column=1).font = Font(italic=True, size=10, color='64748B')
+        ws_col.merge_cells('A2:C2')
+
+        col_headers = ['Month', 'Collected Tariff Rate (%)', 'Change vs. Prior (pp)']
+        teal_fill = PatternFill(start_color='059669', end_color='059669', fill_type='solid')
+        for c, h in enumerate(col_headers, 1):
+            cell = ws_col.cell(row=4, column=c, value=h)
+            cell.font = header_font
+            cell.fill = teal_fill
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = thin_border
+
+        prior_val = None
+        for i, p in enumerate(collected_points):
+            row = i + 5
+            date = (p.get('date') or '')[:7]
+            value = p.get('value')
+            delta = (value - prior_val) if (value is not None and prior_val is not None) else None
+
+            ws_col.cell(row=row, column=1, value=date).alignment = Alignment(horizontal='center')
+            cv = ws_col.cell(row=row, column=2, value=value)
+            cv.alignment = Alignment(horizontal='center')
+            cv.number_format = '0.00'
+            cd = ws_col.cell(row=row, column=3, value=delta)
+            cd.alignment = Alignment(horizontal='center')
+            cd.number_format = '+0.00;-0.00;0.00'
+            if delta is not None:
+                if delta > 0:
+                    cd.font = Font(color='B91C1C')
+                elif delta < 0:
+                    cd.font = Font(color='047857')
+            for col in range(1, 4):
+                ws_col.cell(row=row, column=col).border = thin_border
+            prior_val = value
+
+        ws_col.column_dimensions['A'].width = 14
+        ws_col.column_dimensions['B'].width = 26
+        ws_col.column_dimensions['C'].width = 24
+
+        # Line chart for the collected series
+        c_chart = LineChart()
+        c_chart.title = 'US Effective Tariff Rate (Collected — Apollo/Slok)'
+        c_chart.style = 10
+        c_chart.y_axis.title = 'Percent of goods imports'
+        c_chart.x_axis.title = 'Month'
+        c_chart.y_axis.scaling.min = 0
+        c_chart.width = 28
+        c_chart.height = 14
+        c_chart.legend = None
+
+        c_cats = Reference(ws_col, min_col=1, min_row=5, max_row=len(collected_points) + 4)
+        c_vals = Reference(ws_col, min_col=2, min_row=4, max_row=len(collected_points) + 4)
+        c_chart.add_data(c_vals, titles_from_data=True)
+        c_chart.set_categories(c_cats)
+        c_series = c_chart.series[0]
+        c_series.graphicalProperties.line.width = 25000
+        c_series.graphicalProperties.line.solidFill = '059669'
+        c_series.smooth = False
+
+        ws_col.add_chart(c_chart, f'A{len(collected_points) + 7}')
+
+    # ── Sheet 3: Summary & Methodology ──────────────────────────────────
     ws2 = wb.create_sheet('Summary & Methodology')
 
     ws2.cell(row=1, column=1, value='Yale Budget Lab — Tariff Rate Tracker').font = title_font
@@ -3194,6 +3267,34 @@ def export_yale_tariff_excel():
             ws2.cell(row=notes_row + i, column=2, value='• ' + note).alignment = Alignment(wrap_text=True, vertical='top')
             ws2.merge_cells(start_row=notes_row + i, start_column=2, end_row=notes_row + i, end_column=4)
             ws2.row_dimensions[notes_row + i].height = 45
+
+    # ── Apollo / Torsten Slok collected rate — summary block ────────────
+    if collected_points:
+        apollo_base = 3 + len(summary_rows) + 13 + max(len(notes), 1) + 2
+        ws2.cell(row=apollo_base, column=1, value='— Apollo / Torsten Slok Collected Rate —').font = title_font
+        ws2.merge_cells(start_row=apollo_base, start_column=1, end_row=apollo_base, end_column=4)
+        apollo_rows = [
+            ('Source', collected.get('source', '')),
+            ('Source URL', collected.get('source_url', '')),
+            ('Series', collected.get('source_detail', '')),
+            ('Unit', collected.get('unit', '')),
+            ('Frequency', collected.get('frequency', '')),
+            ('Last Updated', collected.get('last_updated', '')),
+            ('Latest Value', collected.get('latest_value')),
+            ('Latest Month', collected.get('latest_date', '')),
+            ('Peak Value', collected.get('peak_value')),
+            ('Peak Month', collected.get('peak_date', '')),
+        ]
+        for i, (lbl, val) in enumerate(apollo_rows):
+            ws2.cell(row=apollo_base + 2 + i, column=1, value=lbl).font = label_font
+            ws2.cell(row=apollo_base + 2 + i, column=2, value=val)
+        apollo_meth = collected.get('methodology', '')
+        if apollo_meth:
+            meth_r = apollo_base + 2 + len(apollo_rows) + 1
+            ws2.cell(row=meth_r, column=1, value='Methodology').font = label_font
+            ws2.cell(row=meth_r, column=2, value=apollo_meth).alignment = Alignment(wrap_text=True, vertical='top')
+            ws2.merge_cells(start_row=meth_r, start_column=2, end_row=meth_r + 5, end_column=4)
+            ws2.row_dimensions[meth_r].height = 100
 
     ws2.column_dimensions['A'].width = 24
     ws2.column_dimensions['B'].width = 60
