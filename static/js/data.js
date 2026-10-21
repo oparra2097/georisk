@@ -2268,42 +2268,46 @@
         if (!canvasEl) return;
         const ctx = canvasEl.getContext('2d');
 
+        const chartDatasets = [{
+            label: 'Statutory Rate (Yale, pre-sub)',
+            data: values,
+            borderColor: '#1e3a8a',
+            backgroundColor: 'rgba(59, 130, 246, 0.10)',
+            borderWidth: 2.5,
+            fill: true,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#1e3a8a',
+            pointHoverBorderColor: '#ffffff',
+            pointHoverBorderWidth: 2,
+            tension: 0,
+            stepped: 'before',
+        }];
+
+        // Only add collected series if we have data for it
+        if (collectedValues.some(v => v != null)) {
+            chartDatasets.push({
+                label: 'Collected Rate (Census/Wharton)',
+                data: collectedValues,
+                borderColor: '#0d9488',
+                backgroundColor: 'rgba(13, 148, 136, 0.08)',
+                borderWidth: 2,
+                borderDash: [6, 3],
+                fill: false,
+                pointRadius: 3,
+                pointBackgroundColor: '#0d9488',
+                pointBorderColor: '#0d9488',
+                tension: 0.3,
+                spanGaps: true,
+            });
+        }
+
+        try {
         PD.setChart('main', new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [
-                    {
-                        label: 'Statutory Rate (Yale, pre-sub)',
-                        data: values,
-                        borderColor: '#1e3a8a',
-                        backgroundColor: 'rgba(59, 130, 246, 0.10)',
-                        borderWidth: 2.5,
-                        fill: true,
-                        pointRadius: 0,
-                        pointHoverRadius: 5,
-                        pointHoverBackgroundColor: '#1e3a8a',
-                        pointHoverBorderColor: '#ffffff',
-                        pointHoverBorderWidth: 2,
-                        tension: 0,
-                        stepped: 'before',
-                    },
-                    {
-                        label: 'Collected Rate (Census/Wharton)',
-                        data: collectedValues,
-                        borderColor: '#0d9488',
-                        backgroundColor: 'rgba(13, 148, 136, 0.08)',
-                        borderWidth: 2,
-                        borderDash: [6, 3],
-                        fill: false,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#0d9488',
-                        pointBorderColor: '#0d9488',
-                        tension: 0.3,
-                        stepped: false,
-                        spanGaps: true,
-                    },
-                ],
+                datasets: chartDatasets,
             },
             options: {
                 responsive: true,
@@ -2361,6 +2365,18 @@
                 }
             },
         }));
+        } catch (chartErr) {
+            console.error('Yale tariff chart error:', chartErr);
+            const loadEl = document.getElementById('panel-loading');
+            if (loadEl) {
+                loadEl.innerHTML = '<p style="color:#f59e0b">Chart rendering error: ' + chartErr.message + '</p>';
+                loadEl.style.display = '';
+            }
+        }
+
+        // Hide loading spinner if chart rendered OK
+        const loadEl2 = document.getElementById('panel-loading');
+        if (loadEl2) loadEl2.style.display = 'none';
 
         // Inject "Download PNG" button next to the Excel export button.
         // Re-inserted on every render so it survives panel rebuilds.
