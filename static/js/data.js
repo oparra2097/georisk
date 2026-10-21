@@ -2213,64 +2213,97 @@
         const peakDate = points[peakIdx] ? points[peakIdx].date : '';
         const latestDate = points[points.length - 1].date;
 
+        // Summary cards — show both statutory and collected rates
+        const latestCollected = data.latest_collected;
         const summary = document.getElementById('panel-summary');
         if (summary) {
             const latestSrc = data.latest_source || '';
             summary.innerHTML = `
                 <div class="yale-tariff-tiles">
                     <div class="yale-tariff-tile">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Current Rate</div>
-                        <div class="yale-tariff-tile-val" style="color:#f1f5f9;">${latestVal.toFixed(2)}%</div>
-                        <div style="color:#64748b;font-size:11px;">as of ${latestDate}</div>
-                        ${latestSrc ? '<div style="color:#64748b;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + latestSrc + '</div>' : ''}
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Statutory Rate</div>
+                        <div class="yale-tariff-tile-val" style="color:#1e3a8a;">${latestVal.toFixed(1)}%</div>
+                        <div style="color:#64748b;font-size:11px;">Yale pre-sub, ${latestDate}</div>
                     </div>
                     <div class="yale-tariff-tile">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak</div>
-                        <div class="yale-tariff-tile-val" style="color:#ef4444;">${peakVal.toFixed(2)}%</div>
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Collected Rate</div>
+                        <div class="yale-tariff-tile-val" style="color:#0d9488;">${latestCollected != null ? latestCollected.toFixed(1) + '%' : 'N/A'}</div>
+                        <div style="color:#64748b;font-size:11px;">Census/Wharton, Aug 2026</div>
+                    </div>
+                    <div class="yale-tariff-tile">
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak (Statutory)</div>
+                        <div class="yale-tariff-tile-val" style="color:#ef4444;">${peakVal.toFixed(1)}%</div>
                         <div style="color:#64748b;font-size:11px;">${peakDate}</div>
                     </div>
                     <div class="yale-tariff-tile">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Trade-War Low</div>
-                        <div class="yale-tariff-tile-val" style="color:#10b981;">${minVal.toFixed(2)}%</div>
-                        <div style="color:#64748b;font-size:11px;">${minDate}</div>
-                    </div>
-                    <div class="yale-tariff-tile">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Pre-Trade-War Baseline</div>
-                        <div class="yale-tariff-tile-val" style="color:#f1f5f9;">2.40%</div>
-                        <div style="color:#64748b;font-size:11px;">early Jan 2025</div>
+                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Distortion Gap</div>
+                        <div class="yale-tariff-tile-val" style="color:#f59e0b;">${latestCollected != null ? (latestVal - latestCollected).toFixed(1) : '?'}pp</div>
+                        <div style="color:#64748b;font-size:11px;">statutory − collected</div>
                     </div>
                 </div>
             `;
         }
 
-        // Chart
+        // Build collected series mapped onto the same x-axis labels
+        const collected = (data.collected_series || {}).points || [];
+        const collectedMap = {};
+        collected.forEach(p => { collectedMap[p.date] = p.value; });
+
+        // For the collected series, we need to align to the statutory x-axis.
+        // Use nearest-date interpolation: for each statutory date, find the
+        // closest collected date and use its value.
+        const collectedValues = labels.map(date => {
+            if (collectedMap[date] != null) return collectedMap[date];
+            // Find the closest collected date <= this statutory date
+            let best = null;
+            for (const cp of collected) {
+                if (cp.date <= date) best = cp.value;
+            }
+            return best;
+        });
+
+        // Chart — dual series
         PD.destroyChart('main');
         const canvasEl = document.getElementById('panel-chart');
         if (!canvasEl) return;
         const ctx = canvasEl.getContext('2d');
 
-        const color = '#1e3a8a';
-        const fillColor = 'rgba(59, 130, 246, 0.15)';
-
         PD.setChart('main', new Chart(ctx, {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [{
-                    label: 'Effective Tariff Rate (%)',
-                    data: values,
-                    borderColor: color,
-                    backgroundColor: fillColor,
-                    borderWidth: 2.5,
-                    fill: true,
-                    pointRadius: 0,
-                    pointHoverRadius: 5,
-                    pointHoverBackgroundColor: color,
-                    pointHoverBorderColor: '#ffffff',
-                    pointHoverBorderWidth: 2,
-                    tension: 0,  // stepped feel: keep lines straight between policy events
-                    stepped: 'before',
-                }],
+                datasets: [
+                    {
+                        label: 'Statutory Rate (Yale, pre-sub)',
+                        data: values,
+                        borderColor: '#1e3a8a',
+                        backgroundColor: 'rgba(59, 130, 246, 0.10)',
+                        borderWidth: 2.5,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#1e3a8a',
+                        pointHoverBorderColor: '#ffffff',
+                        pointHoverBorderWidth: 2,
+                        tension: 0,
+                        stepped: 'before',
+                    },
+                    {
+                        label: 'Collected Rate (Census/Wharton)',
+                        data: collectedValues,
+                        borderColor: '#0d9488',
+                        backgroundColor: 'rgba(13, 148, 136, 0.08)',
+                        borderWidth: 2,
+                        borderDash: [6, 3],
+                        fill: false,
+                        pointRadius: 3,
+                        pointBackgroundColor: '#0d9488',
+                        pointBorderColor: '#0d9488',
+                        tension: 0.3,
+                        stepped: false,
+                        spanGaps: true,
+                    },
+                ],
             },
             options: {
                 responsive: true,
@@ -2291,10 +2324,13 @@
                         callbacks: {
                             label: (tooltipCtx) => {
                                 const val = tooltipCtx.parsed.y;
-                                if (val == null) return 'N/A';
-                                const out = ['Tariff Rate: ' + val.toFixed(2) + '%'];
-                                const p = points[tooltipCtx.dataIndex];
-                                if (p && p.note) out.push(p.note);
+                                if (val == null) return null;
+                                const seriesName = tooltipCtx.dataset.label || '';
+                                const out = [seriesName + ': ' + val.toFixed(1) + '%'];
+                                if (tooltipCtx.datasetIndex === 0) {
+                                    const p = points[tooltipCtx.dataIndex];
+                                    if (p && p.note) out.push(p.note);
+                                }
                                 return out;
                             }
                         }
