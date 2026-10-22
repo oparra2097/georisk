@@ -3172,13 +3172,6 @@ def export_yale_tariff_excel():
         i += 1
         ym = _next_month(ym)
     data_last = row - 1
-    # Chart series stops at the last month Census has published.
-    months_to_coll = 0
-    ym = first_ym
-    while ym <= last_coll_ym:
-        months_to_coll += 1
-        ym = _next_month(ym)
-    chart_last = 4 + months_to_coll
     ws_d.freeze_panes = 'B5'
     ws_d.auto_filter.ref = f'A4:F{data_last}'
 
@@ -3199,9 +3192,11 @@ def export_yale_tariff_excel():
         ws_c['H4'] = 'Census feed not connected: values are estimates.'
         ws_c['H4'].font = Font(name='Calibri', size=10, italic=True, color='B45309')
 
+    # Both series on one chart, like the web chart's default view. Either
+    # can be hidden in Excel (Chart Filters, or select the line → delete).
     chart = LineChart()
     chart.title = None
-    chart.legend = None
+    chart.legend.position = 'b'
     chart.width = 30
     chart.height = 13
     chart.y_axis.title = '%'
@@ -3215,18 +3210,38 @@ def export_yale_tariff_excel():
     chart.x_axis.majorUnit = 6
     chart.x_axis.delete = False
     chart.x_axis.title = None
-    if coll_points:
-        vals = [p['value'] for p in coll_points if p['date'][:7] >= first_ym]
-        chart.y_axis.scaling.min = int(min(vals) // 1)
-        chart.y_axis.scaling.max = -int(-max(vals) // 1)
-        chart.y_axis.majorUnit = 1 if chart.y_axis.scaling.max - chart.y_axis.scaling.min <= 12 else 2
-    chart.add_data(Reference(ws_d, min_col=2, min_row=4, max_row=chart_last), titles_from_data=True)
-    chart.set_categories(Reference(ws_d, min_col=1, min_row=5, max_row=chart_last))
+
+    plotted = [ws_d.cell(row=r, column=c).value for r in range(5, data_last + 1) for c in (2, 6)]
+    plotted = [v for v in plotted if isinstance(v, (int, float))]
+    if plotted:
+        lo, hi = min(plotted), max(plotted)
+        if hi - min(lo, 0) > 14:
+            chart.y_axis.scaling.min = 0
+            chart.y_axis.scaling.max = -int(-hi // 5) * 5
+            chart.y_axis.majorUnit = 5
+        else:
+            chart.y_axis.scaling.min = int(lo // 1)
+            chart.y_axis.scaling.max = -int(-hi // 1)
+            chart.y_axis.majorUnit = 1
+
+    chart.add_data(Reference(ws_d, min_col=2, min_row=4, max_row=data_last), titles_from_data=True)
+    has_stat = any(isinstance(ws_d.cell(row=r, column=6).value, (int, float)) for r in range(5, data_last + 1))
+    if has_stat:
+        chart.add_data(Reference(ws_d, min_col=6, min_row=4, max_row=data_last), titles_from_data=True)
+    chart.set_categories(Reference(ws_d, min_col=1, min_row=5, max_row=data_last))
+
     s = chart.series[0]
     s.smooth = False
     s.marker.symbol = 'none'
     s.graphicalProperties.line.solidFill = GREEN
     s.graphicalProperties.line.width = 28000
+    if has_stat:
+        s2 = chart.series[1]
+        s2.smooth = False
+        s2.marker.symbol = 'none'
+        s2.graphicalProperties.line.solidFill = '8A94A6'
+        s2.graphicalProperties.line.width = 19000
+        s2.graphicalProperties.line.dashStyle = 'dash'
     chart.graphical_properties = GraphicalProperties(ln=LineProperties(noFill=True))
     ws_c.add_chart(chart, 'B6')
 

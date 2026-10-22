@@ -2212,7 +2212,8 @@
         var coll = (cs.points || []).filter(valid).slice().sort(bySort);
         if (!coll.length && !stat.length) return;
 
-        var compare = !!state.tariffCompare;
+        // Both lines show by default; the toggle hides the Yale overlay.
+        var compare = state.tariffCompare !== false;
         var collByMonth = {};
         coll.forEach(function (p) { collByMonth[p.date.slice(0, 7)] = p.value; });
 
@@ -2310,7 +2311,7 @@
             lbl.style.cursor = 'pointer';
             lbl.style.gap = '6px';
             lbl.title = 'Overlay the Yale Budget Lab statutory rate';
-            lbl.innerHTML = '<input type="checkbox" id="tariff-compare-toggle" style="margin:0;cursor:pointer;">Compare: Yale statutory';
+            lbl.innerHTML = '<input type="checkbox" id="tariff-compare-toggle" style="margin:0;cursor:pointer;">Show Yale statutory';
             controlsBar.insertBefore(lbl, controlsBar.firstChild);
             lbl.querySelector('input').addEventListener('change', function (e) {
                 state.tariffCompare = e.target.checked;
