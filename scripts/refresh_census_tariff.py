@@ -39,19 +39,26 @@ def _diagnose(series):
     pts = series['points']
     print(f'months: {len(pts)}  first: {pts[0]["date"]}  latest: {pts[-1]["date"]}')
     for p in pts[-8:]:
+        rc = p.get('rate_consumption')
         print(f'  {p["date"][:7]}  duty=${p["duty"]/1e9:6.2f}B  gen_imports=${p["gen_imports"]/1e9:7.2f}B'
-              f'  rate={p["value"]:5.2f}%  (vs consumption imports: {p["rate_consumption"]:5.2f}%)')
+              f'  rate={p["value"]:5.2f}%  (vs consumption imports: {rc if rc is not None else "n/a"}%)')
 
+
+def _diagnose_production():
     print('\n=== Production /api/yale-tariff collected_series ===')
-    try:
-        r = requests.get('https://parramacro.com/api/yale-tariff', timeout=60)
-        d = r.json()
+    for attempt in range(3):  # Render may be mid-restart or cold
+        try:
+            r = requests.get('https://parramacro.com/api/yale-tariff', timeout=90)
+            d = r.json()
+        except Exception as e:
+            print(f'  attempt {attempt + 1}: {type(e).__name__}: {e}')
+            continue
         cs = d.get('collected_series') or {}
-        print(f'  HTTP {r.status_code}  source={cs.get("source")!r}  latest_collected={d.get("latest_collected")}')
+        print(f'  HTTP {r.status_code}  origin={cs.get("origin")!r}  source={cs.get("source")!r}'
+              f'  latest={cs.get("latest_date")} {d.get("latest_collected")}')
         for p in (cs.get('points') or [])[-6:]:
-            print(f'  {p.get("date")}  {p.get("value")}  ({p.get("source", "")})')
-    except Exception as e:
-        print(f'  error: {type(e).__name__}: {e}')
+            print(f'  {p.get("date")}  {p.get("value")}')
+        return
 
 
 def main():
@@ -59,9 +66,14 @@ def main():
     ap.add_argument('--diagnose', action='store_true')
     args = ap.parse_args()
 
+    key = os.environ.get('CENSUS_API_KEY', '')
+    print(f'CENSUS_API_KEY set in this environment: {"yes (" + str(len(key)) + " chars)" if key else "NO"}')
+
     series = fetch_census_series(verbose=True)
     if not series or not series.get('points'):
         print('Census fetch returned no data; snapshot left unchanged.')
+        if args.diagnose:
+            _diagnose_production()
         sys.exit(1)
 
     with open(OUT_PATH, 'w') as f:
@@ -70,6 +82,7 @@ def main():
 
     if args.diagnose:
         _diagnose(series)
+        _diagnose_production()
 
 
 if __name__ == '__main__':
