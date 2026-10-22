@@ -90,10 +90,10 @@ def _fetch_customs_duties():
 
 def _fetch_goods_imports():
     """
-    Return monthly US goods imports (BOP basis) as {'YYYY-MM-01': dollars}.
+    Return monthly US goods imports (BOP basis) as {'YYYY-MM-01': millions_usd}.
 
-    FRED series BOPGIMP is monthly NSA, millions of USD. Converted to
-    plain dollars here so numerator and denominator share units.
+    FRED series BOPGIMP is monthly NSA, millions of USD. Kept in millions
+    to match Treasury MTS Table 4 (also millions of USD).
     """
     out = {}
     try:
@@ -108,7 +108,7 @@ def _fetch_goods_imports():
         if not date or val is None:
             continue
         key = date[:7] + '-01'
-        out[key] = float(val) * 1_000_000  # millions → dollars
+        out[key] = float(val)  # already in millions, same as Treasury MTS
     return out
 
 
