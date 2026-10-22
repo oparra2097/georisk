@@ -2253,99 +2253,61 @@
             `;
         }
 
-        // Both series go on a calendar-spaced (linear, ms timestamp) x-axis.
-        // Statutory is event-dated, collected is monthly; plotting each at its
-        // own dates keeps every monthly collected point instead of resampling
-        // it onto the ~35 Yale event dates.
-        const ts = (iso) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10) || 1);
-        const lastTs = Math.max(
-            ts(points[points.length - 1].date),
-            collectedLast ? ts(collectedLast.date) : 0,
-        );
-        const statXY = points.map(p => ({ x: ts(p.date), y: p.value }));
-        // Extend the final step so the statutory line reaches the right edge.
-        if (lastTs > statXY[statXY.length - 1].x) {
-            statXY.push({ x: lastTs, y: statXY[statXY.length - 1].y });
-        }
-        const collectedXY = collected.map(p => ({ x: ts(p.date), y: p.value }));
-
-        const statAt = (x) => {
-            let v = null;
-            for (const p of points) { if (ts(p.date) <= x) v = p.value; else break; }
-            return v;
-        };
-        const collectedAt = (x) => {
-            const d = new Date(x);
-            const key = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
-            const hit = collected.find(p => p.date.slice(0, 7) === key);
-            return hit ? hit.value : null;
-        };
-        const fmtDay = (x) => new Date(x).toISOString().slice(0, 10);
-
-        // Quarterly ticks on month starts across the data range
-        const firstTs = statXY[0].x;
-        const tickValues = [];
-        {
-            const d0 = new Date(firstTs);
-            let y = d0.getUTCFullYear();
-            let m = d0.getUTCMonth() - (d0.getUTCMonth() % 3);
-            for (let t = Date.UTC(y, m, 1); t <= lastTs; t = Date.UTC(y, m, 1)) {
-                if (t >= firstTs) tickValues.push(t);
-                m += 3;
-                if (m >= 12) { m -= 12; y += 1; }
+        // Build collected series — simple nearest-date lookup into statutory labels
+        const collectedSorted = collected.slice().sort(function(a, b) { return a.date < b.date ? -1 : 1; });
+        var labels = points.map(function(p) { return p.date; });
+        var collectedVals = labels.map(function(date) {
+            var best = null;
+            for (var i = 0; i < collectedSorted.length; i++) {
+                if (collectedSorted[i].date <= date) best = collectedSorted[i].value;
             }
-        }
+            return best;
+        });
 
-        // Chart — dual series
+        // Chart
         PD.destroyChart('main');
-        const canvasEl = document.getElementById('panel-chart');
+        var canvasEl = document.getElementById('panel-chart');
         if (!canvasEl) return;
-        const ctx = canvasEl.getContext('2d');
+        var ctx = canvasEl.getContext('2d');
 
-        const chartDatasets = [{
-            label: 'Statutory Rate (Yale, pre-sub)',
-            data: statXY,
-            borderColor: '#1e3a8a',
-            backgroundColor: 'rgba(59, 130, 246, 0.10)',
+        var datasets = [{
+            label: 'Statutory (Yale)',
+            data: values,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.08)',
             borderWidth: 2.5,
             fill: true,
             pointRadius: 0,
-            pointHoverRadius: 5,
-            pointHoverBackgroundColor: '#1e3a8a',
-            pointHoverBorderColor: '#ffffff',
-            pointHoverBorderWidth: 2,
+            pointHitRadius: 8,
             tension: 0,
             stepped: 'before',
+            spanGaps: true,
         }];
 
-        // Only add collected series if we have data for it
-        if (collectedXY.length) {
-            chartDatasets.push({
-                label: 'Collected Rate (duties ÷ imports, Apollo/Slok)',
-                data: collectedXY,
-                borderColor: '#0d9488',
-                backgroundColor: 'rgba(13, 148, 136, 0.08)',
+        if (collectedVals.some(function(v) { return v != null; })) {
+            datasets.push({
+                label: 'Collected (Census)',
+                data: collectedVals,
+                borderColor: '#14b8a6',
+                backgroundColor: 'transparent',
                 borderWidth: 2,
                 borderDash: [6, 3],
                 fill: false,
                 pointRadius: 3,
-                pointBackgroundColor: '#0d9488',
-                pointBorderColor: '#0d9488',
+                pointBackgroundColor: '#14b8a6',
+                pointHitRadius: 8,
                 tension: 0.3,
                 spanGaps: true,
             });
         }
 
-        try {
         PD.setChart('main', new Chart(ctx, {
             type: 'line',
-            data: {
-                datasets: chartDatasets,
-            },
+            data: { labels: labels, datasets: datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
                         position: 'top',
@@ -2359,75 +2321,32 @@
                         borderWidth: 1,
                         bodyFont: { size: 12 },
                         callbacks: {
-                            // Show both rates at the hovered date, whichever point is nearest.
-                            title: (items) => {
-                                if (!items.length) return '';
-                                const it = items[0];
-                                const x = it.parsed.x;
-                                return it.datasetIndex === 1 ? fmtMonth(fmtDay(x)) : fmtDay(x);
-                            },
-                            label: () => null,
-                            afterBody: (items) => {
-                                if (!items.length) return [];
-                                const it = items[0];
-                                const x = it.parsed.x;
-                                const s = statAt(x);
-                                const c = collectedAt(x);
-                                const out = [];
-                                if (s != null) out.push('Statutory: ' + s.toFixed(1) + '%');
-                                if (c != null) out.push('Collected: ' + c.toFixed(1) + '%');
-                                if (s != null && c != null) out.push('Gap: ' + (s - c).toFixed(1) + ' pp');
-                                if (it.datasetIndex === 0) {
-                                    const p = points.find(pp => ts(pp.date) === x);
-                                    if (p && p.note) out.push('', p.note);
-                                }
-                                return out;
-                            },
+                            label: function(ctx) {
+                                var val = ctx.parsed.y;
+                                if (val == null) return null;
+                                return ctx.dataset.label + ': ' + val.toFixed(1) + '%';
+                            }
                         }
                     }
                 },
                 scales: {
                     x: {
-                        type: 'linear',
-                        min: firstTs,
-                        max: lastTs,
-                        afterBuildTicks: (axis) => {
-                            axis.ticks = tickValues.map(v => ({ value: v }));
-                        },
-                        ticks: {
-                            color: '#9ca3af',
-                            font: { size: 11 },
-                            maxRotation: 0,
-                            autoSkip: false,
-                            callback: (v) => fmtMonth(fmtDay(v)).replace(/ (\d{2})(\d{2})$/, " '$2"),
-                        },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+                        grid: { color: 'rgba(55,65,81,0.3)' }
                     },
                     y: {
-                        ticks: {
-                            color: '#6b7280',
-                            font: { size: 10 },
-                            callback: (val) => val.toFixed(0) + '%',
-                        },
+                        ticks: { color: '#6b7280', font: { size: 10 }, callback: function(v) { return v + '%'; } },
                         grid: { color: 'rgba(55,65,81,0.3)' },
                         beginAtZero: true,
                         suggestedMax: 30,
                     }
                 }
-            },
-        }));
-        } catch (chartErr) {
-            console.error('Yale tariff chart error:', chartErr);
-            const loadEl = document.getElementById('panel-loading');
-            if (loadEl) {
-                loadEl.innerHTML = '<p style="color:#f59e0b">Chart rendering error: ' + chartErr.message + '</p>';
-                loadEl.style.display = '';
             }
-        }
+        }));
 
-        // Hide loading spinner if chart rendered OK
-        const loadEl2 = document.getElementById('panel-loading');
-        if (loadEl2) loadEl2.style.display = 'none';
+        // Hide loading
+        var ld = document.getElementById('panel-loading');
+        if (ld) ld.style.display = 'none';
 
         // Inject "Download PNG" button next to the Excel export button.
         // Re-inserted on every render so it survives panel rebuilds.
