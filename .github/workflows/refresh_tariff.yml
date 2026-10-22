@@ -10,6 +10,12 @@ name: Refresh tariff rate
 on:
   schedule:
     - cron: '40 14 * * *'   # daily 14:40 UTC (after the 8:30 ET FT-900 release)
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/refresh_census_tariff.py'
+      - 'backend/data_sources/census_tariff.py'
+      - '.github/workflows/refresh_tariff.yml'
   workflow_dispatch:
     inputs:
       diagnose:
@@ -47,7 +53,7 @@ jobs:
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
           PYTHONUNBUFFERED: '1'
         run: |
-          if [ "${{ github.event.inputs.diagnose }}" = "true" ]; then
+          if [ "${{ github.event.inputs.diagnose }}" = "true" ] || [ "${{ github.event_name }}" = "push" ]; then
             python scripts/refresh_census_tariff.py --diagnose
           else
             python scripts/refresh_census_tariff.py
