@@ -2340,12 +2340,13 @@
         if (yMax - yMin < 2) yMax = yMin + 2;
 
         var INK = '#111827', MUTED = '#374151', GREEN = '#2f6f5e';
+        var FONT = 'Inter, "Helvetica Neue", Helvetica, Arial, sans-serif';
         var datasets = [{
             label: 'US effective tariff rate',
             data: collVals,
             borderColor: GREEN,
             backgroundColor: GREEN,
-            borderWidth: 1.75,
+            borderWidth: 2.25,
             pointRadius: 0,
             pointHoverRadius: 4,
             pointHitRadius: 8,
@@ -2394,13 +2395,32 @@
                 var yl = chart.scales.y, yr = chart.scales.y2;
                 if (yl) c.fillText('%', yl.left + yl.width / 2, area.top - 6);
                 if (yr) c.fillText('%', yr.left + yr.width / 2, area.top - 6);
+
+                // Latest-value marker at the end of the effective-rate line.
+                var meta = chart.getDatasetMeta(0);
+                var lastIdx = -1;
+                for (var k = collVals.length - 1; k >= 0; k--) { if (collVals[k] != null) { lastIdx = k; break; } }
+                if (meta && !meta.hidden && lastIdx >= 0 && meta.data[lastIdx]) {
+                    var pt = meta.data[lastIdx];
+                    c.fillStyle = GREEN;
+                    c.beginPath();
+                    c.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+                    c.fill();
+                    c.font = '600 12px ' + FONT;
+                    c.textAlign = 'right';
+                    c.textBaseline = 'bottom';
+                    c.fillText(collVals[lastIdx].toFixed(1) + '%', pt.x - 6, pt.y - 6);
+                    c.font = '10px ' + FONT;
+                    c.fillStyle = '#6b7280';
+                    c.fillText(monthLabel(months[lastIdx]), pt.x - 6, pt.y - 20);
+                }
                 c.restore();
             },
         };
 
         var yTicks = {
             color: MUTED,
-            font: { size: 10 },
+            font: { size: 10, family: FONT },
             stepSize: step,
             callback: function (v) { return v; },
         };
@@ -2422,7 +2442,7 @@
                             text: headline(),
                             align: 'start',
                             color: INK,
-                            font: { family: 'Georgia, "Times New Roman", serif', size: 16, weight: 'normal' },
+                            font: { family: 'Georgia, "Times New Roman", serif', size: 18, weight: 'normal' },
                             padding: { top: 2, bottom: compare ? 6 : 10 },
                         },
                         subtitle: {
@@ -2430,13 +2450,13 @@
                             text: 'US effective tariff rate',
                             align: 'center',
                             color: INK,
-                            font: { size: 12 },
+                            font: { size: 12, family: FONT },
                             padding: { bottom: 14 },
                         },
                         legend: {
                             display: compare,
                             position: 'top',
-                            labels: { color: INK, font: { size: 11 }, usePointStyle: true, pointStyle: 'line', boxWidth: 26, padding: 14 },
+                            labels: { color: INK, font: { size: 11, family: FONT }, usePointStyle: true, pointStyle: 'line', boxWidth: 26, padding: 14 },
                         },
                         tooltip: {
                             backgroundColor: '#ffffff',
@@ -2444,7 +2464,8 @@
                             bodyColor: MUTED,
                             borderColor: '#d1d5db',
                             borderWidth: 1,
-                            titleFont: { weight: '600' },
+                            titleFont: { weight: '600', family: FONT },
+                            bodyFont: { family: FONT },
                             callbacks: {
                                 title: function (items) { return items.length ? monthLabel(items[0].label) : ''; },
                                 label: function (item) {
@@ -2466,7 +2487,7 @@
                             border: { color: '#9ca3af' },
                             ticks: {
                                 color: MUTED,
-                                font: { size: 10 },
+                                font: { size: 10, family: FONT },
                                 autoSkip: false,
                                 maxRotation: 0,
                                 callback: function (val) {

@@ -3013,6 +3013,9 @@ def export_yale_tariff_excel():
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.chart import LineChart, Reference
+    from openpyxl.chart.axis import DateAxis
+    from openpyxl.chart.shapes import GraphicalProperties
+    from openpyxl.drawing.line import LineProperties
 
     data = get_yale_tariff_data()
     stat_points = sorted(
@@ -3037,6 +3040,9 @@ def export_yale_tariff_excel():
         y, m = int(ym[:4]), int(ym[5:7]) + 1
         return f'{y + (m > 12)}-{(m - 1) % 12 + 1:02d}'
 
+    def _month_name(ym):
+        return datetime.strptime(ym[:7], '%Y-%m').strftime('%b %Y')
+
     stat_first = stat_points[0]['date'][:10] if stat_points else None
 
     def _stat_avg(ym):
@@ -3060,33 +3066,43 @@ def export_yale_tariff_excel():
                 n += 1
         return round(total / n, 2) if n else None
 
-    green, navy, grey = '2F6F5E', '1E3A8A', '64748B'
-    title_font = Font(bold=True, size=14, color='111827', name='Georgia')
-    sub_font = Font(italic=True, size=10, color=grey)
-    label_font = Font(bold=True, size=11, color='111827')
-    header_font = Font(bold=True, color='FFFFFF', size=11)
-    thin = Side(style='thin', color='CBD5E1')
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    center = Alignment(horizontal='center', vertical='center')
+    # ── Palette & styles (shared with the web chart) ────────────────────
+    GREEN, INK, MUTED, RULE, BAND = '2F6F5E', '111827', '6B7280', 'D1D5DB', 'F6F8F7'
+    title_font = Font(name='Georgia', size=16, color=INK)
+    h2_font = Font(name='Calibri', size=12, bold=True, color=INK)
+    body_font = Font(name='Calibri', size=11, color=INK)
+    note_font = Font(name='Calibri', size=9, italic=True, color=MUTED)
+    head_font = Font(name='Calibri', size=10, bold=True, color='FFFFFF')
+    head_fill = PatternFill(start_color=GREEN, end_color=GREEN, fill_type='solid')
+    band_fill = PatternFill(start_color=BAND, end_color=BAND, fill_type='solid')
+    rule = Border(bottom=Side(style='thin', color=RULE))
+    wrap_top = Alignment(wrap_text=True, vertical='top')
 
-    def _header(ws, row, headers, fill_hex):
-        fill = PatternFill(start_color=fill_hex, end_color=fill_hex, fill_type='solid')
-        for c, h in enumerate(headers, 1):
+    def _table_header(ws, row, headers, widths):
+        for c, (h, w) in enumerate(zip(headers, widths), 1):
             cell = ws.cell(row=row, column=c, value=h)
-            cell.font = header_font
-            cell.fill = fill
-            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            cell.border = border
-        ws.row_dimensions[row].height = 30
+            cell.font = head_font
+            cell.fill = head_fill
+            cell.alignment = Alignment(horizontal='center' if c > 1 else 'left', vertical='center', wrap_text=True)
+            ws.column_dimensions[cell.column_letter].width = w
+        ws.row_dimensions[row].height = 32
 
-    def _delta(cell, delta):
-        cell.value = _r(delta)
-        cell.number_format = '+0.00;-0.00;0.00'
-        cell.alignment = center
-        if delta is not None and abs(delta) >= 0.005:
-            cell.font = Font(color='B91C1C' if delta > 0 else '047857')
+    def _body_row(ws, row, ncols, banded):
+        for c in range(1, ncols + 1):
+            cell = ws.cell(row=row, column=c)
+            cell.font = body_font
+            cell.border = rule
+            if banded:
+                cell.fill = band_fill
+            if c > 1 and cell.alignment.horizontal is None:
+                cell.alignment = Alignment(horizontal='right', vertical='top')
 
-    # Headline in the chart's style
+    def _delta_font(delta):
+        if delta is None or abs(delta) < 0.005:
+            return body_font
+        return Font(name='Calibri', size=11, color='B91C1C' if delta > 0 else '047857')
+
+    # Headline in the chart's style (same rule as the web chart)
     headline = 'US effective tariff rate'
     if coll_points:
         recent = [p['value'] for p in coll_points[-4:]]
@@ -3103,144 +3119,189 @@ def export_yale_tariff_excel():
         'Note: Calculated as monthly Census "Calculated Duty" divided by total US goods imports, '
         'multiplied by 100. Sources: US Census Bureau, Apollo Chief Economist (Torsten Slok) methodology.'
     )
-
-    wb = Workbook()
-
-    # ── Sheet 1: Effective tariff rate, monthly (the chart) ─────────────
-    ws = wb.active
-    ws.title = 'Effective Tariff Rate'
-    ws.cell(row=1, column=1, value=headline).font = title_font
-    ws.cell(row=2, column=1, value=note).font = sub_font
-    if not collected.get('origin'):
-        ws.cell(row=3, column=1, value='Census feed not connected: values are estimates from the JSON fallback.').font = Font(italic=True, size=10, color='B45309')
-    _header(ws, 4, ['Month', 'Effective Tariff Rate (%)', 'Calculated Duty ($bn)', 'General Imports ($bn)',
-                    'Change vs. Prior (pp)', 'Yale Statutory, monthly avg (%)'], green)
+    is_estimate = not collected.get('origin')
 
     coll_by_month = {p['date'][:7]: p for p in coll_points}
     if coll_points:
         first_ym = max('2021-01', coll_points[0]['date'][:7])
-        last_ym = coll_points[-1]['date'][:7]
+        last_coll_ym = coll_points[-1]['date'][:7]
     else:
-        first_ym, last_ym = stat_points[0]['date'][:7], stat_points[-1]['date'][:7]
+        first_ym = last_coll_ym = stat_points[0]['date'][:7]
+    last_ym = last_coll_ym
     if stat_points and stat_points[-1]['date'][:7] > last_ym:
         last_ym = stat_points[-1]['date'][:7]
 
-    row, ym, prior_v = 5, first_ym, None
+    wb = Workbook()
+
+    # ── Sheet 2 first (data), so the chart can reference it ─────────────
+    ws_d = wb.active
+    ws_d.title = 'Monthly Data'
+    ws_d.sheet_view.showGridLines = False
+    ws_d['A1'] = 'US effective tariff rate — monthly data'
+    ws_d['A1'].font = h2_font
+    ws_d['A2'] = note
+    ws_d['A2'].font = note_font
+    ws_d['A2'].alignment = wrap_top
+    ws_d.merge_cells('A2:F2')
+    ws_d.row_dimensions[2].height = 28
+    headers = ['Month', 'Effective tariff rate (%)', 'Calculated duty ($bn)', 'General imports ($bn)',
+               'Change vs. prior month (pp)', 'Yale statutory, monthly avg (%)']
+    _table_header(ws_d, 4, headers, [12, 15, 15, 15, 15, 17])
+
+    row, ym, prior_v, i = 5, first_ym, None, 0
     while ym <= last_ym:
         p = coll_by_month.get(ym)
         v = p['value'] if p else None
-        c = ws.cell(row=row, column=1, value=_d(ym + '-01'))
-        c.number_format = 'mmm yyyy'
-        c.alignment = center
-        c = ws.cell(row=row, column=2, value=_r(v))
-        c.number_format = '0.00'
-        c.alignment = center
         duty = p.get('duty') if p else None
         imps = p.get('gen_imports') if p else None
-        c = ws.cell(row=row, column=3, value=_r(duty / 1e9, 3) if duty is not None else None)
-        c.number_format = '#,##0.000'
-        c.alignment = center
-        c = ws.cell(row=row, column=4, value=_r(imps / 1e9, 3) if imps is not None else None)
-        c.number_format = '#,##0.000'
-        c.alignment = center
-        _delta(ws.cell(row=row, column=5), (v - prior_v) if (v is not None and prior_v is not None) else None)
-        c = ws.cell(row=row, column=6, value=_stat_avg(ym))
-        c.number_format = '0.00'
-        c.alignment = center
-        for col in range(1, 7):
-            ws.cell(row=row, column=col).border = border
+        delta = (v - prior_v) if (v is not None and prior_v is not None) else None
+
+        c = ws_d.cell(row=row, column=1, value=_d(ym + '-01'))
+        c.number_format = 'mmm yyyy'
+        c.alignment = Alignment(horizontal='left', vertical='top')
+        ws_d.cell(row=row, column=2, value=_r(v)).number_format = '0.00'
+        ws_d.cell(row=row, column=3, value=_r(duty / 1e9, 1) if duty is not None else None).number_format = '#,##0.0'
+        ws_d.cell(row=row, column=4, value=_r(imps / 1e9, 1) if imps is not None else None).number_format = '#,##0.0'
+        ws_d.cell(row=row, column=5, value=_r(delta)).number_format = '+0.00;-0.00;0.00'
+        ws_d.cell(row=row, column=6, value=_stat_avg(ym)).number_format = '0.00'
+        _body_row(ws_d, row, 6, banded=(i % 2 == 1))
+        ws_d.cell(row=row, column=5).font = _delta_font(delta)
         if v is not None:
             prior_v = v
         row += 1
+        i += 1
         ym = _next_month(ym)
-    last_row = row - 1
+    data_last = row - 1
+    # Chart series stops at the last month Census has published.
+    months_to_coll = 0
+    ym = first_ym
+    while ym <= last_coll_ym:
+        months_to_coll += 1
+        ym = _next_month(ym)
+    chart_last = 4 + months_to_coll
+    ws_d.freeze_panes = 'B5'
+    ws_d.auto_filter.ref = f'A4:F{data_last}'
 
-    for col, w in zip('ABCDEF', (12, 16, 16, 16, 14, 18)):
-        ws.column_dimensions[col].width = w
-    ws.freeze_panes = 'A5'
+    # ── Sheet 1: Chart (a clean figure, like Slok's) ────────────────────
+    ws_c = wb.create_sheet('Chart', 0)
+    ws_c.sheet_view.showGridLines = False
+    for col, w in zip('ABCDEFGHIJKLMN', [3] + [12] * 13):
+        ws_c.column_dimensions[col].width = w
+    ws_c['B2'] = headline
+    ws_c['B2'].font = title_font
+    ws_c['B3'] = 'US effective tariff rate, % of goods imports, monthly'
+    ws_c['B3'].font = Font(name='Calibri', size=10, color=MUTED)
+    if coll_points:
+        latest = coll_points[-1]
+        ws_c['B4'] = f"Latest: {latest['value']:.2f}% ({_month_name(latest['date'])})"
+        ws_c['B4'].font = Font(name='Calibri', size=11, bold=True, color=GREEN)
+    if is_estimate:
+        ws_c['H4'] = 'Census feed not connected: values are estimates.'
+        ws_c['H4'].font = Font(name='Calibri', size=10, italic=True, color='B45309')
 
     chart = LineChart()
-    chart.title = headline
-    chart.style = 2
-    chart.y_axis.title = '%'
-    chart.y_axis.majorGridlines = None
-    chart.x_axis.number_format = 'mmm yy'
-    chart.x_axis.majorTimeUnit = 'months'
-    chart.x_axis.tickLblSkip = 3
-    chart.x_axis.delete = False
-    chart.y_axis.delete = False
+    chart.title = None
     chart.legend = None
     chart.width = 30
-    chart.height = 14
+    chart.height = 13
+    chart.y_axis.title = '%'
+    chart.y_axis.majorGridlines = None
+    chart.y_axis.number_format = '0'
+    chart.y_axis.delete = False
+    chart.y_axis.crossAx = 500
+    chart.x_axis = DateAxis(crossAx=100)
+    chart.x_axis.number_format = 'mmm yy'
+    chart.x_axis.majorTimeUnit = 'months'
+    chart.x_axis.majorUnit = 6
+    chart.x_axis.delete = False
+    chart.x_axis.title = None
     if coll_points:
         vals = [p['value'] for p in coll_points if p['date'][:7] >= first_ym]
         chart.y_axis.scaling.min = int(min(vals) // 1)
         chart.y_axis.scaling.max = -int(-max(vals) // 1)
-    chart.add_data(Reference(ws, min_col=2, min_row=4, max_row=last_row), titles_from_data=True)
-    chart.set_categories(Reference(ws, min_col=1, min_row=5, max_row=last_row))
+        chart.y_axis.majorUnit = 1 if chart.y_axis.scaling.max - chart.y_axis.scaling.min <= 12 else 2
+    chart.add_data(Reference(ws_d, min_col=2, min_row=4, max_row=chart_last), titles_from_data=True)
+    chart.set_categories(Reference(ws_d, min_col=1, min_row=5, max_row=chart_last))
     s = chart.series[0]
     s.smooth = False
     s.marker.symbol = 'none'
-    s.graphicalProperties.line.solidFill = green
-    s.graphicalProperties.line.width = 22000
-    ws.add_chart(chart, 'H4')
+    s.graphicalProperties.line.solidFill = GREEN
+    s.graphicalProperties.line.width = 28000
+    chart.graphical_properties = GraphicalProperties(ln=LineProperties(noFill=True))
+    ws_c.add_chart(chart, 'B6')
 
-    # ── Sheet 2: Yale statutory policy events ───────────────────────────
-    ws_s = wb.create_sheet('Statutory (Yale)')
-    ws_s.cell(row=1, column=1, value='Yale Budget Lab — Statutory Effective Tariff Rate (pre-substitution)').font = title_font
-    ws_s.cell(row=2, column=1, value=data.get('subtitle', '')).font = sub_font
-    _header(ws_s, 4, ['Date', 'Statutory Rate (%)', 'Change vs. Prior (pp)', 'Policy Event', 'Source'], navy)
+    ws_c['B33'] = note
+    ws_c['B33'].font = note_font
+    ws_c['B33'].alignment = wrap_top
+    ws_c.merge_cells('B33:N34')
+    ws_c['B36'] = 'Data: see "Monthly Data". Statutory comparison and policy events: see "Yale Policy Events".'
+    ws_c['B36'].font = Font(name='Calibri', size=9, color=MUTED)
+
+    # ── Sheet 3: Yale policy events ─────────────────────────────────────
+    ws_s = wb.create_sheet('Yale Policy Events')
+    ws_s.sheet_view.showGridLines = False
+    ws_s['A1'] = 'Yale Budget Lab — statutory effective tariff rate (pre-substitution)'
+    ws_s['A1'].font = h2_font
+    ws_s['A2'] = 'Rate in effect from each date until the next event. Policy-set rate before any change in import behaviour.'
+    ws_s['A2'].font = note_font
+    _table_header(ws_s, 4, ['Date', 'Statutory rate (%)', 'Change (pp)', 'Policy event', 'Source'],
+                  [12, 12, 11, 72, 42])
     prior = None
     for i, p in enumerate(stat_points):
         r = 5 + i
+        delta = (p['value'] - prior) if prior is not None else None
         c = ws_s.cell(row=r, column=1, value=_d(p['date']))
         c.number_format = 'yyyy-mm-dd'
-        c.alignment = center
-        c = ws_s.cell(row=r, column=2, value=_r(p['value']))
-        c.number_format = '0.00'
-        c.alignment = center
-        _delta(ws_s.cell(row=r, column=3), (p['value'] - prior) if prior is not None else None)
-        ws_s.cell(row=r, column=4, value=p.get('note', '')).alignment = Alignment(wrap_text=True, vertical='top')
-        ws_s.cell(row=r, column=5, value=p.get('source', '')).alignment = Alignment(wrap_text=True, vertical='top')
-        for col in range(1, 6):
-            ws_s.cell(row=r, column=col).border = border
+        c.alignment = Alignment(horizontal='left', vertical='top')
+        ws_s.cell(row=r, column=2, value=_r(p['value'])).number_format = '0.00'
+        ws_s.cell(row=r, column=3, value=_r(delta)).number_format = '+0.00;-0.00;0.00'
+        ws_s.cell(row=r, column=4, value=p.get('note', '')).alignment = wrap_top
+        ws_s.cell(row=r, column=5, value=p.get('source', '')).alignment = wrap_top
+        _body_row(ws_s, r, 5, banded=(i % 2 == 1))
+        ws_s.cell(row=r, column=3).font = _delta_font(delta)
+        ws_s.cell(row=r, column=5).font = Font(name='Calibri', size=10, color=MUTED)
         prior = p['value']
-    for col, w in zip('ABCDE', (14, 18, 20, 70, 40)):
-        ws_s.column_dimensions[col].width = w
     ws_s.freeze_panes = 'A5'
 
-    # ── Sheet 3: Summary & Methodology ──────────────────────────────────
-    ws_m = wb.create_sheet('Summary & Methodology')
-    ws_m.cell(row=1, column=1, value='US Effective Tariff Rate — Summary & Methodology').font = title_font
-    r = 3
+    # ── Sheet 4: Methodology ────────────────────────────────────────────
+    ws_m = wb.create_sheet('Methodology')
+    ws_m.sheet_view.showGridLines = False
+    ws_m.column_dimensions['A'].width = 3
+    ws_m.column_dimensions['B'].width = 24
+    ws_m.column_dimensions['C'].width = 100
+    ws_m['B2'] = 'Methodology & sources'
+    ws_m['B2'].font = title_font
+    r = 4
 
     def _section(title):
         nonlocal r
-        ws_m.cell(row=r, column=1, value=title).font = Font(bold=True, size=12, color='111827')
+        ws_m.cell(row=r, column=2, value=title).font = h2_font
         r += 1
 
-    def _kv(label, value, height=None):
+    def _kv(label, value, lines=1):
         nonlocal r
-        ws_m.cell(row=r, column=1, value=label).font = label_font
-        ws_m.cell(row=r, column=2, value=value).alignment = Alignment(wrap_text=True, vertical='top')
-        if height:
-            ws_m.row_dimensions[r].height = height
+        ws_m.cell(row=r, column=2, value=label).font = Font(name='Calibri', size=11, bold=True, color=MUTED)
+        ws_m.cell(row=r, column=2).alignment = wrap_top
+        cell = ws_m.cell(row=r, column=3, value=value)
+        cell.font = body_font
+        cell.alignment = wrap_top
+        ws_m.row_dimensions[r].height = 15 * max(1, lines)
         r += 1
 
-    _section('Effective tariff rate — Apollo / Torsten Slok method')
+    _section('Effective tariff rate (chart)')
     _kv('Source', collected.get('source', ''))
-    _kv('Series', collected.get('source_detail', ''))
+    _kv('Definition', collected.get('source_detail', ''))
     _kv('Frequency', collected.get('frequency') or 'Monthly')
     _kv('Last updated', collected.get('last_updated') or data.get('last_updated', ''))
     if coll_points:
         peak = max((p for p in coll_points if p['date'][:7] >= first_ym), key=lambda p: p['value'])
-        _kv('Latest', f"{coll_points[-1]['value']:.2f}% ({coll_points[-1]['date'][:7]})")
-        _kv(f'Peak since {first_ym}', f"{peak['value']:.2f}% ({peak['date'][:7]})")
+        _kv('Latest', f"{coll_points[-1]['value']:.2f}% ({_month_name(coll_points[-1]['date'])})")
+        _kv(f'Peak since {_month_name(first_ym)}', f"{peak['value']:.2f}% ({_month_name(peak['date'])})")
     if collected.get('methodology'):
-        _kv('Methodology', collected['methodology'], 90)
+        _kv('Method', collected['methodology'], lines=4)
     r += 1
 
-    _section('Statutory rate — Yale Budget Lab')
+    _section('Statutory rate (comparison)')
     _kv('Source', data.get('source', ''))
     _kv('Source URL', data.get('source_url', ''))
     if stat_points:
@@ -3248,10 +3309,16 @@ def export_yale_tariff_excel():
         if coll_points:
             _kv('Statutory − effective', f"{stat_points[-1]['value'] - coll_points[-1]['value']:.2f} pp")
     if data.get('methodology'):
-        _kv('Methodology', data['methodology'], 140)
+        _kv('Method', data['methodology'], lines=8)
 
-    ws_m.column_dimensions['A'].width = 26
-    ws_m.column_dimensions['B'].width = 110
+    # Print setup: landscape, one page wide, header row repeated.
+    for ws in wb.worksheets:
+        ws.page_setup.orientation = 'landscape'
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws_d.print_title_rows = '4:4'
+    ws_s.print_title_rows = '4:4'
 
     output = BytesIO()
     wb.save(output)
