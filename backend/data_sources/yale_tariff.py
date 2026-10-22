@@ -24,6 +24,9 @@ def get_yale_tariff_data():
     """
     Return the Yale Budget Lab tariff rate data, with the collected
     (Apollo/Slok) sub-series overlaid live from Treasury + FRED.
+
+    Non-blocking: if the Apollo cache is cold, returns hardcoded data
+    immediately and triggers a background fetch so the next call is warm.
     """
     data = {}
     if _STATIC_JSON.exists():
@@ -40,15 +43,33 @@ def get_yale_tariff_data():
             "notes": [],
         }
 
-    # Overlay live Apollo/Slok collected-rate series. This runs on every
-    # call but the Apollo module caches for 12h, so the actual network
-    # fetch runs twice a day at most.
+    # Overlay live Apollo/Slok collected-rate series — non-blocking.
     try:
         from backend.data_sources.apollo_tariff import get_apollo_tariff_data
-        apollo = get_apollo_tariff_data() or {}
+        import backend.data_sources.apollo_tariff as _apollo_mod
+        import time as _time
+        import threading
+
+        # If cache is warm, use it. If cold, return hardcoded and warm in background.
+        with _apollo_mod._lock:
+            cache_warm = (_apollo_mod._cached_data is not None
+                          and (_time.time() - _apollo_mod._cached_at) < _apollo_mod.CACHE_TTL)
+
+        if cache_warm:
+            apollo = get_apollo_tariff_data() or {}
+        else:
+            apollo = {}
+            # Trigger background warm-up (fire-and-forget)
+            def _bg_warm():
+                try:
+                    get_apollo_tariff_data()
+                    logger.info("Apollo tariff cache warmed in background")
+                except Exception as ex:
+                    logger.warning(f"Apollo background warm failed: {ex}")
+            threading.Thread(target=_bg_warm, daemon=True).start()
+
         apollo_points = apollo.get('points') or []
         if apollo_points:
-            # Preserve any extra metadata the hardcoded block carried
             existing = data.get('collected_series') or {}
             data['collected_series'] = {
                 'source': apollo.get('source') or existing.get('source', ''),
@@ -67,8 +88,6 @@ def get_yale_tariff_data():
                 'points': apollo_points,
                 'notes': existing.get('notes', []),
             }
-            # Also surface the live latest on the top-level fields the
-            # frontend already reads for its "Collected" summary tile.
             if apollo.get('latest_value') is not None:
                 data['latest_collected'] = apollo['latest_value']
     except Exception as e:
