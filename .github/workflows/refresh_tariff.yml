@@ -6,6 +6,7 @@ name: Refresh tariff rate
 # Census releases ~5 weeks after month end, so a daily check picks up the
 # new month the day it lands. The app also fetches Census live; this
 # snapshot is the fallback if that call fails on Render.
+# Requires the CENSUS_API_KEY repo secret (free key from api.census.gov).
 
 on:
   schedule:
