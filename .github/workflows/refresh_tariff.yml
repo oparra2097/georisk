@@ -1,0 +1,71 @@
+name: Refresh tariff rate
+
+# Pulls the Census "Calculated Duty" / general imports series (the exact
+# series behind Torsten Slok's Apollo effective-tariff chart) and commits
+# static/data/census_tariff_rate.json when a new month is published.
+# Census releases ~5 weeks after month end, so a daily check picks up the
+# new month the day it lands. The app also fetches Census live; this
+# snapshot is the fallback if that call fails on Render.
+
+on:
+  schedule:
+    - cron: '40 14 * * *'   # daily 14:40 UTC (after the 8:30 ET FT-900 release)
+  workflow_dispatch:
+    inputs:
+      diagnose:
+        description: 'Also compare against the old feed and production (true/false)'
+        default: 'true'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-tariff
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch Census tariff series
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+          PYTHONUNBUFFERED: '1'
+        run: |
+          if [ "${{ github.event.inputs.diagnose }}" = "true" ]; then
+            python scripts/refresh_census_tariff.py --diagnose
+          else
+            python scripts/refresh_census_tariff.py
+          fi
+
+      - name: Commit snapshot
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add static/data/census_tariff_rate.json
+          if git diff --cached --quiet; then
+            echo "no change"
+          else
+            git commit -m "Refresh Census tariff rate $(date -u +'%Y-%m-%d')"
+            for attempt in 1 2 3; do
+              if git push; then break; fi
+              git pull --rebase origin main
+              sleep $((attempt * 2))
+            done
+          fi
