@@ -15,8 +15,8 @@ backend/data_sources/census_tariff.py).
 
 Usage:
     python scripts/refresh_census_tariff.py             # write snapshot
-    python scripts/refresh_census_tariff.py --diagnose  # also compare
-        against the old Treasury+FRED feed and the production endpoint
+    python scripts/refresh_census_tariff.py --diagnose  # also print the
+        latest months and what the production endpoint is serving
 """
 
 import argparse
@@ -42,18 +42,6 @@ def _diagnose(series):
         print(f'  {p["date"][:7]}  duty=${p["duty"]/1e9:6.2f}B  gen_imports=${p["gen_imports"]/1e9:7.2f}B'
               f'  rate={p["value"]:5.2f}%  (vs consumption imports: {p["rate_consumption"]:5.2f}%)')
 
-    print('\n=== Old feed: Treasury MTS customs + FRED BOPGIMP ===')
-    try:
-        from backend.data_sources import apollo_tariff
-        old = apollo_tariff._build_series()
-        if not old:
-            print('  returned nothing (fetch failed or empty)')
-        else:
-            for p in old['points'][-8:]:
-                print(f'  {p["date"][:7]}  rate={p["value"]:6.2f}%')
-    except Exception as e:  # diagnostic only
-        print(f'  error: {type(e).__name__}: {e}')
-
     print('\n=== Production /api/yale-tariff collected_series ===')
     try:
         r = requests.get('https://parramacro.com/api/yale-tariff', timeout=60)
@@ -74,8 +62,6 @@ def main():
     series = fetch_census_series(verbose=True)
     if not series or not series.get('points'):
         print('Census fetch returned no data; snapshot left unchanged.')
-        if args.diagnose:
-            _diagnose_without_census()
         sys.exit(1)
 
     with open(OUT_PATH, 'w') as f:
@@ -84,10 +70,6 @@ def main():
 
     if args.diagnose:
         _diagnose(series)
-
-
-def _diagnose_without_census():
-    _diagnose({'points': [{'date': '-', 'duty': 0, 'gen_imports': 0, 'value': 0, 'rate_consumption': 0}]})
 
 
 if __name__ == '__main__':

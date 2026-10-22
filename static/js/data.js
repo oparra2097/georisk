@@ -2193,241 +2193,376 @@
     // ══════════════════════════════════════════════════════
 
     function renderYaleTariff(ds) {
-        const data = PD.getCached(ds.api);
-        if (!data || !Array.isArray(data.points) || data.points.length === 0) return;
+        var data = PD.getCached(ds.api);
+        if (!data) return;
 
-        const points = data.points.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
-        const values = points.map(p => p.value);
+        var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        function monthLabel(ym) { return MONTHS[parseInt(ym.slice(5, 7), 10) - 1] + ' ' + ym.slice(0, 4); }
+        function nextMonth(ym) {
+            var y = +ym.slice(0, 4), m = +ym.slice(5, 7) + 1;
+            if (m > 12) { m = 1; y += 1; }
+            return y + '-' + (m < 10 ? '0' : '') + m;
+        }
+        function daysIn(ym) { return new Date(Date.UTC(+ym.slice(0, 4), +ym.slice(5, 7), 0)).getUTCDate(); }
+        function bySort(a, b) { return a.date < b.date ? -1 : 1; }
+        function valid(p) { return p && p.date && p.value != null; }
 
-        // Summary card — latest value, peak, min (post-baseline)
-        const latestVal = data.latest_value != null ? data.latest_value : values[values.length - 1];
-        const peakVal = Math.max.apply(null, values);
-        // Exclude the pre-trade-war baseline (index 0) from the "Low" stat,
-        // since we already display it separately as "Pre-Trade-War Baseline".
-        const postBaseline = points.slice(1);
-        const minPoint = postBaseline.reduce((acc, p) => (p.value < acc.value ? p : acc), postBaseline[0] || { value: 0, date: '' });
-        const minVal = minPoint.value;
-        const minDate = minPoint.date;
-        const peakIdx = values.indexOf(peakVal);
-        const peakDate = points[peakIdx] ? points[peakIdx].date : '';
-        const latestDate = points[points.length - 1].date;
+        var stat = (data.points || []).filter(valid).slice().sort(bySort);
+        var cs = data.collected_series || {};
+        var coll = (cs.points || []).filter(valid).slice().sort(bySort);
+        if (!coll.length && !stat.length) return;
 
-        // Summary cards — show both statutory and collected rates
-        const collectedSeries = data.collected_series || {};
-        const collected = (collectedSeries.points || [])
-            .filter(p => p && p.date && p.value != null)
-            .slice().sort((a, b) => (a.date < b.date ? -1 : 1));
-        const collectedLast = collected.length ? collected[collected.length - 1] : null;
-        const latestCollected = collectedLast ? collectedLast.value : data.latest_collected;
-        const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const fmtMonth = (iso) => MONTHS[parseInt(iso.slice(5, 7), 10) - 1] + ' ' + iso.slice(0, 4);
-        const collectedCaption = collectedLast
-            ? 'Duties ÷ imports, ' + fmtMonth(collectedLast.date)
-            : 'Duties ÷ imports';
-        const summary = document.getElementById('panel-summary');
-        if (summary) {
-            const latestSrc = data.latest_source || '';
-            summary.innerHTML = `
-                <div class="yale-tariff-tiles">
-                    <div class="yale-tariff-tile">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Statutory Rate</div>
-                        <div class="yale-tariff-tile-val" style="color:#1e3a8a;">${latestVal.toFixed(1)}%</div>
-                        <div style="color:#64748b;font-size:11px;">Yale pre-sub, ${latestDate}</div>
-                    </div>
-                    <div class="yale-tariff-tile">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Collected Rate</div>
-                        <div class="yale-tariff-tile-val" style="color:#0d9488;">${latestCollected != null ? latestCollected.toFixed(1) + '%' : 'N/A'}</div>
-                        <div style="color:#64748b;font-size:11px;">${collectedCaption}</div>
-                    </div>
-                    <div class="yale-tariff-tile">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Peak (Statutory)</div>
-                        <div class="yale-tariff-tile-val" style="color:#ef4444;">${peakVal.toFixed(1)}%</div>
-                        <div style="color:#64748b;font-size:11px;">${peakDate}</div>
-                    </div>
-                    <div class="yale-tariff-tile">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Distortion Gap</div>
-                        <div class="yale-tariff-tile-val" style="color:#f59e0b;">${latestCollected != null ? (latestVal - latestCollected).toFixed(1) : '?'}pp</div>
-                        <div style="color:#64748b;font-size:11px;">statutory − collected</div>
-                    </div>
-                </div>
-            `;
+        var compare = !!state.tariffCompare;
+        var collByMonth = {};
+        coll.forEach(function (p) { collByMonth[p.date.slice(0, 7)] = p.value; });
+
+        // Statutory rate as a monthly time-weighted average of Yale's
+        // step function, so it shares the monthly axis without hiding
+        // intra-month swings (e.g. May 2025's court rulings).
+        var statFirstDay = stat.length ? stat[0].date.slice(0, 10) : null;
+        function statAvg(ym) {
+            if (!stat.length) return null;
+            var nd = daysIn(ym), sum = 0, cnt = 0;
+            for (var d = 1; d <= nd; d++) {
+                var day = ym + '-' + (d < 10 ? '0' : '') + d;
+                if (day < statFirstDay) continue;
+                var v = null;
+                for (var i = 0; i < stat.length; i++) {
+                    if (stat[i].date.slice(0, 10) <= day) v = stat[i].value; else break;
+                }
+                if (v != null) { sum += v; cnt++; }
+            }
+            return cnt ? Math.round(sum / cnt * 100) / 100 : null;
+        }
+        function eventsIn(ym) {
+            return stat.filter(function (p) { return p.date.slice(0, 7) === ym && p.note; });
         }
 
-        // Build collected series — simple nearest-date lookup into statutory labels
-        const collectedSorted = collected.slice().sort(function(a, b) { return a.date < b.date ? -1 : 1; });
-        var labels = points.map(function(p) { return p.date; });
-        var collectedVals = labels.map(function(date) {
-            var best = null;
-            for (var i = 0; i < collectedSorted.length; i++) {
-                if (collectedSorted[i].date <= date) best = collectedSorted[i].value;
-            }
-            return best;
-        });
+        // Monthly axis from Jan 2021 (Slok's chart start) to the latest
+        // collected month; with the comparison on, out to Yale's latest too.
+        var lastColl = coll.length ? coll[coll.length - 1].date.slice(0, 7) : null;
+        var lastStat = stat.length ? stat[stat.length - 1].date.slice(0, 7) : null;
+        var startYm = coll.length ? (coll[0].date.slice(0, 7) > '2021-01' ? coll[0].date.slice(0, 7) : '2021-01')
+                                  : stat[0].date.slice(0, 7);
+        var endYm = lastColl || lastStat;
+        if (compare && lastStat && lastStat > endYm) endYm = lastStat;
+        var months = [];
+        for (var ym = startYm; ym <= endYm; ym = nextMonth(ym)) months.push(ym);
 
-        // Chart
+        var collVals = months.map(function (m) { return m in collByMonth ? collByMonth[m] : null; });
+        var statVals = compare ? months.map(function (m) { return m >= statFirstDay.slice(0, 7) ? statAvg(m) : null; }) : [];
+
+        // Takeaway headline in Slok's style, computed from the data.
+        function headline() {
+            if (!coll.length) return 'US effective tariff rate';
+            var latest = coll[coll.length - 1];
+            var recent = coll.slice(-4).map(function (p) { return p.value; });
+            var lo = Math.min.apply(null, recent), hi = Math.max.apply(null, recent);
+            if (hi - lo <= 1.0) {
+                var a = Math.floor(lo), b = Math.ceil(hi);
+                if (b === a) b = a + 1;
+                return 'US effective tariff rate has stabilized between ' + a + '% and ' + b + '%';
+            }
+            var prior = coll[Math.max(0, coll.length - 7)].value;
+            return 'US effective tariff rate has ' + (latest.value > prior ? 'risen' : 'declined') +
+                ' to ' + latest.value.toFixed(1) + '%';
+        }
+
+        // ── Summary tiles ──────────────────────────────────
+        var latestColl = coll.length ? coll[coll.length - 1] : null;
+        var peakColl = coll.reduce(function (acc, p) {
+            return (p.date.slice(0, 7) >= startYm && (!acc || p.value > acc.value)) ? p : acc;
+        }, null);
+        var latestStat = stat.length ? stat[stat.length - 1] : null;
+        var summary = document.getElementById('panel-summary');
+        if (summary) {
+            function tile(label, value, caption, color) {
+                return '<div class="yale-tariff-tile">' +
+                    '<div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">' + label + '</div>' +
+                    '<div class="yale-tariff-tile-val" style="color:' + color + ';">' + value + '</div>' +
+                    '<div style="color:#64748b;font-size:11px;">' + caption + '</div></div>';
+            }
+            summary.innerHTML = '<div class="yale-tariff-tiles">' +
+                tile('Effective tariff rate',
+                    latestColl ? latestColl.value.toFixed(1) + '%' : 'N/A',
+                    latestColl ? 'Census duties ÷ imports, ' + monthLabel(latestColl.date.slice(0, 7)) : 'Census data unavailable',
+                    '#34d399') +
+                tile('Peak since ' + monthLabel(startYm),
+                    peakColl ? peakColl.value.toFixed(1) + '%' : 'N/A',
+                    peakColl ? monthLabel(peakColl.date.slice(0, 7)) : '',
+                    '#f87171') +
+                tile('Statutory rate (Yale)',
+                    latestStat ? latestStat.value.toFixed(1) + '%' : 'N/A',
+                    latestStat ? 'pre-substitution, ' + latestStat.date.slice(0, 10) : '',
+                    '#93c5fd') +
+                tile('Statutory − collected',
+                    (latestStat && latestColl) ? (latestStat.value - latestColl.value).toFixed(1) + ' pp' : 'N/A',
+                    'exemptions, substitution, timing',
+                    '#fbbf24') +
+                '</div>';
+        }
+
+        // ── Compare toggle in the controls bar ──────────────
+        var controlsBar = document.getElementById('panel-controls');
+        if (controlsBar && !document.getElementById('tariff-compare-toggle')) {
+            var lbl = document.createElement('label');
+            lbl.className = 'export-btn-data';
+            lbl.style.cursor = 'pointer';
+            lbl.style.gap = '6px';
+            lbl.title = 'Overlay the Yale Budget Lab statutory rate';
+            lbl.innerHTML = '<input type="checkbox" id="tariff-compare-toggle" style="margin:0;cursor:pointer;">Compare: Yale statutory';
+            controlsBar.insertBefore(lbl, controlsBar.firstChild);
+            lbl.querySelector('input').addEventListener('change', function (e) {
+                state.tariffCompare = e.target.checked;
+                renderYaleTariff(ds);
+            });
+        }
+        var toggleEl = document.getElementById('tariff-compare-toggle');
+        if (toggleEl) toggleEl.checked = compare;
+
+        // ── Chart (Apollo "Daily Spark" styling) ─────────────
         PD.destroyChart('main');
+        var container = document.getElementById('panel-chart-container');
         var canvasEl = document.getElementById('panel-chart');
         if (!canvasEl) return;
-        var ctx = canvasEl.getContext('2d');
+        if (container) {
+            container.style.background = '#ffffff';
+            container.style.borderColor = '#e5e7eb';
+            container.style.height = (window.innerWidth < 768 ? 380 : 470) + 'px';
+        }
 
+        var visible = collVals.concat(statVals).filter(function (v) { return v != null; });
+        var vMin = visible.length ? Math.min.apply(null, visible) : 0;
+        var vMax = visible.length ? Math.max.apply(null, visible) : 10;
+        var step = (vMax - Math.min(vMin, 0)) > 14 ? 5 : 1;
+        var yMin = step === 1 ? Math.floor(vMin) : 0;
+        var yMax = Math.ceil(vMax / step) * step;
+        if (yMax - yMin < 2) yMax = yMin + 2;
+
+        var INK = '#111827', MUTED = '#374151', GREEN = '#2f6f5e';
         var datasets = [{
-            label: 'Statutory (Yale)',
-            data: values,
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.08)',
-            borderWidth: 2.5,
-            fill: true,
+            label: 'US effective tariff rate',
+            data: collVals,
+            borderColor: GREEN,
+            backgroundColor: GREEN,
+            borderWidth: 1.75,
             pointRadius: 0,
+            pointHoverRadius: 4,
             pointHitRadius: 8,
             tension: 0,
-            stepped: 'before',
-            spanGaps: true,
+            fill: false,
+            yAxisID: 'y',
         }];
-
-        if (collectedVals.some(function(v) { return v != null; })) {
+        if (compare) {
             datasets.push({
-                label: 'Collected (Census)',
-                data: collectedVals,
-                borderColor: '#14b8a6',
-                backgroundColor: 'transparent',
-                borderWidth: 2,
-                borderDash: [6, 3],
-                fill: false,
-                pointRadius: 3,
-                pointBackgroundColor: '#14b8a6',
+                label: 'Statutory rate (Yale Budget Lab, monthly avg)',
+                data: statVals,
+                borderColor: '#8a94a6',
+                backgroundColor: '#8a94a6',
+                borderWidth: 1.5,
+                borderDash: [5, 4],
+                pointRadius: 0,
+                pointHoverRadius: 4,
                 pointHitRadius: 8,
-                tension: 0.3,
-                spanGaps: true,
+                tension: 0,
+                fill: false,
+                yAxisID: 'y',
             });
         }
 
-        PD.setChart('main', new Chart(ctx, {
-            type: 'line',
-            data: { labels: labels, datasets: datasets },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        borderWidth: 1,
-                        bodyFont: { size: 12 },
-                        callbacks: {
-                            label: function(ctx) {
-                                var val = ctx.parsed.y;
-                                if (val == null) return null;
-                                return ctx.dataset.label + ': ' + val.toFixed(1) + '%';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: { color: '#6b7280', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
-                        grid: { color: 'rgba(55,65,81,0.3)' }
-                    },
-                    y: {
-                        ticks: { color: '#6b7280', font: { size: 10 }, callback: function(v) { return v + '%'; } },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
-                        beginAtZero: true,
-                        suggestedMax: 30,
-                    }
-                }
-            }
-        }));
+        var apolloStyle = {
+            id: 'apolloStyle',
+            beforeDraw: function (chart) {
+                var c = chart.ctx;
+                c.save();
+                c.fillStyle = '#ffffff';
+                c.fillRect(0, 0, chart.width, chart.height);
+                c.restore();
+            },
+            afterDraw: function (chart) {
+                var c = chart.ctx, area = chart.chartArea;
+                c.save();
+                c.fillStyle = '#6b7280';
+                c.font = '600 9px Helvetica, Arial, sans-serif';
+                c.textAlign = 'right';
+                c.textBaseline = 'top';
+                c.fillText('PARRA MACRO', chart.width - 6, 4);
+                c.fillStyle = MUTED;
+                c.font = '10px Helvetica, Arial, sans-serif';
+                c.textAlign = 'center';
+                c.textBaseline = 'bottom';
+                var yl = chart.scales.y, yr = chart.scales.y2;
+                if (yl) c.fillText('%', yl.left + yl.width / 2, area.top - 6);
+                if (yr) c.fillText('%', yr.left + yr.width / 2, area.top - 6);
+                c.restore();
+            },
+        };
 
-        // Hide loading
+        var yTicks = {
+            color: MUTED,
+            font: { size: 10 },
+            stepSize: step,
+            callback: function (v) { return v; },
+        };
+
+        try {
+            PD.setChart('main', new Chart(canvasEl.getContext('2d'), {
+                type: 'line',
+                data: { labels: months, datasets: datasets },
+                plugins: [apolloStyle],
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    layout: { padding: { top: 6, right: 6, left: 2, bottom: 2 } },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: headline(),
+                            align: 'start',
+                            color: INK,
+                            font: { family: 'Georgia, "Times New Roman", serif', size: 16, weight: 'normal' },
+                            padding: { top: 2, bottom: compare ? 6 : 10 },
+                        },
+                        subtitle: {
+                            display: !compare,
+                            text: 'US effective tariff rate',
+                            align: 'center',
+                            color: INK,
+                            font: { size: 12 },
+                            padding: { bottom: 14 },
+                        },
+                        legend: {
+                            display: compare,
+                            position: 'top',
+                            labels: { color: INK, font: { size: 11 }, usePointStyle: true, pointStyle: 'line', boxWidth: 26, padding: 14 },
+                        },
+                        tooltip: {
+                            backgroundColor: '#ffffff',
+                            titleColor: INK,
+                            bodyColor: MUTED,
+                            borderColor: '#d1d5db',
+                            borderWidth: 1,
+                            titleFont: { weight: '600' },
+                            callbacks: {
+                                title: function (items) { return items.length ? monthLabel(items[0].label) : ''; },
+                                label: function (item) {
+                                    if (item.parsed.y == null) return null;
+                                    var name = item.datasetIndex === 0 ? 'Effective (Census)' : 'Statutory (Yale avg)';
+                                    return name + ': ' + item.parsed.y.toFixed(2) + '%';
+                                },
+                                afterBody: function (items) {
+                                    if (!compare || !items.length) return [];
+                                    return eventsIn(items[0].label).map(function (p) { return '• ' + p.note; });
+                                },
+                            },
+                        },
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            grid: { display: false },
+                            border: { color: '#9ca3af' },
+                            ticks: {
+                                color: MUTED,
+                                font: { size: 10 },
+                                autoSkip: false,
+                                maxRotation: 0,
+                                callback: function (val) {
+                                    var lab = this.getLabelForValue(val), mm = lab.slice(5, 7);
+                                    if (mm === '01') return 'Jan';
+                                    if (mm === '04') return 'Apr';
+                                    if (mm === '07') return ['Jul', lab.slice(0, 4)];
+                                    if (mm === '10') return 'Oct';
+                                    return '';
+                                },
+                            },
+                        },
+                        y: {
+                            position: 'left',
+                            min: yMin,
+                            max: yMax,
+                            grid: { display: false },
+                            border: { color: '#9ca3af' },
+                            ticks: yTicks,
+                        },
+                        y2: {
+                            position: 'right',
+                            min: yMin,
+                            max: yMax,
+                            grid: { display: false },
+                            border: { color: '#9ca3af' },
+                            ticks: yTicks,
+                        },
+                    },
+                },
+            }));
+        } catch (err) {
+            console.error('Tariff chart error:', err);
+        }
         var ld = document.getElementById('panel-loading');
         if (ld) ld.style.display = 'none';
 
-        // Inject "Download PNG" button next to the Excel export button.
-        // Re-inserted on every render so it survives panel rebuilds.
-        const controlsBar = document.getElementById('panel-controls');
-        const existingPng = controlsBar && controlsBar.querySelector('#yale-tariff-png-btn');
-        if (controlsBar && !existingPng) {
-            const pngBtn = document.createElement('button');
-            pngBtn.id = 'yale-tariff-png-btn';
-            pngBtn.type = 'button';
-            pngBtn.className = 'export-btn-data';
-            pngBtn.title = 'Download chart as PNG';
-            pngBtn.style.background = 'transparent';
-            pngBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>PNG';
-            pngBtn.addEventListener('click', () => {
-                const canvas = document.getElementById('panel-chart');
-                if (!canvas) return;
-                // Composite onto a white background so the dark-theme transparent canvas is readable.
-                const tmp = document.createElement('canvas');
-                tmp.width = canvas.width;
-                tmp.height = canvas.height;
-                const tctx = tmp.getContext('2d');
-                tctx.fillStyle = '#ffffff';
-                tctx.fillRect(0, 0, tmp.width, tmp.height);
-                tctx.drawImage(canvas, 0, 0);
-                const dataUrl = tmp.toDataURL('image/png');
-                const link = document.createElement('a');
-                const today = new Date().toISOString().slice(0, 10);
-                link.download = 'yale_tariff_rate_' + today + '.png';
-                link.href = dataUrl;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            });
-            controlsBar.appendChild(pngBtn);
+        // Source note under the chart, as in Slok's chart.
+        var noteEl = document.getElementById('tariff-chart-note');
+        if (!noteEl && container && container.parentNode) {
+            noteEl = document.createElement('p');
+            noteEl.id = 'tariff-chart-note';
+            noteEl.style.cssText = 'color:#94a3b8;font-size:12px;line-height:1.5;margin:-8px 0 18px;';
+            container.parentNode.insertBefore(noteEl, container.nextSibling);
+        }
+        if (noteEl) {
+            var noteText = cs.note || 'Note: Calculated as monthly Census "Calculated Duty" divided by total US goods imports, multiplied by 100. Sources: US Census Bureau, Apollo Chief Economist (Torsten Slok) methodology.';
+            if (compare) noteText += ' Statutory rate: Yale Budget Lab pre-substitution average effective tariff rate, averaged over each month.';
+            if (!cs.origin) noteText += ' Census feed not connected yet; showing estimated monthly values.';
+            noteEl.textContent = noteText;
         }
 
-        // Table
-        const thead = document.getElementById('panel-thead');
-        const tbody = document.getElementById('panel-tbody');
+        // ── Monthly table (latest first) ─────────────────────
+        var thead = document.getElementById('panel-thead');
+        var tbody = document.getElementById('panel-tbody');
         if (thead && tbody) {
-            thead.innerHTML = '<tr><th>Date</th><th>Effective Tariff Rate</th><th>Change vs. Prior</th><th>Policy Event</th></tr>';
-            let rows = '';
-            const reversed = points.slice().reverse();
-            reversed.forEach((p, i) => {
-                const prior = reversed[i + 1];
-                let delta = '';
-                if (prior) {
-                    const d = p.value - prior.value;
-                    const sign = d > 0 ? '+' : '';
-                    const col = d > 0 ? '#ef4444' : (d < 0 ? '#10b981' : '#64748b');
-                    delta = '<span style="color:' + col + ';">' + sign + d.toFixed(2) + ' pp</span>';
-                } else {
-                    delta = '<span style="color:#64748b;">—</span>';
+            thead.innerHTML = '<tr><th>Month</th><th>Effective Tariff Rate</th><th>Change vs. Prior</th><th>Yale Statutory (avg)</th><th>Policy Events</th></tr>';
+            var rows = '';
+            var tableMonths = months.slice();
+            if (lastStat && lastStat > tableMonths[tableMonths.length - 1]) {
+                for (var t = nextMonth(tableMonths[tableMonths.length - 1]); t <= lastStat; t = nextMonth(t)) tableMonths.push(t);
+            }
+            for (var i = tableMonths.length - 1; i >= 0; i--) {
+                var m = tableMonths[i];
+                var v = m in collByMonth ? collByMonth[m] : null;
+                var pv = i > 0 && (tableMonths[i - 1] in collByMonth) ? collByMonth[tableMonths[i - 1]] : null;
+                var delta = '<span style="color:#64748b;">—</span>';
+                if (v != null && pv != null) {
+                    var d = v - pv;
+                    var col = d > 0 ? '#ef4444' : (d < 0 ? '#10b981' : '#64748b');
+                    delta = '<span style="color:' + col + ';">' + (d > 0 ? '+' : '') + d.toFixed(2) + ' pp</span>';
                 }
-                const noteHtml = p.note
-                    ? '<span style="color:#94a3b8;font-size:12px;">' + p.note + '</span>'
-                    : '<span style="color:#64748b;">—</span>';
-                rows += '<tr><td>' + p.date + '</td><td>' + p.value.toFixed(2) + '%</td><td>' + delta + '</td><td style="max-width:320px;">' + noteHtml + '</td></tr>';
-            });
+                var sAvg = (statFirstDay && m >= statFirstDay.slice(0, 7)) ? statAvg(m) : null;
+                var ev = eventsIn(m).map(function (p) { return p.date.slice(5, 10) + ': ' + p.note; }).join('<br>');
+                rows += '<tr><td>' + monthLabel(m) + '</td>' +
+                    '<td>' + (v != null ? v.toFixed(2) + '%' : '—') + '</td>' +
+                    '<td>' + delta + '</td>' +
+                    '<td>' + (sAvg != null ? sAvg.toFixed(2) + '%' : '—') + '</td>' +
+                    '<td style="max-width:360px;color:#94a3b8;font-size:12px;">' + (ev || '—') + '</td></tr>';
+            }
             tbody.innerHTML = rows;
         }
 
-        // Meta
-        const metaEl = document.getElementById('panel-meta');
+        // ── Meta ─────────────────────────────────────────────
+        var metaEl = document.getElementById('panel-meta');
         if (metaEl) {
-            const parts = [];
-            if (data.source) parts.push(data.source);
-            if (data.unit) parts.push(data.unit);
-            if (data.frequency) parts.push(data.frequency);
-            if (data.last_updated) parts.push('Last updated: ' + data.last_updated);
-            let metaHtml = '<div>' + parts.join(' \u00b7 ') + '</div>';
-            if (Array.isArray(data.notes) && data.notes.length) {
-                metaHtml += '<ul style="margin-top:8px;padding-left:18px;color:#64748b;font-size:12px;line-height:1.6;">';
-                data.notes.forEach(n => { metaHtml += '<li>' + n + '</li>'; });
-                metaHtml += '</ul>';
-            }
+            var parts = [];
+            if (cs.source) parts.push('Effective rate: ' + cs.source);
+            if (data.source) parts.push('Statutory rate: ' + data.source);
+            if (cs.last_updated || data.last_updated) parts.push('Last updated: ' + (cs.last_updated || data.last_updated));
+            var metaHtml = '<div>' + parts.join(' · ') + '</div>';
+            if (cs.methodology) metaHtml += '<p style="margin-top:8px;color:#64748b;font-size:12px;line-height:1.6;">' + cs.methodology + '</p>';
             metaEl.innerHTML = metaHtml;
         }
 
-        // Hide history section
-        const histSection = document.getElementById('panel-history-section');
+        var histSection = document.getElementById('panel-history-section');
         if (histSection) histSection.style.display = 'none';
     }
 

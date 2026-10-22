@@ -477,13 +477,13 @@ def init_scheduler(app):
             logger.error(f"commodities warmup failed: {e}")
     threading.Thread(target=_warm_commodities, daemon=True).start()
 
-    # Pre-warm Apollo/Slok tariff series so /api/yale-tariff is instant
-    def _warm_apollo_tariff():
+    # Pre-warm the Census tariff series so /api/yale-tariff is instant
+    def _warm_census_tariff():
         try:
-            from backend.data_sources.apollo_tariff import get_apollo_tariff_data
-            result = get_apollo_tariff_data()
+            from backend.data_sources.census_tariff import get_census_tariff_data
+            result = get_census_tariff_data()
             pts = len((result or {}).get('points', []))
-            logger.info(f"Apollo tariff cache warmed: {pts} months")
+            logger.info(f"Census tariff cache warmed: {pts} months ({(result or {}).get('origin')})")
         except Exception as e:
-            logger.error(f"Apollo tariff warmup failed: {e}")
-    threading.Thread(target=_warm_apollo_tariff, daemon=True).start()
+            logger.error(f"Census tariff warmup failed: {e}")
+    threading.Thread(target=_warm_census_tariff, daemon=True).start()

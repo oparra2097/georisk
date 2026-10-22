@@ -1,11 +1,12 @@
 """
-Yale Budget Lab — Average Effective Tariff Rate data source.
+US effective tariff rate data for the tariff chart.
 
-Loads a pre-computed series of the US statutory tariff rate from
-static/data/yale_tariff_rates.json. The "collected_series" (Apollo /
-Torsten Slok methodology) is overlaid live from the US Treasury Fiscal
-Data API + FRED so it auto-updates monthly instead of relying on the
-hardcoded values in the JSON file.
+Two series:
+  - Statutory: Yale Budget Lab pre-substitution rate, policy-event dated,
+    from static/data/yale_tariff_rates.json.
+  - Collected: the exact Apollo / Torsten Slok series — monthly Census
+    "Calculated Duty" ÷ total US goods imports × 100 (see census_tariff.py).
+    Replaces the hardcoded ``collected_series`` in the JSON when available.
 """
 
 import json
@@ -21,13 +22,6 @@ _STATIC_JSON = (
 
 
 def get_yale_tariff_data():
-    """
-    Return the Yale Budget Lab tariff rate data, with the collected
-    (Apollo/Slok) sub-series overlaid live from Treasury + FRED.
-
-    Non-blocking: if the Apollo cache is cold, returns hardcoded data
-    immediately and triggers a background fetch so the next call is warm.
-    """
     data = {}
     if _STATIC_JSON.exists():
         try:
@@ -37,63 +31,35 @@ def get_yale_tariff_data():
             logger.warning(f"Failed to load Yale tariff JSON: {e}")
 
     if not data:
-        data = {
-            "error": "Yale tariff data not found.",
-            "points": [],
-            "notes": [],
-        }
+        data = {"error": "Yale tariff data not found.", "points": [], "notes": []}
 
-    # Overlay live Apollo/Slok collected-rate series — non-blocking.
     try:
-        from backend.data_sources.apollo_tariff import get_apollo_tariff_data
-        import backend.data_sources.apollo_tariff as _apollo_mod
-        import time as _time
-        import threading
-
-        # If cache is warm, use it. If cold, return hardcoded and warm in background.
-        with _apollo_mod._lock:
-            cache_warm = (_apollo_mod._cached_data is not None
-                          and (_time.time() - _apollo_mod._cached_at) < _apollo_mod.CACHE_TTL)
-
-        if cache_warm:
-            apollo = get_apollo_tariff_data() or {}
-        else:
-            apollo = {}
-            # Trigger background warm-up (fire-and-forget)
-            def _bg_warm():
-                try:
-                    get_apollo_tariff_data()
-                    logger.info("Apollo tariff cache warmed in background")
-                except Exception as ex:
-                    logger.warning(f"Apollo background warm failed: {ex}")
-            threading.Thread(target=_bg_warm, daemon=True).start()
-
-        apollo_points = apollo.get('points') or []
-        if apollo_points:
-            existing = data.get('collected_series') or {}
+        from backend.data_sources.census_tariff import get_census_tariff_data
+        census = get_census_tariff_data(block=False) or {}
+        points = census.get('points') or []
+        if points:
             data['collected_series'] = {
-                'source': apollo.get('source') or existing.get('source', ''),
-                'source_url': apollo.get('source_url') or existing.get('source_url', ''),
-                'source_detail': apollo.get('source_detail') or existing.get('source_detail', ''),
-                'title': apollo.get('title') or existing.get('title', ''),
-                'subtitle': apollo.get('subtitle') or existing.get('subtitle', ''),
-                'unit': apollo.get('unit') or existing.get('unit', ''),
-                'frequency': apollo.get('frequency') or existing.get('frequency', ''),
-                'last_updated': apollo.get('last_updated'),
-                'latest_date': apollo.get('latest_date'),
-                'latest_value': apollo.get('latest_value'),
-                'peak_date': apollo.get('peak_date'),
-                'peak_value': apollo.get('peak_value'),
-                'methodology': apollo.get('methodology') or existing.get('methodology', ''),
-                'points': apollo_points,
-                'notes': existing.get('notes', []),
+                'source': census.get('source', ''),
+                'source_url': census.get('source_url', ''),
+                'source_detail': census.get('source_detail', ''),
+                'title': census.get('title', ''),
+                'unit': census.get('unit', ''),
+                'frequency': census.get('frequency', 'Monthly'),
+                'last_updated': census.get('last_updated'),
+                'latest_date': census.get('latest_date'),
+                'latest_value': census.get('latest_value'),
+                'peak_date': census.get('peak_date'),
+                'peak_value': census.get('peak_value'),
+                'methodology': census.get('methodology', ''),
+                'note': census.get('note', ''),
+                'origin': census.get('origin', ''),
+                'points': [
+                    {k: p[k] for k in ('date', 'value', 'duty', 'gen_imports') if p.get(k) is not None}
+                    for p in points
+                ],
             }
-            if apollo.get('latest_value') is not None:
-                data['latest_collected'] = apollo['latest_value']
+            data['latest_collected'] = census.get('latest_value')
     except Exception as e:
-        logger.warning(
-            f"Failed to overlay Apollo live tariff series; "
-            f"keeping hardcoded collected_series. Error: {e}"
-        )
+        logger.warning(f"Census collected series unavailable, keeping JSON fallback: {e}")
 
     return data

@@ -57,6 +57,14 @@ def _get(params, verbose):
     resp = requests.get(CENSUS_URL, params=params, timeout=60)
     if verbose:
         print(f'GET {resp.url.split("&key=")[0]} -> HTTP {resp.status_code}, {len(resp.content)} bytes')
+    # Census redirects keyless or bad-key requests to an HTML help page.
+    if 'missing_key' in resp.url or 'invalid_key' in resp.url:
+        msg = ('Census API rejected the request (missing or invalid key). '
+               'Set CENSUS_API_KEY — free signup at https://api.census.gov/data/key_signup.html')
+        logger.warning(msg)
+        if verbose:
+            print('  ' + msg)
+        return None
     if resp.status_code != 200:
         if verbose:
             print('  body:', resp.text[:300])
@@ -189,12 +197,42 @@ def _load_snapshot():
         return None
 
 
-def get_census_tariff_data():
-    """Newest of (live Census fetch, committed snapshot), cached 12 h."""
+_warming = {'busy': False}
+
+
+def get_census_tariff_data(block=True):
+    """Newest of (live Census fetch, committed snapshot), cached 12 h.
+
+    With block=False and a cold cache, return the snapshot immediately and
+    refresh from Census in a background thread, so page loads never wait
+    on the Census API.
+    """
     with _lock:
         if _cache['data'] and time.time() - _cache['at'] < CACHE_TTL:
             return _cache['data']
+        if not block:
+            if not _warming['busy']:
+                _warming['busy'] = True
+                threading.Thread(target=_warm, daemon=True).start()
+            snap = _load_snapshot()
+            if snap:
+                snap = dict(snap)
+                snap['origin'] = 'snapshot'
+            return snap
+    return _refresh()
 
+
+def _warm():
+    try:
+        _refresh()
+    except Exception as e:
+        logger.warning(f'Census background refresh failed: {e}')
+    finally:
+        with _lock:
+            _warming['busy'] = False
+
+
+def _refresh():
     live = None
     try:
         live = fetch_census_series()

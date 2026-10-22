@@ -186,14 +186,14 @@ window.ParraData.CATALOG = {
                 {
                     id: 'yale-tariff',
                     label: 'US Effective Tariff Rate',
-                    source: 'Yale Budget Lab',
-                    sourceDetail: 'Statutory (Yale) & Collected (Census) Effective Tariff Rate through Oct 2026',
+                    source: 'US Census Bureau',
+                    sourceDetail: 'Calculated duty ÷ goods imports, monthly (Apollo / Torsten Slok method); Yale Budget Lab statutory rate for comparison',
                     api: '/api/yale-tariff',
                     exportUrl: '/api/yale-tariff/export',
                     type: 'yale-tariff',
                     controls: [],
                     subviews: [],
-                    searchTerms: ['tariff', 'tariffs', 'Yale', 'Yale Budget Lab', 'trade', 'trade policy', 'effective tariff rate', 'import duty', 'protectionism', 'Trump tariffs', 'liberation day'],
+                    searchTerms: ['tariff', 'tariffs', 'Yale', 'Yale Budget Lab', 'trade', 'trade policy', 'effective tariff rate', 'import duty', 'protectionism', 'Trump tariffs', 'liberation day', 'Census', 'calculated duty', 'Apollo', 'Slok', 'Torsten Slok'],
                 },
                 {
                     id: 'gold-reserves',
