@@ -1,397 +1,79 @@
 {% extends "base.html" %}
 {% block title %}Parra Macro — Country Risk & Commodities Strategy{% endblock %}
 
+{% block body_class %}page-home{% endblock %}
+
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/home.css">
-<style>
-  /* Hero — legible on dark #0a0e1a */
-  .home-hero {
-    max-width: 1200px;
-    margin: 48px auto 24px;
-    padding: 0 24px;
-  }
-  .home-hero-eyebrow {
-    color: var(--text-secondary, #9ca3af);
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    font-weight: 600;
-    margin: 0 0 12px;
-  }
-  .home-hero-title {
-    font-size: clamp(32px, 5vw, 54px);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1.08;
-    margin: 0 0 20px;
-    color: var(--text-primary, #e5e7eb);
-  }
-  .home-hero-title .accent { color: var(--accent, #3b82f6); }
-  .home-hero-lede {
-    font-size: 17px;
-    color: #d1d5db;
-    line-height: 1.6;
-    max-width: 60ch;
-    margin: 0 0 28px;
-  }
-  .home-hero-cta {
-    display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
-  }
-  .home-cta-primary {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 11px 20px;
-    background: var(--accent, #3b82f6); color: #fff;
-    border-radius: 8px; text-decoration: none;
-    font-weight: 600; font-size: 14px;
-    transition: filter .1s;
-  }
-  .home-cta-primary:hover { filter: brightness(1.1); }
-  .home-cta-ghost {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 18px;
-    background: transparent; color: var(--accent, #3b82f6);
-    border: 1px solid var(--accent, #3b82f6);
-    border-radius: 8px; text-decoration: none;
-    font-weight: 600; font-size: 14px;
-    transition: background .1s;
-  }
-  .home-cta-ghost:hover { background: rgba(59, 130, 246, 0.12); }
-  .home-hero-substack {
-    display: inline-flex; align-items: center; gap: 6px;
-    margin-left: auto; font-size: 12px;
-    color: var(--text-secondary, #9ca3af);
-  }
-  .home-hero-substack a {
-    color: var(--accent, #3b82f6); text-decoration: none; font-weight: 600;
-  }
-  @media (max-width: 720px) {
-    .home-hero { margin: 24px auto 16px; padding: 0 16px; }
-    .home-hero-substack { margin-left: 0; margin-top: 4px; width: 100%; }
-  }
-
-  /* Fed funds strip — compact "US rate + direction" glance under the ticker */
-  .home-fedstrip {
-    max-width: 1200px;
-    margin: 20px auto 0;
-    padding: 16px 20px;
-    background: var(--bg-secondary, #111827);
-    border: 1px solid var(--border, #1f2937);
-    border-left: 3px solid var(--accent, #3b82f6);
-    border-radius: 10px;
-    display: flex; align-items: center; gap: 24px;
-    text-decoration: none; color: inherit;
-    transition: border-color .15s;
-    flex-wrap: wrap;
-  }
-  .home-fedstrip:hover { border-color: var(--accent, #3b82f6); }
-  .hf-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .hf-lbl {
-    font-size: 10px; color: var(--text-muted, #6b7280);
-    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
-  }
-  .hf-val {
-    font-size: 15px; font-weight: 600; color: var(--text-primary, #e5e7eb);
-    font-variant-numeric: tabular-nums;
-  }
-  .hf-val.hike { color: #ef4444; }
-  .hf-val.cut  { color: #10b981; }
-  .hf-val.hold { color: var(--text-secondary, #9ca3af); }
-  .hf-divergence {
-    display: inline-flex; align-items: center;
-    padding: 3px 8px;
-    background: rgba(245, 158, 11, 0.15); color: #f59e0b;
-    border-radius: 4px;
-    font-size: 10px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.06em;
-  }
-  .hf-arrow {
-    margin-left: auto;
-    color: var(--accent, #3b82f6); font-size: 20px; font-weight: 600;
-  }
-  @media (max-width: 720px) {
-    .home-fedstrip {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px 20px;
-      margin: 16px 16px 0;
-    }
-    .hf-arrow { display: none; }
-    .hf-divergence { grid-column: 1 / -1; justify-self: start; }
-  }
-
-  /* This week's call — single big trade card */
-  .home-call {
-    max-width: 1200px; margin: 32px auto; padding: 0 24px;
-  }
-  .home-call-eyebrow-row {
-    display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px;
-  }
-  .home-call-eyebrow-row h2 {
-    font-size: 12px; font-weight: 700; margin: 0;
-    color: var(--text-muted, #6b7280);
-    letter-spacing: 0.06em; text-transform: uppercase;
-  }
-  .home-call-eyebrow-row a {
-    font-size: 12px; color: var(--text-secondary, #9ca3af);
-    text-decoration: none; margin-left: auto;
-  }
-  .home-call-eyebrow-row a:hover { color: var(--accent, #3b82f6); }
-  .home-call-eyebrow-block {
-    display: flex; flex-direction: column; gap: 3px; min-width: 0;
-  }
-  .home-call-freshness {
-    font-size: 11px;
-    color: var(--text-muted, #6b7280);
-    font-weight: 500;
-  }
-  .home-call-timestamp {
-    margin-left: 6px;
-    color: var(--accent, #3b82f6);
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-  }
-  .home-call-card {
-    background: var(--bg-secondary, #111827);
-    border: 1px solid var(--border, #1f2937);
-    border-left: 3px solid var(--accent, #3b82f6);
-    border-radius: 12px; padding: 28px;
-    display: grid; grid-template-columns: 1fr auto;
-    gap: 24px; align-items: center;
-    text-decoration: none; color: inherit;
-    transition: border-color .15s;
-  }
-  .home-call-card:hover {
-    border-color: var(--accent, #3b82f6);
-    border-left-color: var(--accent, #3b82f6);
-  }
-  .home-call-body { min-width: 0; }
-  .home-call-side {
-    display: inline-block;
-    padding: 4px 10px; border-radius: 4px;
-    font-size: 11px; font-weight: 700;
-    letter-spacing: 0.08em; text-transform: uppercase;
-    background: rgba(16, 185, 129, 0.15); color: #10b981;
-    margin-bottom: 10px;
-  }
-  .home-call-side.short {
-    background: rgba(239, 68, 68, 0.15); color: #ef4444;
-  }
-  .home-call-country {
-    font-size: 28px; font-weight: 700;
-    color: var(--text-primary, #e5e7eb);
-    margin: 0 0 6px; letter-spacing: -0.02em;
-  }
-  .home-call-thesis {
-    font-size: 14px; color: var(--text-secondary, #9ca3af);
-    line-height: 1.55; margin: 0 0 16px; max-width: 60ch;
-  }
-  .home-call-stats {
-    display: flex; gap: 28px;
-    font-variant-numeric: tabular-nums; flex-wrap: wrap;
-  }
-  .home-call-stat { display: flex; flex-direction: column; }
-  .home-call-stat .lbl {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--text-muted, #6b7280); margin-bottom: 3px;
-  }
-  .home-call-stat .val {
-    font-size: 16px; font-weight: 600;
-    color: var(--text-primary, #e5e7eb);
-  }
-  .home-call-stat.edge .val { color: #10b981; }
-  .home-call-arrow {
-    font-size: 24px; color: var(--accent, #3b82f6);
-    align-self: center;
-  }
-  .home-call-loading {
-    padding: 24px;
-    color: var(--text-muted, #6b7280);
-    font-size: 13px; text-align: center;
-  }
-  @media (max-width: 720px) {
-    .home-call-card { grid-template-columns: 1fr; padding: 20px; }
-    .home-call-country { font-size: 22px; }
-    .home-call-arrow { display: none; }
-  }
-
-  /* "As of" badge — surfaces yield vintage on every call so stale
-     rows are visible at a glance. */
-  .home-call-asof {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 2px 8px; margin-left: 8px;
-    background: rgba(107, 114, 128, 0.2);
-    color: var(--text-muted, #6b7280);
-    border-radius: 3px;
-    font-size: 10px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.04em;
-    vertical-align: middle;
-  }
-
-  /* Secondary call cards — top SHORT + second-best LONG below the
-     featured card. Same style, ~60% size. */
-  .home-call-secondary-row {
-    display: grid; grid-template-columns: repeat(2, 1fr);
-    gap: 12px; margin-top: 12px;
-  }
-  .home-call-card-mini {
-    background: var(--bg-secondary, #111827);
-    border: 1px solid var(--border, #1f2937);
-    border-left: 3px solid var(--accent, #3b82f6);
-    border-radius: 10px; padding: 16px 18px;
-    display: grid; grid-template-columns: 1fr auto;
-    gap: 12px; align-items: center;
-    text-decoration: none; color: inherit;
-    transition: border-color .15s;
-    min-width: 0;
-  }
-  .home-call-card-mini:hover {
-    border-color: var(--accent, #3b82f6);
-    border-left-color: var(--accent, #3b82f6);
-  }
-  .home-call-card-mini.short-card { border-left-color: #ef4444; }
-  .home-call-card-mini.short-card:hover { border-left-color: #ef4444; }
-  .home-call-card-mini .home-call-side { margin-bottom: 6px; font-size: 10px; }
-  .home-call-card-mini .home-call-country {
-    font-size: 18px; margin: 0 0 4px;
-  }
-  .home-call-card-mini .home-call-mini-stats {
-    display: flex; gap: 14px;
-    font-variant-numeric: tabular-nums; font-size: 12px;
-    color: var(--text-secondary, #9ca3af);
-  }
-  .home-call-card-mini .home-call-mini-stats .lbl {
-    color: var(--text-muted, #6b7280); font-size: 9px;
-    text-transform: uppercase; letter-spacing: 0.05em;
-    display: block; font-weight: 700; margin-bottom: 1px;
-  }
-  .home-call-card-mini .home-call-mini-stats .val {
-    color: var(--text-primary, #e5e7eb); font-weight: 600;
-  }
-  .home-call-card-mini .home-call-mini-stats .val.edge { color: #10b981; }
-  .home-call-card-mini .home-call-arrow { font-size: 18px; }
-  .home-call-card-mini.short-card .home-call-arrow { color: #ef4444; }
-  @media (max-width: 720px) {
-    .home-call-secondary-row { grid-template-columns: 1fr; }
-    .home-call-card-mini { padding: 14px 16px; }
-    .home-call-card-mini .home-call-arrow { display: none; }
-  }
-
-  /* Latest note — single card linking to Substack */
-  .home-latest {
-    max-width: 1200px; margin: 24px auto 60px; padding: 0 24px;
-  }
-  .home-latest-head {
-    display: flex; align-items: baseline; gap: 12px; margin: 0 0 12px;
-  }
-  .home-latest-head h2 {
-    font-size: 12px; font-weight: 700; margin: 0;
-    color: var(--text-muted, #6b7280);
-    letter-spacing: 0.06em; text-transform: uppercase;
-  }
-  .home-latest-head a {
-    font-size: 12px; color: var(--text-secondary, #9ca3af);
-    text-decoration: none; margin-left: auto;
-  }
-  .home-latest-card {
-    background: var(--bg-secondary, #111827);
-    border: 1px solid var(--border, #1f2937);
-    border-radius: 10px; padding: 20px;
-    text-decoration: none;
-    display: flex; align-items: center; gap: 16px;
-    transition: border-color .15s;
-  }
-  .home-latest-card:hover { border-color: var(--accent, #3b82f6); }
-  .home-latest-body { min-width: 0; flex: 1; }
-  .home-latest-kicker {
-    font-size: 10px; color: var(--text-muted, #6b7280);
-    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
-    margin-bottom: 6px;
-  }
-  .home-latest-card h3 {
-    font-size: 16px; font-weight: 600; margin: 0;
-    color: var(--text-primary, #e5e7eb); line-height: 1.35;
-  }
-  .home-latest-card p {
-    font-size: 13px; color: var(--text-secondary, #9ca3af);
-    margin: 6px 0 0; line-height: 1.5;
-  }
-  .home-latest-card .arrow {
-    color: var(--accent, #3b82f6); font-size: 22px; font-weight: 600;
-  }
-</style>
 {% endblock %}
 
 {% block content %}
 {% if home_data %}
 <script id="home-data" type="application/json">{{ home_data|tojson }}</script>
 {% endif %}
-<!-- Hero -->
-<section class="home-hero">
-  <p class="home-hero-eyebrow">Oscar Parra · Macro strategist</p>
-  <h1 class="home-hero-title">
-    Country risk &amp; commodities, called with
-    <span class="accent">data</span>.
-  </h1>
-  <p class="home-hero-lede">
-    Sovereign PDs and 1-10 internal ratings for ~190 countries, EM FX &amp;
-    rates screens, and named-scenario forecasts for oil, gas, agriculture
-    and metals. One weekly trade board tying it all together.
+<div class="hv">
+
+<!-- Masthead -->
+<header class="hv-mast">
+  <p class="hv-dateline">
+    <span id="hv-date"></span>
+    <span id="market-timestamp"></span>
   </p>
-  <div class="home-hero-cta">
-    <a href="/trades" class="home-cta-primary">
-      Trade ideas
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M5 12h14M12 5l7 7-7 7"/>
-      </svg>
-    </a>
-    <a href="/country-risk" class="home-cta-ghost">Country risk</a>
-    <a href="/commodities" class="home-cta-ghost">Commodities</a>
-    <span class="home-hero-substack">
-      New posts monthly on
-      <a href="https://theparrable.substack.com" target="_blank" rel="noopener">Substack →</a>
-    </span>
-  </div>
+  <h1 class="hv-title">How are markets reading the economy?</h1>
+  <p class="hv-lede">
+    A daily read on growth, inflation, rates and risk from live market
+    prices, next to our Fed call and the sovereign trade board. Country
+    detail lives in the <a href="/georisk">GeoRisk Monitor</a>; monthly
+    notes go out on <a href="https://theparrable.substack.com" target="_blank" rel="noopener">Substack</a>.
+  </p>
+</header>
+
+<!-- Headline vitals — filled by home.js from /api/markets (Yahoo Finance) -->
+<section class="hv-vitals" id="hv-vitals" aria-label="Headline indicators">
+  <div class="hv-vital"><div class="hv-vital-topic">Growth</div><div class="hv-loading">Loading…</div></div>
+  <div class="hv-vital"><div class="hv-vital-topic">Inflation</div></div>
+  <div class="hv-vital"><div class="hv-vital-topic">Rates</div></div>
+  <div class="hv-vital"><div class="hv-vital-topic">Dollar</div></div>
+  <div class="hv-vital"><div class="hv-vital-topic">Risk</div></div>
 </section>
 
-<!-- Scrolling Ticker Bar -->
-<div class="ticker-bar">
-  <div class="ticker-track" id="ticker-track">
-    <span class="ticker-loading">Loading market data...</span>
+<!-- Fed outlook — current target, next FOMC, market vs model call -->
+<section class="hv-section" id="home-rates">
+  <div class="hv-section-head">
+    <h2>Fed outlook</h2>
+    <span class="hv-section-note">Market pricing against our policy-path model</span>
+    <a href="/us-rates" class="hv-more">Full rates forecast &rarr;</a>
   </div>
-</div>
+  <a href="/us-rates" class="home-fedstrip" id="home-fedstrip">
+    <div class="hf-item">
+      <span class="hf-lbl">Fed funds target</span>
+      <span class="hf-val" id="hf-range">—</span>
+    </div>
+    <div class="hf-item">
+      <span class="hf-lbl">Next FOMC</span>
+      <span class="hf-val" id="hf-meeting">—</span>
+    </div>
+    <div class="hf-item">
+      <span class="hf-lbl">Market implies</span>
+      <span class="hf-val" id="hf-market">—</span>
+    </div>
+    <div class="hf-item">
+      <span class="hf-lbl">Model implies</span>
+      <span class="hf-val" id="hf-model">—</span>
+    </div>
+  </a>
+  <p class="hf-divergence" id="hf-divergence" hidden>Our model and market pricing disagree on the next meeting.</p>
+</section>
 
-<!-- Fed funds current + direction strip -->
-<a href="/us-rates" class="home-fedstrip" id="home-fedstrip">
-  <div class="hf-item">
-    <span class="hf-lbl">Fed funds target</span>
-    <span class="hf-val" id="hf-range">—</span>
+<!-- Market indicators — grouped tables, rows open the history chart -->
+<section class="hv-section">
+  <div class="hv-section-head">
+    <h2>Market indicators</h2>
+    <span class="hv-section-note">Select a row for its history</span>
+    <a href="/api/markets/export" class="hv-more">Download .xlsx</a>
   </div>
-  <div class="hf-item">
-    <span class="hf-lbl">Next FOMC</span>
-    <span class="hf-val" id="hf-meeting">—</span>
-  </div>
-  <div class="hf-item">
-    <span class="hf-lbl">Market implies</span>
-    <span class="hf-val" id="hf-market">—</span>
-  </div>
-  <div class="hf-item">
-    <span class="hf-lbl">Model implies</span>
-    <span class="hf-val" id="hf-model">—</span>
-  </div>
-  <span class="hf-divergence" id="hf-divergence" hidden>&#9889; divergence</span>
-  <span class="hf-arrow">&rarr;</span>
-</a>
-
-<!-- Markets — live snapshot of today's market. home.js populates
-     #market-grid from /api/markets and drives the expandable Chart.js
-     panel (#market-chart-panel). -->
-<section class="section">
-  <div class="section-header">
-    <span class="section-label">Markets</span>
-    <span class="section-timestamp" id="market-timestamp"></span>
-  </div>
-  <div class="market-grid" id="market-grid">
-    <div class="market-loading"><div class="spinner"></div></div>
+  <div class="hv-tables" id="market-grid">
+    <div class="hv-loading">Loading market data…</div>
   </div>
 
   <div class="market-chart-panel" id="market-chart-panel" style="display:none;">
@@ -409,7 +91,7 @@
         <button class="tf-btn" data-period="5y">5Y</button>
         <button class="tf-btn" data-period="10y">10Y</button>
       </div>
-      <button class="market-chart-close" id="chart-close-btn">&times;</button>
+      <button class="market-chart-close" id="chart-close-btn" aria-label="Close chart">&times;</button>
     </div>
     <div class="market-chart-container">
       <canvas id="market-history-chart"></canvas>
@@ -418,41 +100,79 @@
       </div>
     </div>
   </div>
+  <p class="hv-source">Prices from Yahoo Finance, refreshed every five minutes. Changes are against the previous close.</p>
 </section>
 
 <!-- This week's calls — featured card + 2 secondaries -->
-<section class="home-call">
-  <div class="home-call-eyebrow-row">
-    <div class="home-call-eyebrow-block">
-      <h2>This week's calls</h2>
-      <span class="home-call-freshness">
-        Refreshed daily &middot; 06:00 UTC
-        <span class="home-call-timestamp" id="home-call-timestamp"></span>
-      </span>
-    </div>
-    <a href="/trades">See full ranking &rarr;</a>
+<section class="hv-section home-call">
+  <div class="hv-section-head">
+    <h2>This week's calls</h2>
+    <span class="hv-section-note">
+      Refreshed daily at 06:00 UTC<span class="home-call-timestamp" id="home-call-timestamp"></span>
+    </span>
+    <a href="/trades" class="hv-more">Full ranking &rarr;</a>
   </div>
-  <div id="home-call-slot">
+  <div id="home-call-slot" class="home-call-slot">
     <div class="home-call-loading">Loading model-vs-market signals…</div>
   </div>
   <div id="home-call-secondary-slot" class="home-call-secondary-row" style="display:none"></div>
 </section>
 
-<!-- Latest note -->
-<section class="home-latest">
-  <div class="home-latest-head">
-    <h2>Latest note</h2>
-    <a href="/research">All research &rarr;</a>
+<!-- Platform directory -->
+<section class="hv-section">
+  <div class="hv-section-head">
+    <h2>Explore the platform</h2>
   </div>
-  <a href="https://theparrable.substack.com" target="_blank" rel="noopener" class="home-latest-card">
-    <div class="home-latest-body">
-      <div class="home-latest-kicker">Substack · The Parrable</div>
-      <h3>Monthly macro notes on country risk, EM FX, and commodities</h3>
-      <p>Sovereign rating changes, deterioration screens, scenario forecasts and the model-versus-market trade board — delivered monthly.</p>
-    </div>
-    <span class="arrow">&rarr;</span>
+  <ul class="hv-directory">
+    <li><a href="/georisk">
+      <span class="hv-dir-name">GeoRisk Monitor</span>
+      <span class="hv-dir-desc">Live map of geopolitical risk scores, hotspots and news signals by country.</span>
+    </a></li>
+    <li><a href="/country-risk">
+      <span class="hv-dir-name">Country Risk</span>
+      <span class="hv-dir-desc">Sovereign default probabilities, 1–10 internal ratings and EM FX screens.</span>
+    </a></li>
+    <li><a href="/us-rates">
+      <span class="hv-dir-name">Rates</span>
+      <span class="hv-dir-desc">Fed path model against futures pricing, plus emerging-market policy rates.</span>
+    </a></li>
+    <li><a href="/commodities">
+      <span class="hv-dir-name">Commodities</span>
+      <span class="hv-dir-desc">Scenario forecasts for oil, gas, agriculture and metals.</span>
+    </a></li>
+    <li><a href="/trades">
+      <span class="hv-dir-name">Trade Ideas</span>
+      <span class="hv-dir-desc">Weekly board of sovereign longs and shorts where model and market disagree.</span>
+    </a></li>
+    <li><a href="/models">
+      <span class="hv-dir-name">Models</span>
+      <span class="hv-dir-desc">Macro model, house prices, labor market, CPI release and data-center tracking.</span>
+    </a></li>
+    <li><a href="/data">
+      <span class="hv-dir-name">Data</span>
+      <span class="hv-dir-desc">Downloadable datasets behind every chart on the site.</span>
+    </a></li>
+    <li><a href="/research">
+      <span class="hv-dir-name">Research</span>
+      <span class="hv-dir-desc">Notes and write-ups on country risk, EM FX and commodities.</span>
+    </a></li>
+  </ul>
+</section>
+
+<!-- Latest note — home.js swaps in the newest Substack post when available -->
+<section class="hv-section">
+  <div class="hv-section-head">
+    <h2>Latest note</h2>
+    <a href="/research" class="hv-more">All research &rarr;</a>
+  </div>
+  <a href="https://theparrable.substack.com" target="_blank" rel="noopener" class="hv-note" id="latest-post">
+    <div class="hv-note-meta" id="latest-post-meta">The Parrable on Substack</div>
+    <div class="hv-note-title" id="latest-post-title">Monthly macro notes on country risk, EM FX and commodities</div>
+    <p class="hv-note-desc" id="latest-post-desc">Sovereign rating changes, deterioration screens, scenario forecasts and the model-versus-market trade board.</p>
   </a>
 </section>
+
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -501,7 +221,7 @@
       if (tsEl && ts) {
         try {
           const d = new Date(ts);
-          tsEl.textContent = '· Last: ' + d.toLocaleString('en-US', {
+          tsEl.textContent = ' · last run ' + d.toLocaleString('en-US', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
             timeZone: 'UTC', timeZoneName: 'short',
           });
@@ -556,7 +276,7 @@
       return `
         <a href="/trades" class="home-call-card">
           <div class="home-call-body">
-            <span class="home-call-side ${sideClass}">${pick.side} · ${rating}</span>${asOfBadge}
+            <span class="home-call-side ${sideClass}">${pick.side === 'SHORT' ? 'Short' : 'Long'} · ${rating}</span>${asOfBadge}
             <h3 class="home-call-country">${country}</h3>
             <p class="home-call-thesis">${thesis}</p>
             <div class="home-call-stats">
@@ -578,7 +298,6 @@
               </div>
             </div>
           </div>
-          <span class="home-call-arrow">&rarr;</span>
         </a>
       `;
     }
@@ -592,12 +311,12 @@
       const sideClass = pick.side === 'SHORT' ? 'short' : '';
       const cardCls = pick.side === 'SHORT' ? 'short-card' : '';
       const asOfBadge = pick.as_of
-        ? `<span class="home-call-asof">${pick.as_of}</span>`
+        ? `<span class="home-call-asof">as of ${pick.as_of}</span>`
         : '';
       return `
         <a href="/trades" class="home-call-card-mini ${cardCls}">
           <div class="home-call-body">
-            <span class="home-call-side ${sideClass}">${pick.side} · ${rating}</span>${asOfBadge}
+            <span class="home-call-side ${sideClass}">${pick.side === 'SHORT' ? 'Short' : 'Long'} · ${rating}</span>${asOfBadge}
             <h3 class="home-call-country">${country}</h3>
             <div class="home-call-mini-stats">
               <div><span class="lbl">Model</span><span class="val">${modelPd}</span></div>
@@ -605,7 +324,6 @@
               <div><span class="lbl">Edge</span><span class="val edge">${edge}</span></div>
             </div>
           </div>
-          <span class="home-call-arrow">&rarr;</span>
         </a>
       `;
     }
@@ -625,16 +343,23 @@
       fetch('/api/us-rates/fedwatch').then((r) => (r.ok ? r.json() : null)).catch(() => null),
       fetch('/api/us-rates/edge?top_n=1').then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]).then(([fw, edge]) => { populate(fw, edge); })
-      .catch(() => { strip.style.display = 'none'; });
+      .catch(() => { hide(); });
+
+    // Collapse the whole Fed outlook section, not just the strip, so a
+    // cold rates cache doesn't leave an orphaned heading.
+    function hide() {
+      const section = document.getElementById('home-rates');
+      (section || strip).style.display = 'none';
+    }
 
     function populate(fw, edge) {
-      if (!fw || fw.target_mid == null) { strip.style.display = 'none'; return; }
+      if (!fw || fw.target_mid == null) { hide(); return; }
       const lo = fw.target_mid - 0.125;
       const hi = fw.target_mid + 0.125;
       document.getElementById('hf-range').textContent = `${lo.toFixed(2)}–${hi.toFixed(2)}%`;
 
       const near = (fw.grid || []).find((r) => r.probs);
-      if (!near) { strip.style.display = 'none'; return; }
+      if (!near) { hide(); return; }
       document.getElementById('hf-meeting').textContent = fmtMeetingDate(near.meeting_date);
 
       // Market call — top-probability bucket.

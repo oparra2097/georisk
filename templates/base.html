@@ -42,20 +42,19 @@
     <link rel="stylesheet" href="/static/css/site.css">
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
     <nav class="site-nav">
         <div class="nav-inner">
             <a href="/" class="nav-brand">Parra Macro</a>
             <div class="nav-tabs">
-                <a href="/" class="nav-tab {% if active_page == 'home' %}active{% endif %}">Home</a>
-                <a href="/country-risk" class="nav-tab {% if active_page in ['country-risk','georisk','credit-default','em-fx-rates'] %}active{% endif %}">Country Risk</a>
+                <a href="/georisk" class="nav-tab {% if active_page == 'georisk' %}active{% endif %}">GeoRisk</a>
+                <a href="/country-risk" class="nav-tab {% if active_page in ['country-risk','credit-default','em-fx-rates'] %}active{% endif %}">Country Risk</a>
+                <a href="/us-rates" class="nav-tab {% if active_page in ['us-rates','em-rates'] %}active{% endif %}">Rates</a>
                 <a href="/commodities" class="nav-tab {% if active_page == 'commodities' %}active{% endif %}">Commodities</a>
                 <a href="/trades" class="nav-tab {% if active_page == 'trades' %}active{% endif %}">Trade Ideas</a>
-                <a href="/us-rates" class="nav-tab {% if active_page in ['us-rates','em-rates'] %}active{% endif %}">Rates</a>
                 <a href="/models" class="nav-tab {% if active_page in ['models','macro-model','house-prices','data-centers','labor-market','cpi-release','securitizations'] %}active{% endif %}">Models</a>
                 <a href="/data" class="nav-tab {% if active_page == 'data' %}active{% endif %}">Data</a>
                 <a href="/research" class="nav-tab {% if active_page == 'research' %}active{% endif %}">Research</a>
-                <a href="/about" class="nav-tab {% if active_page == 'about' %}active{% endif %}">About</a>
             </div>
             <div class="nav-right">
                 <div class="nav-auth">
@@ -97,7 +96,15 @@
     <footer class="site-footer">
         <div class="footer-inner">
             <span class="footer-brand">Parra Macro</span>
-            <span class="footer-copy">&copy; 2025. Macro research &amp; geopolitical risk analysis.</span>
+            <nav class="footer-links" aria-label="Footer">
+                <a href="/georisk">GeoRisk Monitor</a>
+                <a href="/country-risk">Country Risk</a>
+                <a href="/us-rates">Rates</a>
+                <a href="/research">Research</a>
+                <a href="/about">About</a>
+                <a href="https://theparrable.substack.com" target="_blank" rel="noopener">Substack</a>
+            </nav>
+            <span class="footer-copy">&copy; 2025 Oscar Parra. Macro research and geopolitical risk analysis.</span>
         </div>
     </footer>
 

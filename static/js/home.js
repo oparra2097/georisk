@@ -1,5 +1,7 @@
 /**
- * Home page - Market data fetching, ticker rendering, sparklines, expandable charts
+ * Home page — headline vitals, grouped indicator tables, expandable
+ * history chart and the latest Substack note. Market data comes from
+ * /api/markets (Yahoo Finance, cached server-side for 5 minutes).
  */
 
 let marketChart = null;
@@ -8,6 +10,7 @@ let activePeriod = '1mo';
 let marketsCache = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    renderDateline();
     fetchMarkets();
     fetchLatestPost();
     // Auto-refresh every 5 minutes
@@ -33,6 +36,15 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
+function renderDateline() {
+    const el = document.getElementById('hv-date');
+    if (!el) return;
+    el.textContent = new Date().toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    });
+}
+
+
 async function fetchMarkets() {
     try {
         const resp = await fetch('/api/markets');
@@ -40,53 +52,102 @@ async function fetchMarkets() {
         const data = await resp.json();
         if (data.markets) {
             marketsCache = data.markets;
-            renderTicker(data.markets);
+            renderVitals(data.markets);
             renderMarketGrid(data.markets);
+            renderTimestamp(data.updated_at);
         }
     } catch (err) {
         console.error('Failed to fetch markets:', err);
+        const grid = document.getElementById('market-grid');
+        if (grid && !marketsCache) {
+            grid.innerHTML = '<div class="hv-table-empty">Market data is unavailable right now.</div>';
+        }
     }
 }
 
 
-// ===== Ticker Bar =====
-
-function renderTicker(markets) {
-    const track = document.getElementById('ticker-track');
-    if (!track) return;
-
-    const items = markets
-        .filter(m => m.price !== null)
-        .map(m => tickerItemHTML(m))
-        .join('<span class="ticker-sep">|</span>');
-
-    // Duplicate for infinite scroll effect
-    track.innerHTML = items + '<span class="ticker-sep">|</span>' + items;
-}
-
-function tickerItemHTML(m) {
-    const dir = (m.change_pct || 0) >= 0 ? 'up' : 'down';
-    const sign = dir === 'up' ? '+' : '';
-    const pct = m.change_pct !== null ? `${sign}${m.change_pct.toFixed(2)}%` : '';
-    const chg = m.change !== null ? `${sign}${m.change.toFixed(2)}` : '';
-    return `
-        <span class="ticker-item">
-            <span class="ticker-name">${m.name}</span>
-            <span class="ticker-price">${formatPrice(m.price, m.type)}</span>
-            <span class="ticker-change ${dir}">${chg} (${pct})</span>
-        </span>
-    `;
+function renderTimestamp(iso) {
+    const el = document.getElementById('market-timestamp');
+    if (!el || !iso) return;
+    // updated_at is naive UTC from the server
+    const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+    if (isNaN(d)) return;
+    el.textContent = ' · Markets as of ' + d.toLocaleTimeString('en-US', {
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    });
 }
 
 
-// ===== Market Grid (category-grouped) =====
+// ===== Headline vitals =====
+//
+// One headline instrument per theme plus a supporting line, the way a
+// macro dashboard leads with output / inflation / rates before detail.
 
-const MARKET_CATEGORIES = [
-    { key: 'equity',    label: 'Equity' },
-    { key: 'commodity', label: 'Commodities' },
-    { key: 'bond',      label: 'Fixed Income' },
-    { key: 'other',     label: 'Indicators' },
+const VITALS = [
+    { topic: 'Growth',    main: '^GSPC',    support: 'HG=F' },
+    { topic: 'Inflation', main: 'CL=F',     support: 'GC=F' },
+    { topic: 'Rates',     main: '^TNX',     support: 'TERM_SPREAD' },
+    { topic: 'Dollar',    main: 'DX-Y.NYB', support: 'EURUSD=X' },
+    { topic: 'Risk',      main: '^VIX',     support: null },
 ];
+
+function renderVitals(markets) {
+    const wrap = document.getElementById('hv-vitals');
+    if (!wrap) return;
+    const bySym = Object.fromEntries(markets.map(m => [m.symbol, m]));
+
+    wrap.innerHTML = VITALS.map(v => {
+        const m = bySym[v.main];
+        const s = v.support ? bySym[v.support] : null;
+        if (!m || m.price === null) {
+            return `<div class="hv-vital"><div class="hv-vital-topic">${v.topic}</div>
+                    <div class="hv-vital-value flat">—</div></div>`;
+        }
+        const dir = direction(m);
+        return `
+            <div class="hv-vital">
+                <div class="hv-vital-topic">${v.topic}</div>
+                <div class="hv-vital-name">${m.name}</div>
+                <div class="hv-vital-value">${formatPrice(m.price, m.type)}</div>
+                <div class="hv-vital-change ${dir}">${formatChange(m)}</div>
+                <div class="hv-vital-read">${vitalRead(v, m, s)}</div>
+            </div>`;
+    }).join('');
+}
+
+// Short plain-language line under each headline number.
+function vitalRead(v, m, s) {
+    if (v.main === '^VIX') {
+        const x = m.price;
+        const level = x < 15 ? 'Calm' : x < 20 ? 'Normal' : x < 30 ? 'Elevated' : 'Stressed';
+        return `${level} equity volatility (long-run average near 19).`;
+    }
+    if (v.support === 'TERM_SPREAD' && s && s.price !== null) {
+        const bp = Math.round(s.price * 100);
+        const shape = bp < 0 ? 'inverted' : bp < 50 ? 'flat' : 'upward-sloping';
+        return `10Y–3M curve ${bp >= 0 ? '+' : ''}${bp}bp, ${shape}.`;
+    }
+    if (!s || s.price === null) return '';
+    return `${s.name} ${formatPrice(s.price, s.type)}, ${formatChange(s)}.`;
+}
+
+
+// ===== Indicator tables (theme-grouped) =====
+
+const MARKET_GROUPS = [
+    { key: 'growth',    label: 'Growth & equities' },
+    { key: 'inflation', label: 'Inflation & commodities' },
+    { key: 'rates',     label: 'Rates & curve' },
+    { key: 'dollar',    label: 'Dollar & FX' },
+    { key: 'risk',      label: 'Risk' },
+];
+
+function groupOf(m) {
+    if (m.group) return m.group;
+    // Fallback for payloads cached before groups were added.
+    return { equity: 'growth', commodity: 'inflation', bond: 'rates',
+             spread: 'rates', fx: 'dollar' }[m.type] || 'risk';
+}
 
 function renderMarketGrid(markets) {
     const grid = document.getElementById('market-grid');
@@ -94,61 +155,79 @@ function renderMarketGrid(markets) {
 
     grid.innerHTML = '';
 
-    for (const cat of MARKET_CATEGORIES) {
-        const items = markets.filter(m =>
-            cat.key === 'other'
-                ? ['indicator', 'spread', 'fx'].includes(m.type)
-                : m.type === cat.key
-        );
+    for (const g of MARKET_GROUPS) {
+        const items = markets.filter(m => groupOf(m) === g.key);
         if (items.length === 0) continue;
 
-        const label = document.createElement('div');
-        label.className = 'market-category-label';
-        label.textContent = cat.label;
-        grid.appendChild(label);
+        const block = document.createElement('div');
+        block.className = 'hv-table-block';
+        block.innerHTML = `
+            <h3>${g.label}</h3>
+            <table class="hv-table">
+                <thead><tr>
+                    <th scope="col">Indicator</th>
+                    <th scope="col">Last</th>
+                    <th scope="col">Change</th>
+                    <th scope="col">5 days</th>
+                </tr></thead>
+                <tbody></tbody>
+            </table>`;
+        const tbody = block.querySelector('tbody');
 
         items.forEach(m => {
-            const card = document.createElement('div');
-            card.className = 'market-card';
-            card.dataset.symbol = m.symbol;
-            card.innerHTML = marketCardHTML(m);
-            card.addEventListener('click', () => onMarketCardClick(m));
-            card.style.cursor = 'pointer';
-            grid.appendChild(card);
+            const tr = document.createElement('tr');
+            tr.dataset.symbol = m.symbol;
+            tr.tabIndex = 0;
+            tr.classList.toggle('is-active', m.symbol === activeSymbol);
+            tr.innerHTML = marketRowHTML(m);
+            tr.addEventListener('click', () => onMarketCardClick(m));
+            tr.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onMarketCardClick(m); }
+            });
+            tbody.appendChild(tr);
         });
+        grid.appendChild(block);
     }
 }
 
-function marketCardHTML(m) {
-    const dir = (m.change_pct || 0) > 0 ? 'up' : (m.change_pct || 0) < 0 ? 'down' : 'flat';
-    const sign = dir === 'up' ? '+' : '';
-    const pct = m.change_pct !== null ? `${sign}${m.change_pct.toFixed(2)}%` : 'N/A';
-    const chg = m.change !== null ? `${sign}${m.change.toFixed(2)}` : '';
-    const price = m.price !== null ? formatPrice(m.price, m.type) : '--';
-
-    let sparkSVG = '';
-    if (m.sparkline && m.sparkline.length > 2) {
-        sparkSVG = buildSparklineSVG(m.sparkline, dir);
-    }
-
+function marketRowHTML(m) {
+    const dir = direction(m);
+    const price = m.price !== null ? formatPrice(m.price, m.type) : '—';
+    const spark = (m.sparkline && m.sparkline.length > 2) ? buildSparklineSVG(m.sparkline, dir) : '';
     return `
-        <div class="market-card-header">
-            <span class="market-label">${m.name}</span>
-            <span class="market-type-badge">${m.type}</span>
-        </div>
-        <div class="market-price">${price}</div>
-        <div class="market-change ${dir}">${chg} (${pct})</div>
-        <div class="market-sparkline">${sparkSVG}</div>
-    `;
+        <td>${m.name}</td>
+        <td>${price}</td>
+        <td class="${dir}">${formatChange(m, false) || '—'}</td>
+        <td><span class="hv-spark">${spark}</span></td>`;
+}
+
+function direction(m) {
+    const isYield = m.type === 'bond' || m.type === 'spread';
+    // Yields read in whole basis points, so a sub-0.5bp move is flat.
+    const v = isYield ? Math.round((m.change || 0) * 100)
+            : (m.change_pct !== null ? m.change_pct : m.change);
+    return (v || 0) > 0 ? 'up' : (v || 0) < 0 ? 'down' : 'flat';
+}
+
+// "+0.42%" for prices, "+3bp" for yields and spreads.
+function formatChange(m, withToday = true) {
+    const suffix = withToday ? ' today' : '';
+    if (m.type === 'bond' || m.type === 'spread') {
+        if (m.change === null) return '';
+        const bp = Math.round(m.change * 100);
+        return `${bp >= 0 ? '+' : ''}${bp}bp${suffix}`;
+    }
+    if (m.change_pct === null) return '';
+    return `${m.change_pct >= 0 ? '+' : ''}${m.change_pct.toFixed(2)}%${suffix}`;
 }
 
 
 // ===== SVG Sparkline =====
 
 function buildSparklineSVG(data, dir) {
-    const w = 200;
-    const h = 40;
-    const pad = 2;
+    const w = 72;
+    const h = 20;
+    const pad = 1.5;
     const n = data.length;
     if (n < 2) return '';
 
@@ -162,17 +241,11 @@ function buildSparklineSVG(data, dir) {
         return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
 
-    const color = dir === 'up' ? 'var(--green)' : dir === 'down' ? 'var(--red)' : 'var(--text-muted)';
-
-    // Create fill area
-    const firstX = pad;
-    const lastX = pad + ((n - 1) / (n - 1)) * (w - pad * 2);
-    const fillPoints = points.join(' ') + ` ${lastX.toFixed(1)},${h} ${firstX.toFixed(1)},${h}`;
+    const color = dir === 'up' ? 'var(--hv-up)' : dir === 'down' ? 'var(--hv-down)' : 'var(--hv-ink-3)';
 
     return `
-        <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;">
-            <polygon points="${fillPoints}" fill="${color}" opacity="0.1"/>
-            <polyline points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+        <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;" aria-hidden="true">
+            <polyline points="${points.join(' ')}" fill="none" stroke="${color}" stroke-width="1.25" vector-effect="non-scaling-stroke"/>
         </svg>
     `;
 }
@@ -194,8 +267,8 @@ function onMarketCardClick(market) {
     activePeriod = '1mo';
 
     // Highlight active card
-    document.querySelectorAll('.market-card').forEach(c => {
-        c.classList.toggle('market-card-active', c.dataset.symbol === market.symbol);
+    document.querySelectorAll('.hv-table tbody tr').forEach(r => {
+        r.classList.toggle('is-active', r.dataset.symbol === market.symbol);
     });
 
     // Update header info
@@ -231,7 +304,7 @@ function closeChartPanel() {
     const panel = document.getElementById('market-chart-panel');
     if (panel) panel.style.display = 'none';
     activeSymbol = null;
-    document.querySelectorAll('.market-card').forEach(c => c.classList.remove('market-card-active'));
+    document.querySelectorAll('.hv-table tbody tr').forEach(r => r.classList.remove('is-active'));
     if (marketChart) {
         marketChart.destroy();
         marketChart = null;
@@ -294,8 +367,8 @@ function renderHistoryChart(data) {
     const first = closes.find(v => v !== null);
     const last = [...closes].reverse().find(v => v !== null);
     const isUp = last >= first;
-    const lineColor = isUp ? 'rgb(16, 185, 129)' : 'rgb(239, 68, 68)';
-    const fillColor = isUp ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+    const lineColor = isUp ? '#4fae7f' : '#d9705b';
+    const fillColor = isUp ? 'rgba(79, 174, 127, 0.08)' : 'rgba(217, 112, 91, 0.08)';
 
     // Update header % change to reflect selected period
     const changeEl = document.getElementById('chart-change');
@@ -315,7 +388,7 @@ function renderHistoryChart(data) {
                 data: closes,
                 borderColor: lineColor,
                 backgroundColor: fillColor,
-                borderWidth: 2,
+                borderWidth: 1.5,
                 fill: true,
                 pointRadius: 0,
                 pointHitRadius: 8,
@@ -329,15 +402,17 @@ function renderHistoryChart(data) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(0,0,0,0.9)',
-                    titleColor: '#fff',
-                    bodyColor: '#d1d5db',
+                    backgroundColor: '#1b1e23',
+                    borderColor: '#3a3f48',
+                    borderWidth: 1,
+                    titleColor: '#e8e6e1',
+                    bodyColor: '#b4b1aa',
                     callbacks: {
                         label: (ctx) => {
                             const val = ctx.parsed.y;
                             if (val == null) return 'N/A';
                             if (data.type === 'bond' || data.type === 'spread') return val.toFixed(3) + '%';
-                            if (data.type === 'fx') return val.toFixed(4);
+                            if (data.type === 'fx') return formatPrice(val, 'fx');
                             if (data.type === 'commodity') return '$' + val.toFixed(2);
                             // equity, indicator, and anything else
                             return val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -348,20 +423,20 @@ function renderHistoryChart(data) {
             scales: {
                 x: {
                     ticks: {
-                        color: '#6b7280',
-                        font: { size: 10 },
+                        color: '#85827c',
+                        font: { size: 11 },
                         maxRotation: 0,
                         autoSkip: true,
                         maxTicksLimit: 10,
                     },
-                    grid: { color: 'rgba(55,65,81,0.3)' }
+                    grid: { display: false }
                 },
                 y: {
                     ticks: {
-                        color: '#6b7280',
-                        font: { size: 10 },
+                        color: '#85827c',
+                        font: { size: 11 },
                     },
-                    grid: { color: 'rgba(55,65,81,0.3)' }
+                    grid: { color: 'rgba(255,255,255,0.06)' }
                 }
             }
         }
@@ -371,6 +446,8 @@ function renderHistoryChart(data) {
 
 // ===== Latest Substack Post =====
 
+// Swaps the static Substack card for the newest post. On any failure
+// the static card stays as is.
 async function fetchLatestPost() {
     try {
         const resp = await fetch('/api/substack');
@@ -379,28 +456,16 @@ async function fetchLatestPost() {
         if (!data.posts || data.posts.length === 0) return;
 
         const p = data.posts[0];
-        const section = document.getElementById('latest-research-section');
-        const container = document.getElementById('latest-post');
-        if (!section || !container) return;
+        const link = document.getElementById('latest-post');
+        if (!link || !p.url || !p.title) return;
 
-        const img = p.image
-            ? `<img class="latest-post-image" src="${p.image}" alt="" loading="lazy">`
-            : '';
-
-        container.innerHTML = `
-            <a href="${p.url}" target="_blank" rel="noopener" class="latest-post-card">
-                ${img}
-                <div class="latest-post-body">
-                    <div class="latest-post-date">${p.published_at}</div>
-                    <div class="latest-post-title">${p.title}</div>
-                    <div class="latest-post-desc">${p.description}</div>
-                    <span class="latest-post-read">Read on Substack &rarr;</span>
-                </div>
-            </a>
-        `;
-        section.style.display = '';
+        link.href = p.url;
+        document.getElementById('latest-post-title').textContent = p.title;
+        document.getElementById('latest-post-desc').textContent = p.description || '';
+        document.getElementById('latest-post-meta').textContent =
+            p.published_at ? `The Parrable · ${p.published_at}` : 'The Parrable';
     } catch (err) {
-        // Silently fail — section stays hidden
+        // Silently fail — static card stays
     }
 }
 
@@ -417,11 +482,12 @@ function formatPrice(price, type) {
         case 'commodity':
             return '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         case 'bond':
-            return price.toFixed(3) + '%';
+            return price.toFixed(2) + '%';
         case 'spread':
-            return price.toFixed(3) + '%';
+            return (price >= 0 ? '+' : '') + Math.round(price * 100) + 'bp';
         case 'fx':
-            return price.toFixed(4);
+            // EUR/USD needs four decimals; DXY and USD/JPY read in two.
+            return price >= 20 ? price.toFixed(2) : price.toFixed(4);
         default:
             return price.toFixed(2);
     }

@@ -8,6 +8,7 @@ Thread-safe cache with 5-minute TTL to avoid hammering the API.
 import threading
 import time
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -24,22 +25,27 @@ def _ensure_yfinance():
 
 SYMBOLS = {
     # Equity
-    '^GSPC':    {'name': 'S&P 500',          'type': 'equity'},
-    '^IXIC':    {'name': 'NASDAQ',            'type': 'equity'},
-    '^N225':    {'name': 'Nikkei 225',        'type': 'equity'},
+    '^GSPC':    {'name': 'S&P 500',          'type': 'equity',    'group': 'growth'},
+    '^IXIC':    {'name': 'NASDAQ',            'type': 'equity',    'group': 'growth'},
+    '^RUT':     {'name': 'Russell 2000',      'type': 'equity',    'group': 'growth'},
+    '^N225':    {'name': 'Nikkei 225',        'type': 'equity',    'group': 'growth'},
     # Commodities
-    'GC=F':     {'name': 'Gold',              'type': 'commodity'},
-    'CL=F':     {'name': 'WTI Crude',         'type': 'commodity'},
-    'BZ=F':     {'name': 'Brent Crude',       'type': 'commodity'},
-    'NG=F':     {'name': 'Natural Gas',       'type': 'commodity'},
+    'HG=F':     {'name': 'Copper',            'type': 'commodity', 'group': 'growth'},
+    'GC=F':     {'name': 'Gold',              'type': 'commodity', 'group': 'inflation'},
+    'CL=F':     {'name': 'WTI Crude',         'type': 'commodity', 'group': 'inflation'},
+    'BZ=F':     {'name': 'Brent Crude',       'type': 'commodity', 'group': 'inflation'},
+    'NG=F':     {'name': 'Natural Gas',       'type': 'commodity', 'group': 'inflation'},
     # Fixed Income
-    '^TNX':     {'name': 'US 10Y Treasury',   'type': 'bond'},
-    '^FVX':     {'name': 'US 5Y Treasury',    'type': 'bond'},
-    '^IRX':     {'name': 'US 3M Treasury',    'type': 'bond'},
+    '^IRX':     {'name': 'US 3M Treasury',    'type': 'bond',      'group': 'rates'},
+    '^FVX':     {'name': 'US 5Y Treasury',    'type': 'bond',      'group': 'rates'},
+    '^TNX':     {'name': 'US 10Y Treasury',   'type': 'bond',      'group': 'rates'},
+    '^TYX':     {'name': 'US 30Y Treasury',   'type': 'bond',      'group': 'rates'},
     # FX
-    'EURUSD=X': {'name': 'EUR/USD',           'type': 'fx'},
+    'DX-Y.NYB': {'name': 'US Dollar Index',   'type': 'fx',        'group': 'dollar'},
+    'EURUSD=X': {'name': 'EUR/USD',           'type': 'fx',        'group': 'dollar'},
+    'USDJPY=X': {'name': 'USD/JPY',           'type': 'fx',        'group': 'dollar'},
     # Indicators
-    '^VIX':     {'name': 'VIX',               'type': 'indicator'},
+    '^VIX':     {'name': 'VIX',               'type': 'indicator', 'group': 'risk'},
 }
 
 CACHE_TTL = 300  # 5 minutes
@@ -81,6 +87,7 @@ def _fetch_single(symbol):
         'symbol': symbol,
         'name': info['name'],
         'type': info['type'],
+        'group': info.get('group'),
         'price': None,
         'change': None,
         'change_pct': None,
@@ -123,10 +130,10 @@ def _fetch_single(symbol):
 def _fetch_all_markets():
     """Fetch all market data. Returns list of market dicts."""
     _ensure_yfinance()
-    results = []
-    for symbol in SYMBOLS:
-        data = _fetch_single(symbol)
-        results.append(data)
+    # Each symbol is two blocking HTTP calls; fan out so the full set
+    # costs roughly one round-trip instead of len(SYMBOLS).
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(_fetch_single, SYMBOLS))
 
     # Compute term spread (10Y - 3M)
     tnx_data = next((r for r in results if r['symbol'] == '^TNX'), None)
@@ -156,6 +163,7 @@ def _fetch_all_markets():
             'symbol': 'TERM_SPREAD',
             'name': 'Term Spread (10Y-3M)',
             'type': 'spread',
+            'group': 'rates',
             'price': spread_price,
             'change': spread_change,
             'change_pct': spread_change_pct,

@@ -41,8 +41,8 @@ a:hover {
 /* ===== Navigation ===== */
 
 .site-nav {
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
+    background: #121417;
+    border-bottom: 1px solid #262a31;
     height: 56px;
     position: sticky;
     top: 0;
@@ -60,10 +60,11 @@ a:hover {
 }
 
 .nav-brand {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--text-primary);
-    letter-spacing: -0.5px;
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+    font-size: 19px;
+    font-weight: 600;
+    color: #e8e6e1;
+    letter-spacing: -0.01em;
     text-decoration: none;
 }
 .nav-brand:hover {
@@ -81,21 +82,21 @@ a:hover {
 .nav-tab {
     display: flex;
     align-items: center;
-    padding: 0 16px;
-    font-size: 13px;
+    padding: 0 14px;
+    font-size: 14px;
     font-weight: 500;
-    color: var(--text-muted);
+    color: #a3a09a;
     text-decoration: none;
     border-bottom: 2px solid transparent;
     transition: color 0.15s, border-color 0.15s;
 }
 .nav-tab:hover {
-    color: var(--text-primary);
+    color: #e8e6e1;
     text-decoration: none;
 }
 .nav-tab.active {
-    color: #fff;
-    border-bottom-color: var(--accent);
+    color: #e8e6e1;
+    border-bottom-color: #e8e6e1;
 }
 
 .nav-right {
@@ -147,6 +148,11 @@ a:hover {
 
 /* ===== Main Content ===== */
 
+/* Homepage sits on a neutral graphite instead of the app navy. */
+body.page-home {
+    background: #111315;
+}
+
 .site-main {
     flex: 1;
 }
@@ -155,8 +161,8 @@ a:hover {
 /* ===== Footer ===== */
 
 .site-footer {
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
+    background: #121417;
+    border-top: 1px solid #262a31;
     padding: 20px 24px;
     margin-top: auto;
 }
@@ -167,6 +173,21 @@ a:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px 24px;
+    flex-wrap: wrap;
+}
+
+.footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    font-size: 13px;
+}
+.footer-links a {
+    color: #a3a09a;
+}
+.footer-links a:hover {
+    color: #e8e6e1;
 }
 
 .footer-brand {
