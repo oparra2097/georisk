@@ -6,17 +6,66 @@
  * boxed cards; colour is reserved for direction (up / down).
  */
 
-.hv {
+/* Colour tokens. Dark is the default; a light-mode OS setting swaps
+ * the same tokens below, so every rule here stays scheme-agnostic.
+ * Declared on body (not .hv) so the shared nav and footer pick up
+ * the --chrome-* overrides on this page too. */
+body.page-home {
+    color-scheme: dark;
+    --hv-bg: #111315;
     --hv-rule: #262a31;
     --hv-rule-strong: #3a3f48;
     --hv-ink: #e8e6e1;
     --hv-ink-2: #b4b1aa;
     --hv-ink-3: #85827c;
+    --hv-strong: #ffffff;
     --hv-up: #4fae7f;
     --hv-down: #d9705b;
     --hv-link: #8fb4e8;
+    --hv-warn: #d9a441;
+    --hv-hover: rgba(255, 255, 255, 0.025);
+    --hv-chart-fill-up: rgba(79, 174, 127, 0.08);
+    --hv-chart-fill-down: rgba(217, 112, 91, 0.08);
+    --hv-chart-grid: rgba(255, 255, 255, 0.06);
+    --hv-tooltip-bg: #1b1e23;
     --hv-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+    background: var(--hv-bg);
+}
 
+@media (prefers-color-scheme: light) {
+    body.page-home {
+        color-scheme: light;
+        --hv-bg: #fbfaf7;
+        --hv-rule: #e4e1da;
+        --hv-rule-strong: #c9c5bc;
+        --hv-ink: #1d1c1a;
+        --hv-ink-2: #4a4843;
+        --hv-ink-3: #75726b;
+        --hv-strong: #000000;
+        --hv-up: #1f7a4f;
+        --hv-down: #b5462f;
+        --hv-link: #1f5fae;
+        --hv-warn: #8a5a00;
+        --hv-hover: rgba(0, 0, 0, 0.03);
+        --hv-chart-fill-up: rgba(31, 122, 79, 0.08);
+        --hv-chart-fill-down: rgba(181, 70, 47, 0.08);
+        --hv-chart-grid: rgba(0, 0, 0, 0.07);
+        --hv-tooltip-bg: #ffffff;
+
+        /* Shared nav / footer (site.css) */
+        --chrome-bg: #f4f2ed;
+        --chrome-rule: #e4e1da;
+        --chrome-ink: #1d1c1a;
+        --chrome-ink-2: #5c5953;
+        --text-muted: #75726b;
+        --text-secondary: #4a4843;
+        --text-primary: #1d1c1a;
+        --border: #d6d2ca;
+        --accent: #1f5fae;
+    }
+}
+
+.hv {
     max-width: 1120px;
     margin: 0 auto;
     padding: 0 24px 72px;
@@ -160,7 +209,7 @@
     color: inherit;
 }
 .hv .home-fedstrip:hover { text-decoration: none; }
-.home-fedstrip:hover .hf-val { color: #fff; }
+.home-fedstrip:hover .hf-val { color: var(--hv-strong); }
 
 .hf-item {
     padding: 16px 20px 16px 0;
@@ -192,7 +241,7 @@
 
 .hf-divergence {
     font-size: 13px;
-    color: #d9a441;
+    color: var(--hv-warn);
     margin: 6px 0 0;
 }
 
@@ -248,7 +297,7 @@
 }
 
 .hv-table tbody tr { cursor: pointer; }
-.hv-table tbody tr:hover td { background: rgba(255, 255, 255, 0.025); }
+.hv-table tbody tr:hover td { background: var(--hv-hover); }
 .hv-table tbody tr.is-active td:first-child { box-shadow: inset 2px 0 0 var(--hv-link); padding-left: 8px; }
 
 .hv-spark {

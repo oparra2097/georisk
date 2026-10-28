@@ -12,6 +12,13 @@
     --border: #1f2937;
     --green: #10b981;
     --red: #ef4444;
+
+    /* Nav + footer. Pages can override these (home.css does for
+       light mode). */
+    --chrome-bg: #121417;
+    --chrome-rule: #262a31;
+    --chrome-ink: #e8e6e1;
+    --chrome-ink-2: #a3a09a;
 }
 
 * {
@@ -41,8 +48,8 @@ a:hover {
 /* ===== Navigation ===== */
 
 .site-nav {
-    background: #121417;
-    border-bottom: 1px solid #262a31;
+    background: var(--chrome-bg);
+    border-bottom: 1px solid var(--chrome-rule);
     height: 56px;
     position: sticky;
     top: 0;
@@ -63,13 +70,13 @@ a:hover {
     font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
     font-size: 19px;
     font-weight: 600;
-    color: #e8e6e1;
+    color: var(--chrome-ink);
     letter-spacing: -0.01em;
     text-decoration: none;
 }
 .nav-brand:hover {
     text-decoration: none;
-    color: #fff;
+    color: var(--chrome-ink);
 }
 
 .nav-tabs {
@@ -85,18 +92,18 @@ a:hover {
     padding: 0 14px;
     font-size: 14px;
     font-weight: 500;
-    color: #a3a09a;
+    color: var(--chrome-ink-2);
     text-decoration: none;
     border-bottom: 2px solid transparent;
     transition: color 0.15s, border-color 0.15s;
 }
 .nav-tab:hover {
-    color: #e8e6e1;
+    color: var(--chrome-ink);
     text-decoration: none;
 }
 .nav-tab.active {
-    color: #e8e6e1;
-    border-bottom-color: #e8e6e1;
+    color: var(--chrome-ink);
+    border-bottom-color: var(--chrome-ink);
 }
 
 .nav-right {
@@ -148,10 +155,6 @@ a:hover {
 
 /* ===== Main Content ===== */
 
-/* Homepage sits on a neutral graphite instead of the app navy. */
-body.page-home {
-    background: #111315;
-}
 
 .site-main {
     flex: 1;
@@ -161,8 +164,8 @@ body.page-home {
 /* ===== Footer ===== */
 
 .site-footer {
-    background: #121417;
-    border-top: 1px solid #262a31;
+    background: var(--chrome-bg);
+    border-top: 1px solid var(--chrome-rule);
     padding: 20px 24px;
     margin-top: auto;
 }
@@ -184,10 +187,10 @@ body.page-home {
     font-size: 13px;
 }
 .footer-links a {
-    color: #a3a09a;
+    color: var(--chrome-ink-2);
 }
 .footer-links a:hover {
-    color: #e8e6e1;
+    color: var(--chrome-ink);
 }
 
 .footer-brand {

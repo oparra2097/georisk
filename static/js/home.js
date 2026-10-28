@@ -354,9 +354,35 @@ async function fetchAndRenderHistory(symbol, period) {
 }
 
 
+// Chart.js draws to canvas, so it can't follow CSS variables on its
+// own — read the current tokens (which flip with prefers-color-scheme
+// in home.css) each time the chart is drawn.
+function themeColors() {
+    const cs = getComputedStyle(document.body);
+    const v = (name) => cs.getPropertyValue(name).trim();
+    return {
+        up: v('--hv-up'), down: v('--hv-down'),
+        fillUp: v('--hv-chart-fill-up'), fillDown: v('--hv-chart-fill-down'),
+        ink: v('--hv-ink'), ink2: v('--hv-ink-2'), ink3: v('--hv-ink-3'),
+        ruleStrong: v('--hv-rule-strong'), grid: v('--hv-chart-grid'),
+        tooltipBg: v('--hv-tooltip-bg'),
+    };
+}
+
+// Redraw an open chart if the OS theme flips while the page is open.
+// Tables, vitals and sparklines use CSS variables and update by themselves.
+let lastHistoryData = null;
+if (window.matchMedia) {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const onChange = () => { if (marketChart && lastHistoryData) renderHistoryChart(lastHistoryData); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+}
+
 function renderHistoryChart(data) {
     const ctx = document.getElementById('market-history-chart');
     if (!ctx) return;
+    lastHistoryData = data;
 
     if (marketChart) marketChart.destroy();
 
@@ -367,8 +393,9 @@ function renderHistoryChart(data) {
     const first = closes.find(v => v !== null);
     const last = [...closes].reverse().find(v => v !== null);
     const isUp = last >= first;
-    const lineColor = isUp ? '#4fae7f' : '#d9705b';
-    const fillColor = isUp ? 'rgba(79, 174, 127, 0.08)' : 'rgba(217, 112, 91, 0.08)';
+    const c = themeColors();
+    const lineColor = isUp ? c.up : c.down;
+    const fillColor = isUp ? c.fillUp : c.fillDown;
 
     // Update header % change to reflect selected period
     const changeEl = document.getElementById('chart-change');
@@ -402,11 +429,11 @@ function renderHistoryChart(data) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: '#1b1e23',
-                    borderColor: '#3a3f48',
+                    backgroundColor: c.tooltipBg,
+                    borderColor: c.ruleStrong,
                     borderWidth: 1,
-                    titleColor: '#e8e6e1',
-                    bodyColor: '#b4b1aa',
+                    titleColor: c.ink,
+                    bodyColor: c.ink2,
                     callbacks: {
                         label: (ctx) => {
                             const val = ctx.parsed.y;
@@ -423,7 +450,7 @@ function renderHistoryChart(data) {
             scales: {
                 x: {
                     ticks: {
-                        color: '#85827c',
+                        color: c.ink3,
                         font: { size: 11 },
                         maxRotation: 0,
                         autoSkip: true,
@@ -433,10 +460,10 @@ function renderHistoryChart(data) {
                 },
                 y: {
                     ticks: {
-                        color: '#85827c',
+                        color: c.ink3,
                         font: { size: 11 },
                     },
-                    grid: { color: 'rgba(255,255,255,0.06)' }
+                    grid: { color: c.grid }
                 }
             }
         }
