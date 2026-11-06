@@ -8,10 +8,12 @@ let marketChart = null;
 let activeSymbol = null;
 let activePeriod = '1mo';
 let marketsCache = null;
+let macroVitals = null;   // /api/macro/vitals: GDPNow + US/UK/euro-area inflation
 
 document.addEventListener('DOMContentLoaded', () => {
     renderDateline();
     fetchMarkets();
+    fetchMacroVitals();
     fetchReleases();
     fetchLatestPost();
     // Auto-refresh every 5 minutes
@@ -95,9 +97,11 @@ const VITALS = [
 function renderVitals(markets) {
     const wrap = document.getElementById('hv-vitals');
     if (!wrap) return;
-    const bySym = Object.fromEntries(markets.map(m => [m.symbol, m]));
+    const bySym = Object.fromEntries((markets || []).map(m => [m.symbol, m]));
 
     wrap.innerHTML = VITALS.map(v => {
+        const macro = macroVital(v.topic, bySym);
+        if (macro) return macro;
         const m = bySym[v.main];
         const s = v.support ? bySym[v.support] : null;
         if (!m || m.price === null) {
@@ -114,6 +118,57 @@ function renderVitals(markets) {
                 <div class="hv-vital-read">${vitalRead(v, m, s)}</div>
             </div>`;
     }).join('');
+}
+
+// Growth leads with the Atlanta Fed's GDPNow and Inflation with US CPI
+// (UK and euro area beneath). Returns null to fall back to the market
+// read when that data isn't available.
+function macroVital(topic, bySym) {
+    if (!macroVitals) return null;
+    const tile = (name, value, sub, read) => `
+        <div class="hv-vital">
+            <div class="hv-vital-topic">${topic}</div>
+            <div class="hv-vital-name">${name}</div>
+            <div class="hv-vital-value">${value}</div>
+            <div class="hv-vital-change flat">${sub}</div>
+            <div class="hv-vital-read">${read}</div>
+        </div>`;
+
+    if (topic === 'Growth' && macroVitals.gdpnow) {
+        const g = macroVitals.gdpnow;
+        const spx = bySym['^GSPC'];
+        const read = spx && spx.price !== null
+            ? `${spx.name} ${formatPrice(spx.price, spx.type)}, ${formatChange(spx)}.` : '';
+        return tile(`Atlanta Fed GDPNow, ${g.quarter}`, `${g.value.toFixed(1)}%`,
+                    'Real GDP, annualized', read);
+    }
+    if (topic === 'Inflation' && macroVitals.inflation && macroVitals.inflation.us) {
+        const inf = macroVitals.inflation;
+        const others = [['UK', inf.uk], ['Euro area', inf.ea]]
+            .filter(([, x]) => x)
+            .map(([label, x]) => `${label} ${x.yoy.toFixed(1)}% (${shortMonth(x.month).split(' ')[0]})`);
+        return tile(`US CPI, ${shortMonth(inf.us.month)}`, `${inf.us.yoy.toFixed(1)}%`,
+                    '12-month rate', others.length ? others.join(' · ') + '.' : '');
+    }
+    return null;
+}
+
+// '2026-09' or '2026-09-01' -> 'Sep 2026'
+function shortMonth(s) {
+    const [y, m] = (s || '').split('-').map(Number);
+    if (!y || !m) return '';
+    return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+async function fetchMacroVitals() {
+    try {
+        const resp = await fetch('/api/macro/vitals');
+        if (!resp.ok) return;
+        macroVitals = await resp.json();
+        renderVitals(marketsCache);
+    } catch (err) {
+        // Keep the market-based read
+    }
 }
 
 // Short plain-language line under each headline number.
