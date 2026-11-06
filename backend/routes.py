@@ -1,6 +1,6 @@
 from io import BytesIO
 from datetime import datetime
-from flask import Blueprint, jsonify, send_file, request
+from flask import Blueprint, jsonify, send_file, request, current_app
 from backend.cache.store import store
 from backend.data_sources.market_data import get_market_data, get_market_history
 from backend.data_sources.imf_cofer import (
@@ -735,6 +735,48 @@ def us_releases_summary():
         }
 
     return jsonify({'jobs': jobs, 'cpi': cpi})
+
+
+@api_bp.route('/macro/vitals')
+def macro_vitals():
+    """Growth and inflation reads for the homepage headline strip.
+
+    gdpnow: the Atlanta Fed's latest GDPNow estimate (FRED GDPNOW, real
+            GDP growth, % annualized) for the quarter it covers.
+    inflation: latest 12-month CPI rate for the US (BLS), UK (ONS) and
+            euro area (Eurostat HICP). ONS and Eurostat series are
+            published as annual rates; BLS carries yoy_change.
+    """
+    from backend.data_sources.fred_client import fetch_series
+
+    gdpnow = None
+    try:
+        obs = fetch_series('GDPNOW')
+        if obs:
+            o = obs[-1]
+            y, m = int(o['date'][:4]), int(o['date'][5:7])
+            gdpnow = {'quarter': f'Q{(m - 1) // 3 + 1} {y}', 'date': o['date'], 'value': o['value']}
+    except Exception as e:  # noqa: BLE001
+        current_app.logger.warning(f'GDPNow fetch failed: {e}')
+
+    def latest(data, field):
+        pts = ((data or {}).get('series') or {}).get('all_items') or []
+        for p in reversed(pts):
+            if p.get(field) is not None:
+                return {'month': p['date'][:7], 'yoy': round(p[field], 2)}
+        return None
+
+    inflation = {}
+    for key, getter, field in (('us', get_bls_cpi_data, 'yoy_change'),
+                               ('uk', get_ons_cpi_data, 'value'),
+                               ('ea', get_eurostat_cpi_data, 'value')):
+        try:
+            inflation[key] = latest(getter(), field)
+        except Exception as e:  # noqa: BLE001
+            current_app.logger.warning(f'{key} inflation fetch failed: {e}')
+            inflation[key] = None
+
+    return jsonify({'gdpnow': gdpnow, 'inflation': inflation})
 
 
 @api_bp.route('/labor-market/us/refresh', methods=['POST'])
