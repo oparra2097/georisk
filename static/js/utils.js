@@ -1,16 +1,16 @@
 const Utils = {
     riskColor(score) {
-        if (score <= 15) return '#10b981';
-        if (score <= 35) return '#f59e0b';
-        if (score <= 60) return '#f97316';
-        return '#ef4444';
+        if (score <= 15) return Theme.c('green');
+        if (score <= 35) return Theme.c('amber');
+        if (score <= 60) return Theme.c('orange');
+        return Theme.c('red');
     },
 
     riskBg(score) {
-        if (score <= 15) return 'rgba(16, 185, 129, 0.15)';
-        if (score <= 35) return 'rgba(245, 158, 11, 0.15)';
-        if (score <= 60) return 'rgba(249, 115, 22, 0.15)';
-        return 'rgba(239, 68, 68, 0.15)';
+        if (score <= 15) return Theme.c('green', 0.15);
+        if (score <= 35) return Theme.c('amber', 0.15);
+        if (score <= 60) return Theme.c('orange', 0.15);
+        return Theme.c('red', 0.15);
     },
 
     riskLabel(score) {

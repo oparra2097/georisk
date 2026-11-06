@@ -81,9 +81,9 @@ DATASETS: dict[tuple[str, str], ChartMeta] = {
 
 
 SITE_NAME = "Parra Macro"
-SITE_TAGLINE = "Macro research & geopolitical risk analysis"
-DEFAULT_TITLE = "Parra Macro — Macro & Geopolitical Risk"
-DEFAULT_DESC = "Interactive macro and geopolitical risk analytics: inflation, commodities, reserves, sovereign risk, and more."
+SITE_TAGLINE = "Macro strategy research"
+DEFAULT_TITLE = "Parra Macro — Macro Strategy"
+DEFAULT_DESC = "Macro strategy research: rates, sovereign credit, EM FX and commodities, plus the GeoRisk geopolitical risk app."
 
 
 # ──────────────────────────────────────────────────────────────────────────

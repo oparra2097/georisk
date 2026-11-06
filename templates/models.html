@@ -3,68 +3,68 @@
 
 {% block extra_css %}
 <style>
-  .models-page { max-width: 1200px; margin: 0 auto; padding: 32px 24px; color: #1f2937; }
+  .models-page { max-width: 1200px; margin: 0 auto; padding: 32px 24px; color: var(--ink); }
   .models-header { margin-bottom: 28px; }
   .models-title { font-size: 26px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; }
-  .models-subtitle { font-size: 14px; color: #6b7280; margin: 0; max-width: 720px; line-height: 1.6; }
+  .models-subtitle { font-size: 14px; color: var(--ink-4); margin: 0; max-width: 720px; line-height: 1.6; }
 
   .models-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
 
   .model-card {
-    display: flex; flex-direction: column; padding: 24px; border: 1px solid #e5e7eb;
-    border-radius: 10px; background: #fff; text-decoration: none; color: inherit;
+    display: flex; flex-direction: column; padding: 24px; border: 1px solid var(--rule);
+    border-radius: 10px; background: var(--surface); text-decoration: none; color: inherit;
     transition: all 0.15s ease; position: relative; overflow: hidden;
   }
-  .model-card:hover { border-color: #1f2937; box-shadow: 0 4px 20px rgba(0,0,0,0.06); transform: translateY(-2px); }
+  .model-card:hover { border-color: var(--ink); box-shadow: 0 4px 20px rgba(0,0,0,0.06); transform: translateY(-2px); }
   .model-card::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
   }
-  .model-card.card-geo::before    { background: #8b5cf6; }
-  .model-card.card-macro::before  { background: #3b82f6; }
-  .model-card.card-hpi::before    { background: #10b981; }
-  .model-card.card-dc::before     { background: #f97316; }
-  .model-card.card-sec::before    { background: #7c3aed; }
-  .model-card.card-cd::before     { background: #dc2626; }
-  .model-card.card-lm::before     { background: #0891b2; }
-  .model-card.card-cpi::before    { background: #8b5cf6; }
-  .model-card.card-fx::before     { background: #14b8a6; }
-  .model-card.card-rates::before  { background: #3b82f6; }
-  .model-card.card-emrates::before { background: #0ea5e9; }
+  .model-card.card-geo::before    { background: var(--violet); }
+  .model-card.card-macro::before  { background: var(--blue); }
+  .model-card.card-hpi::before    { background: var(--green); }
+  .model-card.card-dc::before     { background: var(--orange); }
+  .model-card.card-sec::before    { background: var(--violet-strong); }
+  .model-card.card-cd::before     { background: var(--red-strong); }
+  .model-card.card-lm::before     { background: var(--cyan-strong); }
+  .model-card.card-cpi::before    { background: var(--violet); }
+  .model-card.card-fx::before     { background: var(--cyan); }
+  .model-card.card-rates::before  { background: var(--blue); }
+  .model-card.card-emrates::before { background: var(--cyan); }
 
   .model-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .model-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0; }
-  .card-geo .model-icon    { background: #8b5cf618; color: #8b5cf6; }
-  .card-macro .model-icon  { background: #3b82f618; color: #3b82f6; }
-  .card-hpi .model-icon    { background: #10b98118; color: #10b981; }
-  .card-dc .model-icon     { background: #f9731618; color: #f97316; }
-  .card-sec .model-icon    { background: #7c3aed18; color: #7c3aed; }
-  .card-cd .model-icon     { background: #dc262618; color: #dc2626; }
-  .card-lm .model-icon     { background: #0891b218; color: #0891b2; }
-  .card-cpi .model-icon    { background: #8b5cf618; color: #8b5cf6; }
-  .card-fx .model-icon     { background: #14b8a618; color: #14b8a6; }
-  .card-rates .model-icon  { background: #3b82f618; color: #3b82f6; }
-  .card-emrates .model-icon { background: #0ea5e918; color: #0ea5e9; }
+  .card-geo .model-icon    { background: #8b5cf618; color: var(--violet); }
+  .card-macro .model-icon  { background: #3b82f618; color: var(--blue); }
+  .card-hpi .model-icon    { background: #10b98118; color: var(--green); }
+  .card-dc .model-icon     { background: #f9731618; color: var(--orange); }
+  .card-sec .model-icon    { background: #7c3aed18; color: var(--violet-text); }
+  .card-cd .model-icon     { background: #dc262618; color: var(--red-text); }
+  .card-lm .model-icon     { background: #0891b218; color: var(--cyan-text); }
+  .card-cpi .model-icon    { background: #8b5cf618; color: var(--violet); }
+  .card-fx .model-icon     { background: #14b8a618; color: var(--cyan); }
+  .card-rates .model-icon  { background: #3b82f618; color: var(--blue); }
+  .card-emrates .model-icon { background: #0ea5e918; color: var(--cyan); }
 
-  .model-name { font-size: 17px; font-weight: 600; margin: 0; color: #111827; }
-  .model-tagline { font-size: 12px; color: #6b7280; margin: 2px 0 0; }
+  .model-name { font-size: 17px; font-weight: 600; margin: 0; color: var(--ink-strong); }
+  .model-tagline { font-size: 12px; color: var(--ink-4); margin: 2px 0 0; }
   .model-badge {
     margin-left: auto; font-size: 10px; padding: 2px 8px; border-radius: 3px;
     text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
   }
-  .badge-public     { background: #d1fae5; color: #065f46; }
-  .badge-login      { background: #dbeafe; color: #1e40af; }
-  .badge-restricted { background: #fef3c7; color: #78350f; }
-  .badge-beta       { background: #ede9fe; color: #5b21b6; margin-left: 6px; }
+  .badge-public     { background: var(--green-tint); color: var(--green-soft); }
+  .badge-login      { background: var(--blue-tint); color: var(--blue-soft); }
+  .badge-restricted { background: var(--amber-tint); color: var(--amber-soft); }
+  .badge-beta       { background: var(--violet-tint); color: var(--violet-soft); margin-left: 6px; }
 
-  .model-desc { font-size: 13px; color: #4b5563; line-height: 1.55; margin: 0 0 16px; flex-grow: 1; }
+  .model-desc { font-size: 13px; color: var(--ink-3); line-height: 1.55; margin: 0 0 16px; flex-grow: 1; }
 
-  .model-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 0; border-top: 1px solid #f3f4f6; margin-bottom: 12px; }
+  .model-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 0; border-top: 1px solid var(--rule); margin-bottom: 12px; }
   .model-stat { font-size: 11px; }
-  .model-stat .num { font-size: 15px; font-weight: 600; color: #111827; display: block; font-variant-numeric: tabular-nums; }
-  .model-stat .lbl { color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; margin-top: 2px; display: block; }
+  .model-stat .num { font-size: 15px; font-weight: 600; color: var(--ink-strong); display: block; font-variant-numeric: tabular-nums; }
+  .model-stat .lbl { color: var(--ink-5); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; margin-top: 2px; display: block; }
 
-  .model-cta { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: #111827; }
-  .model-card:hover .model-cta { color: #2563eb; }
+  .model-cta { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 500; color: var(--ink-strong); }
+  .model-card:hover .model-cta { color: var(--blue-text); }
   .model-cta .arrow { transition: transform 0.15s; }
   .model-card:hover .model-cta .arrow { transform: translateX(3px); }
 </style>

@@ -2,17 +2,17 @@
  * Dark theme inherited from site.css; tokens scoped to .efr-page. */
 
 .efr-page {
-  --efr-bg:        var(--bg-primary,   #0a0e1a);
-  --efr-surface:   var(--bg-secondary, #111827);
-  --efr-surface-2: #161d33;
-  --efr-border:    var(--border,       #1f2937);
-  --efr-text:      var(--text-primary, #e5e7eb);
-  --efr-dim:       var(--text-secondary,#9ca3af);
-  --efr-mute:      var(--text-muted,   #6b7280);
-  --efr-accent:    #3b82f6;
-  --efr-good:      #10b981;
-  --efr-bad:       #ef4444;
-  --efr-warn:      #f59e0b;
+  --efr-bg:        var(--bg-primary,   var(--bg));
+  --efr-surface:   var(--bg-secondary, var(--surface));
+  --efr-surface-2: var(--surface);
+  --efr-border:    var(--border,       var(--rule));
+  --efr-text:      var(--text-primary, var(--ink));
+  --efr-dim:       var(--text-secondary,var(--ink-3));
+  --efr-mute:      var(--text-muted,   var(--ink-4));
+  --efr-accent:    var(--blue);
+  --efr-good:      var(--green);
+  --efr-bad:       var(--red);
+  --efr-warn:      var(--amber);
 
   margin: 0;
   padding: 28px max(20px, calc((100vw - 1320px) / 2)) 64px;
@@ -45,10 +45,10 @@
   border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer;
   text-decoration: none; border: 1px solid var(--efr-border); transition: all .15s;
 }
-.efr-btn-primary { background: var(--efr-accent); color: #fff; border-color: var(--efr-accent); }
+.efr-btn-primary { background: var(--efr-accent); color: var(--on-accent); border-color: var(--efr-accent); }
 .efr-btn-primary:hover { filter: brightness(1.1); }
 .efr-btn-ghost { background: transparent; color: var(--efr-dim); }
-.efr-btn-ghost:hover { color: var(--efr-text); border-color: #2a3245; }
+.efr-btn-ghost:hover { color: var(--efr-text); border-color: var(--rule-strong); }
 .efr-btn:disabled { opacity: .6; cursor: default; }
 
 /* ── How-to guide (collapsible) ──────────────────────────── */
@@ -65,7 +65,7 @@
 .efr-guide-q {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
-  background: var(--efr-accent); color: #fff; font-weight: 700; font-size: 13px;
+  background: var(--efr-accent); color: var(--on-accent); font-weight: 700; font-size: 13px;
 }
 .efr-guide-chev { margin-left: auto; transition: transform .2s; color: var(--efr-mute); }
 .efr-guide[open] .efr-guide-chev { transform: rotate(180deg); }
@@ -75,12 +75,12 @@
 .efr-guide-card p { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--efr-dim); }
 .efr-guide-card b { color: var(--efr-text); }
 .efr-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.efr-dot-long { background: #34d399; }
-.efr-dot-dur  { background: #60a5fa; }
-.efr-dot-cvx  { background: #fbbf24; }
+.efr-dot-long { background: var(--green-text); }
+.efr-dot-dur  { background: var(--blue-text); }
+.efr-dot-cvx  { background: var(--amber-text); }
 .efr-guide-foot {
   margin: 4px 0 0; padding: 12px 14px; font-size: 12px; line-height: 1.6;
-  color: var(--efr-mute); background: rgba(255,255,255,.02);
+  color: var(--efr-mute); background: color-mix(in srgb, var(--ink-strong) 2%, transparent);
   border: 1px solid var(--efr-border); border-radius: 8px;
 }
 .efr-guide-foot b { color: var(--efr-dim); }
@@ -89,20 +89,20 @@
 .efr-jump {
   position: sticky; top: 0; z-index: 20; display: flex; gap: 4px; flex-wrap: wrap;
   padding: 8px 6px; margin-bottom: 22px;
-  background: rgba(10,14,26,.85); backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--efr-border);
 }
 .efr-jump-link {
   font-size: 12.5px; font-weight: 600; color: var(--efr-dim); text-decoration: none;
   padding: 6px 12px; border-radius: 7px; transition: all .15s;
 }
-.efr-jump-link:hover { color: var(--efr-text); background: rgba(255,255,255,.04); }
-.efr-jump-link.active { color: #fff; background: var(--efr-accent); }
+.efr-jump-link:hover { color: var(--efr-text); background: color-mix(in srgb, var(--ink-strong) 4%, transparent); }
+.efr-jump-link.active { color: var(--on-accent); background: var(--efr-accent); }
 
 /* ── Section tags ────────────────────────────────────────── */
 .efr-tag { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: .05em; vertical-align: middle; }
-.efr-tag-dur { background: rgba(96,165,250,.16); color: #60a5fa; }
-.efr-tag-cvx { background: rgba(251,191,36,.16); color: #fbbf24; }
+.efr-tag-dur { background: color-mix(in srgb, var(--blue-text) 16%, transparent); color: var(--blue-text); }
+.efr-tag-cvx { background: color-mix(in srgb, var(--amber-text) 16%, transparent); color: var(--amber-text); }
 
 /* ── ETF duration chips ──────────────────────────────────── */
 .efr-etf-chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -110,16 +110,16 @@
   font-size: 12px; color: var(--efr-text); background: var(--efr-surface);
   border: 1px solid var(--efr-border); border-radius: 8px; padding: 7px 11px;
 }
-.efr-etf-chip b { color: #60a5fa; }
+.efr-etf-chip b { color: var(--blue-text); }
 .efr-chip-sub { color: var(--efr-mute); font-size: 10.5px; }
 
 /* Compression cell coloring */
-.efr-comp-low  { color: #60a5fa; font-weight: 600; }
-.efr-comp-high { color: #fbbf24; font-weight: 600; }
+.efr-comp-low  { color: var(--blue-text); font-weight: 600; }
+.efr-comp-high { color: var(--amber-text); font-weight: 600; }
 
 /* ── Backdrop strip ──────────────────────────────────────── */
 .efr-backdrop {
-  background: linear-gradient(135deg, #0c1424 0%, #111d36 100%);
+  background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 100%);
   border: 1px solid var(--efr-border); border-radius: 12px;
   padding: 18px 20px; margin-bottom: 26px;
 }
@@ -153,7 +153,7 @@
 .efr-toggle-group { display: inline-flex; gap: 4px; background: var(--efr-surface); border: 1px solid var(--efr-border); border-radius: 8px; padding: 3px; }
 .efr-toggle { border: none; background: transparent; color: var(--efr-dim); font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; }
 .efr-toggle:hover { color: var(--efr-text); }
-.efr-toggle.active { background: var(--efr-accent); color: #fff; }
+.efr-toggle.active { background: var(--efr-accent); color: var(--on-accent); }
 
 /* ── Tables ──────────────────────────────────────────────── */
 .efr-table-wrap { overflow-x: auto; border: 1px solid var(--efr-border); border-radius: 12px; background: var(--efr-surface); }
@@ -164,9 +164,9 @@
   text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--efr-border); white-space: nowrap;
 }
 .efr-table th.num, .efr-table td.num { text-align: right; }
-.efr-table tbody td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.efr-table tbody td { padding: 11px 12px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 4%, transparent); }
 .efr-table tbody tr:last-child td { border-bottom: none; }
-.efr-table tbody tr:hover { background: rgba(255,255,255,.02); }
+.efr-table tbody tr:hover { background: color-mix(in srgb, var(--ink-strong) 2%, transparent); }
 .efr-compact { width: 100%; }
 .efr-compact thead th, .efr-compact tbody td { padding: 8px 10px; }
 
@@ -181,20 +181,20 @@
 /* Currency cell */
 .efr-ccy { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .efr-flag { font-size: 15px; }
-.efr-bloc { font-size: 10px; color: var(--efr-mute); background: rgba(255,255,255,.05); padding: 1px 6px; border-radius: 4px; margin-left: 2px; }
+.efr-bloc { font-size: 10px; color: var(--efr-mute); background: color-mix(in srgb, var(--ink-strong) 5%, transparent); padding: 1px 6px; border-radius: 4px; margin-left: 2px; }
 .efr-rank { color: var(--efr-mute); font-variant-numeric: tabular-nums; }
 
 /* Screen-specific */
-.efr-screen tbody tr:first-child { background: rgba(59,130,246,.05); }
+.efr-screen tbody tr:first-child { background: color-mix(in srgb, var(--blue) 5%, transparent); }
 .efr-rationale-col { min-width: 280px; }
 .efr-rationale { font-size: 12px; color: var(--efr-dim); line-height: 1.5; }
 
 /* Signal badges */
 .efr-badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 5px; white-space: nowrap; line-height: 1.3; }
-.efr-badge-long    { background: rgba(16,185,129,.14); color: #34d399; border: 1px solid rgba(16,185,129,.3); }
-.efr-badge-value   { background: rgba(59,130,246,.14); color: #60a5fa; border: 1px solid rgba(59,130,246,.3); }
-.efr-badge-rich    { background: rgba(245,158,11,.14); color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
-.efr-badge-neutral { background: rgba(148,163,184,.12); color: #94a3b8; border: 1px solid rgba(148,163,184,.25); }
+.efr-badge-long    { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green-text); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); }
+.efr-badge-value   { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue-text); border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent); }
+.efr-badge-rich    { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber-text); border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent); }
+.efr-badge-neutral { background: color-mix(in srgb, var(--ink-3) 12%, transparent); color: var(--ink-3); border: 1px solid color-mix(in srgb, var(--ink-3) 25%, transparent); }
 
 /* Sparkline cell */
 .efr-spark-cell { width: 130px; }
@@ -203,7 +203,7 @@
 /* Rates grid */
 .efr-rates-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
 .efr-sub-h2 { font-size: 15px; font-weight: 650; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
-.efr-pill { font-size: 11px; font-weight: 600; color: var(--efr-dim); background: rgba(255,255,255,.05); padding: 2px 8px; border-radius: 5px; }
+.efr-pill { font-size: 11px; font-weight: 600; color: var(--efr-dim); background: color-mix(in srgb, var(--ink-strong) 5%, transparent); padding: 2px 8px; border-radius: 5px; }
 .efr-src { font-size: 10px; font-weight: 500; color: var(--efr-mute); text-transform: uppercase; letter-spacing: .05em; }
 .efr-asof { font-size: 11px; color: var(--efr-mute); }
 

@@ -105,7 +105,7 @@
 .suggestion-pill:hover {
     background: var(--accent-dim);
     border-color: var(--accent);
-    color: #fff;
+    color: var(--ink-strong);
 }
 
 
@@ -136,7 +136,7 @@
 
 .message.user .message-avatar {
     background: var(--accent);
-    color: #fff;
+    color: var(--on-accent);
 }
 
 .message.assistant .message-avatar {
@@ -174,7 +174,7 @@
 }
 
 .message-text strong {
-    color: #fff;
+    color: var(--ink-strong);
     font-weight: 600;
 }
 
@@ -264,7 +264,7 @@
 .send-btn {
     background: var(--accent);
     border: none;
-    color: #fff;
+    color: var(--on-accent);
     width: 34px;
     height: 34px;
     border-radius: 8px;
@@ -277,7 +277,7 @@
 }
 
 .send-btn:hover:not(:disabled) {
-    background: #2563eb;
+    background: var(--blue-strong);
 }
 
 .send-btn:disabled {

@@ -17,28 +17,28 @@
   };
 
   const COLOR = {
-    headline: '#3b82f6',
-    core:     '#10b981',
-    food:     '#f59e0b',
-    energy:   '#ef4444',
-    shelter:  '#8b5cf6',
-    pos:      '#ef4444',          // CPI pos = bad, so red
-    neg:      '#10b981',
-    grid:     'rgba(255,255,255,0.06)',
-    text:     '#9ca3af',
-    target:   'rgba(96, 165, 250, 0.45)',
+    headline: Theme.c('blue'),
+    core:     Theme.c('green'),
+    food:     Theme.c('amber'),
+    energy:   Theme.c('red'),
+    shelter:  Theme.c('violet'),
+    pos:      Theme.c('red'),          // CPI pos = bad, so red
+    neg:      Theme.c('green'),
+    grid:     Theme.c('ink', 0.06),
+    text:     Theme.c('ink-3'),
+    target:   Theme.c('blue-text', 0.45),
   };
 
   const GROUP_COLOR = {
-    shelter:  '#8b5cf6',
-    food:     '#f59e0b',
-    energy:   '#ef4444',
-    vehicles: '#06b6d4',
-    medical:  '#f43f5e',
-    services: '#10b981',
-    goods:    '#ec4899',
-    aggregate:'#64748b',
-    other:    '#94a3b8',
+    shelter:  Theme.c('violet'),
+    food:     Theme.c('amber'),
+    energy:   Theme.c('red'),
+    vehicles: Theme.c('cyan'),
+    medical:  Theme.c('red'),
+    services: Theme.c('green'),
+    goods:    Theme.c('pink'),
+    aggregate:Theme.c('ink-4'),
+    other:    Theme.c('ink-3'),
   };
 
   const state = {
@@ -330,10 +330,10 @@
         labels: labels.map(formatMonth),
         datasets: [
           { label: 'Headline CPI', data: labels.map(l => hMap[l] != null ? hMap[l] : null),
-            borderColor: COLOR.headline, backgroundColor: 'rgba(59,130,246,0.10)',
+            borderColor: COLOR.headline, backgroundColor: Theme.c('blue', 0.10),
             tension: 0.25, pointRadius: 0, borderWidth: 2.4 },
           { label: 'Core CPI', data: labels.map(l => cMap[l] != null ? cMap[l] : null),
-            borderColor: COLOR.core, backgroundColor: 'rgba(16,185,129,0.10)',
+            borderColor: COLOR.core, backgroundColor: Theme.c('green', 0.10),
             tension: 0.25, pointRadius: 0, borderWidth: 2.4 },
           { label: 'Food', data: labels.map(l => fMap[l] != null ? fMap[l] : null),
             borderColor: COLOR.food, backgroundColor: 'transparent',
@@ -376,7 +376,7 @@
     const data = rows.map(r => r.change_pct);
     const colors = rows.map(r => (r.change_pct != null && r.change_pct >= 0)
       ? GROUP_COLOR[r.group] || COLOR.pos
-      : 'rgba(16,185,129,0.65)');
+      : Theme.c('green', 0.65));
 
     state.charts.rank = new Chart(ctx, {
       type: 'bar',
@@ -396,8 +396,8 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0a0e1a', borderColor: '#1f2937', borderWidth: 1,
-            titleColor: '#e5e7eb', bodyColor: '#cbd5e1',
+            backgroundColor: Theme.c('bg'), borderColor: Theme.c('rule'), borderWidth: 1,
+            titleColor: Theme.c('ink'), bodyColor: Theme.c('ink-2'),
             callbacks: {
               label: (c) => c.parsed.x == null ? null
                 : `${c.parsed.x >= 0 ? '+' : ''}${c.parsed.x.toFixed(2)}%`,
@@ -472,7 +472,7 @@
     const slice = state.windowMonths === 0 ? filtered : filtered.slice(-state.windowMonths);
     const labels = slice.map(p => p.date);
     const data = slice.map(p => p[basisField()]);
-    const color = ((det.colors || {})[state.detailKey]) || '#8b5cf6';
+    const color = ((det.colors || {})[state.detailKey]) || Theme.c('violet');
 
     const ctx = document.getElementById('cpi-detail-chart');
     if (!ctx) return;
@@ -608,7 +608,7 @@
     return `
       <div class="lm-spark-card ${active}" data-spark="${key}">
         <div class="lm-spark-head">
-          <span class="lm-color-dot" style="background:${colors[key] || '#64748b'}"></span>
+          <span class="lm-color-dot" style="background:${colors[key] || Theme.c('ink-4')}"></span>
           <span class="lm-spark-label" title="${cats[key] || key}">${cats[key] || key}</span>
         </div>
         <div class="lm-spark-value-row">
@@ -644,7 +644,7 @@
         labels,
         datasets: [{
           data,
-          borderColor: color || '#64748b',
+          borderColor: color || Theme.c('ink-4'),
           backgroundColor: 'transparent',
           borderWidth: 1.6,
           pointRadius: 0,
@@ -657,8 +657,8 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0a0e1a', borderColor: '#1f2937', borderWidth: 1,
-            titleColor: '#e5e7eb', bodyColor: '#cbd5e1',
+            backgroundColor: Theme.c('bg'), borderColor: Theme.c('rule'), borderWidth: 1,
+            titleColor: Theme.c('ink'), bodyColor: Theme.c('ink-2'),
             callbacks: {
               label: (c) => `${c.parsed.y >= 0 ? '+' : ''}${c.parsed.y.toFixed(2)}% YoY`,
               title: (items) => items[0] ? formatMonth(items[0].label) : '',
@@ -681,8 +681,8 @@
         legend: { display: showLegend, position: 'top',
                   labels: { color: COLOR.text, boxWidth: 12 } },
         tooltip: {
-          backgroundColor: '#0a0e1a', borderColor: '#1f2937', borderWidth: 1,
-          titleColor: '#e5e7eb', bodyColor: '#cbd5e1',
+          backgroundColor: Theme.c('bg'), borderColor: Theme.c('rule'), borderWidth: 1,
+          titleColor: Theme.c('ink'), bodyColor: Theme.c('ink-2'),
           callbacks: {
             label: (c) => c.parsed.y == null ? null
               : `${c.dataset.label}: ${yFmt(c.parsed.y)}`,

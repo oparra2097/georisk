@@ -5,41 +5,41 @@
 <style>
     .keys-wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px; }
     .keys-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-    .keys-header h1 { color: #f1f5f9; font-size: 22px; font-weight: 700; margin: 0; }
-    .keys-header a { color: #3b82f6; font-size: 13px; text-decoration: none; }
-    .keys-sub { color: #64748b; font-size: 13px; margin: 0 0 22px; }
-    .keys-sub code { background: #0f172a; border: 1px solid #1e293b; padding: 1px 6px; border-radius: 4px; color: #cbd5f5; font-size: 12px; }
+    .keys-header h1 { color: var(--ink-strong); font-size: 22px; font-weight: 700; margin: 0; }
+    .keys-header a { color: var(--blue); font-size: 13px; text-decoration: none; }
+    .keys-sub { color: var(--ink-4); font-size: 13px; margin: 0 0 22px; }
+    .keys-sub code { background: var(--surface); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 4px; color: var(--ink-2); font-size: 12px; }
 
-    .panel { background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-    .panel h2 { color: #e2e8f0; font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+    .panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .panel h2 { color: var(--ink); font-size: 15px; font-weight: 600; margin: 0 0 12px; }
 
     .new-key-banner { background: #10b9810f; border: 1px solid #10b98144; border-radius: 8px; padding: 16px 18px; margin-bottom: 20px; }
-    .new-key-banner h3 { color: #6ee7b7; font-size: 13px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .new-key-banner .secret { display: block; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: #020617; color: #cbd5f5; padding: 12px 14px; border-radius: 6px; border: 1px solid #1e293b; }
-    .new-key-banner .warn { color: #fbbf24; font-size: 12px; margin: 8px 0 0; }
-    .copy-btn { margin-top: 8px; padding: 5px 12px; font-size: 12px; background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 4px; cursor: pointer; }
-    .copy-btn:hover { background: #334155; }
+    .new-key-banner h3 { color: var(--green-soft); font-size: 13px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .new-key-banner .secret { display: block; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: var(--bg); color: var(--ink-2); padding: 12px 14px; border-radius: 6px; border: 1px solid var(--rule); }
+    .new-key-banner .warn { color: var(--amber-text); font-size: 12px; margin: 8px 0 0; }
+    .copy-btn { margin-top: 8px; padding: 5px 12px; font-size: 12px; background: var(--surface-2); color: var(--ink); border: 1px solid var(--rule-strong); border-radius: 4px; cursor: pointer; }
+    .copy-btn:hover { background: var(--surface-3); }
 
     form.create-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    form.create-form input[type=text] { flex: 1 1 200px; padding: 8px 10px; background: #020617; border: 1px solid #1e293b; border-radius: 4px; color: #e2e8f0; font-size: 13px; }
-    form.create-form select { padding: 8px 10px; background: #020617; border: 1px solid #1e293b; border-radius: 4px; color: #e2e8f0; font-size: 13px; }
-    form.create-form button { padding: 8px 18px; background: #3b82f6; color: #fff; border: 0; border-radius: 4px; font-weight: 600; font-size: 13px; cursor: pointer; }
-    form.create-form button:hover { background: #2563eb; }
+    form.create-form input[type=text] { flex: 1 1 200px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; color: var(--ink); font-size: 13px; }
+    form.create-form select { padding: 8px 10px; background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; color: var(--ink); font-size: 13px; }
+    form.create-form button { padding: 8px 18px; background: var(--blue); color: var(--on-accent); border: 0; border-radius: 4px; font-weight: 600; font-size: 13px; cursor: pointer; }
+    form.create-form button:hover { background: var(--blue-strong); }
 
     table.keys { width: 100%; border-collapse: collapse; font-size: 13px; }
-    table.keys th { background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px; text-align: left; }
-    table.keys td { padding: 10px; border-bottom: 1px solid #1e293b; color: #e2e8f0; vertical-align: middle; }
-    table.keys td.prefix { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #cbd5f5; font-size: 12px; }
+    table.keys th { background: var(--surface-2); color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px; text-align: left; }
+    table.keys td { padding: 10px; border-bottom: 1px solid var(--rule); color: var(--ink); vertical-align: middle; }
+    table.keys td.prefix { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-2); font-size: 12px; }
     .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-    .pill-active { background: #10b98118; color: #10b981; }
-    .pill-revoked { background: #f59e0b18; color: #f59e0b; }
-    .revoke-btn { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; border: 1px solid #ef444444; background: transparent; color: #ef4444; cursor: pointer; }
+    .pill-active { background: #10b98118; color: var(--green); }
+    .pill-revoked { background: #f59e0b18; color: var(--amber); }
+    .revoke-btn { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; border: 1px solid #ef444444; background: transparent; color: var(--red); cursor: pointer; }
     .revoke-btn:hover { background: #ef444418; }
-    .empty { color: #64748b; font-size: 13px; text-align: center; padding: 24px; }
+    .empty { color: var(--ink-4); font-size: 13px; text-align: center; padding: 24px; }
 
     .flash-bar { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
-    .flash-bar.success { background: #10b98118; color: #6ee7b7; border: 1px solid #10b98133; }
-    .flash-bar.error { background: #ef444418; color: #fca5a5; border: 1px solid #ef444433; }
+    .flash-bar.success { background: #10b98118; color: var(--green-soft); border: 1px solid #10b98133; }
+    .flash-bar.error { background: #ef444418; color: var(--red-soft); border: 1px solid #ef444433; }
 </style>
 {% endblock %}
 

@@ -13,10 +13,10 @@
       Fed funds futures curve overlaid on the FRB/US-lite macro model's
       p10-p90 fed funds fan. The market side is CME ZQ contracts (implied
       rate = 100 − settle). The model side is the reduced-form inertial
-      Taylor rule from <a href="/macro-model" style="color:var(--accent,#3b82f6);text-decoration:none">/macro-model</a>.
+      Taylor rule from <a href="/macro-model" style="color:var(--accent,var(--blue));text-decoration:none">/macro-model</a>.
       A CME FedWatch–style probability grid decomposes each contract into
       per-meeting hike / hold / cut buckets. Divergent contracts feed
-      <a href="/trades" style="color:var(--accent,#3b82f6);text-decoration:none">/trades</a>.
+      <a href="/trades" style="color:var(--accent,var(--blue));text-decoration:none">/trades</a>.
     </p>
   </header>
 
@@ -57,7 +57,7 @@
       <span><span class="dot market"></span>Market (fed funds futures / ZQ)</span>
       <span><span class="dot model"></span>Model p50 (FRB/US-lite Taylor rule)</span>
       <span><span class="dot band"></span>Model p10–p90 band</span>
-      <span style="margin-left:auto"><span class="dot" style="background:var(--usr-good, #10b981)"></span>Spot (FRED DFF)</span>
+      <span style="margin-left:auto"><span class="dot" style="background:var(--usr-good, var(--green))"></span>Spot (FRED DFF)</span>
     </div>
   </section>
 
@@ -90,7 +90,7 @@
   <section class="usr-section">
     <div class="usr-section-head">
       <h2 class="usr-section-title">Edge — where the model disagrees with the market</h2>
-      <span class="usr-section-note"><a href="/trades" style="color:var(--accent,#3b82f6);text-decoration:none;font-weight:600">Open trade board →</a></span>
+      <span class="usr-section-note"><a href="/trades" style="color:var(--accent,var(--blue));text-decoration:none;font-weight:600">Open trade board →</a></span>
     </div>
     <div class="usr-edge-wrap">
       <table class="usr-edge" id="usr-edge">
@@ -129,7 +129,7 @@
         bucketed linearly across ±25 / hold / ±50 so the expected value
         of the bucketed distribution equals the observed delta. Standard
         <a href="https://www.cmegroup.com/education/tools-and-applications/fedwatch-tool.html"
-           style="color:var(--accent,#3b82f6);text-decoration:none" target="_blank" rel="noopener">CME
+           style="color:var(--accent,var(--blue));text-decoration:none" target="_blank" rel="noopener">CME
         methodology</a>.</p>
       <p><strong>Edge.</strong> Model p50 at the meeting date (linear
         interpolation between quarter-end points) minus market

@@ -22,20 +22,20 @@
   };
 
   const COLOR = {
-    bls:           '#3b82f6',
-    blsBar:        'rgba(59,130,246,0.65)',
-    estLine:       '#f59e0b',
-    estBar:        'rgba(245,158,11,0.45)',
-    u3:            '#ef4444',
-    u6:            '#f97316',
-    lfp:           '#a855f7',
-    eppop:         '#8b5cf6',
-    wage:          '#10b981',
-    hours:         '#14b8a6',
-    pos:           '#10b981',
-    neg:           '#ef4444',
-    grid:          'rgba(255,255,255,0.06)',
-    text:          '#9ca3af',
+    bls:           Theme.c('blue'),
+    blsBar:        Theme.c('blue', 0.65),
+    estLine:       Theme.c('amber'),
+    estBar:        Theme.c('amber', 0.45),
+    u3:            Theme.c('red'),
+    u6:            Theme.c('orange'),
+    lfp:           Theme.c('violet'),
+    eppop:         Theme.c('violet'),
+    wage:          Theme.c('green'),
+    hours:         Theme.c('cyan'),
+    pos:           Theme.c('green'),
+    neg:           Theme.c('red'),
+    grid:          Theme.c('ink', 0.06),
+    text:          Theme.c('ink-3'),
   };
 
   const state = {
@@ -347,8 +347,8 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0a0e1a', borderColor: '#1f2937', borderWidth: 1,
-            titleColor: '#e5e7eb', bodyColor: '#cbd5e1',
+            backgroundColor: Theme.c('bg'), borderColor: Theme.c('rule'), borderWidth: 1,
+            titleColor: Theme.c('ink'), bodyColor: Theme.c('ink-2'),
             callbacks: {
               label: (c) => {
                 const v = c.parsed.x;
@@ -471,7 +471,7 @@
     return `
       <div class="lm-spark-card" data-spark="${key}">
         <div class="lm-spark-head">
-          <span class="lm-color-dot" style="background:${colors[key] || '#64748b'}"></span>
+          <span class="lm-color-dot" style="background:${colors[key] || Theme.c('ink-4')}"></span>
           <span class="lm-spark-label" title="${cats[key] || key}">${cats[key] || key}</span>
         </div>
         <div class="lm-spark-value-row">
@@ -498,7 +498,7 @@
         labels,
         datasets: [{
           data,
-          borderColor: ((state.bundle.bls||{}).colors||{})[key] || '#64748b',
+          borderColor: ((state.bundle.bls||{}).colors||{})[key] || Theme.c('ink-4'),
           backgroundColor: 'transparent',
           borderWidth: 1.6,
           pointRadius: 0,
@@ -511,8 +511,8 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0a0e1a', borderColor: '#1f2937', borderWidth: 1,
-            titleColor: '#e5e7eb', bodyColor: '#cbd5e1',
+            backgroundColor: Theme.c('bg'), borderColor: Theme.c('rule'), borderWidth: 1,
+            titleColor: Theme.c('ink'), bodyColor: Theme.c('ink-2'),
             callbacks: {
               label: (c) => `${c.parsed.y >= 0 ? '+' : ''}${c.parsed.y.toFixed(2)}% YoY`,
               title: (items) => items[0] ? formatMonth(items[0].label) : '',
@@ -575,7 +575,7 @@
             data: forecastBars, backgroundColor: COLOR.estBar, borderColor: COLOR.estLine,
             borderWidth: 1, borderDash: [4, 3], order: 2 },
           { type: 'line', label: 'Bridge model estimate',
-            data: estLine, borderColor: COLOR.estLine, backgroundColor: 'rgba(245,158,11,0.18)',
+            data: estLine, borderColor: COLOR.estLine, backgroundColor: Theme.c('amber', 0.18),
             tension: 0.25, pointRadius: 0, pointHoverRadius: 3, borderWidth: 2,
             spanGaps: true, order: 1 },
         ],
@@ -631,10 +631,10 @@
         labels,
         datasets: [
           { label: 'U-3 (BLS)', data: u3Series, borderColor: COLOR.u3,
-            backgroundColor: 'rgba(239,68,68,0.10)', tension: 0.25,
+            backgroundColor: Theme.c('red', 0.10), tension: 0.25,
             pointRadius: 0, borderWidth: 2, fill: false },
           { label: 'U-6 (BLS)', data: u6Series, borderColor: COLOR.u6,
-            backgroundColor: 'rgba(249,115,22,0.08)', tension: 0.25,
+            backgroundColor: Theme.c('orange', 0.08), tension: 0.25,
             pointRadius: 0, borderWidth: 2, fill: false },
           { label: 'U-3 model estimate', data: estLevel, borderColor: COLOR.estLine,
             borderDash: [5, 4], tension: 0.25, pointRadius: 0, borderWidth: 2,
@@ -669,7 +669,7 @@
         datasets: [
           { label: 'Avg hourly earnings YoY (%)',
             data: slice.map(m => aheByMonth[m] != null ? aheByMonth[m] : null),
-            borderColor: COLOR.wage, backgroundColor: 'rgba(16,185,129,0.10)',
+            borderColor: COLOR.wage, backgroundColor: Theme.c('green', 0.10),
             tension: 0.25, pointRadius: 0, borderWidth: 2, yAxisID: 'y' },
           { label: 'Avg weekly hours',
             data: slice.map(m => hrsByMonth[m] != null ? hrsByMonth[m] : null),
@@ -708,10 +708,10 @@
         datasets: [
           { label: 'Labor-force participation', data: slice.map(m => lfpBy[m] != null ? lfpBy[m] : null),
             borderColor: COLOR.lfp, tension: 0.25, pointRadius: 0, borderWidth: 2,
-            backgroundColor: 'rgba(168,85,247,0.10)' },
+            backgroundColor: Theme.c('violet', 0.10) },
           { label: 'Employment-to-population', data: slice.map(m => epopBy[m] != null ? epopBy[m] : null),
             borderColor: COLOR.eppop, tension: 0.25, pointRadius: 0, borderWidth: 2,
-            backgroundColor: 'rgba(139,92,246,0.10)' },
+            backgroundColor: Theme.c('violet', 0.10) },
         ],
       },
       options: chartOpts({ yTitle: 'Rate (%)', yFmt: (v) => `${v.toFixed(1)}%`, showLegend: true }),
@@ -788,8 +788,8 @@
       plugins: {
         legend: { display: showLegend, position: 'top', labels: { color: COLOR.text, boxWidth: 12 } },
         tooltip: {
-          backgroundColor: '#0a0e1a', borderColor: '#1f2937', borderWidth: 1,
-          titleColor: '#e5e7eb', bodyColor: '#cbd5e1',
+          backgroundColor: Theme.c('bg'), borderColor: Theme.c('rule'), borderWidth: 1,
+          titleColor: Theme.c('ink'), bodyColor: Theme.c('ink-2'),
           callbacks: {
             label: (c) => c.parsed.y == null ? null : `${c.dataset.label}: ${yFmt(c.parsed.y)}`,
           },
@@ -812,8 +812,8 @@
       plugins: {
         legend: { display: true, position: 'top', labels: { color: COLOR.text, boxWidth: 12 } },
         tooltip: {
-          backgroundColor: '#0a0e1a', borderColor: '#1f2937', borderWidth: 1,
-          titleColor: '#e5e7eb', bodyColor: '#cbd5e1',
+          backgroundColor: Theme.c('bg'), borderColor: Theme.c('rule'), borderWidth: 1,
+          titleColor: Theme.c('ink'), bodyColor: Theme.c('ink-2'),
         },
       },
       scales: {

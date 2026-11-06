@@ -84,20 +84,20 @@
     gap: 6px;
     padding: 7px 14px;
     font-size: 13px;
-    color: var(--text-secondary, #9ca3af);
+    color: var(--text-secondary, var(--ink-3));
     background: transparent;
-    border: 1px solid var(--border, #374151);
+    border: 1px solid var(--border, var(--rule-strong));
     border-radius: 6px;
     cursor: pointer;
     transition: color 0.2s, border-color 0.2s;
 }
 .panel-share-btn:hover {
-    color: var(--text-primary, #f3f4f6);
-    border-color: var(--text-muted, #6b7280);
+    color: var(--text-primary, var(--ink-strong));
+    border-color: var(--text-muted, var(--ink-4));
 }
 .panel-share-btn.copied {
-    color: #10b981;
-    border-color: #10b981;
+    color: var(--green);
+    border-color: var(--green);
 }
 
 .share-toast {
@@ -105,9 +105,9 @@
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
-    background: #111827;
-    color: #f3f4f6;
-    border: 1px solid #374151;
+    background: var(--surface);
+    color: var(--ink-strong);
+    border: 1px solid var(--rule-strong);
     border-radius: 8px;
     padding: 10px 18px;
     font-size: 13px;
@@ -246,9 +246,9 @@
 }
 
 .history-range-btn.active {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.4);
-    color: #ef4444;
+    background: color-mix(in srgb, var(--red) 15%, transparent);
+    border-color: color-mix(in srgb, var(--red) 40%, transparent);
+    color: var(--red);
 }
 
 #panel-history-chart {

@@ -9,19 +9,19 @@
  */
 
 .cr-page {
-  --cr-bg:            var(--bg-primary,    #0a0e1a);
-  --cr-surface:       var(--bg-secondary,  #111827);
-  --cr-surface-2:     #1a2035;
-  --cr-border:        var(--border,        #1f2937);
-  --cr-border-strong: #2a3245;
-  --cr-text:          var(--text-primary,  #e5e7eb);
-  --cr-text-dim:      var(--text-secondary,#9ca3af);
-  --cr-text-mute:     var(--text-muted,    #6b7280);
-  --cr-accent:        var(--accent,        #3b82f6);
-  --cr-accent-soft:   rgba(59, 130, 246, 0.12);
-  --cr-good:          #10b981;
-  --cr-bad:           #ef4444;
-  --cr-warn:          #f59e0b;
+  --cr-bg:            var(--bg-primary,    var(--bg));
+  --cr-surface:       var(--bg-secondary,  var(--surface));
+  --cr-surface-2:     var(--surface-2);
+  --cr-border:        var(--border,        var(--rule));
+  --cr-border-strong: var(--rule-strong);
+  --cr-text:          var(--text-primary,  var(--ink));
+  --cr-text-dim:      var(--text-secondary,var(--ink-3));
+  --cr-text-mute:     var(--text-muted,    var(--ink-4));
+  --cr-accent:        var(--accent,        var(--blue));
+  --cr-accent-soft:   color-mix(in srgb, var(--blue) 12%, transparent);
+  --cr-good:          var(--green);
+  --cr-bad:           var(--red);
+  --cr-warn:          var(--amber);
 
   max-width: 1400px;
   margin: 0 auto;
@@ -112,7 +112,7 @@
 }
 .cr-card:hover {
   border-color: var(--cr-accent);
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--blue) 15%, transparent);
 }
 .cr-card-eyebrow {
   font-size: 10px;

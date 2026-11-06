@@ -3,44 +3,44 @@
 
 {% block extra_css %}
 <style>
-  .hp-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+  .hp-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: var(--ink); }
 
-  .hp-hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-             color: #f1f5f9; padding: 36px 28px; border-radius: 10px; margin-bottom: 24px; }
-  .hp-hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #86efac; margin-bottom: 8px; }
+  .hp-hero { background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+             color: var(--ink-strong); padding: 36px 28px; border-radius: 10px; margin-bottom: 24px; }
+  .hp-hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--green-soft); margin-bottom: 8px; }
   .hp-hero h2 { font-size: 26px; font-weight: 700; margin: 0 0 10px; line-height: 1.2; }
-  .hp-hero p { font-size: 14px; color: #cbd5e1; margin: 0 0 18px; line-height: 1.6; max-width: 780px; }
+  .hp-hero p { font-size: 14px; color: var(--ink-2); margin: 0 0 18px; line-height: 1.6; max-width: 780px; }
   .hp-hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 16px; }
-  .hp-hero-stat { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); }
-  .hp-hero-stat .num { font-size: 22px; font-weight: 600; color: #f1f5f9; }
+  .hp-hero-stat { background: color-mix(in srgb, var(--ink-strong) 5%, transparent); padding: 12px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+  .hp-hero-stat .num { font-size: 22px; font-weight: 600; color: var(--ink-strong); }
   .hp-hero-stat .lbl {
-    font-size: 11px; color: #94a3b8; text-transform: uppercase;
+    font-size: 11px; color: var(--ink-3); text-transform: uppercase;
     letter-spacing: 0.06em; margin-top: 2px;
     overflow-wrap: anywhere; line-height: 1.25;
   }
-  .hp-hero-stat .chg { font-size: 13px; color: #86efac; margin-top: 4px; }
-  .hp-hero-stat .chg.neg { color: #fca5a5; }
+  .hp-hero-stat .chg { font-size: 13px; color: var(--green-soft); margin-top: 4px; }
+  .hp-hero-stat .chg.neg { color: var(--red-soft); }
 
   .hp-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-  .hp-tab { padding: 6px 14px; font-size: 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 4px; cursor: pointer; color: #374151; }
-  .hp-tab:hover { background: #f3f4f6; }
-  .hp-tab.active { background: #111827; color: #fff; border-color: #111827; }
-  .hp-search { margin-left: auto; padding: 6px 10px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; min-width: 240px; }
+  .hp-tab { padding: 6px 14px; font-size: 12px; border: 1px solid var(--rule-strong); background: var(--surface); border-radius: 4px; cursor: pointer; color: var(--ink-2); }
+  .hp-tab:hover { background: var(--surface-2); }
+  .hp-tab.active { background: var(--ink-strong); color: var(--surface); border-color: var(--ink); }
+  .hp-search { margin-left: auto; padding: 6px 10px; font-size: 12px; border: 1px solid var(--rule-strong); border-radius: 4px; min-width: 240px; }
 
-  .hp-card { border: 1px solid #e5e7eb; background: #fff; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
-  .hp-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.03em; color: #374151; }
+  .hp-card { border: 1px solid var(--rule); background: var(--surface); padding: 14px; border-radius: 6px; margin-bottom: 16px; }
+  .hp-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-2); }
 
   table.hp-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
-  table.hp-table thead th { background: #f9fafb; color: #4b5563; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 10px; text-align: left; position: sticky; top: 0; cursor: pointer; user-select: none; }
-  table.hp-table thead th.sorted { color: #111827; }
+  table.hp-table thead th { background: var(--surface-2); color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 10px; text-align: left; position: sticky; top: 0; cursor: pointer; user-select: none; }
+  table.hp-table thead th.sorted { color: var(--ink-strong); }
   table.hp-table thead th.num, table.hp-table td.num { text-align: right; }
-  table.hp-table tbody td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; color: #1f2937; }
-  table.hp-table tbody tr:hover { background: #f9fafb; cursor: pointer; }
-  table.hp-table tbody tr.selected { background: #dbeafe; }
-  table.hp-table tbody tr.hover-from-map { background: #eff6ff; box-shadow: inset 2px 0 0 #2563eb; }
+  table.hp-table tbody td { padding: 7px 10px; border-bottom: 1px solid var(--rule); color: var(--ink); }
+  table.hp-table tbody tr:hover { background: var(--surface-2); cursor: pointer; }
+  table.hp-table tbody tr.selected { background: var(--blue-tint); }
+  table.hp-table tbody tr.hover-from-map { background: var(--blue-wash); box-shadow: inset 2px 0 0 var(--blue-strong); }
 
-  .pos { color: #059669; } .neg { color: #dc2626; } .zero { color: #9ca3af; }
-  .tbl-wrap { max-height: 520px; overflow-y: auto; border: 1px solid #f3f4f6; border-radius: 4px; }
+  .pos { color: var(--green-text); } .neg { color: var(--red-text); } .zero { color: var(--ink-5); }
+  .tbl-wrap { max-height: 520px; overflow-y: auto; border: 1px solid var(--rule); border-radius: 4px; }
 
   /* ── Mobile (≤640px) ───────────────────────────────────────────── */
   @media (max-width: 640px) {
@@ -84,62 +84,62 @@
   .hp-layout { display: grid; grid-template-columns: minmax(0,2fr) minmax(320px,1fr); gap: 20px; }
   @media (max-width: 900px) { .hp-layout { grid-template-columns: 1fr; } }
 
-  .detail-box { font-size: 13px; color: #4b5563; }
+  .detail-box { font-size: 13px; color: var(--ink-3); }
   .detail-box dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
-  .detail-box dt { color: #9ca3af; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .detail-box dt { color: var(--ink-5); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
   .detail-box dd { margin: 0; font-variant-numeric: tabular-nums; }
   .sparkline-host { margin-top: 14px; }
 
-  .footer-note { font-size: 10px; color: #9ca3af; margin-top: 18px; padding-top: 10px; border-top: 1px solid #f3f4f6; }
-  .loading { color: #9ca3af; font-size: 12px; padding: 12px; text-align: center; }
+  .footer-note { font-size: 10px; color: var(--ink-5); margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  .loading { color: var(--ink-5); font-size: 12px; padding: 12px; text-align: center; }
 
   /* ── Map ───────────────────────────────────────────────────────── */
   .hp-map-card { padding: 18px 20px; }
   .hp-map-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .hp-map-head h3 { margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #374151; }
-  .hp-map-head .sub { font-size: 11px; color: #9ca3af; margin-left: 6px; }
+  .hp-map-head h3 { margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-2); }
+  .hp-map-head .sub { font-size: 11px; color: var(--ink-5); margin-left: 6px; }
   .hp-map-controls { margin-left: auto; display: flex; gap: 6px; align-items: center; }
-  .hp-map-controls select { padding: 4px 8px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 3px; background: #fff; color: #1f2937; }
-  .hp-map-controls .btn-reset { padding: 4px 10px; font-size: 11px; border: 1px solid #d1d5db; background: #fff; border-radius: 3px; cursor: pointer; color: #374151; }
-  .hp-map-controls .btn-reset:hover { background: #f3f4f6; }
+  .hp-map-controls select { padding: 4px 8px; font-size: 11px; border: 1px solid var(--rule-strong); border-radius: 3px; background: var(--surface); color: var(--ink); }
+  .hp-map-controls .btn-reset { padding: 4px 10px; font-size: 11px; border: 1px solid var(--rule-strong); background: var(--surface); border-radius: 3px; cursor: pointer; color: var(--ink-2); }
+  .hp-map-controls .btn-reset:hover { background: var(--surface-2); }
   .hp-map-controls .btn-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .hp-map-host { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 360px; background: #f9fafb;
-                 border-radius: 6px; overflow: hidden; border: 1px solid #f3f4f6; }
+  .hp-map-host { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 360px; background: var(--surface-2);
+                 border-radius: 6px; overflow: hidden; border: 1px solid var(--rule); }
   .hp-map-host svg { width: 100%; height: 100%; display: block; }
 
   .hp-map-host path.geo {
-    fill: #e5e7eb; stroke: #fff; stroke-width: 0.6; cursor: pointer;
+    fill: var(--surface-3); stroke: var(--surface); stroke-width: 0.6; cursor: pointer;
     transition: fill 0.18s ease, stroke 0.18s ease;
   }
-  .hp-map-host path.geo:hover { stroke: #111827; stroke-width: 1.2; }
-  .hp-map-host path.geo.no-data { fill: #f3f4f6; cursor: default; }
-  .hp-map-host path.geo.selected { stroke: #111827; stroke-width: 1.6; }
-  .hp-map-host path.county-border { fill: none; stroke: #fff; stroke-width: 0.4; pointer-events: none; }
-  .hp-map-host path.state-outline { fill: none; stroke: #1f2937; stroke-width: 1; pointer-events: none; }
+  .hp-map-host path.geo:hover { stroke: var(--ink); stroke-width: 1.2; }
+  .hp-map-host path.geo.no-data { fill: var(--surface-2); cursor: default; }
+  .hp-map-host path.geo.selected { stroke: var(--ink); stroke-width: 1.6; }
+  .hp-map-host path.county-border { fill: none; stroke: var(--surface); stroke-width: 0.4; pointer-events: none; }
+  .hp-map-host path.state-outline { fill: none; stroke: var(--ink); stroke-width: 1; pointer-events: none; }
   .hp-map-host path.geo.dim { opacity: 0.25; }
   .hp-map-host text.state-label {
-    font: 600 9px system-ui, sans-serif; fill: #1f2937; pointer-events: none;
-    paint-order: stroke; stroke: rgba(255,255,255,0.85); stroke-width: 2.2px;
+    font: 600 9px system-ui, sans-serif; fill: var(--ink); pointer-events: none;
+    paint-order: stroke; stroke: color-mix(in srgb, var(--surface) 85%, transparent); stroke-width: 2.2px;
     text-anchor: middle; user-select: none;
   }
   .hp-map-host text.state-label.dim { opacity: 0.25; }
 
   .hp-tooltip {
-    position: absolute; pointer-events: none; background: rgba(15,23,42,0.95); color: #f1f5f9;
+    position: absolute; pointer-events: none; background: color-mix(in srgb, var(--ink-strong) 95%, transparent); color: var(--surface-2);
     padding: 8px 10px; border-radius: 5px; font-size: 11px; z-index: 5; min-width: 160px;
     transform: translate(-50%, -110%); white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.18);
     opacity: 0; transition: opacity 0.12s;
   }
   .hp-tooltip.show { opacity: 1; }
-  .hp-tooltip strong { display: block; font-size: 12px; margin-bottom: 4px; color: #fff; }
+  .hp-tooltip strong { display: block; font-size: 12px; margin-bottom: 4px; color: var(--surface); }
   .hp-tooltip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 10px; }
-  .hp-tooltip dt { color: #cbd5e1; }
+  .hp-tooltip dt { color: var(--ink-5); }
   .hp-tooltip dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
-  .hp-tooltip .delta-pos { color: #fca5a5; } .hp-tooltip .delta-neg { color: #86efac; }
+  .hp-tooltip .delta-pos { color: var(--red); } .hp-tooltip .delta-neg { color: var(--green); }
 
   .hp-legend {
-    display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 11px; color: #6b7280;
+    display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 11px; color: var(--ink-4);
     font-variant-numeric: tabular-nums; flex-wrap: wrap;
   }
   .hp-legend .scale-host { display: flex; flex-direction: column; gap: 3px; }
@@ -151,17 +151,17 @@
     display: flex;
   }
   .hp-legend .ticks {
-    width: 240px; display: flex; justify-content: space-between; font-size: 10px; color: #4b5563;
+    width: 240px; display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-3);
   }
-  .hp-legend .lbl { font-size: 11px; color: #4b5563; }
+  .hp-legend .lbl { font-size: 11px; color: var(--ink-3); }
   .hp-legend .meta {
-    margin-left: auto; font-size: 10px; color: #9ca3af; line-height: 1.4; text-align: right;
+    margin-left: auto; font-size: 10px; color: var(--ink-5); line-height: 1.4; text-align: right;
   }
-  .hp-legend .meta strong { color: #4b5563; font-weight: 600; }
+  .hp-legend .meta strong { color: var(--ink-3); font-weight: 600; }
 
   .hp-map-overlay {
     position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    background: rgba(249,250,251,0.85); color: #6b7280; font-size: 13px; pointer-events: none;
+    background: color-mix(in srgb, var(--surface-2) 85%, transparent); color: var(--ink-4); font-size: 13px; pointer-events: none;
   }
   .hp-map-overlay.hidden { display: none; }
 
@@ -170,19 +170,19 @@
   .hp-forecast-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
   .hp-forecast-head h3 {
     margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.03em; color: #374151;
+    letter-spacing: 0.03em; color: var(--ink-2);
   }
-  .hp-forecast-head h3 .sub { font-size: 11px; font-weight: 400; color: #9ca3af; text-transform: none; letter-spacing: 0; margin-left: 8px; }
+  .hp-forecast-head h3 .sub { font-size: 11px; font-weight: 400; color: var(--ink-5); text-transform: none; letter-spacing: 0; margin-left: 8px; }
   .hp-forecast-status {
-    font-size: 11px; padding: 3px 8px; border-radius: 10px; background: #f3f4f6; color: #4b5563;
+    font-size: 11px; padding: 3px 8px; border-radius: 10px; background: var(--surface-2); color: var(--ink-3);
   }
-  .hp-forecast-status.ok    { background: #d1fae5; color: #065f46; }
-  .hp-forecast-status.err   { background: #fee2e2; color: #991b1b; }
-  .hp-forecast-status.build { background: #fef3c7; color: #78350f; }
+  .hp-forecast-status.ok    { background: var(--green-tint); color: var(--green-soft); }
+  .hp-forecast-status.err   { background: var(--red-tint); color: var(--red-soft); }
+  .hp-forecast-status.build { background: var(--amber-tint); color: var(--amber-soft); }
   .hp-forecast-controls { margin-left: auto; display: flex; gap: 6px; align-items: center; }
-  .hp-forecast-controls select { padding: 4px 8px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 3px; background: #fff; color: #1f2937; }
-  .hp-forecast-controls button { padding: 4px 12px; font-size: 11px; border: 1px solid #d1d5db; background: #fff; border-radius: 3px; cursor: pointer; color: #374151; }
-  .hp-forecast-controls button:hover { background: #f3f4f6; }
+  .hp-forecast-controls select { padding: 4px 8px; font-size: 11px; border: 1px solid var(--rule-strong); border-radius: 3px; background: var(--surface); color: var(--ink); }
+  .hp-forecast-controls button { padding: 4px 12px; font-size: 11px; border: 1px solid var(--rule-strong); background: var(--surface); border-radius: 3px; cursor: pointer; color: var(--ink-2); }
+  .hp-forecast-controls button:hover { background: var(--surface-2); }
   .hp-forecast-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
   .hp-forecast-grid {
     display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 16px;
@@ -193,22 +193,22 @@
   .hp-forecast-table-wrap table { min-width: 520px; }
   .hp-forecast-chart-host {
     width: 100%; aspect-ratio: 5 / 2; min-height: 180px; max-height: 260px;
-    background: #fafbfc; border: 1px solid #f3f4f6; border-radius: 4px;
+    background: var(--surface-2); border: 1px solid var(--rule); border-radius: 4px;
     margin-bottom: 10px; position: relative;
   }
   .hp-forecast-chart-host svg { width: 100%; height: 100%; display: block; }
-  .hp-forecast-chart-host .axis text { fill: #9ca3af; font-size: 10px; }
+  .hp-forecast-chart-host .axis text { fill: var(--ink-5); font-size: 10px; }
   .hp-forecast-chart-host .axis line, .hp-forecast-chart-host .axis path {
-    stroke: #e5e7eb; shape-rendering: crispEdges;
+    stroke: var(--rule); shape-rendering: crispEdges;
   }
-  .hp-forecast-chart-host .gridline { stroke: #f3f4f6; stroke-dasharray: 2,2; }
-  .hp-forecast-chart-host .fan-band { fill: #93c5fd; opacity: 0.35; }
-  .hp-forecast-chart-host .fan-median { fill: none; stroke: #1d4ed8; stroke-width: 2; }
-  .hp-forecast-chart-host .hist-line { fill: none; stroke: #1f2937; stroke-width: 1.5; }
+  .hp-forecast-chart-host .gridline { stroke: var(--rule); stroke-dasharray: 2,2; }
+  .hp-forecast-chart-host .fan-band { fill: var(--blue); opacity: 0.35; }
+  .hp-forecast-chart-host .fan-median { fill: none; stroke: var(--blue-strong); stroke-width: 2; }
+  .hp-forecast-chart-host .hist-line { fill: none; stroke: var(--ink); stroke-width: 1.5; }
   .hp-forecast-chart-host .scenario-line {
-    fill: none; stroke: #b91c1c; stroke-width: 1.8; stroke-dasharray: 4,3;
+    fill: none; stroke: var(--red-strong); stroke-width: 1.8; stroke-dasharray: 4,3;
   }
-  .hp-forecast-chart-host .legend-row { font-size: 10px; fill: #4b5563; }
+  .hp-forecast-chart-host .legend-row { font-size: 10px; fill: var(--ink-3); }
 </style>
 {% endblock %}
 
@@ -231,7 +231,7 @@
       <span id="hp-diag-badge" style="font-size:10px;padding:2px 8px;border-radius:10px;"></span>
       <button class="hp-tab" id="hp-diag-toggle" style="margin-left:auto;font-size:11px;padding:3px 10px;">Details</button>
     </h3>
-    <div id="hp-diag-summary" style="font-size:12px;color:#4b5563;"></div>
+    <div id="hp-diag-summary" style="font-size:12px;color:var(--ink-3);"></div>
     <div id="hp-diag-details" style="display:none;margin-top:10px;"></div>
   </section>
 
@@ -241,7 +241,7 @@
       <h3>Map</h3>
       <span class="sub" id="hp-map-sub">United States — click any state to drill into counties</span>
       <div class="hp-map-controls">
-        <label style="font-size:11px;color:#4b5563;">Color by
+        <label style="font-size:11px;color:var(--ink-3);">Color by
           <select id="hp-map-metric">
             <option value="yoy_pct" selected>YoY %</option>
             <option value="yoy_3y_avg">3y avg %</option>
@@ -293,7 +293,7 @@
         </div>
       </div>
       <div class="hp-forecast-meta">
-        <div id="hp-forecast-fit" style="font-size:11px;color:#6b7280;line-height:1.5;">
+        <div id="hp-forecast-fit" style="font-size:11px;color:var(--ink-4);line-height:1.5;">
           Fit diagnostics will appear here once the model is built.
         </div>
       </div>
@@ -311,7 +311,7 @@
 
   <div class="hp-layout">
     <div class="hp-card">
-      <h3>Geographies <span id="hp-count" style="font-weight:400;color:#9ca3af;margin-left:6px;font-size:11px;"></span></h3>
+      <h3>Geographies <span id="hp-count" style="font-weight:400;color:var(--ink-5);margin-left:6px;font-size:11px;"></span></h3>
       <div class="tbl-wrap">
         <table class="hp-table" id="hp-table">
           <thead>
@@ -462,31 +462,31 @@
 
     const badge = $('hp-diag-badge');
     if (s.build_error) {
-      badge.textContent = 'ERROR'; badge.style.background = '#fee2e2'; badge.style.color = '#991b1b';
+      badge.textContent = 'ERROR'; badge.style.background = Theme.c('red-tint'); badge.style.color = Theme.c('red-soft');
     } else if (s.building) {
-      badge.textContent = 'BUILDING'; badge.style.background = '#fef3c7'; badge.style.color = '#78350f';
+      badge.textContent = 'BUILDING'; badge.style.background = Theme.c('amber-tint'); badge.style.color = Theme.c('amber-soft');
     } else if (s.built && d.n_sources_fail > 0) {
-      badge.textContent = 'PARTIAL'; badge.style.background = '#fed7aa'; badge.style.color = '#9a3412';
+      badge.textContent = 'PARTIAL'; badge.style.background = Theme.c('orange-tint'); badge.style.color = Theme.c('orange-soft');
     } else if (s.built) {
-      badge.textContent = 'OK'; badge.style.background = '#d1fae5'; badge.style.color = '#065f46';
+      badge.textContent = 'OK'; badge.style.background = Theme.c('green-tint'); badge.style.color = Theme.c('green-soft');
     } else {
-      badge.textContent = 'QUEUED'; badge.style.background = '#e5e7eb'; badge.style.color = '#4b5563';
+      badge.textContent = 'QUEUED'; badge.style.background = Theme.c('surface-3'); badge.style.color = Theme.c('ink-3');
     }
 
     const summary = `<strong>Sources:</strong> ${d.n_sources_ok} ok, ${d.n_sources_fail} failed
-                     ${s.build_error ? `<br><span style="color:#b91c1c;">${s.build_error}</span>` : ''}
-                     ${s.building ? '<br><span style="color:#78350f;">Downloading FHFA + Case-Shiller + Zillow CSVs (typically 60-120s on first load)…</span>' : ''}`;
+                     ${s.build_error ? `<br><span style="color:var(--red-text);">${s.build_error}</span>` : ''}
+                     ${s.building ? '<br><span style="color:var(--amber-soft);">Downloading FHFA + Case-Shiller + Zillow CSVs (typically 60-120s on first load)…</span>' : ''}`;
     $('hp-diag-summary').innerHTML = summary;
 
     const rows = d.fetches.map(f => {
-      const cls = f.ok ? '' : 'style="background:#fef2f2;"';
+      const cls = f.ok ? '' : 'style="background:var(--red-wash);"';
       const status = f.ok ? `<span class="pos">${f.n_rows.toLocaleString()} rows</span>`
                            : `<span class="neg" style="font-size:11px;">${f.error || 'failed'}</span>`;
       return `<tr ${cls}><td>${f.label}</td><td><code>${f.source_id}</code></td><td>${status}</td></tr>`;
     }).join('');
     $('hp-diag-details').innerHTML = `<table class="hp-table" style="font-size:11px;">
       <thead><tr><th>Source</th><th>ID</th><th>Status</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="3" style="color:#9ca3af;">No fetches recorded yet.</td></tr>'}</tbody></table>`;
+      <tbody>${rows || '<tr><td colspan="3" style="color:var(--ink-5);">No fetches recorded yet.</td></tr>'}</tbody></table>`;
   }
 
   function renderTable() {
@@ -545,10 +545,10 @@
       ['Level', e.level],
       ['Code', e.code],
       ['Frequency', e.freq],
-      ['Latest', `${fmtNum(e.latest_index,2)} <span style="color:#9ca3af;">(${e.latest_date})</span>`],
+      ['Latest', `${fmtNum(e.latest_index,2)} <span style="color:var(--ink-5);">(${e.latest_date})</span>`],
       ['YoY', fmtPct(e.yoy_pct,2)],
       ['3y avg YoY', fmtPct(e.yoy_3y_avg,2)],
-      ['From peak', `${fmtPct(e.from_peak_pct,2)} <span style="color:#9ca3af;">(${e.peak_date})</span>`],
+      ['From peak', `${fmtPct(e.from_peak_pct,2)} <span style="color:var(--ink-5);">(${e.peak_date})</span>`],
       ['YoY z-score', fmtZ(e.zscore_yoy)],
       ['Observations', e.n_obs],
     ];
@@ -571,9 +571,9 @@
     const firstDate = history[0].date, lastDate = history[history.length-1].date;
     return `<div class="sparkline-host">
       <svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-        <polyline fill="none" stroke="#3b82f6" stroke-width="1.5" points="${pts}"/>
+        <polyline fill="none" stroke="${Theme.c('blue')}" stroke-width="1.5" points="${pts}"/>
       </svg>
-      <div style="font-size:10px;color:#9ca3af;display:flex;justify-content:space-between;margin-top:2px;">
+      <div style="font-size:10px;color:var(--ink-5);display:flex;justify-content:space-between;margin-top:2px;">
         <span>${firstDate}</span><span>${lastDate}</span>
       </div>
     </div>`;
@@ -585,10 +585,10 @@
     if (!r.ok) return;
     const b = await r.json();
     $('hp-sources').innerHTML = (b.sources || []).map(s => `
-      <div style="padding:4px 0;border-bottom:1px solid #f3f4f6;">
-        <div style="color:#111827;font-weight:500;">${s.name}</div>
-        <div style="color:#6b7280;">${s.publisher} · ${s.freq} · lag ~${s.lag_days}d</div>
-        <div style="color:#9ca3af;font-size:10px;">${s.license} · levels: ${s.levels.join(', ')}</div>
+      <div style="padding:4px 0;border-bottom:1px solid var(--rule);">
+        <div style="color:var(--ink-strong);font-weight:500;">${s.name}</div>
+        <div style="color:var(--ink-4);">${s.publisher} · ${s.freq} · lag ~${s.lag_days}d</div>
+        <div style="color:var(--ink-5);font-size:10px;">${s.license} · levels: ${s.levels.join(', ')}</div>
       </div>`).join('');
   }
 
@@ -650,7 +650,7 @@
   // by RANK within the visible set — that meant when drilled into a state
   // where every county had positive YoY, the bottom-quartile counties got
   // deep blue (the "negative" colour) and the user perceived a flip.
-  const COLOR_BUCKETS = ['#313695','#4575b4','#74add1','#abd9e9','#fee08b','#fdae61','#f46d43','#d73027','#a50026'];
+  const COLOR_BUCKETS = [Theme.c('scale-div-1'),Theme.c('scale-div-2'),Theme.c('scale-div-3'),Theme.c('scale-div-4'),Theme.c('scale-div-5'),Theme.c('scale-div-6'),Theme.c('scale-div-7'),Theme.c('scale-div-8'),Theme.c('scale-div-9')];
 
   function buildScale(values, metric) {
     // Sign-anchored diverging scale. Cut points are placed at fractions
@@ -663,7 +663,7 @@
     // to the SIGN+MAGNITUDE of its value, not its rank.
     const finite = values.filter(v => v !== null && v !== undefined && !isNaN(v));
     if (!finite.length) {
-      return { colorOf: () => '#f5f5f4', edges: [], lo: 0, hi: 0 };
+      return { colorOf: () => Theme.c('surface-2'), edges: [], lo: 0, hi: 0 };
     }
     const sorted = finite.slice().sort((a, b) => a - b);
     const lo = sorted[0], hi = sorted[sorted.length - 1];
@@ -678,13 +678,13 @@
     ];
     const scale = d3.scaleThreshold().domain(edges).range(COLOR_BUCKETS);
     return {
-      colorOf: (v) => (v === null || v === undefined || isNaN(v)) ? '#f5f5f4' : scale(v),
+      colorOf: (v) => (v === null || v === undefined || isNaN(v)) ? Theme.c('surface-2') : scale(v),
       edges, lo, hi, ext,
     };
   }
 
   function hpiColor(value) {
-    return (map.scale ? map.scale.colorOf(value) : '#f5f5f4');
+    return (map.scale ? map.scale.colorOf(value) : Theme.c('surface-2'));
   }
 
   function fmtMetric(v, metric) {
@@ -769,7 +769,7 @@
       .transition().duration(280)
       .style('fill', d => {
         const s = map.stateData[STATE_FIPS_TO_ABBR[String(d.id).padStart(2, '0')]];
-        if (!s) return '#f3f4f6';
+        if (!s) return Theme.c('surface-2');
         return hpiColor(s[map.metric]);
       });
     updateLegendBounds(vals);
@@ -979,7 +979,7 @@
       .style('fill', f => {
         const fips = String(f.id).padStart(5, '0');
         const c = map.countyData[fips];
-        return c ? hpiColor(c[map.metric]) : '#f3f4f6';
+        return c ? hpiColor(c[map.metric]) : Theme.c('surface-2');
       });
     updateLegendBounds(vals);
     renderLegendGradient();
@@ -1157,7 +1157,7 @@
       .filter(([k]) => k !== 'const')
       .map(([k, v]) => `${k}: ${v.toFixed(3)}`).join(' · ');
     const sourceLine = b.source
-      ? `<div style="margin-top:4px;color:#4b5563;">Source: <code>${b.source}</code></div>`
+      ? `<div style="margin-top:4px;color:var(--ink-3);">Source: <code>${b.source}</code></div>`
       : '';
     const lastObs = (last.quarter && last.hpi_index)
       ? `<div style="margin-top:4px;">Last observation ${last.quarter}: HPI <strong>${last.hpi_index.toFixed(2)}</strong></div>`
@@ -1171,7 +1171,7 @@
         <span>R² <code>${sr.rsq ?? '—'}</code></span> ·
         <span>DW <code>${dx.durbin_watson ?? '—'}</code></span>
       </div>
-      <div style="margin-top:6px;color:#9ca3af;">Long-run: ${lrCoefs || '—'}</div>
+      <div style="margin-top:6px;color:var(--ink-5);">Long-run: ${lrCoefs || '—'}</div>
     `;
   }
 
@@ -1335,17 +1335,17 @@
     // Legend (top-left)
     const legend = g.append('g').attr('class', 'legend-row').attr('transform', 'translate(8,8)');
     legend.append('line').attr('x1', 0).attr('x2', 14).attr('y1', 0).attr('y2', 0)
-      .attr('stroke', '#1f2937').attr('stroke-width', 1.5);
+      .attr('stroke', Theme.c('ink')).attr('stroke-width', 1.5);
     legend.append('text').attr('x', 18).attr('y', 3).text('History');
     legend.append('line').attr('x1', 70).attr('x2', 84).attr('y1', 0).attr('y2', 0)
-      .attr('stroke', '#1d4ed8').attr('stroke-width', 2);
+      .attr('stroke', Theme.c('blue-strong')).attr('stroke-width', 2);
     legend.append('text').attr('x', 88).attr('y', 3).text('Median forecast');
     legend.append('rect').attr('x', 170).attr('y', -4).attr('width', 14).attr('height', 8)
-      .attr('fill', '#93c5fd').attr('opacity', 0.35);
+      .attr('fill', Theme.c('blue')).attr('opacity', 0.35);
     legend.append('text').attr('x', 188).attr('y', 3).text('p10–p90');
     if (scenario.length) {
       legend.append('line').attr('x1', 240).attr('x2', 254).attr('y1', 0).attr('y2', 0)
-        .attr('stroke', '#b91c1c').attr('stroke-width', 1.8).attr('stroke-dasharray', '4,3');
+        .attr('stroke', Theme.c('red-strong')).attr('stroke-width', 1.8).attr('stroke-dasharray', '4,3');
       legend.append('text').attr('x', 258).attr('y', 3).text('Scenario');
     }
   }

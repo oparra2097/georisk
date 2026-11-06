@@ -21,10 +21,10 @@
   border: 1px solid var(--lm-border); border-radius: 8px;
 }
 .cpi-rank-table tbody tr { cursor: pointer; transition: background 0.05s; }
-.cpi-rank-table tbody tr:hover { background: rgba(255,255,255,0.04); }
+.cpi-rank-table tbody tr:hover { background: color-mix(in srgb, var(--ink-strong) 4%, transparent); }
 .cpi-rank-table tbody tr.cpi-row-active {
-  background: rgba(59, 130, 246, 0.10);
-  outline: 1px solid rgba(59, 130, 246, 0.35);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--blue) 35%, transparent);
 }
 .cpi-rank-table tbody tr.cpi-row-aggregate td { font-weight: 600; }
 
@@ -33,7 +33,7 @@
   font-size: var(--lm-fs-xs); color: var(--lm-text-mute);
   text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
   padding: 2px 8px; border-radius: 4px;
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--ink-strong) 4%, transparent);
 }
 
 @media (max-width: 880px) {
