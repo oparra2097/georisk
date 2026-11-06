@@ -688,6 +688,55 @@ def labor_market_us():
     })
 
 
+@api_bp.route('/releases/us')
+def us_releases_summary():
+    """Headline numbers from the latest jobs report and CPI release.
+
+    A light payload for the homepage; the figures are computed the same
+    way as the KPI strips on /labor-market and /cpi-release.
+    """
+    def last(series, n=1):
+        return series[-n] if series and len(series) >= n else None
+
+    emp = (get_bls_employment_data() or {}).get('series') or {}
+    payrolls = last(emp.get('payrolls'))
+    unrate, unrate_prev = last(emp.get('unemployment')), last(emp.get('unemployment'), 2)
+    ahe = last(emp.get('avg_hourly_earnings'))
+    jobs = None
+    if payrolls or unrate:
+        jobs = {
+            'month': (payrolls or unrate).get('date'),
+            'payrolls_change': payrolls.get('mom_change') if payrolls else None,
+            'unemployment': unrate.get('value') if unrate else None,
+            'unemployment_change': (round(unrate['value'] - unrate_prev['value'], 2)
+                                    if unrate and unrate_prev else None),
+            'wages_yoy': ahe.get('yoy_change') if ahe else None,
+            'next_release': bls_release_calendar.next_release('employment_situation'),
+        }
+
+    ov = (get_bls_cpi_data() or {}).get('series') or {}
+
+    def mom(key):
+        cur, prev = last(ov.get(key)), last(ov.get(key), 2)
+        if not cur or not prev or not prev.get('value'):
+            return None
+        return round((cur['value'] - prev['value']) / prev['value'] * 100, 2)
+
+    headline, core = last(ov.get('all_items')), last(ov.get('core'))
+    cpi = None
+    if headline or core:
+        cpi = {
+            'month': (headline or core).get('date'),
+            'headline_yoy': headline.get('yoy_change') if headline else None,
+            'core_yoy': core.get('yoy_change') if core else None,
+            'headline_mom': mom('all_items'),
+            'core_mom': mom('core'),
+            'next_release': bls_release_calendar.next_release('cpi'),
+        }
+
+    return jsonify({'jobs': jobs, 'cpi': cpi})
+
+
 @api_bp.route('/labor-market/us/refresh', methods=['POST'])
 def labor_market_us_refresh():
     """Clear BLS + FRED + bridge-model caches and recompute on next request."""
