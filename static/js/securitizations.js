@@ -38,11 +38,11 @@ const SecuritizationsPage = {
   },
 
   riskColor(score) {
-    if (score == null) return '#d1d5db';
-    if (score >= 75) return '#dc2626';
-    if (score >= 50) return '#f59e0b';
-    if (score >= 25) return '#facc15';
-    return '#10b981';
+    if (score == null) return Theme.c('ink-5');
+    if (score >= 75) return Theme.c('red-text');
+    if (score >= 50) return Theme.c('amber');
+    if (score >= 25) return Theme.c('amber');
+    return Theme.c('green');
   },
 
   _matchesFilter(d) {
@@ -73,10 +73,10 @@ const SecuritizationsPage = {
       const cusipTitle = d.cusip_source === 'edgar_fwp_cache' ? 'pulled from EDGAR FWP' : '';
       const cusip = d.cusip_senior
         ? `<span class="cusip-cell" title="${cusipTitle}">${d.cusip_senior}</span>`
-        : `<span class="cusip-cell" style="color:#d1d5db;" title="pending EDGAR FWP lookup">pending</span>`;
+        : `<span class="cusip-cell" style="color:var(--ink-5);" title="pending EDGAR FWP lookup">pending</span>`;
       const sr = d.stranded_risk_avg;
       const riskCell = sr == null
-        ? '<span style="color:#d1d5db;">—</span>'
+        ? '<span style="color:var(--ink-5);">—</span>'
         : `<span style="display:inline-block;padding:1px 5px;border-radius:3px;background:${this.riskColor(sr)}20;color:${this.riskColor(sr)};font-weight:600;">${sr.toFixed(0)}</span>`;
       return `
         <tr data-deal-id="${d.deal_id}">
@@ -89,7 +89,7 @@ const SecuritizationsPage = {
           <td class="num">${this.fmtNum(d.total_size_usd_m)}</td>
           <td class="num">${this.fmtNum(d.current_balance_usd_m)}</td>
           <td><span class="rating ${this.ratingClass(d.rating_senior)}">${d.rating_senior || 'NR'}</span>
-              <span style="color:#9ca3af;font-size:10px;">${d.rater || ''}</span></td>
+              <span style="color:var(--ink-5);font-size:10px;">${d.rater || ''}</span></td>
           <td>${cusip}</td>
           <td class="num">${this.fmtNum(collMw)}</td>
           <td class="num">${riskCell}</td>
@@ -140,27 +140,27 @@ const SecuritizationsPage = {
       </dl>
       <section>
         <h4>Collateral facilities (${d.collateral_facility_count || (d.collateral_facilities || []).length})</h4>
-        <div>${facChips || '<span style="color:#9ca3af;">not disclosed in seed</span>'}</div>
-        <div style="font-size:10px;color:#9ca3af;margin-top:4px;">
+        <div>${facChips || '<span style="color:var(--ink-5);">not disclosed in seed</span>'}</div>
+        <div style="font-size:10px;color:var(--ink-5);margin-top:4px;">
           Built: ${this.fmtNum(d.collateral_mw_built)} MW · UC: ${this.fmtNum(d.collateral_mw_uc)} MW
         </div>
       </section>
       ${(d.tranches && d.tranches.length) ? `
       <section>
-        <h4>Capital stack <span style="font-size:9px;color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0;">(from EDGAR FWP)</span></h4>
+        <h4>Capital stack <span style="font-size:9px;color:var(--ink-5);font-weight:400;text-transform:none;letter-spacing:0;">(from EDGAR FWP)</span></h4>
         <table style="width:100%;font-size:11px;border-collapse:collapse;">
           <thead>
-            <tr style="border-bottom:1px solid #e5e7eb;">
-              <th style="text-align:left;padding:3px 4px;color:#6b7280;font-weight:500;">Class</th>
-              <th style="text-align:left;padding:3px 4px;color:#6b7280;font-weight:500;">CUSIP</th>
-              <th style="text-align:left;padding:3px 4px;color:#6b7280;font-weight:500;">Rating</th>
-              <th style="text-align:right;padding:3px 4px;color:#6b7280;font-weight:500;">Cpn %</th>
-              <th style="text-align:right;padding:3px 4px;color:#6b7280;font-weight:500;">Size $M</th>
+            <tr style="border-bottom:1px solid var(--rule);">
+              <th style="text-align:left;padding:3px 4px;color:var(--ink-4);font-weight:500;">Class</th>
+              <th style="text-align:left;padding:3px 4px;color:var(--ink-4);font-weight:500;">CUSIP</th>
+              <th style="text-align:left;padding:3px 4px;color:var(--ink-4);font-weight:500;">Rating</th>
+              <th style="text-align:right;padding:3px 4px;color:var(--ink-4);font-weight:500;">Cpn %</th>
+              <th style="text-align:right;padding:3px 4px;color:var(--ink-4);font-weight:500;">Size $M</th>
             </tr>
           </thead>
           <tbody>
             ${d.tranches.map(t => `
-              <tr style="border-bottom:1px solid #f3f4f6;">
+              <tr style="border-bottom:1px solid var(--rule);">
                 <td style="padding:3px 4px;">${t.class}</td>
                 <td style="padding:3px 4px;font-family:ui-monospace,monospace;">${t.cusip || '—'}</td>
                 <td style="padding:3px 4px;">${t.rating ? `<span class="rating ${this.ratingClass(t.rating)}">${t.rating}</span>` : '—'}</td>
@@ -179,7 +179,7 @@ const SecuritizationsPage = {
               ${d.stranded_risk_avg.toFixed(0)}/100
             </span>
           </div>
-          <div style="color:#6b7280;font-size:11px;line-height:1.5;">
+          <div style="color:var(--ink-4);font-size:11px;line-height:1.5;">
             MW-weighted avg across ${(d.facility_matches || []).length} matched facilities<br>
             ${this.fmtNum(d.at_risk_mw_total)} at-risk MW · ${this.fmtNum(d.matched_mw_total)} total matched MW
           </div>
@@ -187,9 +187,9 @@ const SecuritizationsPage = {
       </section>` : ''}
       <section>
         <h4>Top tenants ${d.top_tenant_share_pct ? `(top one ${d.top_tenant_share_pct.toFixed(0)}%)` : ''}</h4>
-        <div>${tenantChips || '<span style="color:#9ca3af;">not disclosed in seed</span>'}</div>
+        <div>${tenantChips || '<span style="color:var(--ink-5);">not disclosed in seed</span>'}</div>
       </section>
-      ${d.notes ? `<section><h4>Notes</h4><div style="font-size:11px;color:#374151;">${d.notes}</div></section>` : ''}
+      ${d.notes ? `<section><h4>Notes</h4><div style="font-size:11px;color:var(--ink-2);">${d.notes}</div></section>` : ''}
       ${d.source_url ? `<section><h4>Source</h4>
         <a href="${d.source_url}" target="_blank" rel="noopener">${new URL(d.source_url).hostname.replace(/^www\./, '')} ↗</a>
       </section>` : ''}
@@ -273,22 +273,22 @@ const SecuritizationsPage = {
         return;
       }
       tbody.innerHTML = rows.map(r => {
-        const tierColor = r.source_tier === 'bdc_filing' ? '#10b981' : '#f59e0b';
+        const tierColor = r.source_tier === 'bdc_filing' ? Theme.c('green') : Theme.c('amber');
         const sourceLabel = r.source_url
-          ? `<a href="${r.source_url}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none;">${r.source_tier}↗</a>`
+          ? `<a href="${r.source_url}" target="_blank" rel="noopener" style="color:var(--blue-text);text-decoration:none;">${r.source_tier}↗</a>`
           : r.source_tier;
         const borrowerKey = (r.borrower || '').split(/[\s,/]/)[0];
         return `<tr>
           <td><span class="conf-dot conf-${r.confidence||'medium'}"></span>${r.lender}
-              <span style="color:#9ca3af;font-size:10px;">· ${r.lender_type_label || ''}</span></td>
+              <span style="color:var(--ink-5);font-size:10px;">· ${r.lender_type_label || ''}</span></td>
           <td><a href="#" data-borrower="${borrowerKey}" class="pc-borrower-link"
-                 style="color:#7c3aed;text-decoration:none;border-bottom:1px dotted #c4b5fd;"
+                 style="color:var(--violet-text);text-decoration:none;border-bottom:1px dotted var(--violet-line);"
                  title="Show securitized deals also collateralized by ${r.borrower}">${r.borrower}</a></td>
-          <td style="font-size:11px;color:#374151;">${(r.deal_type||'').replace(/_/g,' ')}</td>
+          <td style="font-size:11px;color:var(--ink-2);">${(r.deal_type||'').replace(/_/g,' ')}</td>
           <td class="num">${this.fmtNum(r.commitment_usd_m)}</td>
           <td class="num">${this.fmtNum(r.outstanding_usd_m)}</td>
           <td><span style="color:${tierColor};">●</span> ${sourceLabel}</td>
-          <td style="color:#6b7280;font-size:11px;">${r.maturity_year || '—'}</td>
+          <td style="color:var(--ink-4);font-size:11px;">${r.maturity_year || '—'}</td>
         </tr>`;
       }).join('');
       tbody.querySelectorAll('a.pc-borrower-link').forEach(a => {
@@ -323,12 +323,12 @@ SecuritizationsPage.wireAdmin = function() {
   document.getElementById('btn-cik-resolve')?.addEventListener('click', async () => {
     setStatus('resolving CIKs…');
     results.style.display = '';
-    results.innerHTML = '<div style="color:#6b7280;">querying EDGAR full-text search for each missing deal…</div>';
+    results.innerHTML = '<div style="color:var(--ink-4);">querying EDGAR full-text search for each missing deal…</div>';
 
     // Build a list of issuer-name guesses from deals missing edgar_cik.
     const missing = (this.summary?.deals || []).filter(d => !d.edgar_cik);
     if (!missing.length) {
-      results.innerHTML = '<div style="color:#10b981;">all 29 deals already have CIKs populated.</div>';
+      results.innerHTML = '<div style="color:var(--green);">all 29 deals already have CIKs populated.</div>';
       setStatus(''); return;
     }
     const issuers = missing.map(d => ({
@@ -348,35 +348,35 @@ SecuritizationsPage.wireAdmin = function() {
       results.innerHTML = j.results.map((res, i) => {
         const meta = issuers[i];
         if (!res.ok) {
-          return `<div style="padding:6px 0;border-bottom:1px solid #fde68a;">
-            <strong style="color:#374151;">${meta.deal_id}</strong>
-            <span style="color:#9ca3af;">(${meta.issuer})</span>
-            <span style="color:#dc2626;font-size:10px;">— ${res.error}</span>
+          return `<div style="padding:6px 0;border-bottom:1px solid var(--amber-line);">
+            <strong style="color:var(--ink-2);">${meta.deal_id}</strong>
+            <span style="color:var(--ink-5);">(${meta.issuer})</span>
+            <span style="color:var(--red-text);font-size:10px;">— ${res.error}</span>
           </div>`;
         }
         if (!res.candidates?.length) {
-          return `<div style="padding:6px 0;border-bottom:1px solid #fde68a;">
-            <strong style="color:#374151;">${meta.deal_id}</strong>
-            <span style="color:#9ca3af;">(${meta.issuer})</span>
-            <span style="color:#dc2626;font-size:10px;">— no EDGAR hits</span>
+          return `<div style="padding:6px 0;border-bottom:1px solid var(--amber-line);">
+            <strong style="color:var(--ink-2);">${meta.deal_id}</strong>
+            <span style="color:var(--ink-5);">(${meta.issuer})</span>
+            <span style="color:var(--red-text);font-size:10px;">— no EDGAR hits</span>
           </div>`;
         }
         const candList = res.candidates.slice(0, 5).map(c => `
           <button type="button" data-cik="${c.cik}" class="cik-copy-btn"
-            style="margin:2px 4px 2px 0;padding:3px 8px;border:1px solid #d1d5db;background:#fff;border-radius:3px;cursor:pointer;font-family:ui-monospace,monospace;font-size:11px;"
+            style="margin:2px 4px 2px 0;padding:3px 8px;border:1px solid var(--rule-strong);background:var(--surface);border-radius:3px;cursor:pointer;font-family:ui-monospace,monospace;font-size:11px;"
             title="${c.name} · forms: ${(c.form_hits||[]).join(', ')}">
-            ${c.cik} <span style="color:#9ca3af;">${c.name}</span>
+            ${c.cik} <span style="color:var(--ink-5);">${c.name}</span>
           </button>`).join('');
-        return `<div style="padding:6px 0;border-bottom:1px solid #fde68a;">
-          <strong style="color:#374151;">${meta.deal_id}</strong>
-          <span style="color:#9ca3af;font-size:10px;">(${meta.issuer})</span>
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--amber-line);">
+          <strong style="color:var(--ink-2);">${meta.deal_id}</strong>
+          <span style="color:var(--ink-5);font-size:10px;">(${meta.issuer})</span>
           <div style="margin-top:4px;">${candList}</div>
         </div>`;
       }).join('');
       results.querySelectorAll('.cik-copy-btn').forEach(b =>
         b.addEventListener('click', () => {
           navigator.clipboard?.writeText(b.dataset.cik);
-          b.style.background = '#d1fae5';
+          b.style.background = Theme.c('green-tint');
           setStatus(`copied ${b.dataset.cik} — paste into edgar_cik column for the row above`);
         }));
       setStatus(`${j.results.filter(r => r.ok && r.candidates?.length).length}/${issuers.length} resolved with candidates`);

@@ -38,7 +38,7 @@ const PanelModule = {
 
         const toneEl = document.getElementById('panel-avg-tone');
         toneEl.textContent = tone.toFixed(1);
-        toneEl.style.color = tone < -3 ? '#ef4444' : tone < -1 ? '#f59e0b' : '#10b981';
+        toneEl.style.color = tone < -3 ? Theme.c('red') : tone < -1 ? Theme.c('amber') : Theme.c('green');
 
         this.renderRadarChart(detail.indicators || {});
         this.renderIndicatorBars(detail.indicators || {});
@@ -125,9 +125,9 @@ const PanelModule = {
                 labels: labels,
                 datasets: [{
                     data: data,
-                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                    borderColor: 'rgba(239, 68, 68, 0.8)',
-                    pointBackgroundColor: 'rgba(239, 68, 68, 1)',
+                    backgroundColor: Theme.c('red', 0.15),
+                    borderColor: Theme.c('red', 0.8),
+                    pointBackgroundColor: Theme.c('red'),
                     pointRadius: 4,
                     borderWidth: 2
                 }]
@@ -141,14 +141,14 @@ const PanelModule = {
                         max: 100,
                         ticks: {
                             stepSize: 25,
-                            color: '#6b7280',
+                            color: Theme.c('ink-4'),
                             backdropColor: 'transparent',
                             font: { size: 10 }
                         },
-                        grid: { color: 'rgba(107, 114, 128, 0.2)' },
-                        angleLines: { color: 'rgba(107, 114, 128, 0.2)' },
+                        grid: { color: Theme.c('ink-4', 0.2) },
+                        angleLines: { color: Theme.c('ink-4', 0.2) },
                         pointLabels: {
-                            color: '#9ca3af',
+                            color: Theme.c('ink-3'),
                             font: { size: 11 }
                         }
                     }
@@ -199,7 +199,7 @@ const PanelModule = {
             if (!placeholder) {
                 placeholder = document.createElement('p');
                 placeholder.id = 'history-placeholder';
-                placeholder.style.cssText = 'color: #6b7280; font-size: 12px; text-align: center; padding: 20px 0;';
+                placeholder.style.cssText = 'color: var(--ink-4); font-size: 12px; text-align: center; padding: 20px 0;';
                 canvasEl.parentNode.insertBefore(placeholder, canvasEl.nextSibling);
             }
             placeholder.textContent = 'Score history will appear after daily data accumulates.';
@@ -224,8 +224,8 @@ const PanelModule = {
                     {
                         label: 'Composite',
                         data: compositeData,
-                        borderColor: '#ef4444',
-                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderColor: Theme.c('red'),
+                        backgroundColor: Theme.c('red', 0.1),
                         borderWidth: 2,
                         fill: true,
                         pointRadius: 0,
@@ -234,7 +234,7 @@ const PanelModule = {
                     {
                         label: 'Base Score',
                         data: baseData,
-                        borderColor: 'rgba(59, 130, 246, 0.5)',
+                        borderColor: Theme.c('blue', 0.5),
                         borderWidth: 1.5,
                         borderDash: [4, 2],
                         fill: false,
@@ -244,7 +244,7 @@ const PanelModule = {
                     {
                         label: 'News Score',
                         data: newsData,
-                        borderColor: 'rgba(245, 158, 11, 0.5)',
+                        borderColor: Theme.c('amber', 0.5),
                         borderWidth: 1.5,
                         borderDash: [4, 2],
                         fill: false,
@@ -261,7 +261,7 @@ const PanelModule = {
                     legend: {
                         position: 'top',
                         labels: {
-                            color: '#9ca3af',
+                            color: Theme.c('ink-3'),
                             font: { size: 10 },
                             boxWidth: 10,
                             padding: 8,
@@ -270,9 +270,9 @@ const PanelModule = {
                         }
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#d1d5db',
+                        backgroundColor: Theme.c('surface-2', 0.96),
+                        titleColor: Theme.c('ink-strong'),
+                        bodyColor: Theme.c('ink-2'),
                         callbacks: {
                             label: (ctx) => {
                                 const val = ctx.parsed.y;
@@ -284,22 +284,22 @@ const PanelModule = {
                 scales: {
                     x: {
                         ticks: {
-                            color: '#6b7280',
+                            color: Theme.c('ink-4'),
                             font: { size: 9 },
                             maxTicksLimit: 8,
                             maxRotation: 0
                         },
-                        grid: { color: 'rgba(55,65,81,0.2)' }
+                        grid: { color: Theme.c('ink-5', 0.2) }
                     },
                     y: {
                         min: 0,
                         max: 100,
                         ticks: {
-                            color: '#6b7280',
+                            color: Theme.c('ink-4'),
                             font: { size: 9 },
                             stepSize: 25
                         },
-                        grid: { color: 'rgba(55,65,81,0.2)' }
+                        grid: { color: Theme.c('ink-5', 0.2) }
                     }
                 }
             }
@@ -332,7 +332,7 @@ const PanelModule = {
     renderHeadlines(articles) {
         const list = document.getElementById('panel-headlines');
         if (!articles.length) {
-            list.innerHTML = '<li style="color: #6b7280; padding: 12px 0; font-size: 13px;">No headlines available for this country.</li>';
+            list.innerHTML = '<li style="color: var(--ink-4); padding: 12px 0; font-size: 13px;">No headlines available for this country.</li>';
             return;
         }
         list.innerHTML = '';

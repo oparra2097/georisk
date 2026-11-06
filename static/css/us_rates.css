@@ -8,19 +8,19 @@
  */
 
 .usr-page {
-  --usr-bg:            var(--bg-primary,    #0a0e1a);
-  --usr-surface:       var(--bg-secondary,  #111827);
-  --usr-surface-2:     #1a2035;
-  --usr-border:        var(--border,        #1f2937);
-  --usr-border-strong: #2a3245;
-  --usr-text:          var(--text-primary,  #e5e7eb);
-  --usr-text-dim:      var(--text-secondary,#9ca3af);
-  --usr-text-mute:     var(--text-muted,    #6b7280);
-  --usr-accent:        var(--accent,        #3b82f6);
-  --usr-accent-soft:   rgba(59, 130, 246, 0.15);
-  --usr-good:          #10b981;
-  --usr-bad:           #ef4444;
-  --usr-warn:          #f59e0b;
+  --usr-bg:            var(--bg-primary,    var(--bg));
+  --usr-surface:       var(--bg-secondary,  var(--surface));
+  --usr-surface-2:     var(--surface-2);
+  --usr-border:        var(--border,        var(--rule));
+  --usr-border-strong: var(--rule-strong);
+  --usr-text:          var(--text-primary,  var(--ink));
+  --usr-text-dim:      var(--text-secondary,var(--ink-3));
+  --usr-text-mute:     var(--text-muted,    var(--ink-4));
+  --usr-accent:        var(--accent,        var(--blue));
+  --usr-accent-soft:   color-mix(in srgb, var(--blue) 15%, transparent);
+  --usr-good:          var(--green);
+  --usr-bad:           var(--red);
+  --usr-warn:          var(--amber);
 
   max-width: 1400px;
   margin: 0 auto;
@@ -128,13 +128,13 @@
 }
 .usr-chart-legend .dot.market { background: var(--usr-accent); }
 .usr-chart-legend .dot.model  { background: var(--usr-warn); }
-.usr-chart-legend .dot.band   { background: rgba(245, 158, 11, 0.25); }
+.usr-chart-legend .dot.band   { background: color-mix(in srgb, var(--amber) 25%, transparent); }
 
 /* D3 element styling — matched via CSS classes set in JS */
 .usr-chart-host .grid-line { stroke: var(--usr-border); stroke-width: 1; stroke-dasharray: 2 3; }
 .usr-chart-host .axis-line { stroke: var(--usr-border-strong); stroke-width: 1; }
 .usr-chart-host .axis-label { fill: var(--usr-text-mute); font-size: 11px; }
-.usr-chart-host .fan-band { fill: rgba(245, 158, 11, 0.15); stroke: none; }
+.usr-chart-host .fan-band { fill: color-mix(in srgb, var(--amber) 15%, transparent); stroke: none; }
 .usr-chart-host .model-line { stroke: var(--usr-warn); stroke-width: 2; fill: none; }
 .usr-chart-host .market-line { stroke: var(--usr-accent); stroke-width: 2.5; fill: none; }
 .usr-chart-host .market-dot { fill: var(--usr-accent); }
@@ -198,9 +198,9 @@ table.usr-fedwatch-grid {
   font-weight: 600;
 }
 /* Probability heatmap opacity. JS sets `style="--p:0.42"` per cell.  */
-.usr-fedwatch-grid .prob-cut  { background: rgba(16, 185, 129, calc(0.05 + var(--p, 0) * 0.55)); }
-.usr-fedwatch-grid .prob-hold { background: rgba(107, 114, 128, calc(0.05 + var(--p, 0) * 0.35)); }
-.usr-fedwatch-grid .prob-hike { background: rgba(239, 68, 68,  calc(0.05 + var(--p, 0) * 0.55)); }
+.usr-fedwatch-grid .prob-cut  { background: color-mix(in srgb, var(--green) calc((0.05 + var(--p, 0) * 0.55) * 100%), transparent); }
+.usr-fedwatch-grid .prob-hold { background: color-mix(in srgb, var(--ink-4) calc((0.05 + var(--p, 0) * 0.35) * 100%), transparent); }
+.usr-fedwatch-grid .prob-hike { background: color-mix(in srgb, var(--red) calc((0.05 + var(--p, 0) * 0.55) * 100%), transparent); }
 .usr-fedwatch-grid .prob-cell.leading {
   outline: 1px solid var(--usr-accent);
   outline-offset: -1px;
@@ -250,11 +250,11 @@ table.usr-edge {
   text-transform: uppercase;
 }
 .usr-edge-side.short {
-  background: rgba(239, 68, 68, 0.15);
+  background: color-mix(in srgb, var(--red) 15%, transparent);
   color: var(--usr-bad);
 }
 .usr-edge-side.long {
-  background: rgba(16, 185, 129, 0.15);
+  background: color-mix(in srgb, var(--green) 15%, transparent);
   color: var(--usr-good);
 }
 

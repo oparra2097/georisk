@@ -1,26 +1,5 @@
 /* ===== Site-wide styles (nav, footer, page layout) ===== */
 
-:root {
-    --bg-primary: #0a0e1a;
-    --bg-secondary: #111827;
-    --bg-tertiary: #1a2035;
-    --text-primary: #e5e7eb;
-    --text-secondary: #9ca3af;
-    --text-muted: #6b7280;
-    --accent: #3b82f6;
-    --accent-dim: #1e3a5f;
-    --border: #1f2937;
-    --green: #10b981;
-    --red: #ef4444;
-
-    /* Nav + footer. Pages can override these (home.css does for
-       light mode). */
-    --chrome-bg: #121417;
-    --chrome-rule: #262a31;
-    --chrome-ink: #e8e6e1;
-    --chrome-ink-2: #a3a09a;
-}
-
 * {
     margin: 0;
     padding: 0;
@@ -28,7 +7,7 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-family: var(--font-sans);
     background: var(--bg-primary);
     color: var(--text-primary);
     min-height: 100vh;
@@ -48,8 +27,8 @@ a:hover {
 /* ===== Navigation ===== */
 
 .site-nav {
-    background: var(--chrome-bg);
-    border-bottom: 1px solid var(--chrome-rule);
+    background: var(--surface);
+    border-bottom: 1px solid var(--rule);
     height: 56px;
     position: sticky;
     top: 0;
@@ -67,16 +46,16 @@ a:hover {
 }
 
 .nav-brand {
-    font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+    font-family: var(--font-serif);
     font-size: 19px;
     font-weight: 600;
-    color: var(--chrome-ink);
+    color: var(--ink);
     letter-spacing: -0.01em;
     text-decoration: none;
 }
 .nav-brand:hover {
     text-decoration: none;
-    color: var(--chrome-ink);
+    color: var(--ink);
 }
 
 .nav-tabs {
@@ -92,24 +71,41 @@ a:hover {
     padding: 0 14px;
     font-size: 14px;
     font-weight: 500;
-    color: var(--chrome-ink-2);
+    color: var(--ink-3);
     text-decoration: none;
     border-bottom: 2px solid transparent;
     transition: color 0.15s, border-color 0.15s;
 }
 .nav-tab:hover {
-    color: var(--chrome-ink);
+    color: var(--ink);
     text-decoration: none;
 }
 .nav-tab.active {
-    color: var(--chrome-ink);
-    border-bottom-color: var(--chrome-ink);
+    color: var(--ink);
+    border-bottom-color: var(--ink);
 }
 
 .nav-right {
     display: flex;
     align-items: center;
     gap: 12px;
+}
+
+/* GeoRisk is a standalone app, not a section: a button, not a tab. */
+.nav-app {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    padding: 5px 12px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+    white-space: nowrap;
+    transition: border-color 0.15s, background 0.15s;
+}
+.nav-app:hover {
+    text-decoration: none;
+    border-color: var(--ink-4);
+    background: var(--surface-2);
 }
 
 .nav-auth {
@@ -164,8 +160,8 @@ a:hover {
 /* ===== Footer ===== */
 
 .site-footer {
-    background: var(--chrome-bg);
-    border-top: 1px solid var(--chrome-rule);
+    background: var(--surface);
+    border-top: 1px solid var(--rule);
     padding: 20px 24px;
     margin-top: auto;
 }
@@ -187,10 +183,10 @@ a:hover {
     font-size: 13px;
 }
 .footer-links a {
-    color: var(--chrome-ink-2);
+    color: var(--ink-3);
 }
 .footer-links a:hover {
-    color: var(--chrome-ink);
+    color: var(--ink);
 }
 
 .footer-brand {
@@ -343,6 +339,10 @@ a:hover {
     }
     .nav-divider {
         display: none;
+    }
+    .nav-app {
+        font-size: 12px;
+        padding: 4px 9px;
     }
     .nav-social {
         gap: 8px;

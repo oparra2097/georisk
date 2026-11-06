@@ -241,7 +241,7 @@ function buildSparklineSVG(data, dir) {
         return `${x.toFixed(1)},${y.toFixed(1)}`;
     });
 
-    const color = dir === 'up' ? 'var(--hv-up)' : dir === 'down' ? 'var(--hv-down)' : 'var(--hv-ink-3)';
+    const color = dir === 'up' ? 'var(--up)' : dir === 'down' ? 'var(--down)' : 'var(--ink-4)';
 
     return `
         <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:100%;" aria-hidden="true">
@@ -354,30 +354,22 @@ async function fetchAndRenderHistory(symbol, period) {
 }
 
 
-// Chart.js draws to canvas, so it can't follow CSS variables on its
-// own — read the current tokens (which flip with prefers-color-scheme
-// in home.css) each time the chart is drawn.
+// Chart.js draws to canvas, so it can't follow CSS variables; colours
+// come from the theme tokens via Theme.c (static/js/theme.js).
 function themeColors() {
-    const cs = getComputedStyle(document.body);
-    const v = (name) => cs.getPropertyValue(name).trim();
     return {
-        up: v('--hv-up'), down: v('--hv-down'),
-        fillUp: v('--hv-chart-fill-up'), fillDown: v('--hv-chart-fill-down'),
-        ink: v('--hv-ink'), ink2: v('--hv-ink-2'), ink3: v('--hv-ink-3'),
-        ruleStrong: v('--hv-rule-strong'), grid: v('--hv-chart-grid'),
-        tooltipBg: v('--hv-tooltip-bg'),
+        up: Theme.c('up'), down: Theme.c('down'),
+        fillUp: Theme.c('up', 0.08), fillDown: Theme.c('down', 0.08),
+        ink: Theme.c('ink'), ink2: Theme.c('ink-3'), ink3: Theme.c('ink-4'),
+        ruleStrong: Theme.c('rule-strong'), grid: Theme.c('rule'),
+        tooltipBg: Theme.c('surface'),
     };
 }
 
 // Redraw an open chart if the OS theme flips while the page is open.
 // Tables, vitals and sparklines use CSS variables and update by themselves.
 let lastHistoryData = null;
-if (window.matchMedia) {
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
-    const onChange = () => { if (marketChart && lastHistoryData) renderHistoryChart(lastHistoryData); };
-    if (mq.addEventListener) mq.addEventListener('change', onChange);
-    else if (mq.addListener) mq.addListener(onChange);
-}
+Theme.onChange(() => { if (marketChart && lastHistoryData) renderHistoryChart(lastHistoryData); });
 
 function renderHistoryChart(data) {
     const ctx = document.getElementById('market-history-chart');

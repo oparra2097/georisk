@@ -1,0 +1,271 @@
+/* ===== Parra Macro theme =====
+ *
+ * The one place to change site colours. Every stylesheet, template and
+ * script reads these tokens; nothing else in the codebase should
+ * hard-code a colour.
+ *
+ *   CSS:  color: var(--ink-3);   background: var(--surface);
+ *         a tinted variant: color-mix(in srgb, var(--accent) 12%, transparent)
+ *   JS:   Theme.c('accent')          -> '#3b82f6'   (canvas, SVG, Chart.js)
+ *         Theme.c('accent', 0.12)    -> 'rgba(59,130,246,0.12)'
+ *
+ * Dark is the default. When the visitor's OS or browser is set to light
+ * mode, the block under prefers-color-scheme swaps the same names to
+ * light values. To change a colour, edit it here in both blocks.
+ *
+ * Neutrals (by role, darkest-to-lightest in dark mode):
+ *   --bg            page background
+ *   --surface       cards, panels, nav, footer
+ *   --surface-2     raised / nested panels, table headers
+ *   --surface-3     hover and selected rows, chips
+ *   --rule          hairline borders and dividers
+ *   --rule-strong   stronger borders, inputs
+ *   --ink-strong    headlines, the highest-contrast text
+ *   --ink           body text
+ *   --ink-2 … --ink-5  progressively quieter text (labels, captions, hints)
+ *
+ * Hues: blue, green, red, amber, orange, violet, cyan, pink. Each has:
+ *   --<hue>         fills, lines, icons
+ *   --<hue>-strong  button fills under white text
+ *   --<hue>-text    coloured text on the page
+ *   --<hue>-soft    text on a -tint background
+ *   --<hue>-tint    badge / chip background
+ *   --<hue>-wash    very light section background
+ *   --<hue>-line    tinted borders
+ *
+ * Meaning-based names (--accent, --pos, --neg, --warn, --up, --down,
+ * --link) point at those hues; prefer them in new code.
+ */
+
+:root {
+    color-scheme: dark;
+
+    /* Neutrals */
+    --bg:          #111315;
+    --surface:     #17191c;
+    --surface-2:   #1d2024;
+    --surface-3:   #24282d;
+    --rule:        #262a31;
+    --rule-strong: #3a3f48;
+    --ink-strong:  #ffffff;
+    --ink:         #e8e6e1;
+    --ink-2:       #cfccc5;
+    --ink-3:       #a3a09a;
+    --ink-4:       #85827c;
+    --ink-5:       #5c5953;
+
+    /* Direction (market moves) and links */
+    --up:   #4fae7f;
+    --down: #d9705b;
+    --link: #8fb4e8;
+
+    /* Hues */
+    --blue: #3b82f6;
+    --blue-strong: #2563eb;
+    --blue-text: #60a5fa;
+    --blue-soft: #93c5fd;
+    --blue-tint: #1e3a8a;
+    --blue-wash: #151e2c;
+    --blue-line: #1e40af;
+
+    --green: #10b981;
+    --green-strong: #059669;
+    --green-text: #34d399;
+    --green-soft: #6ee7b7;
+    --green-tint: #064e3b;
+    --green-wash: #112420;
+    --green-line: #065f46;
+
+    --red: #ef4444;
+    --red-strong: #dc2626;
+    --red-text: #f87171;
+    --red-soft: #fca5a5;
+    --red-tint: #7f1d1d;
+    --red-wash: #27181a;
+    --red-line: #991b1b;
+
+    --amber: #f59e0b;
+    --amber-strong: #d97706;
+    --amber-text: #fbbf24;
+    --amber-soft: #fcd34d;
+    --amber-tint: #78350f;
+    --amber-wash: #282114;
+    --amber-line: #92400e;
+
+    --orange: #f97316;
+    --orange-strong: #ea580c;
+    --orange-text: #fb923c;
+    --orange-soft: #fdba74;
+    --orange-tint: #7c2d12;
+    --orange-wash: #281d15;
+    --orange-line: #9a3412;
+
+    --violet: #8b5cf6;
+    --violet-strong: #7c3aed;
+    --violet-text: #a78bfa;
+    --violet-soft: #c4b5fd;
+    --violet-tint: #4c1d95;
+    --violet-wash: #1d1a2c;
+    --violet-line: #5b21b6;
+
+    --cyan: #06b6d4;
+    --cyan-strong: #0891b2;
+    --cyan-text: #22d3ee;
+    --cyan-soft: #67e8f9;
+    --cyan-tint: #164e63;
+    --cyan-wash: #102328;
+    --cyan-line: #155e75;
+
+    --pink: #ec4899;
+    --pink-strong: #db2777;
+    --pink-text: #f472b6;
+    --pink-soft: #f9a8d4;
+    --pink-tint: #831843;
+    --pink-wash: #271822;
+    --pink-line: #9d174d;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        color-scheme: light;
+
+        --bg:          #fbfaf7;
+        --surface:     #ffffff;
+        --surface-2:   #f4f2ed;
+        --surface-3:   #ebe8e1;
+        --rule:        #e4e1da;
+        --rule-strong: #c9c5bc;
+        --ink-strong:  #000000;
+        --ink:         #1d1c1a;
+        --ink-2:       #3a3833;
+        --ink-3:       #4a4843;
+        --ink-4:       #75726b;
+        --ink-5:       #a3a09a;
+
+        --up:   #1f7a4f;
+        --down: #b5462f;
+        --link: #1f5fae;
+
+        --blue: #2563eb;
+        --blue-strong: #2563eb;
+        --blue-text: #1d4ed8;
+        --blue-soft: #1e40af;
+        --blue-tint: #dbeafe;
+        --blue-wash: #eff6ff;
+        --blue-line: #bfdbfe;
+
+        --green: #059669;
+        --green-strong: #059669;
+        --green-text: #047857;
+        --green-soft: #065f46;
+        --green-tint: #d1fae5;
+        --green-wash: #ecfdf5;
+        --green-line: #a7f3d0;
+
+        --red: #dc2626;
+        --red-strong: #dc2626;
+        --red-text: #b91c1c;
+        --red-soft: #991b1b;
+        --red-tint: #fee2e2;
+        --red-wash: #fef2f2;
+        --red-line: #fecaca;
+
+        --amber: #d97706;
+        --amber-strong: #d97706;
+        --amber-text: #b45309;
+        --amber-soft: #92400e;
+        --amber-tint: #fef3c7;
+        --amber-wash: #fffbeb;
+        --amber-line: #fde68a;
+
+        --orange: #ea580c;
+        --orange-strong: #ea580c;
+        --orange-text: #c2410c;
+        --orange-soft: #9a3412;
+        --orange-tint: #ffedd5;
+        --orange-wash: #fff7ed;
+        --orange-line: #fed7aa;
+
+        --violet: #7c3aed;
+        --violet-strong: #7c3aed;
+        --violet-text: #6d28d9;
+        --violet-soft: #5b21b6;
+        --violet-tint: #ede9fe;
+        --violet-wash: #f5f3ff;
+        --violet-line: #ddd6fe;
+
+        --cyan: #0891b2;
+        --cyan-strong: #0891b2;
+        --cyan-text: #0e7490;
+        --cyan-soft: #155e75;
+        --cyan-tint: #cffafe;
+        --cyan-wash: #ecfeff;
+        --cyan-line: #a5f3fc;
+
+        --pink: #db2777;
+        --pink-strong: #db2777;
+        --pink-text: #be185d;
+        --pink-soft: #9d174d;
+        --pink-tint: #fce7f3;
+        --pink-wash: #fdf2f8;
+        --pink-line: #fbcfe8;
+    }
+}
+
+/* Same in both modes */
+:root {
+    --on-accent: #ffffff;   /* text on a solid hue fill */
+
+    /* Meaning-based aliases */
+    --accent:        var(--blue);
+    --accent-strong: var(--blue-strong);
+    --accent-text:   var(--blue-text);
+    --accent-tint:   var(--blue-tint);
+    --pos:  var(--green);
+    --neg:  var(--red);
+    --warn: var(--amber);
+
+    /* Company colours (data-center tenants, Substack) */
+    --brand-microsoft: #0078d4;
+    --brand-meta:      #0668e1;
+    --brand-google:    #ea4335;
+    --brand-amazon:    #ff9900;
+    --brand-openai:    #10a37f;
+    --brand-oracle:    #c74634;
+    --brand-substack:  #ff6719;
+
+    /* Data scales: diverging blue -> red (ColorBrewer RdYlBu), and the
+       CB-reserves chart pair. Data encodings, so they stay fixed. */
+    --scale-div-1: #313695;
+    --scale-div-2: #4575b4;
+    --scale-div-3: #74add1;
+    --scale-div-4: #abd9e9;
+    --scale-div-5: #fee08b;
+    --scale-div-6: #fdae61;
+    --scale-div-7: #f46d43;
+    --scale-div-8: #d73027;
+    --scale-div-9: #a50026;
+    --scale-energy-1: #10a050;   /* industrial power price: cheap */
+    --scale-energy-2: #7e5f32;
+    --scale-energy-3: #ec1e14;   /* expensive */
+    --series-gold:     #e0b84c;
+    --series-treasury: #5b8def;
+    --series-tariff:   #2f6f5e;
+
+    --font-sans:  -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+
+    /* Older names still used around the codebase */
+    --bg-primary:     var(--bg);
+    --bg-secondary:   var(--surface);
+    --bg-tertiary:    var(--surface-2);
+    --border:         var(--rule);
+    --text-primary:   var(--ink);
+    --text-secondary: var(--ink-3);
+    --text-muted:     var(--ink-4);
+    --accent-dim:     var(--blue-tint);
+    --risk-low:       var(--green);
+    --risk-medium:    var(--amber);
+    --risk-high:      var(--orange);
+    --risk-critical:  var(--red);
+}

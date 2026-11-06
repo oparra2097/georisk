@@ -13,7 +13,7 @@
 
   const API = { bundle: '/api/em-fx-rates', refresh: '/api/em-fx-rates/refresh' };
 
-  const COLOR = { pos: '#10b981', neg: '#ef4444', dim: '#9ca3af', grid: 'rgba(255,255,255,0.06)' };
+  const COLOR = { pos: Theme.c('green'), neg: Theme.c('red'), dim: Theme.c('ink-3'), grid: Theme.c('ink', 0.06) };
 
   const state = {
     data: null,

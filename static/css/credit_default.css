@@ -1,7 +1,7 @@
 /* Sovereign Credit Default — dashboard styles ──────────────────────────
  *
  * Theme: dark, unified with the global site (var(--bg-primary)
- * = #0a0e1a, --text-primary = #e5e7eb).  See main.css for the
+ * = var(--bg), --text-primary = var(--ink)).  See main.css for the
  * upstream tokens.  We define a small set of credit-default-specific
  * surface + type tokens so future colour changes are a one-line edit.
  *
@@ -10,20 +10,20 @@
  */
 
 .cd-page {
-  --cd-bg:        var(--bg-primary,    #0a0e1a);
-  --cd-surface:   var(--bg-secondary,  #111827);
-  --cd-surface-2: #1a2035;
-  --cd-surface-3: rgba(255, 255, 255, 0.025);
-  --cd-border:    var(--border,        #1f2937);
-  --cd-border-strong: #2a3245;
-  --cd-text:      var(--text-primary,  #e5e7eb);
-  --cd-text-dim:  var(--text-secondary,#9ca3af);
-  --cd-text-mute: var(--text-muted,    #6b7280);
-  --cd-accent:    var(--accent,        #3b82f6);
-  --cd-accent-soft: rgba(59, 130, 246, 0.12);
-  --cd-good:      #10b981;
-  --cd-bad:       #ef4444;
-  --cd-warn:      #f59e0b;
+  --cd-bg:        var(--bg-primary,    var(--bg));
+  --cd-surface:   var(--bg-secondary,  var(--surface));
+  --cd-surface-2: var(--surface-2);
+  --cd-surface-3: color-mix(in srgb, var(--ink-strong) 2.5%, transparent);
+  --cd-border:    var(--border,        var(--rule));
+  --cd-border-strong: var(--rule-strong);
+  --cd-text:      var(--text-primary,  var(--ink));
+  --cd-text-dim:  var(--text-secondary,var(--ink-3));
+  --cd-text-mute: var(--text-muted,    var(--ink-4));
+  --cd-accent:    var(--accent,        var(--blue));
+  --cd-accent-soft: color-mix(in srgb, var(--blue) 12%, transparent);
+  --cd-good:      var(--green);
+  --cd-bad:       var(--red);
+  --cd-warn:      var(--amber);
 
   --cd-fs-xs: 10px;   /* eyebrow / chip / column header */
   --cd-fs-sm: 12px;   /* body small / table cells */
@@ -77,7 +77,7 @@
 }
 .cd-export-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 14px; background: var(--cd-accent); color: #fff;
+  padding: 8px 14px; background: var(--cd-accent); color: var(--on-accent);
   border-radius: 8px; text-decoration: none; font-size: var(--cd-fs-sm);
   font-weight: 600; transition: filter 0.1s ease;
 }
@@ -111,7 +111,7 @@
 .cd-toggle:last-child { border-right: 0; }
 .cd-toggle:hover { background: var(--cd-surface-2); color: var(--cd-text); }
 .cd-toggle.active {
-  background: var(--cd-accent); color: #fff;
+  background: var(--cd-accent); color: var(--on-accent);
 }
 .cd-spacer { flex: 1; }
 .cd-link-btn {
@@ -304,11 +304,11 @@
 .cd-table th:nth-child(3),
 .cd-table td:nth-child(2),
 .cd-table td:nth-child(3) {
-  background: rgba(59, 130, 246, 0.05);
+  background: color-mix(in srgb, var(--blue) 5%, transparent);
 }
 .cd-table tbody tr:hover td:nth-child(2),
 .cd-table tbody tr:hover td:nth-child(3) {
-  background: rgba(59, 130, 246, 0.10);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
 }
 
 .cd-table tbody td {
@@ -336,28 +336,28 @@
   min-width: 32px; height: 22px; padding: 0 6px;
   border-radius: 4px; font-size: 11px; font-weight: 700;
 }
-.cd-rating-chip.ig         { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; }
-.cd-rating-chip.crossover  { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
-.cd-rating-chip.hy         { background: rgba(245, 158, 11, 0.20); color: #fbbf24; }
-.cd-rating-chip.distressed { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; }
-.cd-rating-chip.default    { background: #fff; color: var(--cd-bg); }
+.cd-rating-chip.ig         { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green-soft); }
+.cd-rating-chip.crossover  { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber-soft); }
+.cd-rating-chip.hy         { background: color-mix(in srgb, var(--amber) 20%, transparent); color: var(--amber-text); }
+.cd-rating-chip.distressed { background: color-mix(in srgb, var(--red) 18%, transparent);  color: var(--red-soft); }
+.cd-rating-chip.default    { background: var(--ink-strong); color: var(--cd-bg); }
 
 .cd-pd-bar {
   display: inline-block; height: 6px;
-  background: linear-gradient(90deg, #fbbf24, #ef4444);
+  background: linear-gradient(90deg, var(--amber-text), var(--red));
   border-radius: 3px; vertical-align: middle; margin-right: 6px; max-width: 80px;
 }
 
-.cd-delta-pos { color: #fca5a5; font-weight: 600; }
-.cd-delta-neg { color: #6ee7b7; font-weight: 600; }
+.cd-delta-pos { color: var(--red-soft); font-weight: 600; }
+.cd-delta-neg { color: var(--green-soft); font-weight: 600; }
 .cd-delta-zero { color: var(--cd-text-mute); }
 
 .cd-watch-down {
-  color: #fca5a5; font-weight: 700; font-size: 14px;
+  color: var(--red-soft); font-weight: 700; font-size: 14px;
   display: inline-block; min-width: 22px; text-align: center;
 }
 .cd-watch-up {
-  color: #6ee7b7; font-weight: 700; font-size: 14px;
+  color: var(--green-soft); font-weight: 700; font-size: 14px;
   display: inline-block; min-width: 22px; text-align: center;
 }
 .cd-watch-none { color: var(--cd-border-strong); }
@@ -399,17 +399,17 @@
   background: var(--cd-surface-2);
 }
 .cd-rating-card--pm {
-  background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 130%);
-  border-color: var(--cd-accent); color: #fff;
+  background: linear-gradient(135deg, var(--blue-tint) 0%, var(--blue) 130%);
+  border-color: var(--cd-accent); color: var(--on-accent);
 }
-.cd-rating-card--pm .cd-rating-label { color: rgba(255, 255, 255, 0.75); }
-.cd-rating-card--pm .cd-rating-meta  { color: rgba(255, 255, 255, 0.85); }
+.cd-rating-card--pm .cd-rating-label { color: color-mix(in srgb, var(--ink-strong) 75%, transparent); }
+.cd-rating-card--pm .cd-rating-meta  { color: color-mix(in srgb, var(--ink-strong) 85%, transparent); }
 .cd-rating-card--pm .cd-rating-value { font-size: var(--cd-fs-xl); }
 .cd-rating-card--composite {
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.40);
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+  border-color: color-mix(in srgb, var(--green) 40%, transparent);
 }
-.cd-rating-card--composite .cd-rating-label { color: #6ee7b7; }
+.cd-rating-card--composite .cd-rating-label { color: var(--green-soft); }
 .cd-rating-label {
   font-size: var(--cd-fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--cd-text-mute); font-weight: 600;
@@ -422,7 +422,7 @@
 .cd-rating-raw {
   font-size: 10px;
   font-style: italic;
-  color: rgba(255, 255, 255, 0.55);
+  color: color-mix(in srgb, var(--ink-strong) 55%, transparent);
   margin-top: 2px;
   display: block;
 }
@@ -552,28 +552,28 @@
 .cd-dialog {
   border: 0; border-radius: 12px; padding: 0; max-width: 600px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  color: #1f2937;
+  color: var(--surface-2);
 }
-.cd-dialog::backdrop { background: rgba(15, 23, 42, 0.7); }
+.cd-dialog::backdrop { background: color-mix(in srgb, var(--surface) 70%, transparent); }
 .cd-dialog article { padding: 20px 24px 24px; }
 .cd-dialog header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px;
 }
-.cd-dialog header h3 { font-size: 17px; font-weight: 700; margin: 0; color: #111827; }
+.cd-dialog header h3 { font-size: 17px; font-weight: 700; margin: 0; color: var(--surface); }
 .cd-dialog-close {
   font-size: 20px; line-height: 1; background: transparent; border: 0;
-  color: #6b7280; cursor: pointer; padding: 4px 8px;
+  color: var(--ink-4); cursor: pointer; padding: 4px 8px;
 }
 .cd-method-body p {
-  font-size: 13px; line-height: 1.6; color: #1f2937; margin: 0 0 10px;
+  font-size: 13px; line-height: 1.6; color: var(--surface-2); margin: 0 0 10px;
 }
 .cd-method-body .cd-method-data {
-  font-size: 12px; color: #6b7280; margin-top: 14px;
-  padding-top: 12px; border-top: 1px solid #e5e7eb;
+  font-size: 12px; color: var(--ink-4); margin-top: 14px;
+  padding-top: 12px; border-top: 1px solid var(--ink);
 }
 .cd-method-body code {
-  background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 12px;
+  background: var(--ink-strong); padding: 1px 4px; border-radius: 3px; font-size: 12px;
 }
 
 /* ── Responsive: tablet & mobile ─────────────────────────────────────── */

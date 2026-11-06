@@ -219,7 +219,7 @@
         const gapCls = gap == null ? '' : gap > 0 ? 'tr-edge-pos' : (gap < 0 ? 'tr-edge-neg' : '');
         const gapStr = gap == null ? '—' : (gap > 0 ? '+' : '') + gap.toFixed(0);
         const nextMtg = r.next_meeting || '—';
-        const marker = row.divergent ? ' <span title="strategist diverges from model" style="color:#f59e0b">⚡</span>' : '';
+        const marker = row.divergent ? ' <span title="strategist diverges from model" style="color:var(--amber)">⚡</span>' : '';
         return `
           <tr>
             <td><span class="tr-side ${sideCls}">${dirLbl}</span>${marker}</td>

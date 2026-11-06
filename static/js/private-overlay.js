@@ -752,9 +752,9 @@
       .attr('cx', d => { const p = projection([d.lon, d.lat]); return p ? p[0] : null; })
       .attr('cy', d => { const p = projection([d.lon, d.lat]); return p ? p[1] : null; })
       .attr('r',  d => radiusScale(d.exposure))
-      .style('fill', d => d.precision === 'state' ? '#a78bfa' : '#7c3aed')
+      .style('fill', d => d.precision === 'state' ? Theme.c('violet') : Theme.c('violet-text'))
       .style('fill-opacity', d => d.precision === 'state' ? 0.28 : 0.50)
-      .style('stroke', d => d.precision === 'state' ? '#7c3aed' : '#5b21b6')
+      .style('stroke', d => d.precision === 'state' ? Theme.c('violet-text') : Theme.c('violet-soft'))
       .style('stroke-width', 1.5)
       .style('stroke-dasharray', d => d.precision === 'state' ? '3,3' : null)
       .style('cursor', 'pointer');
@@ -821,16 +821,16 @@
     }
     const total = built + uc + planned;
     let label;
-    if (!total)                                   label = '<span style="color:#9ca3af;">not disclosed</span>';
-    else if (built && !uc && !planned)            label = `<span style="color:#10b981;font-weight:600;">100% built</span>`;
-    else if (!built && uc && !planned)            label = `<span style="color:#f59e0b;font-weight:600;">100% UC</span>`;
-    else if (!built && !uc && planned)            label = `<span style="color:#6366f1;font-weight:600;">100% plan</span>`;
+    if (!total)                                   label = '<span style="color:var(--ink-5);">not disclosed</span>';
+    else if (built && !uc && !planned)            label = `<span style="color:var(--green);font-weight:600;">100% built</span>`;
+    else if (!built && uc && !planned)            label = `<span style="color:var(--amber);font-weight:600;">100% UC</span>`;
+    else if (!built && !uc && planned)            label = `<span style="color:var(--violet);font-weight:600;">100% plan</span>`;
     else {
       const pct = v => Math.round(100 * v / total);
       const parts = [];
-      if (built)   parts.push(`<span style="color:#10b981;">${pct(built)}%B</span>`);
-      if (uc)      parts.push(`<span style="color:#f59e0b;">${pct(uc)}%U</span>`);
-      if (planned) parts.push(`<span style="color:#6366f1;">${pct(planned)}%P</span>`);
+      if (built)   parts.push(`<span style="color:var(--green);">${pct(built)}%B</span>`);
+      if (uc)      parts.push(`<span style="color:var(--amber);">${pct(uc)}%U</span>`);
+      if (planned) parts.push(`<span style="color:var(--violet);">${pct(planned)}%P</span>`);
       label = parts.join(' · ');
     }
     return { built_mw: built, uc_mw: uc, planned_mw: planned, total, label };
@@ -869,27 +869,27 @@
   function structuringDetails(m) {
     if (m.dealMatch) {
       const d = m.dealMatch;
-      const cusip   = d.cusip_senior ? `<code>${d.cusip_senior}</code>` : '<span style="color:#9ca3af;">pending</span>';
+      const cusip   = d.cusip_senior ? `<code>${d.cusip_senior}</code>` : '<span style="color:var(--ink-5);">pending</span>';
       const rating  = d.rating_senior ? `${d.rating_senior} (${d.rater || '?'})` : '—';
       const wal     = d.wal_years ? `${d.wal_years.toFixed(1)} yrs` : '—';
       const tcShare = d.top_tenant_share_pct ? ` (top tenant ${d.top_tenant_share_pct}%)` : '';
       const topT    = (d.top_tenants || []).join(', ') || '—';
       const src     = d.source_url
-        ? `<a href="${d.source_url}" target="_blank" style="color:#1d4ed8;">primary source ↗</a>`
+        ? `<a href="${d.source_url}" target="_blank" style="color:var(--blue-text);">primary source ↗</a>`
         : '—';
       const notes   = d.notes
-        ? `<div style="margin-top:6px;color:#6b7280;font-size:10px;line-height:1.5;">${d.notes}</div>` : '';
+        ? `<div style="margin-top:6px;color:var(--ink-4);font-size:10px;line-height:1.5;">${d.notes}</div>` : '';
       // Credit-analyst structural fields — confidence-flagged so user
       // knows which values are presale-confirmed vs archetype-typical.
       const srcFlag = d.structuring_source || '';
       const sourceBadge = srcFlag.startsWith('confirmed')
-        ? '<span style="background:#d1fae5;color:#065f46;padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;">presale</span>'
+        ? '<span style="background:var(--green-tint);color:var(--green-soft);padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;">presale</span>'
         : srcFlag.startsWith('archetype')
-          ? '<span style="background:#fef3c7;color:#92400e;padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;" title="industry-typical for this deal archetype; refine from primary-source presale">archetype</span>'
+          ? '<span style="background:var(--amber-tint);color:var(--amber-soft);padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;" title="industry-typical for this deal archetype; refine from primary-source presale">archetype</span>'
           : srcFlag.startsWith('na')
-            ? '<span style="background:#f3f4f6;color:#6b7280;padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;">n/a</span>'
+            ? '<span style="background:var(--surface-2);color:var(--ink-4);padding:0 4px;border-radius:3px;font-size:9px;font-weight:600;">n/a</span>'
             : '';
-      const ard  = d.ard ? d.ard : '<span style="color:#9ca3af;">—</span>';
+      const ard  = d.ard ? d.ard : '<span style="color:var(--ink-5);">—</span>';
       const adv  = d.senior_advance_rate_pct ? `${d.senior_advance_rate_pct.toFixed(0)}%` : '—';
       const dscC = d.dscr_at_close ? `${d.dscr_at_close.toFixed(2)}x` : '—';
       const dscT = d.dscr_trigger  ? `${d.dscr_trigger.toFixed(2)}x` : '—';
@@ -901,44 +901,44 @@
       return `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
           <div>
-            <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">
+            <div style="font-size:10px;color:var(--ink-4);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">
               Headline
             </div>
             <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:11px;">
-              <div style="color:#9ca3af;">Sponsor</div>          <div>${d.sponsor || '—'}</div>
-              <div style="color:#9ca3af;">Deal type</div>        <div>${d.deal_type_label}</div>
-              <div style="color:#9ca3af;">Issued → Maturity</div><div>${d.issue_date || '—'} → ${d.final_maturity || '—'}</div>
-              <div style="color:#9ca3af;">Senior rating</div>    <div>${rating}</div>
-              <div style="color:#9ca3af;">Senior CUSIP</div>     <div>${cusip}</div>
-              <div style="color:#9ca3af;">WAL</div>              <div>${wal}</div>
-              <div style="color:#9ca3af;">Tenant type</div>      <div>${d.tenant_type_label || '—'}</div>
-              <div style="color:#9ca3af;">Facility type</div>    <div>${d.datacenter_type_label || '—'}</div>
-              <div style="color:#9ca3af;">Top tenants</div>      <div>${topT}${tcShare}</div>
-              <div style="color:#9ca3af;">Collateral DCs</div>   <div>${(d.collateral_facilities || []).join('; ') || '—'}</div>
+              <div style="color:var(--ink-5);">Sponsor</div>          <div>${d.sponsor || '—'}</div>
+              <div style="color:var(--ink-5);">Deal type</div>        <div>${d.deal_type_label}</div>
+              <div style="color:var(--ink-5);">Issued → Maturity</div><div>${d.issue_date || '—'} → ${d.final_maturity || '—'}</div>
+              <div style="color:var(--ink-5);">Senior rating</div>    <div>${rating}</div>
+              <div style="color:var(--ink-5);">Senior CUSIP</div>     <div>${cusip}</div>
+              <div style="color:var(--ink-5);">WAL</div>              <div>${wal}</div>
+              <div style="color:var(--ink-5);">Tenant type</div>      <div>${d.tenant_type_label || '—'}</div>
+              <div style="color:var(--ink-5);">Facility type</div>    <div>${d.datacenter_type_label || '—'}</div>
+              <div style="color:var(--ink-5);">Top tenants</div>      <div>${topT}${tcShare}</div>
+              <div style="color:var(--ink-5);">Collateral DCs</div>   <div>${(d.collateral_facilities || []).join('; ') || '—'}</div>
             </div>
           </div>
           <div>
-            <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">
+            <div style="font-size:10px;color:var(--ink-4);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">
               Structuring ${sourceBadge}
             </div>
             <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:11px;">
-              <div style="color:#9ca3af;" title="Anticipated Repayment Date — spread step-up + cash sweep kick in if not refi'd by this date">ARD</div>
+              <div style="color:var(--ink-5);" title="Anticipated Repayment Date — spread step-up + cash sweep kick in if not refi'd by this date">ARD</div>
                   <div>${ard}</div>
-              <div style="color:#9ca3af;" title="Senior class advance rate — senior balance ÷ appraised collateral value">Senior advance</div>
+              <div style="color:var(--ink-5);" title="Senior class advance rate — senior balance ÷ appraised collateral value">Senior advance</div>
                   <div>${adv}</div>
-              <div style="color:#9ca3af;" title="DSCR at deal close — NOI ÷ debt service">DSCR (close)</div>
+              <div style="color:var(--ink-5);" title="DSCR at deal close — NOI ÷ debt service">DSCR (close)</div>
                   <div>${dscC}</div>
-              <div style="color:#9ca3af;" title="DSCR rapid-amortization trigger — below this, excess cash sweeps to senior principal">DSCR trigger</div>
+              <div style="color:var(--ink-5);" title="DSCR rapid-amortization trigger — below this, excess cash sweeps to senior principal">DSCR trigger</div>
                   <div>${dscT}</div>
-              <div style="color:#9ca3af;" title="% of capital structure subordinate to Class A senior (mezz B/C/D/equity stack)">Subordination</div>
+              <div style="color:var(--ink-5);" title="% of capital structure subordinate to Class A senior (mezz B/C/D/equity stack)">Subordination</div>
                   <div>${sub}</div>
-              <div style="color:#9ca3af;">Senior coupon</div>    <div>${cpn}</div>
-              <div style="color:#9ca3af;" title="Can the issuer swap collateral facilities in/out of the trust?">Substitution</div>
+              <div style="color:var(--ink-5);">Senior coupon</div>    <div>${cpn}</div>
+              <div style="color:var(--ink-5);" title="Can the issuer swap collateral facilities in/out of the trust?">Substitution</div>
                   <div>${subs}</div>
-              <div style="color:#9ca3af;">Lease type</div>        <div>${lt}</div>
-              <div style="color:#9ca3af;" title="Weighted PPA / utility-contract tenor backing the underlying facilities">PPA tenor</div>
+              <div style="color:var(--ink-5);">Lease type</div>        <div>${lt}</div>
+              <div style="color:var(--ink-5);" title="Weighted PPA / utility-contract tenor backing the underlying facilities">PPA tenor</div>
                   <div>${ppa}</div>
-              <div style="color:#9ca3af;">Primary source</div>    <div>${src}</div>
+              <div style="color:var(--ink-5);">Primary source</div>    <div>${src}</div>
             </div>
           </div>
         </div>${notes}`;
@@ -946,17 +946,17 @@
     if (m.operatorHit) {
       const o = m.operatorHit;
       const facList = (o.facilities || []).slice(0, 10).map(f =>
-        `<li>${f.name} <span style="color:#9ca3af;">— ${f.market || ''} · ${(f.status || '?').replace('_',' ')} · ${Math.round(f.mw || 0)} MW</span></li>`
+        `<li>${f.name} <span style="color:var(--ink-5);">— ${f.market || ''} · ${(f.status || '?').replace('_',' ')} · ${Math.round(f.mw || 0)} MW</span></li>`
       ).join('');
       return `
         <div style="font-size:11px;">
           <div><strong>${o.operator.canonical}</strong>
-            <span style="color:#6b7280;">· ${o.operator.type === 'reit_public' ? 'public REIT (corporate bond — unsecured, claims operator\'s whole portfolio)' : 'private operator'}</span></div>
-          <div style="margin-top:4px;color:#6b7280;">
+            <span style="color:var(--ink-4);">· ${o.operator.type === 'reit_public' ? 'public REIT (corporate bond — unsecured, claims operator\'s whole portfolio)' : 'private operator'}</span></div>
+          <div style="margin-top:4px;color:var(--ink-4);">
             ${o.facility_count} of their US facilities in our map · ${Math.round(o.total_mw)} MW total · ${Math.round(o.at_risk_mw)} at-risk MW
           </div>
-          <ul style="margin:6px 0 0 18px;padding:0;font-size:10px;color:#374151;">
-            ${facList}${o.facility_count > 10 ? `<li style="color:#9ca3af;">…and ${o.facility_count - 10} more</li>` : ''}
+          <ul style="margin:6px 0 0 18px;padding:0;font-size:10px;color:var(--ink-2);">
+            ${facList}${o.facility_count > 10 ? `<li style="color:var(--ink-5);">…and ${o.facility_count - 10} more</li>` : ''}
           </ul>
         </div>`;
     }
@@ -965,11 +965,11 @@
       return `
         <div style="font-size:11px;">
           <strong>${f.name}</strong> · ${f.market || ''} · ${(f.status || '?').replace('_',' ')} · ${Math.round(f.mw || 0)} MW
-          ${f.operator    ? `<div style="color:#6b7280;margin-top:4px;">Operator: ${f.operator}</div>` : ''}
-          ${f.tenant_norm ? `<div style="color:#6b7280;">Tenant: ${f.tenant_norm}</div>` : ''}
+          ${f.operator    ? `<div style="color:var(--ink-4);margin-top:4px;">Operator: ${f.operator}</div>` : ''}
+          ${f.tenant_norm ? `<div style="color:var(--ink-4);">Tenant: ${f.tenant_norm}</div>` : ''}
         </div>`;
     }
-    return '<div style="color:#9ca3af;">No structuring details available.</div>';
+    return '<div style="color:var(--ink-5);">No structuring details available.</div>';
   }
 
   // ── Renderer ─────────────────────────────────────────────────────
@@ -983,11 +983,11 @@
     return `$${Math.round(n).toLocaleString()}`;
   }
   function riskColor(s) {
-    if (s == null) return '#d1d5db';
-    if (s >= 75) return '#dc2626';
-    if (s >= 50) return '#f59e0b';
-    if (s >= 25) return '#facc15';
-    return '#10b981';
+    if (s == null) return Theme.c('ink-5');
+    if (s >= 75) return Theme.c('red-text');
+    if (s >= 50) return Theme.c('amber');
+    if (s >= 25) return Theme.c('amber');
+    return Theme.c('green');
   }
   function renderResults(r) {
     const box = $('overlay-results');
@@ -998,37 +998,37 @@
     // KPI tiles vary by what columns were detected.  AIG sheets have $-exposure
     // but typically no MW column → we hide MW tiles and surface $ instead.
     const tiles = [
-      `<div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
-        <div style="font-size:20px;font-weight:600;color:#1e40af;">${r.matched}/${r.total}</div>
-        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Rows matched (${pct}%)</div>
+      `<div style="background:var(--surface);border:1px solid var(--blue-line);padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:var(--blue-soft);">${r.matched}/${r.total}</div>
+        <div style="font-size:10px;color:var(--violet-soft);text-transform:uppercase;letter-spacing:0.06em;">Rows matched (${pct}%)</div>
       </div>`,
-      `<div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
-        <div style="font-size:20px;font-weight:600;color:#1e40af;">${r.unmatched}</div>
-        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">Unmatched rows</div>
+      `<div style="background:var(--surface);border:1px solid var(--blue-line);padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:var(--blue-soft);">${r.unmatched}</div>
+        <div style="font-size:10px;color:var(--violet-soft);text-transform:uppercase;letter-spacing:0.06em;">Unmatched rows</div>
       </div>`,
     ];
     if (r.totalUpMw > 0) {
-      tiles.push(`<div style="background:#fff;border:1px solid #bfdbfe;padding:10px;border-radius:5px;">
-        <div style="font-size:20px;font-weight:600;color:#1e40af;">${fmt(r.matchedMw)}</div>
-        <div style="font-size:10px;color:#6b21a8;text-transform:uppercase;letter-spacing:0.06em;">MW matched (${mwPct}%)</div>
+      tiles.push(`<div style="background:var(--surface);border:1px solid var(--blue-line);padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:var(--blue-soft);">${fmt(r.matchedMw)}</div>
+        <div style="font-size:10px;color:var(--violet-soft);text-transform:uppercase;letter-spacing:0.06em;">MW matched (${mwPct}%)</div>
       </div>`);
-      tiles.push(`<div style="background:#fff;border:1px solid #fca5a5;padding:10px;border-radius:5px;">
-        <div style="font-size:20px;font-weight:600;color:#b91c1c;">${fmt(r.gapMw)}</div>
-        <div style="font-size:10px;color:#b91c1c;text-transform:uppercase;letter-spacing:0.06em;">MW gap (not in map)</div>
+      tiles.push(`<div style="background:var(--surface);border:1px solid var(--red-line);padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:var(--red-text);">${fmt(r.gapMw)}</div>
+        <div style="font-size:10px;color:var(--red-text);text-transform:uppercase;letter-spacing:0.06em;">MW gap (not in map)</div>
       </div>`);
     }
     if (r.hasExposure && r.totalUpUsd > 0) {
-      tiles.push(`<div style="background:#fff;border:1px solid #c7d2fe;padding:10px;border-radius:5px;">
-        <div style="font-size:20px;font-weight:600;color:#3730a3;">${fmtUsd(r.totalUpUsd)}</div>
-        <div style="font-size:10px;color:#3730a3;text-transform:uppercase;letter-spacing:0.06em;">Total credit exposure</div>
+      tiles.push(`<div style="background:var(--surface);border:1px solid var(--violet-line);padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:var(--violet-soft);">${fmtUsd(r.totalUpUsd)}</div>
+        <div style="font-size:10px;color:var(--violet-soft);text-transform:uppercase;letter-spacing:0.06em;">Total credit exposure</div>
       </div>`);
-      tiles.push(`<div style="background:#fff;border:1px solid #c7d2fe;padding:10px;border-radius:5px;">
-        <div style="font-size:20px;font-weight:600;color:#3730a3;">${fmtUsd(r.matchedUsd)}</div>
-        <div style="font-size:10px;color:#3730a3;text-transform:uppercase;letter-spacing:0.06em;">Exposure on mapped DCs (${usdPct}%)</div>
+      tiles.push(`<div style="background:var(--surface);border:1px solid var(--violet-line);padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:var(--violet-soft);">${fmtUsd(r.matchedUsd)}</div>
+        <div style="font-size:10px;color:var(--violet-soft);text-transform:uppercase;letter-spacing:0.06em;">Exposure on mapped DCs (${usdPct}%)</div>
       </div>`);
-      tiles.push(`<div style="background:#fff;border:1px solid #fca5a5;padding:10px;border-radius:5px;">
-        <div style="font-size:20px;font-weight:600;color:#b91c1c;">${fmtUsd(r.gapUsd)}</div>
-        <div style="font-size:10px;color:#b91c1c;text-transform:uppercase;letter-spacing:0.06em;">Exposure on UN-mapped DCs</div>
+      tiles.push(`<div style="background:var(--surface);border:1px solid var(--red-line);padding:10px;border-radius:5px;">
+        <div style="font-size:20px;font-weight:600;color:var(--red-text);">${fmtUsd(r.gapUsd)}</div>
+        <div style="font-size:10px;color:var(--red-text);text-transform:uppercase;letter-spacing:0.06em;">Exposure on UN-mapped DCs</div>
       </div>`);
     }
     const kpiRow = `
@@ -1037,36 +1037,36 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <button type="button" id="overlay-plot-map"
-                style="padding:6px 12px;border:1px solid #7c3aed;background:#faf5ff;color:#6d28d9;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;">
+                style="padding:6px 12px;border:1px solid var(--violet-strong);background:var(--violet-wash);color:var(--violet-text);border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;">
           📍 Plot exposure on map
         </button>
         <button type="button" id="overlay-clear-map"
-                style="padding:6px 12px;border:1px solid #d1d5db;background:#fff;color:#6b7280;border-radius:4px;cursor:pointer;font-size:11px;">
+                style="padding:6px 12px;border:1px solid var(--rule-strong);background:var(--surface);color:var(--ink-4);border-radius:4px;cursor:pointer;font-size:11px;">
           Clear map overlay
         </button>
-        <span style="align-self:center;font-size:10px;color:#9ca3af;">
+        <span style="align-self:center;font-size:10px;color:var(--ink-5);">
           markers scaled by exposure $; tooltip shows portfolio holdings at each location
         </span>
       </div>`;
 
     const gapTable = r.gapByState.length ? `
       <div style="margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:600;color:var(--blue-soft);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
           Coverage gap by state
         </div>
         <table style="width:100%;font-size:11px;border-collapse:collapse;">
-          <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
+          <thead><tr style="color:var(--ink-4);font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--rule);">
             <th style="text-align:left;padding:4px;font-weight:500;">State</th>
             <th style="text-align:right;padding:4px;font-weight:500;">Unmatched #</th>
             ${r.totalUpMw > 0   ? '<th style="text-align:right;padding:4px;font-weight:500;">Unmatched MW</th>'        : ''}
             ${r.hasExposure     ? '<th style="text-align:right;padding:4px;font-weight:500;">Unmatched exposure</th>' : ''}
           </tr></thead>
           <tbody>
-            ${r.gapByState.slice(0, 12).map(g => `<tr style="border-bottom:1px solid #f3f4f6;">
+            ${r.gapByState.slice(0, 12).map(g => `<tr style="border-bottom:1px solid var(--rule);">
               <td style="padding:4px;">${g.state}</td>
               <td style="padding:4px;text-align:right;">${g.count}</td>
-              ${r.totalUpMw > 0   ? `<td style="padding:4px;text-align:right;color:#b91c1c;font-weight:600;">${fmt(g.mw)}</td>`         : ''}
-              ${r.hasExposure     ? `<td style="padding:4px;text-align:right;color:#b91c1c;font-weight:600;">${fmtUsd(g.usd)}</td>`    : ''}
+              ${r.totalUpMw > 0   ? `<td style="padding:4px;text-align:right;color:var(--red-text);font-weight:600;">${fmt(g.mw)}</td>`         : ''}
+              ${r.hasExposure     ? `<td style="padding:4px;text-align:right;color:var(--red-text);font-weight:600;">${fmtUsd(g.usd)}</td>`    : ''}
             </tr>`).join('')}
           </tbody>
         </table>
@@ -1074,11 +1074,11 @@
 
     const managerTable = (r.byManager && r.byManager.length) ? `
       <div style="margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:600;color:var(--blue-soft);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
           By portfolio manager / operator
         </div>
         <table style="width:100%;font-size:11px;border-collapse:collapse;">
-          <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
+          <thead><tr style="color:var(--ink-4);font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--rule);">
             <th style="text-align:left;padding:4px;font-weight:500;">Manager</th>
             <th style="text-align:right;padding:4px;font-weight:500;">Rows</th>
             <th style="text-align:right;padding:4px;font-weight:500;">Unmatched</th>
@@ -1086,10 +1086,10 @@
             ${r.hasExposure   ? '<th style="text-align:right;padding:4px;font-weight:500;">Exposure</th>'    : ''}
           </tr></thead>
           <tbody>
-            ${r.byManager.slice(0, 15).map(m => `<tr style="border-bottom:1px solid #f3f4f6;">
+            ${r.byManager.slice(0, 15).map(m => `<tr style="border-bottom:1px solid var(--rule);">
               <td style="padding:4px;">${m.manager}</td>
               <td style="padding:4px;text-align:right;">${m.count}</td>
-              <td style="padding:4px;text-align:right;color:${m.unmatched > 0 ? '#b91c1c' : '#10b981'};font-weight:600;">${m.unmatched}</td>
+              <td style="padding:4px;text-align:right;color:${m.unmatched > 0 ? Theme.c('red-text') : Theme.c('green')};font-weight:600;">${m.unmatched}</td>
               ${r.totalUpMw > 0 ? `<td style="padding:4px;text-align:right;">${fmt(m.mw)}</td>`        : ''}
               ${r.hasExposure   ? `<td style="padding:4px;text-align:right;">${fmtUsd(m.usd)}</td>`   : ''}
             </tr>`).join('')}
@@ -1100,15 +1100,15 @@
     const col = r.col;
     const matchedRows = `
       <div style="margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:600;color:var(--blue-soft);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
           Matched rows with risk overlay (${Math.min(20, r.matchedRows.length)} of ${r.matchedRows.length} shown)
-          <span style="font-weight:400;color:#6b7280;text-transform:none;letter-spacing:0;margin-left:6px;font-size:10px;">
+          <span style="font-weight:400;color:var(--ink-4);text-transform:none;letter-spacing:0;margin-left:6px;font-size:10px;">
             · click any row to see full deal structuring
           </span>
         </div>
         <div style="overflow-x:auto;">
         <table style="width:100%;min-width:1100px;font-size:11px;border-collapse:collapse;">
-          <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
+          <thead><tr style="color:var(--ink-4);font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--rule);">
             <th style="text-align:left;padding:4px;font-weight:500;"></th>
             <th style="text-align:left;padding:4px;font-weight:500;">Uploaded name</th>
             <th style="text-align:left;padding:4px;font-weight:500;">How</th>
@@ -1136,25 +1136,25 @@
                 sr        = d.stranded_risk_avg;
                 atRisk    = d.at_risk_mw_total;
                 kindLabel = m.matchKind === 'cusip'
-                  ? '<span style="background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">CUSIP</span>'
-                  : '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">DEAL</span>';
+                  ? '<span style="background:var(--green-tint);color:var(--green-soft);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">CUSIP</span>'
+                  : '<span style="background:var(--blue-tint);color:var(--blue-text);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">DEAL</span>';
               } else if (m.operatorHit) {
                 const o = m.operatorHit;
-                matchedTo = `${o.operator.canonical} <span style="color:#9ca3af;font-size:9px;">(${o.operator.type})</span>`;
+                matchedTo = `${o.operator.canonical} <span style="color:var(--ink-5);font-size:9px;">(${o.operator.type})</span>`;
                 dealMw    = o.total_mw;
                 sr        = o.stranded_risk;
                 atRisk    = o.at_risk_mw;
-                kindLabel = '<span style="background:#ede9fe;color:#6d28d9;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">OP</span>';
+                kindLabel = '<span style="background:var(--violet-tint);color:var(--violet-text);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">OP</span>';
               } else {
                 const f = m.top.facility;
                 matchedTo = f.name;
                 dealMw    = f.mw;
                 sr        = f.stranded_risk;
                 atRisk    = f.at_risk_mw;
-                kindLabel = '<span style="background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">FAC</span>';
+                kindLabel = '<span style="background:var(--amber-tint);color:var(--amber-soft);padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;">FAC</span>';
               }
               const tenantPill = cls.tenant_type
-                ? `<span title="Who's the credit counterparty — hyperscaler vs colocation customer vs wholesale enterprise" style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:999px;font-size:9px;letter-spacing:0.04em;">${cls.tenant_type}</span>` : '—';
+                ? `<span title="Who's the credit counterparty — hyperscaler vs colocation customer vs wholesale enterprise" style="background:var(--blue-tint);color:var(--blue-soft);padding:1px 5px;border-radius:999px;font-size:9px;letter-spacing:0.04em;">${cls.tenant_type}</span>` : '—';
               // Facility-axis tooltips spell out the BTS vs wholesale vs campus distinction.
               const dcTip = {
                 'hyperscale_bts':       'Hyperscale BTS: single hyperscaler is the only tenant in the deal pool',
@@ -1166,13 +1166,13 @@
                 'mixed':                'Mixed: blend of tenant/building types',
               }[cls.dc_type_key] || '';
               const facPill = cls.dc_type
-                ? `<span title="${dcTip}" style="background:#fce7f3;color:#9d174d;padding:1px 5px;border-radius:3px;font-size:9px;letter-spacing:0.04em;cursor:help;">${cls.dc_type}</span>` : '—';
+                ? `<span title="${dcTip}" style="background:var(--pink-tint);color:var(--pink-soft);padding:1px 5px;border-radius:3px;font-size:9px;letter-spacing:0.04em;cursor:help;">${cls.dc_type}</span>` : '—';
               return `
-              <tr class="match-row" data-row-idx="${idx}" style="border-bottom:1px solid #f3f4f6;cursor:pointer;">
-                <td style="padding:4px;color:#9ca3af;width:18px;">▸</td>
+              <tr class="match-row" data-row-idx="${idx}" style="border-bottom:1px solid var(--rule);cursor:pointer;">
+                <td style="padding:4px;color:var(--ink-5);width:18px;">▸</td>
                 <td style="padding:4px;">${m.row[col.name] || '—'}</td>
                 <td style="padding:4px;">${kindLabel}</td>
-                <td style="padding:4px;color:#1e40af;">${matchedTo}</td>
+                <td style="padding:4px;color:var(--blue-soft);">${matchedTo}</td>
                 <td style="padding:4px;font-size:10px;">${stage.label}</td>
                 <td style="padding:4px;">${tenantPill}</td>
                 <td style="padding:4px;">${facPill}</td>
@@ -1181,11 +1181,11 @@
                   ${sr != null ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;background:${riskColor(sr)}22;color:${riskColor(sr)};font-weight:600;">${Math.round(sr)}</span>` : '—'}
                 </td>
                 <td style="padding:4px;text-align:right;">${fmt(atRisk)}</td>
-                <td style="padding:4px;color:#6b7280;">${cls.maturity || '—'}</td>
-                ${r.hasExposure ? `<td style="padding:4px;text-align:right;color:#3730a3;font-weight:600;">${fmtUsd(usd)}</td>` : ''}
-                ${col.rating    ? `<td style="padding:4px;color:#6b7280;">${m.row[col.rating] || '—'}</td>` : ''}
+                <td style="padding:4px;color:var(--ink-4);">${cls.maturity || '—'}</td>
+                ${r.hasExposure ? `<td style="padding:4px;text-align:right;color:var(--violet-soft);font-weight:600;">${fmtUsd(usd)}</td>` : ''}
+                ${col.rating    ? `<td style="padding:4px;color:var(--ink-4);">${m.row[col.rating] || '—'}</td>` : ''}
               </tr>
-              <tr class="match-row-details" data-row-idx="${idx}" style="display:none;background:#f9fafb;border-bottom:1px solid #e5e7eb;">
+              <tr class="match-row-details" data-row-idx="${idx}" style="display:none;background:var(--surface-2);border-bottom:1px solid var(--rule);">
                 <td colspan="13" style="padding:10px 14px;">${structuringDetails(m)}</td>
               </tr>`;
             }).join('')}
@@ -1196,12 +1196,12 @@
 
     const unmatchedRows = r.unmatchedRows.length ? `
       <div>
-        <div style="font-size:11px;font-weight:600;color:#b91c1c;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:600;color:var(--red-text);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
           Unmatched rows (${Math.min(20, r.unmatchedRows.length)} of ${r.unmatchedRows.length} shown) — your map gap
         </div>
         <div style="overflow-x:auto;">
         <table style="width:100%;min-width:900px;font-size:11px;border-collapse:collapse;">
-          <thead><tr style="color:#6b7280;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e5e7eb;">
+          <thead><tr style="color:var(--ink-4);font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--rule);">
             <th style="text-align:left;padding:4px;font-weight:500;">Uploaded name</th>
             <th style="text-align:left;padding:4px;font-weight:500;">City</th>
             <th style="text-align:left;padding:4px;font-weight:500;">State</th>
@@ -1215,14 +1215,14 @@
               const c = u.candidates[0];
               const ls = rowCityState(u.row, col);
               const usd = rowExposureUsd(u.row, col);
-              return `<tr style="border-bottom:1px solid #f3f4f6;">
+              return `<tr style="border-bottom:1px solid var(--rule);">
                 <td style="padding:4px;">${u.row[col.name] || '—'}</td>
-                <td style="padding:4px;color:#6b7280;">${ls.city || '—'}</td>
-                <td style="padding:4px;color:#6b7280;">${(ls.state || '').toUpperCase() || '—'}</td>
+                <td style="padding:4px;color:var(--ink-4);">${ls.city || '—'}</td>
+                <td style="padding:4px;color:var(--ink-4);">${(ls.state || '').toUpperCase() || '—'}</td>
                 <td style="padding:4px;text-align:right;">${fmt(parseMW(u.row[col.mw]))}</td>
-                ${r.hasExposure ? `<td style="padding:4px;text-align:right;color:#3730a3;font-weight:600;">${fmtUsd(usd)}</td>` : ''}
-                <td style="padding:4px;color:#6b7280;">${u.row[col.operator] || u.row[col.tenant] || '—'}</td>
-                <td style="padding:4px;font-size:10px;color:#9ca3af;">${c ? `${c.facility.name} (${(c.score*100).toFixed(0)}%)` : '—'}</td>
+                ${r.hasExposure ? `<td style="padding:4px;text-align:right;color:var(--violet-soft);font-weight:600;">${fmtUsd(usd)}</td>` : ''}
+                <td style="padding:4px;color:var(--ink-4);">${u.row[col.operator] || u.row[col.tenant] || '—'}</td>
+                <td style="padding:4px;font-size:10px;color:var(--ink-5);">${c ? `${c.facility.name} (${(c.score*100).toFixed(0)}%)` : '—'}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -1300,15 +1300,15 @@
     function showDiagnostics(parsed, raw, col) {
       const box = $('overlay-results');
       const looked = (raw.rows || []).slice(0, 6).map((r, i) =>
-        `<tr><td style="padding:4px;color:#9ca3af;">#${i + 1}</td>
-          ${r.slice(0, 8).map(c => `<td style="padding:4px;border:1px solid #fde68a;">${(c || '').slice(0, 30)}</td>`).join('')}
+        `<tr><td style="padding:4px;color:var(--ink-5);">#${i + 1}</td>
+          ${r.slice(0, 8).map(c => `<td style="padding:4px;border:1px solid var(--amber-line);">${(c || '').slice(0, 30)}</td>`).join('')}
         </tr>`).join('');
       const detectedList = col ? Object.entries(col).map(([k, v]) =>
         `<li><code>${k}</code> ← <code>${v}</code></li>`).join('') : '';
       box.style.display = '';
       box.innerHTML = `
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:12px;font-size:12px;color:#374151;">
-          <div style="font-weight:600;color:#92400e;margin-bottom:6px;">Parser diagnostics</div>
+        <div style="background:var(--amber-wash);border:1px solid var(--amber-line);border-radius:5px;padding:12px;font-size:12px;color:var(--ink-2);">
+          <div style="font-weight:600;color:var(--amber-soft);margin-bottom:6px;">Parser diagnostics</div>
           <div style="margin-bottom:8px;">First ${Math.min(6, raw.rows?.length || 0)} rows of your file (first 8 columns shown):</div>
           <div style="overflow-x:auto;margin-bottom:10px;">
             <table style="font-size:11px;border-collapse:collapse;">${looked}</table>
@@ -1320,7 +1320,7 @@
             <strong>Columns I recognized:</strong>
             <ul style="margin:4px 0 0 18px;">${detectedList}</ul>
           </div>` : ''}
-          <div style="margin-top:8px;color:#6b7280;font-size:11px;line-height:1.5;">
+          <div style="margin-top:8px;color:var(--ink-4);font-size:11px;line-height:1.5;">
             <strong>To fix:</strong> rename one of your columns to <code>name</code>,
             <code>asset_name</code>, <code>holding_name</code>, <code>security_name</code>,
             <code>issuer_name</code>, <code>facility</code>, or anything ending in

@@ -32,7 +32,7 @@ const MapModule = {
         this.svg.append('rect')
             .attr('width', width)
             .attr('height', height)
-            .attr('fill', '#0a0e1a');
+            .attr('fill', Theme.c('bg'));
 
         // Zoomable group for all map content
         this.g = this.svg.append('g');
@@ -45,7 +45,7 @@ const MapModule = {
 
         this.colorScale = d3.scaleLinear()
             .domain([0, 15, 35, 60, 100])
-            .range(['#10b981', '#22c55e', '#f59e0b', '#f97316', '#ef4444'])
+            .range([Theme.c('green'), Theme.c('green'), Theme.c('amber'), Theme.c('orange'), Theme.c('red')])
             .clamp(true);
 
         // Setup zoom behavior
@@ -101,8 +101,8 @@ const MapModule = {
                 .join('path')
                 .attr('class', 'country')
                 .attr('d', this.pathGenerator)
-                .attr('fill', '#1f2937')
-                .attr('stroke', '#2d3748')
+                .attr('fill', Theme.c('surface-2'))
+                .attr('stroke', Theme.c('rule-strong'))
                 .attr('stroke-width', 0.5)
                 .on('mouseover', (event, d) => this.handleHover(event, d))
                 .on('mousemove', (event) => this.moveTooltip(event))
@@ -135,7 +135,7 @@ const MapModule = {
                 const alpha2 = this.countryCodeMap[String(d.id)];
                 const scoreData = this.scores[alpha2];
                 const value = this.getScoreValue(scoreData);
-                if (value === undefined) return '#1f2937';
+                if (value === undefined) return Theme.c('surface-2');
                 return this.colorScale(value);
             });
 
@@ -156,7 +156,7 @@ const MapModule = {
                 const alpha2 = this.countryCodeMap[String(d.id)];
                 const scoreData = this.scores[alpha2];
                 const value = this.getScoreValue(scoreData);
-                if (value === undefined) return '#1f2937';
+                if (value === undefined) return Theme.c('surface-2');
                 return this.colorScale(value);
             });
 
@@ -210,7 +210,7 @@ const MapModule = {
 
             // Show "No news data" hint when viewing News Signal with zero articles
             const newsDisplay = (isNewsActive && news === 0 && articles === 0)
-                ? '<span class="tier-value" style="color: #6b7280">N/A</span>'
+                ? '<span class="tier-value" style="color: var(--ink-4)">N/A</span>'
                 : `<span class="tier-value" style="color: ${newsColor}">${news}</span>`;
 
             const warzoneBadge = isWarzone

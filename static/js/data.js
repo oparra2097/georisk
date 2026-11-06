@@ -10,10 +10,10 @@
     const state = PD.state;
 
     const COLORS = [
-        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899',
-        '#8b5cf6', '#f97316', '#06b6d4', '#84cc16', '#e11d48',
-        '#6366f1', '#14b8a6', '#f43f5e', '#a855f7', '#22c55e',
-        '#eab308', '#0ea5e9', '#d946ef', '#64748b', '#fb923c',
+        Theme.c('blue'), Theme.c('green'), Theme.c('amber'), Theme.c('red'), Theme.c('pink'),
+        Theme.c('violet'), Theme.c('orange'), Theme.c('cyan'), Theme.c('green'), Theme.c('red-text'),
+        Theme.c('violet'), Theme.c('cyan'), Theme.c('red'), Theme.c('violet'), Theme.c('green'),
+        Theme.c('amber'), Theme.c('cyan'), Theme.c('violet'), Theme.c('ink-4'), Theme.c('orange-text'),
     ];
 
     let searchIndex = null;
@@ -106,7 +106,7 @@
             tmp.width = canvas.width;
             tmp.height = canvas.height;
             const ctx = tmp.getContext('2d');
-            ctx.fillStyle = '#0f172a';            // slate-900, matches site bg
+            ctx.fillStyle = Theme.c('surface');            // slate-900, matches site bg
             ctx.fillRect(0, 0, tmp.width, tmp.height);
             ctx.drawImage(canvas, 0, 0);
             const ds = PD.findDataset(state.category, state.dataset);
@@ -525,7 +525,7 @@
                         const loadEl = document.getElementById('panel-loading');
                         if (loadEl) loadEl.style.display = 'none';
                         const meta = document.getElementById('panel-meta');
-                        if (meta) meta.innerHTML = '<div style="padding:30px;text-align:center;"><p style="color:#f59e0b;font-size:15px;font-weight:600;">' + (body.error || 'Access denied') + '</p><p style="color:#64748b;font-size:13px;margin-top:8px;">Contact the administrator for access.</p></div>';
+                        if (meta) meta.innerHTML = '<div style="padding:30px;text-align:center;"><p style="color:var(--amber);font-size:15px;font-weight:600;">' + (body.error || 'Access denied') + '</p><p style="color:var(--ink-4);font-size:13px;margin-top:8px;">Contact the administrator for access.</p></div>';
                     }
                 } catch(e) {}
                 return;
@@ -862,17 +862,17 @@
 
         const periods = data.periods || [];
         const meta = data.meta || {};
-        const goldColor = '#e0b84c';     // gold
-        const treColor = '#5b8def';      // treasury (Apollo-ish blue)
+        const goldColor = Theme.c('series-gold');     // gold
+        const treColor = Theme.c('series-treasury');      // treasury (Apollo-ish blue)
 
         if (meta.error || periods.length < 2) {
             const loadEl = document.getElementById('panel-loading');
             if (loadEl) loadEl.style.display = 'none';
             const metaEl = document.getElementById('panel-meta');
             if (metaEl) {
-                metaEl.innerHTML = '<div style="padding:24px;text-align:center;color:#f59e0b;">'
+                metaEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--amber);">'
                     + 'Crossover data unavailable' + (meta.error ? ': ' + meta.error : '')
-                    + '<div style="color:#64748b;font-size:12px;margin-top:6px;">'
+                    + '<div style="color:var(--ink-4);font-size:12px;margin-top:6px;">'
                     + 'Needs a FRED_API_KEY on the server for the gold-price + Treasury series.</div></div>';
             }
             PD.destroyChart('main');
@@ -932,9 +932,9 @@
             if (meta.crossover_period) bits.push('crossover ' + meta.crossover_period);
             if (meta.source) bits.push(meta.source);
             metaEl.innerHTML =
-                '<div style="font-weight:600;color:#e5e7eb;margin-bottom:4px;">'
+                '<div style="font-weight:600;color:var(--ink);margin-bottom:4px;">'
                 + (meta.title || 'Gold vs US Treasurys in central-bank reserves') + '</div>'
-                + '<div style="color:#94a3b8;font-size:12px;">' + bits.join(' · ') + '</div>';
+                + '<div style="color:var(--ink-3);font-size:12px;">' + bits.join(' · ') + '</div>';
         }
 
         // Table: last 24 periods of the two shares.
@@ -1002,7 +1002,7 @@
 
         const step = Math.max(1, Math.floor(periods.length / 20));
         const datasets = currencies.map(ccy => {
-            const color = colors[ccy] || '#999';
+            const color = colors[ccy] || Theme.c('ink-3');
             const r = parseInt(color.slice(1,3),16);
             const g = parseInt(color.slice(3,5),16);
             const b = parseInt(color.slice(5,7),16);
@@ -1056,7 +1056,7 @@
             for (const ccy of currencies) {
                 const histVals = hist.shares[ccy] || [];
                 const coferVal = histVals[histVals.length - 1];
-                rows += '<tr><td style="font-weight:600;color:' + (colors[ccy]||'#333') + '">' + ccy + '</td>';
+                rows += '<tr><td style="font-weight:600;color:' + (colors[ccy]||Theme.c('ink-5')) + '">' + ccy + '</td>';
                 rows += '<td>' + (coferVal != null ? coferVal.toFixed(1) + '%' : '\u2014') + '</td>';
 
                 if (nc && nc.shares && nc.shares[ccy]) {
@@ -1067,7 +1067,7 @@
                     const hi = nc.confidence_upper && nc.confidence_upper[ccy] ? nc.confidence_upper[ccy][ncVals.length-1] : null;
 
                     rows += '<td>' + (ncVal != null ? ncVal.toFixed(1) + '%' : '\u2014') + '</td>';
-                    rows += '<td style="color:' + (change > 0 ? '#16a34a' : change < 0 ? '#dc2626' : '#666') + '">' +
+                    rows += '<td style="color:' + (change > 0 ? Theme.c('green-text') : change < 0 ? Theme.c('red-text') : Theme.c('ink-4')) + '">' +
                             (change != null ? (change >= 0 ? '+' : '') + change.toFixed(2) + 'pp' : '\u2014') + '</td>';
                     rows += '<td>' + (lo != null && hi != null ? '[' + lo.toFixed(1) + ', ' + hi.toFixed(1) + ']' : '\u2014') + '</td>';
                 }
@@ -1083,10 +1083,10 @@
             const daysSince = diag.days_since_cofer || 0;
             const baseTotal = diag.total_reserves_base_usd_bn;
             let html = '<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:8px">';
-            html += '<div><span style="color:#888;font-size:11px">COFER Base</span><br><strong>' + basePeriod + '</strong></div>';
-            html += '<div><span style="color:#888;font-size:11px">Days Since Release</span><br><strong>' + daysSince + '</strong></div>';
-            if (baseTotal) html += '<div><span style="color:#888;font-size:11px">Total Allocated</span><br><strong>$' + Math.round(baseTotal).toLocaleString() + 'B</strong></div>';
-            html += '<div><span style="color:#888;font-size:11px">Model</span><br><strong>ParraMacro Ferranti v' + ((data.metadata||{}).model_version||'1.0') + '</strong></div>';
+            html += '<div><span style="color:var(--ink-3);font-size:11px">COFER Base</span><br><strong>' + basePeriod + '</strong></div>';
+            html += '<div><span style="color:var(--ink-3);font-size:11px">Days Since Release</span><br><strong>' + daysSince + '</strong></div>';
+            if (baseTotal) html += '<div><span style="color:var(--ink-3);font-size:11px">Total Allocated</span><br><strong>$' + Math.round(baseTotal).toLocaleString() + 'B</strong></div>';
+            html += '<div><span style="color:var(--ink-3);font-size:11px">Model</span><br><strong>ParraMacro Ferranti v' + ((data.metadata||{}).model_version||'1.0') + '</strong></div>';
             html += '</div>';
             summary.innerHTML = html;
         }
@@ -1310,7 +1310,7 @@
             const arrow = dir === 'up' ? '&#9650;' : dir === 'down' ? '&#9660;' : '';
             const dirClass = dir === 'up' ? 'summary-up' : dir === 'down' ? 'summary-down' : '';
             const formatted = isIndex ? val.toFixed(1) : val.toFixed(2) + suffix;
-            const borderColor = colors[key] || '#3b82f6';
+            const borderColor = colors[key] || Theme.c('blue');
             html += '<div class="cpi-summary-card" style="border-top: 3px solid ' + borderColor + '">' +
                 '<div class="cpi-summary-label">' + label + '</div>' +
                 '<div class="cpi-summary-value ' + dirClass + '">' + formatted +
@@ -1332,7 +1332,7 @@
         const rawPoints = series[key] || [];
         const transformed = prepareChartData(rawPoints, state.range, state.freq, state.view, isUs);
         const label = categories[key] || key;
-        const borderColor = colors[key] || '#3b82f6';
+        const borderColor = colors[key] || Theme.c('blue');
 
         let latest = null, prev = null;
         for (let i = transformed.length - 1; i >= 0; i--) {
@@ -1595,13 +1595,13 @@
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                        labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)',
+                        backgroundColor: Theme.c('surface-2', 0.96),
+                        titleColor: Theme.c('ink-strong'),
+                        bodyColor: Theme.c('ink-2'),
+                        borderColor: Theme.c('ink', 0.1),
                         borderWidth: 1,
                         bodyFont: { size: 12 },
                         callbacks: {
@@ -1619,23 +1619,23 @@
                             type: 'category',
                             ticks: {
                                 color: (tickCtx) => {
-                                    if (chartIsForecast(tickCtx.index)) return '#6b7280';
-                                    return '#9ca3af';
+                                    if (chartIsForecast(tickCtx.index)) return Theme.c('ink-4');
+                                    return Theme.c('ink-3');
                                 },
                                 font: { size: 11 },
                                 maxRotation: 45,
                                 autoSkip: true,
                                 maxTicksLimit: commFreq === 'yearly' ? 15 : 20,
                             },
-                            grid: { color: 'rgba(55,65,81,0.3)' },
+                            grid: { color: Theme.c('ink-5', 0.3) },
                         },
                         y: {
                             type: 'linear',
                             position: 'left',
-                            ticks: { color: '#6b7280', font: { size: 10 } },
-                            grid: { color: 'rgba(55,65,81,0.3)' },
+                            ticks: { color: Theme.c('ink-4'), font: { size: 10 } },
+                            grid: { color: Theme.c('ink-5', 0.3) },
                             title: groupName === 'Metals'
-                                ? { display: true, text: 'Gold / Platinum / Aluminum', color: '#6b7280', font: { size: 10 } }
+                                ? { display: true, text: 'Gold / Platinum / Aluminum', color: Theme.c('ink-4'), font: { size: 10 } }
                                 : undefined,
                         },
                     };
@@ -1643,9 +1643,9 @@
                         base.y1 = {
                             type: 'linear',
                             position: 'right',
-                            ticks: { color: '#a78bfa', font: { size: 10 } },
+                            ticks: { color: Theme.c('violet-text'), font: { size: 10 } },
                             grid: { drawOnChartArea: false },
-                            title: { display: true, text: 'Copper / Silver', color: '#a78bfa', font: { size: 10 } },
+                            title: { display: true, text: 'Copper / Silver', color: Theme.c('violet-text'), font: { size: 10 } },
                         };
                     }
                     return base;
@@ -1794,10 +1794,10 @@
             datasets.push({
                 label: 'Historical',
                 data: allLabels.map((l, i) => i < forecastStartIdx ? (histMap[l] != null ? histMap[l] : null) : null),
-                borderColor: '#94a3b8',
+                borderColor: Theme.c('ink-3'),
                 backgroundColor: '#94a3b81A',
                 borderWidth: 2, fill: true, pointRadius: 0, pointHitRadius: 8,
-                pointBackgroundColor: '#94a3b8', pointBorderColor: '#94a3b8', tension: 0.3,
+                pointBackgroundColor: Theme.c('ink-3'), pointBorderColor: Theme.c('ink-3'), tension: 0.3,
             });
         }
 
@@ -1806,7 +1806,7 @@
             .filter(sc => scenarios[sc] && sc !== 'Actual')
             .forEach(sc => {
                 const scenData = scenarios[sc];
-                const color = scenarioColors[sc] || '#9ca3af';
+                const color = scenarioColors[sc] || Theme.c('ink-3');
                 const isDashed = false;
                 const isBase = sc === baseScenario;
 
@@ -1846,13 +1846,13 @@
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                        labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)',
+                        backgroundColor: Theme.c('surface-2', 0.96),
+                        titleColor: Theme.c('ink-strong'),
+                        bodyColor: Theme.c('ink-2'),
+                        borderColor: Theme.c('ink', 0.1),
                         borderWidth: 1,
                         bodyFont: { size: 12 },
                         callbacks: {
@@ -1871,21 +1871,21 @@
                             color: (tickCtx) => {
                                 if (tickCtx.index >= forecastStartIdx) {
                                     const fIdx = tickCtx.index - forecastStartIdx;
-                                    if (labelTypes[fIdx] === 'current_q') return '#f59e0b';
-                                    if (labelTypes[fIdx] === 'forecast') return '#6b7280';
+                                    if (labelTypes[fIdx] === 'current_q') return Theme.c('amber');
+                                    if (labelTypes[fIdx] === 'forecast') return Theme.c('ink-4');
                                 }
-                                return '#9ca3af';
+                                return Theme.c('ink-3');
                             },
                             font: { size: 11 },
                             maxRotation: 45,
                             autoSkip: true,
                             maxTicksLimit: 20,
                         },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        grid: { color: Theme.c('ink-5', 0.3) },
                     },
                     y: {
-                        ticks: { color: '#6b7280', font: { size: 10 } },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        ticks: { color: Theme.c('ink-4'), font: { size: 10 } },
+                        grid: { color: Theme.c('ink-5', 0.3) },
                     }
                 }
             },
@@ -1908,7 +1908,7 @@
             scenarioOrder.forEach(sc => {
                 const scenData = scenarios[sc];
                 if (!scenData) return;
-                const color = scenarioColors[sc] || '#9ca3af';
+                const color = scenarioColors[sc] || Theme.c('ink-3');
                 rows += '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';margin-right:6px;"></span>' + sc + '</td>';
                 forecastLabels.forEach((l, i) => {
                     const v = scenData[l];
@@ -2096,13 +2096,13 @@
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                        labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)',
+                        backgroundColor: Theme.c('surface-2', 0.96),
+                        titleColor: Theme.c('ink-strong'),
+                        bodyColor: Theme.c('ink-2'),
+                        borderColor: Theme.c('ink', 0.1),
                         borderWidth: 1,
                         bodyFont: { size: 12 },
                         callbacks: {
@@ -2120,23 +2120,23 @@
                         ticks: {
                             color: (tickCtx) => {
                                 const yr = parseInt(yearLabels[tickCtx.index]);
-                                if (forecastStart && yr >= forecastStart) return '#6b7280';
-                                return '#9ca3af';
+                                if (forecastStart && yr >= forecastStart) return Theme.c('ink-4');
+                                return Theme.c('ink-3');
                             },
                             font: { size: 11 },
                             maxRotation: 0,
                             autoSkip: true,
                             maxTicksLimit: 15,
                         },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
-                        title: { display: true, text: 'Year', color: '#6b7280', font: { size: 11 } },
+                        grid: { color: Theme.c('ink-5', 0.3) },
+                        title: { display: true, text: 'Year', color: Theme.c('ink-4'), font: { size: 11 } },
                     },
                     y: {
                         ticks: {
-                            color: '#6b7280', font: { size: 10 },
+                            color: Theme.c('ink-4'), font: { size: 10 },
                             callback: (val) => valuePrefix + val.toFixed(decimals > 1 ? 1 : decimals) + valueSuffix,
                         },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        grid: { color: Theme.c('ink-5', 0.3) },
                     }
                 }
             },
@@ -2279,27 +2279,27 @@
         if (summary) {
             function tile(label, value, caption, color) {
                 return '<div class="yale-tariff-tile">' +
-                    '<div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">' + label + '</div>' +
+                    '<div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">' + label + '</div>' +
                     '<div class="yale-tariff-tile-val" style="color:' + color + ';">' + value + '</div>' +
-                    '<div style="color:#64748b;font-size:11px;">' + caption + '</div></div>';
+                    '<div style="color:var(--ink-4);font-size:11px;">' + caption + '</div></div>';
             }
             summary.innerHTML = '<div class="yale-tariff-tiles">' +
                 tile('Effective tariff rate',
                     latestColl ? latestColl.value.toFixed(1) + '%' : 'N/A',
                     latestColl ? 'Census duties ÷ imports, ' + monthLabel(latestColl.date.slice(0, 7)) : 'Census data unavailable',
-                    '#34d399') +
+                    Theme.c('green-text')) +
                 tile('Peak since ' + monthLabel(startYm),
                     peakColl ? peakColl.value.toFixed(1) + '%' : 'N/A',
                     peakColl ? monthLabel(peakColl.date.slice(0, 7)) : '',
-                    '#f87171') +
+                    Theme.c('red-text')) +
                 tile('Statutory rate (Yale)',
                     latestStat ? latestStat.value.toFixed(1) + '%' : 'N/A',
                     latestStat ? 'pre-substitution, ' + latestStat.date.slice(0, 10) : '',
-                    '#93c5fd') +
+                    Theme.c('blue-soft')) +
                 tile('Statutory − collected',
                     (latestStat && latestColl) ? (latestStat.value - latestColl.value).toFixed(1) + ' pp' : 'N/A',
                     'exemptions, substitution, timing',
-                    '#fbbf24') +
+                    Theme.c('amber-text')) +
                 '</div>';
         }
 
@@ -2327,8 +2327,8 @@
         var canvasEl = document.getElementById('panel-chart');
         if (!canvasEl) return;
         if (container) {
-            container.style.background = '#ffffff';
-            container.style.borderColor = '#e5e7eb';
+            container.style.background = Theme.c('ink-strong');
+            container.style.borderColor = Theme.c('ink');
             container.style.height = (window.innerWidth < 768 ? 380 : 470) + 'px';
         }
 
@@ -2340,7 +2340,7 @@
         var yMax = Math.ceil(vMax / step) * step;
         if (yMax - yMin < 2) yMax = yMin + 2;
 
-        var INK = '#111827', MUTED = '#374151', GREEN = '#2f6f5e';
+        var INK = Theme.c('surface'), MUTED = Theme.c('ink-5'), GREEN = Theme.c('series-tariff');
         var FONT = 'Inter, "Helvetica Neue", Helvetica, Arial, sans-serif';
         var datasets = [{
             label: 'US effective tariff rate',
@@ -2359,8 +2359,8 @@
             datasets.push({
                 label: 'Statutory rate (Yale Budget Lab, monthly avg)',
                 data: statVals,
-                borderColor: '#8a94a6',
-                backgroundColor: '#8a94a6',
+                borderColor: Theme.c('ink-3'),
+                backgroundColor: Theme.c('ink-3'),
                 borderWidth: 1.5,
                 borderDash: [5, 4],
                 pointRadius: 0,
@@ -2377,14 +2377,14 @@
             beforeDraw: function (chart) {
                 var c = chart.ctx;
                 c.save();
-                c.fillStyle = '#ffffff';
+                c.fillStyle = Theme.c('ink-strong');
                 c.fillRect(0, 0, chart.width, chart.height);
                 c.restore();
             },
             afterDraw: function (chart) {
                 var c = chart.ctx, area = chart.chartArea;
                 c.save();
-                c.fillStyle = '#6b7280';
+                c.fillStyle = Theme.c('ink-4');
                 c.font = '600 9px Helvetica, Arial, sans-serif';
                 c.textAlign = 'right';
                 c.textBaseline = 'top';
@@ -2412,7 +2412,7 @@
                     c.textBaseline = 'bottom';
                     c.fillText(collVals[lastIdx].toFixed(1) + '%', pt.x - 6, pt.y - 6);
                     c.font = '10px ' + FONT;
-                    c.fillStyle = '#6b7280';
+                    c.fillStyle = Theme.c('ink-4');
                     c.fillText(monthLabel(months[lastIdx]), pt.x - 6, pt.y - 20);
                 }
                 c.restore();
@@ -2460,10 +2460,10 @@
                             labels: { color: INK, font: { size: 11, family: FONT }, usePointStyle: true, pointStyle: 'line', boxWidth: 26, padding: 14 },
                         },
                         tooltip: {
-                            backgroundColor: '#ffffff',
+                            backgroundColor: Theme.c('ink-strong'),
                             titleColor: INK,
                             bodyColor: MUTED,
-                            borderColor: '#d1d5db',
+                            borderColor: Theme.c('ink-2'),
                             borderWidth: 1,
                             titleFont: { weight: '600', family: FONT },
                             bodyFont: { family: FONT },
@@ -2485,7 +2485,7 @@
                         x: {
                             type: 'category',
                             grid: { display: false },
-                            border: { color: '#9ca3af' },
+                            border: { color: Theme.c('ink-3') },
                             ticks: {
                                 color: MUTED,
                                 font: { size: 10, family: FONT },
@@ -2506,7 +2506,7 @@
                             min: yMin,
                             max: yMax,
                             grid: { display: false },
-                            border: { color: '#9ca3af' },
+                            border: { color: Theme.c('ink-3') },
                             ticks: yTicks,
                         },
                         y2: {
@@ -2514,7 +2514,7 @@
                             min: yMin,
                             max: yMax,
                             grid: { display: false },
-                            border: { color: '#9ca3af' },
+                            border: { color: Theme.c('ink-3') },
                             ticks: yTicks,
                         },
                     },
@@ -2531,7 +2531,7 @@
         if (!noteEl && container && container.parentNode) {
             noteEl = document.createElement('p');
             noteEl.id = 'tariff-chart-note';
-            noteEl.style.cssText = 'color:#94a3b8;font-size:12px;line-height:1.5;margin:-8px 0 18px;';
+            noteEl.style.cssText = 'color:var(--ink-3);font-size:12px;line-height:1.5;margin:-8px 0 18px;';
             container.parentNode.insertBefore(noteEl, container.nextSibling);
         }
         if (noteEl) {
@@ -2555,10 +2555,10 @@
                 var m = tableMonths[i];
                 var v = m in collByMonth ? collByMonth[m] : null;
                 var pv = i > 0 && (tableMonths[i - 1] in collByMonth) ? collByMonth[tableMonths[i - 1]] : null;
-                var delta = '<span style="color:#64748b;">—</span>';
+                var delta = '<span style="color:var(--ink-4);">—</span>';
                 if (v != null && pv != null) {
                     var d = v - pv;
-                    var col = d > 0 ? '#ef4444' : (d < 0 ? '#10b981' : '#64748b');
+                    var col = d > 0 ? Theme.c('red') : (d < 0 ? Theme.c('green') : Theme.c('ink-4'));
                     delta = '<span style="color:' + col + ';">' + (d > 0 ? '+' : '') + d.toFixed(2) + ' pp</span>';
                 }
                 var sAvg = (statFirstDay && m >= statFirstDay.slice(0, 7)) ? statAvg(m) : null;
@@ -2567,7 +2567,7 @@
                     '<td>' + (v != null ? v.toFixed(2) + '%' : '—') + '</td>' +
                     '<td>' + delta + '</td>' +
                     '<td>' + (sAvg != null ? sAvg.toFixed(2) + '%' : '—') + '</td>' +
-                    '<td style="max-width:360px;color:#94a3b8;font-size:12px;">' + (ev || '—') + '</td></tr>';
+                    '<td style="max-width:360px;color:var(--ink-3);font-size:12px;">' + (ev || '—') + '</td></tr>';
             }
             tbody.innerHTML = rows;
         }
@@ -2580,7 +2580,7 @@
             if (data.source) parts.push('Statutory rate: ' + data.source);
             if (cs.last_updated || data.last_updated) parts.push('Last updated: ' + (cs.last_updated || data.last_updated));
             var metaHtml = '<div>' + parts.join(' · ') + '</div>';
-            if (cs.methodology) metaHtml += '<p style="margin-top:8px;color:#64748b;font-size:12px;line-height:1.6;">' + cs.methodology + '</p>';
+            if (cs.methodology) metaHtml += '<p style="margin-top:8px;color:var(--ink-4);font-size:12px;line-height:1.6;">' + cs.methodology + '</p>';
             metaEl.innerHTML = metaHtml;
         }
 
@@ -2597,7 +2597,7 @@
         if (!data) return;
         if (data.error) {
             const summary = document.getElementById('panel-summary');
-            if (summary) summary.innerHTML = '<div style="color:#f59e0b;padding:30px;text-align:center;"><div style="font-size:15px;font-weight:600;">GDP Nowcast Unavailable</div><div style="color:#64748b;font-size:13px;margin-top:8px;">' + data.error + '</div></div>';
+            if (summary) summary.innerHTML = '<div style="color:var(--amber);padding:30px;text-align:center;"><div style="font-size:15px;font-weight:600;">GDP Nowcast Unavailable</div><div style="color:var(--ink-4);font-size:13px;margin-top:8px;">' + data.error + '</div></div>';
             const loadEl = document.getElementById('panel-loading');
             if (loadEl) loadEl.style.display = 'none';
             return;
@@ -2609,10 +2609,10 @@
         const history = data.history || [];
 
         const estimate = nowcast.estimate != null ? nowcast.estimate : 0;
-        const estColor = estimate >= 0 ? '#10b981' : '#ef4444';
+        const estColor = estimate >= 0 ? Theme.c('green') : Theme.c('red');
         const estSign = estimate >= 0 ? '+' : '';
         const priorActual = prior.actual;
-        const priorColor = priorActual != null ? (priorActual >= 0 ? '#10b981' : '#ef4444') : '#64748b';
+        const priorColor = priorActual != null ? (priorActual >= 0 ? Theme.c('green') : Theme.c('red')) : Theme.c('ink-4');
         const priorSign = priorActual != null && priorActual >= 0 ? '+' : '';
 
         // Summary cards
@@ -2621,20 +2621,20 @@
             summary.innerHTML = `
                 <div class="yale-tariff-tiles" style="grid-template-columns:repeat(3, minmax(0, 1fr));">
                     <div class="yale-tariff-tile" style="padding:20px;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Nowcast</div>
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Nowcast</div>
                         <div class="yale-tariff-tile-val" style="color:${estColor};font-size:36px;">${estSign}${estimate.toFixed(1)}%</div>
-                        <div style="color:#64748b;font-size:12px;margin-top:4px;">${nowcast.quarter} (annualized)</div>
-                        <div style="color:#475569;font-size:11px;">as of ${nowcast.as_of}</div>
+                        <div style="color:var(--ink-4);font-size:12px;margin-top:4px;">${nowcast.quarter} (annualized)</div>
+                        <div style="color:var(--ink-5);font-size:11px;">as of ${nowcast.as_of}</div>
                     </div>
                     <div class="yale-tariff-tile" style="padding:20px;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Prior Quarter</div>
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Prior Quarter</div>
                         <div class="yale-tariff-tile-val" style="color:${priorColor};font-size:36px;">${priorActual != null ? priorSign + priorActual.toFixed(1) + '%' : 'N/A'}</div>
-                        <div style="color:#64748b;font-size:12px;margin-top:4px;">${prior.quarter || ''} (actual)</div>
+                        <div style="color:var(--ink-4);font-size:12px;margin-top:4px;">${prior.quarter || ''} (actual)</div>
                     </div>
                     <div class="yale-tariff-tile" style="padding:20px;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Indicators</div>
-                        <div class="yale-tariff-tile-val" style="color:#e2e8f0;font-size:36px;">${contributions.filter(c => c.signal !== 'unavailable').length}<span style="font-size:18px;color:#64748b;">/${contributions.length}</span></div>
-                        <div style="color:#64748b;font-size:12px;margin-top:4px;">reporting this quarter</div>
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Indicators</div>
+                        <div class="yale-tariff-tile-val" style="color:var(--ink);font-size:36px;">${contributions.filter(c => c.signal !== 'unavailable').length}<span style="font-size:18px;color:var(--ink-4);">/${contributions.length}</span></div>
+                        <div style="color:var(--ink-4);font-size:12px;margin-top:4px;">reporting this quarter</div>
                     </div>
                 </div>
             `;
@@ -2647,7 +2647,7 @@
             const validContribs = contributions.filter(c => c.signal !== 'unavailable');
             const labels = validContribs.map(c => c.label);
             const values = validContribs.map(c => c.contribution);
-            const colors = values.map(v => v >= 0 ? '#10b981' : '#ef4444');
+            const colors = values.map(v => v >= 0 ? Theme.c('green') : Theme.c('red'));
 
             PD.setChart('main', new Chart(ctx, {
                 type: 'bar',
@@ -2668,15 +2668,15 @@
                         title: {
                             display: true,
                             text: 'Indicator Contributions to GDP Nowcast (pp)',
-                            color: '#94a3b8',
+                            color: Theme.c('ink-3'),
                             font: { size: 13, weight: '500' },
                             padding: { bottom: 16 },
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(0,0,0,0.9)',
-                            titleColor: '#fff',
-                            bodyColor: '#d1d5db',
-                            borderColor: 'rgba(255,255,255,0.1)',
+                            backgroundColor: Theme.c('surface-2', 0.96),
+                            titleColor: Theme.c('ink-strong'),
+                            bodyColor: Theme.c('ink-2'),
+                            borderColor: Theme.c('ink', 0.1),
                             borderWidth: 1,
                             callbacks: {
                                 label: function(ctx) {
@@ -2692,11 +2692,11 @@
                     },
                     scales: {
                         x: {
-                            ticks: { color: '#6b7280', font: { size: 10 }, callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) },
-                            grid: { color: 'rgba(55,65,81,0.3)' },
+                            ticks: { color: Theme.c('ink-4'), font: { size: 10 }, callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) },
+                            grid: { color: Theme.c('ink-5', 0.3) },
                         },
                         y: {
-                            ticks: { color: '#94a3b8', font: { size: 11 } },
+                            ticks: { color: Theme.c('ink-3'), font: { size: 11 } },
                             grid: { display: false },
                         }
                     }
@@ -2711,12 +2711,12 @@
             thead.innerHTML = '<tr><th>Indicator</th><th>Latest</th><th>QoQ Change</th><th>Contribution</th><th>Signal</th></tr>';
             let rows = '';
             contributions.forEach(c => {
-                const signalColors = { positive: '#10b981', negative: '#ef4444', neutral: '#94a3b8', unavailable: '#475569' };
-                const signalColor = signalColors[c.signal] || '#64748b';
+                const signalColors = { positive: Theme.c('green'), negative: Theme.c('red'), neutral: Theme.c('ink-3'), unavailable: Theme.c('ink-5') };
+                const signalColor = signalColors[c.signal] || Theme.c('ink-4');
                 const contribSign = c.contribution >= 0 ? '+' : '';
                 const qoqStr = c.pct_change != null ? (c.pct_change >= 0 ? '+' : '') + c.pct_change.toFixed(1) + '%' : '—';
                 const latestStr = c.latest_value != null ? c.latest_value.toLocaleString() : '—';
-                const dateStr = c.latest_date ? ' <span style="color:#475569;font-size:11px;">(' + c.latest_date + ')</span>' : '';
+                const dateStr = c.latest_date ? ' <span style="color:var(--ink-5);font-size:11px;">(' + c.latest_date + ')</span>' : '';
                 rows += '<tr>' +
                     '<td>' + c.label + '</td>' +
                     '<td>' + latestStr + dateStr + '</td>' +
@@ -2733,7 +2733,7 @@
         if (metaEl) {
             const refreshed = data.last_refreshed ? ' · Last refreshed: ' + data.last_refreshed : '';
             metaEl.innerHTML = '<div>Source: FRED (Federal Reserve Economic Data) · Parra Macro bridge equation model' + refreshed + '</div>' +
-                '<div style="color:#475569;font-size:11px;margin-top:4px;">' + (data.methodology || '') + '</div>';
+                '<div style="color:var(--ink-5);font-size:11px;margin-top:4px;">' + (data.methodology || '') + '</div>';
         }
 
         // History section — actual GDP + current nowcast estimate
@@ -2741,7 +2741,7 @@
         if (histSection && (history.length > 0 || nowcast.estimate != null)) {
             histSection.style.display = 'block';
             histSection.innerHTML = `
-                <h3 style="color:#e2e8f0;font-size:14px;font-weight:600;margin-bottom:12px;">GDP Growth (Recent Quarters)</h3>
+                <h3 style="color:var(--ink);font-size:14px;font-weight:600;margin-bottom:12px;">GDP Growth (Recent Quarters)</h3>
                 <div style="height:250px;"><canvas id="gdp-history-chart"></canvas></div>
             `;
             const hCtx = document.getElementById('gdp-history-chart').getContext('2d');
@@ -2769,9 +2769,9 @@
                 estimateValues.push(nowcast.estimate);
             }
 
-            const actualColors = actualValues.map(v => v == null ? 'transparent' : (v >= 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(239, 68, 68, 0.7)'));
+            const actualColors = actualValues.map(v => v == null ? 'transparent' : (v >= 0 ? Theme.c('green', 0.7) : Theme.c('red', 0.7)));
 
-            const estColors = estimateValues.map(v => v == null ? 'transparent' : (v >= 0 ? 'rgba(59, 130, 246, 0.7)' : 'rgba(239, 68, 68, 0.7)'));
+            const estColors = estimateValues.map(v => v == null ? 'transparent' : (v >= 0 ? Theme.c('blue', 0.7) : Theme.c('red', 0.7)));
 
             new Chart(hCtx, {
                 type: 'bar',
@@ -2788,7 +2788,7 @@
                             label: 'Estimate',
                             data: estimateValues,
                             backgroundColor: estColors,
-                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderColor: Theme.c('blue'),
                             borderWidth: 2,
                             borderDash: [4, 3],
                             borderRadius: 4,
@@ -2801,12 +2801,12 @@
                     plugins: {
                         legend: {
                             position: 'top',
-                            labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10 },
+                            labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 12, padding: 10 },
                         },
                         tooltip: {
-                            backgroundColor: 'rgba(0,0,0,0.9)',
-                            titleColor: '#fff',
-                            bodyColor: '#d1d5db',
+                            backgroundColor: Theme.c('surface-2', 0.96),
+                            titleColor: Theme.c('ink-strong'),
+                            bodyColor: Theme.c('ink-2'),
                             callbacks: {
                                 label: function(ctx) {
                                     const val = ctx.parsed.y;
@@ -2819,8 +2819,8 @@
                         }
                     },
                     scales: {
-                        x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: 'rgba(55,65,81,0.3)' } },
-                        y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => v.toFixed(0) + '%' }, grid: { color: 'rgba(55,65,81,0.3)' } }
+                        x: { ticks: { color: Theme.c('ink-4'), font: { size: 10 } }, grid: { color: Theme.c('ink-5', 0.3) } },
+                        y: { ticks: { color: Theme.c('ink-4'), font: { size: 10 }, callback: v => v.toFixed(0) + '%' }, grid: { color: Theme.c('ink-5', 0.3) } }
                     }
                 }
             });
@@ -2842,13 +2842,13 @@
             plugins: {
                 legend: opts.legend ? {
                     position: 'top',
-                    labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                    labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
                 } : { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(0,0,0,0.9)',
-                    titleColor: '#fff',
-                    bodyColor: '#d1d5db',
-                    borderColor: 'rgba(255,255,255,0.1)',
+                    backgroundColor: Theme.c('surface-2', 0.96),
+                    titleColor: Theme.c('ink-strong'),
+                    bodyColor: Theme.c('ink-2'),
+                    borderColor: Theme.c('ink', 0.1),
                     borderWidth: 1,
                     bodyFont: { size: 12 },
                     callbacks: opts.tooltip ? { label: opts.tooltip } : {},
@@ -2858,20 +2858,20 @@
                 x: {
                     type: opts.xType || 'category',
                     ticks: {
-                        color: '#6b7280', font: { size: 10 },
+                        color: Theme.c('ink-4'), font: { size: 10 },
                         maxRotation: opts.maxRotation || 0,
                         autoSkip: opts.xCallback ? false : true,
                         maxTicksLimit: opts.xCallback ? undefined : (opts.maxTicksLimitX || 12),
                         callback: opts.xCallback || undefined,
                     },
-                    grid: { color: 'rgba(55,65,81,0.3)' }
+                    grid: { color: Theme.c('ink-5', 0.3) }
                 },
                 y: {
                     ticks: {
-                        color: '#6b7280', font: { size: 10 },
+                        color: Theme.c('ink-4'), font: { size: 10 },
                         callback: opts.yCallback || undefined,
                     },
-                    grid: { color: 'rgba(55,65,81,0.3)' },
+                    grid: { color: Theme.c('ink-5', 0.3) },
                     beginAtZero: opts.beginAtZero || false,
                 }
             }
@@ -3140,11 +3140,11 @@
     let _debtBarChart = null;
 
     const TIER_COLORS = {
-        Critical: { bg: '#991b1b', light: '#fecaca', text: '#fca5a5' },
-        High:     { bg: '#c2410c', light: '#fed7aa', text: '#fdba74' },
-        Elevated: { bg: '#a16207', light: '#fef08a', text: '#fde047' },
-        Moderate: { bg: '#15803d', light: '#bbf7d0', text: '#86efac' },
-        Low:      { bg: '#1d4ed8', light: '#bfdbfe', text: '#93c5fd' },
+        Critical: { bg: Theme.c('red-tint'), light: Theme.c('red-soft'), text: Theme.c('red-soft') },
+        High:     { bg: Theme.c('orange-strong'), light: Theme.c('orange-soft'), text: Theme.c('orange-soft') },
+        Elevated: { bg: Theme.c('amber-strong'), light: Theme.c('amber-soft'), text: Theme.c('amber-soft') },
+        Moderate: { bg: Theme.c('green-strong'), light: Theme.c('green-soft'), text: Theme.c('green-soft') },
+        Low:      { bg: Theme.c('blue-strong'), light: Theme.c('blue-soft'), text: Theme.c('blue-soft') },
     };
 
     const TIER_ORDER = ['Critical', 'High', 'Elevated', 'Moderate', 'Low'];
@@ -3320,7 +3320,7 @@
             .style('width', '100%')
             .style('display', 'block');
 
-        svg.append('rect').attr('width', width).attr('height', height).attr('fill', '#0a0e1a');
+        svg.append('rect').attr('width', width).attr('height', height).attr('fill', Theme.c('bg'));
 
         const g = svg.append('g');
         const projection = d3.geoNaturalEarth1().scale(160).translate([width / 2, height / 2 + 20]);
@@ -3346,7 +3346,7 @@
 
         const colorScale = d3.scaleLinear()
             .domain([0, 10, 25, 50])
-            .range(['#059669', '#eab308', '#ea580c', '#dc2626'])
+            .range([Theme.c('green-text'), Theme.c('amber'), Theme.c('orange-text'), Theme.c('red-text')])
             .clamp(true);
 
         // Build a Set of currently filtered ISO3 codes
@@ -3365,7 +3365,7 @@
                 .attr('fill', d => {
                     const iso3 = codeMap[String(d.id)];
                     const c = gapLookup[iso3];
-                    if (!c || c.debt_gap_pp == null) return '#1f2937';
+                    if (!c || c.debt_gap_pp == null) return Theme.c('surface-2');
                     return colorScale(c.debt_gap_pp);
                 })
                 .attr('opacity', d => {
@@ -3373,7 +3373,7 @@
                     if (!iso3 || !gapLookup[iso3]) return 0.3;
                     return filteredSet.has(iso3) ? 1 : 0.15;
                 })
-                .attr('stroke', '#2d3748')
+                .attr('stroke', Theme.c('rule-strong'))
                 .attr('stroke-width', 0.5)
                 .style('cursor', 'pointer');
 
@@ -3385,10 +3385,10 @@
                 .on('mouseenter', function (event, d) {
                     const iso3 = codeMap[String(d.id)];
                     const c = gapLookup[iso3];
-                    d3.select(this).attr('stroke', '#fff').attr('stroke-width', 1.5).raise();
+                    d3.select(this).attr('stroke', Theme.c('ink')).attr('stroke-width', 1.5).raise();
 
                     if (!c) {
-                        tooltip.innerHTML = `<strong>${iso3 || '—'}</strong><br><span style="color:#6b7280">No data</span>`;
+                        tooltip.innerHTML = `<strong>${iso3 || '—'}</strong><br><span style="color:var(--ink-4)">No data</span>`;
                     } else {
                         const tc = TIER_COLORS[c.risk_tier] || TIER_COLORS.Low;
                         tooltip.innerHTML =
@@ -3397,15 +3397,15 @@
                             `<div class="sd-tip-grid">` +
                             `<span>Official</span><span>${c.official_debt_gdp != null ? c.official_debt_gdp.toFixed(1) + '%' : '—'}</span>` +
                             `<span>Estimated</span><span>${c.estimated_debt_gdp != null ? c.estimated_debt_gdp.toFixed(1) + '%' : '—'}</span>` +
-                            `<span>Gap</span><span style="color:${c.debt_gap_pp > 10 ? '#f59e0b' : '#9ca3af'}">${c.debt_gap_pp != null ? c.debt_gap_pp.toFixed(1) + 'pp' : '—'}</span>` +
+                            `<span>Gap</span><span style="color:${c.debt_gap_pp > 10 ? Theme.c('amber') : Theme.c('ink-3')}">${c.debt_gap_pp != null ? c.debt_gap_pp.toFixed(1) + 'pp' : '—'}</span>` +
                             `</div>` +
                             (c.debt_service_pct_exports != null || c.interest_pct_revenue != null ? (
-                            `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1)">` +
-                            `<span style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px">Debt Service</span>` +
+                            `<div style="margin-top:6px;padding-top:6px;border-top:1px solid color-mix(in srgb, var(--ink) 10%, transparent)">` +
+                            `<span style="font-size:9px;color:var(--ink-4);text-transform:uppercase;letter-spacing:0.5px">Debt Service</span>` +
                             `<div class="sd-tip-grid" style="font-size:10px">` +
-                            (c.debt_service_pct_exports != null ? `<span>Svc/Exports</span><span style="color:${c.debt_service_pct_exports > 25 ? '#f59e0b' : '#d1d5db'}">${c.debt_service_pct_exports.toFixed(0)}%</span>` : '') +
-                            (c.interest_pct_revenue != null ? `<span>Int/Revenue</span><span style="color:${c.interest_pct_revenue > 15 ? '#f59e0b' : '#d1d5db'}">${c.interest_pct_revenue.toFixed(0)}%</span>` : '') +
-                            (c.short_term_pct != null && c.short_term_pct > 15 ? `<span>ST share</span><span style="color:#f59e0b">${c.short_term_pct.toFixed(0)}%</span>` : '') +
+                            (c.debt_service_pct_exports != null ? `<span>Svc/Exports</span><span style="color:${c.debt_service_pct_exports > 25 ? Theme.c('amber') : Theme.c('ink-2')}">${c.debt_service_pct_exports.toFixed(0)}%</span>` : '') +
+                            (c.interest_pct_revenue != null ? `<span>Int/Revenue</span><span style="color:${c.interest_pct_revenue > 15 ? Theme.c('amber') : Theme.c('ink-2')}">${c.interest_pct_revenue.toFixed(0)}%</span>` : '') +
+                            (c.short_term_pct != null && c.short_term_pct > 15 ? `<span>ST share</span><span style="color:var(--amber)">${c.short_term_pct.toFixed(0)}%</span>` : '') +
                             `</div></div>`) : '');
                     }
                     tooltip.classList.remove('hidden');
@@ -3422,7 +3422,7 @@
                     tooltip.style.top = y + 'px';
                 })
                 .on('mouseleave', function () {
-                    d3.select(this).attr('stroke', '#2d3748').attr('stroke-width', 0.5);
+                    d3.select(this).attr('stroke', Theme.c('rule-strong')).attr('stroke-width', 0.5);
                     tooltip.classList.add('hidden');
                 });
 
@@ -3490,7 +3490,7 @@
         title.setAttribute('x', width / 2);
         title.setAttribute('y', 22);
         title.setAttribute('text-anchor', 'middle');
-        title.setAttribute('fill', '#e5e7eb');
+        title.setAttribute('fill', Theme.c('ink'));
         title.setAttribute('font-family', 'Arial, sans-serif');
         title.setAttribute('font-size', '16');
         title.setAttribute('font-weight', 'bold');
@@ -3499,7 +3499,7 @@
 
         // Legend at bottom
         const ly = height - 25;
-        const colors = ['#059669', '#eab308', '#ea580c', '#dc2626'];
+        const colors = [Theme.c('green-text'), Theme.c('amber'), Theme.c('orange-text'), Theme.c('red-text')];
         const sw = 30;
         const lx = width / 2 - (sw * colors.length) / 2;
         colors.forEach(function (c, i) {
@@ -3513,12 +3513,12 @@
         });
         var lowLbl = document.createElementNS(ns, 'text');
         lowLbl.setAttribute('x', lx - 5); lowLbl.setAttribute('y', ly + 6);
-        lowLbl.setAttribute('text-anchor', 'end'); lowLbl.setAttribute('fill', '#9ca3af');
+        lowLbl.setAttribute('text-anchor', 'end'); lowLbl.setAttribute('fill', Theme.c('ink-3'));
         lowLbl.setAttribute('font-size', '10'); lowLbl.textContent = 'Low gap';
         clone.appendChild(lowLbl);
         var highLbl = document.createElementNS(ns, 'text');
         highLbl.setAttribute('x', lx + sw * colors.length + 5); highLbl.setAttribute('y', ly + 6);
-        highLbl.setAttribute('fill', '#9ca3af'); highLbl.setAttribute('font-size', '10');
+        highLbl.setAttribute('fill', Theme.c('ink-3')); highLbl.setAttribute('font-size', '10');
         highLbl.textContent = 'High gap';
         clone.appendChild(highLbl);
 
@@ -3559,11 +3559,11 @@
         var ctx = canvas.getContext('2d');
 
         // Dark background
-        ctx.fillStyle = '#0a0e1a';
+        ctx.fillStyle = Theme.c('bg');
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Title
-        ctx.fillStyle = '#e5e7eb';
+        ctx.fillStyle = Theme.c('ink');
         ctx.font = 'bold 24px Arial, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('Top 20 Shadow Debt Gaps \u2014 ParraMacro', canvas.width / 2, 32);
@@ -3603,13 +3603,13 @@
                     {
                         label: 'Official Debt (% GDP)',
                         data: officialData,
-                        backgroundColor: '#2563eb',
+                        backgroundColor: Theme.c('blue-strong'),
                         borderRadius: 2,
                     },
                     {
                         label: 'Shadow Debt Gap (pp)',
                         data: gapData,
-                        backgroundColor: '#dc2626',
+                        backgroundColor: Theme.c('red-strong'),
                         borderRadius: 2,
                     },
                 ],
@@ -3619,7 +3619,7 @@
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
+                    legend: { labels: { color: Theme.c('ink-3'), font: { size: 11 } } },
                     tooltip: {
                         callbacks: {
                             label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}${ctx.datasetIndex === 0 ? '%' : 'pp'}`,
@@ -3629,14 +3629,14 @@
                 scales: {
                     x: {
                         stacked: true,
-                        grid: { color: '#1f2937' },
-                        ticks: { color: '#9ca3af', font: { size: 10 } },
-                        title: { display: true, text: '% of GDP', color: '#6b7280', font: { size: 10 } },
+                        grid: { color: Theme.c('surface-2') },
+                        ticks: { color: Theme.c('ink-3'), font: { size: 10 } },
+                        title: { display: true, text: '% of GDP', color: Theme.c('ink-4'), font: { size: 10 } },
                     },
                     y: {
                         stacked: true,
                         grid: { display: false },
-                        ticks: { color: '#e5e7eb', font: { size: 11 } },
+                        ticks: { color: Theme.c('ink'), font: { size: 11 } },
                     },
                 },
             },
@@ -3661,7 +3661,7 @@
                     </div>
                     <span class="sd-rank-val">${(c.official_debt_gdp || 0).toFixed(0)}%</span>
                     <span class="sd-rank-gap">+${(c.debt_gap_pp || 0).toFixed(1)}pp</span>
-                    <span class="sd-rank-svc" style="color:${(c.debt_service_pct_exports||0) > 25 ? '#f59e0b' : '#6b7280'}">${c.debt_service_pct_exports != null ? c.debt_service_pct_exports.toFixed(0) + '%' : '—'}</span>
+                    <span class="sd-rank-svc" style="color:${(c.debt_service_pct_exports||0) > 25 ? Theme.c('amber') : Theme.c('ink-4')}">${c.debt_service_pct_exports != null ? c.debt_service_pct_exports.toFixed(0) + '%' : '—'}</span>
                 </div>
             `;
         }).join('');
@@ -3689,10 +3689,10 @@
                 <td>${c.region || ''}</td>
                 <td>${_fmtNum(c.official_debt_gdp)}%</td>
                 <td class="sd-cell-est">${_fmtNum(c.estimated_debt_gdp)}%</td>
-                <td class="sd-cell-gap" style="color:${(c.debt_gap_pp||0) > 10 ? '#f59e0b' : '#9ca3af'}">${_fmtNum(c.debt_gap_pp)}pp</td>
+                <td class="sd-cell-gap" style="color:${(c.debt_gap_pp||0) > 10 ? Theme.c('amber') : Theme.c('ink-3')}">${_fmtNum(c.debt_gap_pp)}pp</td>
                 <td><span class="sd-tier-cell" style="background:${tc.bg};color:${tc.text}">${tier}</span></td>
-                <td style="color:${(c.debt_service_pct_exports||0) > 25 ? '#f59e0b' : ''}">${_fmtNum(c.debt_service_pct_exports)}%</td>
-                <td style="color:${(c.interest_pct_revenue||0) > 15 ? '#f59e0b' : ''}">${_fmtNum(c.interest_pct_revenue)}%</td>
+                <td style="color:${(c.debt_service_pct_exports||0) > 25 ? Theme.c('amber') : ''}">${_fmtNum(c.debt_service_pct_exports)}%</td>
+                <td style="color:${(c.interest_pct_revenue||0) > 15 ? Theme.c('amber') : ''}">${_fmtNum(c.interest_pct_revenue)}%</td>
                 <td>${_fmtNum(c.reserve_coverage_pct, '', '%', 0)}</td>
                 <td>${_fmtNum(c.short_term_debt_usd_bn, '$', 'B')}</td>
                 <td>${_fmtNum(c.long_term_debt_usd_bn, '$', 'B')}</td>
@@ -3738,14 +3738,14 @@
 
         // Build header with export button
         const exportBtn = ds.exportUrl
-            ? `<a href="${ds.exportUrl}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#1e293b;color:#94a3b8;border:1px solid #334155;border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='#334155';this.style.color='#f1f5f9'" onmouseout="this.style.background='#1e293b';this.style.color='#94a3b8'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel</a>`
+            ? `<a href="${ds.exportUrl}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:var(--surface-2);color:var(--ink-3);border:1px solid var(--rule-strong);border-radius:6px;font-size:12px;text-decoration:none;cursor:pointer;transition:all .15s;" onmouseover="this.style.background='var(--ink-5)';this.style.color='var(--ink-strong)'" onmouseout="this.style.background='var(--surface-2)';this.style.color='var(--ink-3)'"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Excel</a>`
             : '';
 
         panel.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
                 <div>
-                    <h2 style="color:#f1f5f9;font-size:20px;font-weight:700;margin:0;">${ds.label}</h2>
-                    <p style="color:#64748b;font-size:12px;margin:4px 0 0;">${ds.source} — ${ds.sourceDetail || ''}</p>
+                    <h2 style="color:var(--ink-strong);font-size:20px;font-weight:700;margin:0;">${ds.label}</h2>
+                    <p style="color:var(--ink-4);font-size:12px;margin:4px 0 0;">${ds.source} — ${ds.sourceDetail || ''}</p>
                 </div>
                 ${exportBtn}
             </div>
@@ -3759,10 +3759,10 @@
     }
 
     function _tierColor(tier) {
-        if (tier.includes('SEVERE')) return { bg: '#fecaca', text: '#991b1b', badge: '#ef4444' };
-        if (tier.includes('HIGH'))   return { bg: '#fed7aa', text: '#9a3412', badge: '#f59e0b' };
-        if (tier.includes('MODERATE')) return { bg: '#fef3c7', text: '#92400e', badge: '#eab308' };
-        return { bg: '#d1fae5', text: '#065f46', badge: '#10b981' };
+        if (tier.includes('SEVERE')) return { bg: Theme.c('red-soft'), text: Theme.c('red-tint'), badge: Theme.c('red') };
+        if (tier.includes('HIGH'))   return { bg: Theme.c('orange-soft'), text: Theme.c('orange-tint'), badge: Theme.c('amber') };
+        if (tier.includes('MODERATE')) return { bg: Theme.c('amber-soft'), text: Theme.c('amber-tint'), badge: Theme.c('amber') };
+        return { bg: Theme.c('green-soft'), text: Theme.c('green-tint'), badge: Theme.c('green') };
     }
 
     function _renderFertEMRanking(panel, data) {
@@ -3777,22 +3777,22 @@
         // Summary cards
         let html = `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px;">
-                <div style="background: #1e293b; border-radius: 8px; padding: 16px; text-align: center;">
-                    <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Countries Analyzed</div>
-                    <div style="color: #f1f5f9; font-size: 28px; font-weight: 700; margin-top: 4px;">${summary.total_countries || 0}</div>
+                <div style="background: var(--surface-2); border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Countries Analyzed</div>
+                    <div style="color: var(--ink-strong); font-size: 28px; font-weight: 700; margin-top: 4px;">${summary.total_countries || 0}</div>
                 </div>
-                <div style="background: #1e293b; border-radius: 8px; padding: 16px; text-align: center;">
-                    <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Blended Fert Shock</div>
-                    <div style="color: #ef4444; font-size: 28px; font-weight: 700; margin-top: 4px;">+${(summary.blended_fert_shock_pct || 0).toFixed(0)}%</div>
+                <div style="background: var(--surface-2); border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Blended Fert Shock</div>
+                    <div style="color: var(--red); font-size: 28px; font-weight: 700; margin-top: 4px;">+${(summary.blended_fert_shock_pct || 0).toFixed(0)}%</div>
                 </div>
-                <div style="background: #1e293b; border-radius: 8px; padding: 16px; text-align: center;">
-                    <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Brent YoY</div>
-                    <div style="color: #f59e0b; font-size: 28px; font-weight: 700; margin-top: 4px;">+${(summary.brent_yoy_pct || 0).toFixed(0)}%</div>
+                <div style="background: var(--surface-2); border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Brent YoY</div>
+                    <div style="color: var(--amber); font-size: 28px; font-weight: 700; margin-top: 4px;">+${(summary.brent_yoy_pct || 0).toFixed(0)}%</div>
                 </div>
-                <div style="background: #1e293b; border-radius: 8px; padding: 16px; text-align: center;">
-                    <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Severe Impact</div>
-                    <div style="color: #ef4444; font-size: 28px; font-weight: 700; margin-top: 4px;">${(summary.tier_counts || {})['Tier 1'] || 0}</div>
-                    <div style="color: #94a3b8; font-size: 10px;">countries</div>
+                <div style="background: var(--surface-2); border-radius: 8px; padding: 16px; text-align: center;">
+                    <div style="color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">Severe Impact</div>
+                    <div style="color: var(--red); font-size: 28px; font-weight: 700; margin-top: 4px;">${(summary.tier_counts || {})['Tier 1'] || 0}</div>
+                    <div style="color: var(--ink-3); font-size: 10px;">countries</div>
                 </div>
             </div>
         `;
@@ -3801,7 +3801,7 @@
         html += `<div style="overflow-x: auto;">
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
             <thead>
-                <tr style="background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                <tr style="background: var(--surface-2); color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
                     <th style="padding: 10px 8px; text-align: left;">#</th>
                     <th style="padding: 10px 8px; text-align: left;">Country</th>
                     <th style="padding: 10px 8px; text-align: left;">Region</th>
@@ -3819,23 +3819,23 @@
             const tc = _tierColor(c.impact_tier || '');
             const tierLabel = (c.impact_tier || '').split(' — ')[1] || c.impact_tier || '';
             html += `
-                <tr style="border-bottom: 1px solid #1e293b; ${i < 5 ? 'font-weight: 600;' : ''}">
-                    <td style="padding: 8px; color: #64748b;">${i + 1}</td>
-                    <td style="padding: 8px; color: #f1f5f9;">${name}</td>
-                    <td style="padding: 8px; color: #94a3b8; font-size: 12px;">${c.region || ''}</td>
+                <tr style="border-bottom: 1px solid var(--rule); ${i < 5 ? 'font-weight: 600;' : ''}">
+                    <td style="padding: 8px; color: var(--ink-4);">${i + 1}</td>
+                    <td style="padding: 8px; color: var(--ink-strong);">${name}</td>
+                    <td style="padding: 8px; color: var(--ink-3); font-size: 12px;">${c.region || ''}</td>
                     <td style="padding: 8px; text-align: center;">
                         <span style="background: ${tc.badge}22; color: ${tc.badge}; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">${tierLabel}</span>
                     </td>
-                    <td style="padding: 8px; text-align: center; color: #94a3b8;">+${(c.energy_impact_pp || 0).toFixed(1)}</td>
-                    <td style="padding: 8px; text-align: center; color: #f59e0b;">+${(c.food_fert_impact_pp || 0).toFixed(1)}</td>
-                    <td style="padding: 8px; text-align: center; color: #ef4444; font-weight: 700;">+${(c.total_addl_cpi_pp || 0).toFixed(1)}</td>
-                    <td style="padding: 8px; text-align: center; color: #94a3b8;">${(c.current_cpi || 0).toFixed(0)}%</td>
-                    <td style="padding: 8px; text-align: center; color: #f1f5f9; font-weight: 600;">${(c.new_est_cpi || 0).toFixed(0)}%</td>
+                    <td style="padding: 8px; text-align: center; color: var(--ink-3);">+${(c.energy_impact_pp || 0).toFixed(1)}</td>
+                    <td style="padding: 8px; text-align: center; color: var(--amber);">+${(c.food_fert_impact_pp || 0).toFixed(1)}</td>
+                    <td style="padding: 8px; text-align: center; color: var(--red); font-weight: 700;">+${(c.total_addl_cpi_pp || 0).toFixed(1)}</td>
+                    <td style="padding: 8px; text-align: center; color: var(--ink-3);">${(c.current_cpi || 0).toFixed(0)}%</td>
+                    <td style="padding: 8px; text-align: center; color: var(--ink-strong); font-weight: 600;">${(c.new_est_cpi || 0).toFixed(0)}%</td>
                 </tr>`;
         });
 
         html += '</tbody></table></div>';
-        html += '<p style="color: #64748b; font-size: 11px; margin-top: 12px;">Estimated additional CPI inflation (percentage points) from combined energy and fertilizer cost-push. Transmission lag: 6-12 months. Food impact peaks late 2026 / early 2027.</p>';
+        html += '<p style="color: var(--ink-4); font-size: 11px; margin-top: 12px;">Estimated additional CPI inflation (percentage points) from combined energy and fertilizer cost-push. Transmission lag: 6-12 months. Food impact peaks late 2026 / early 2027.</p>';
 
         panel.innerHTML = html;
     }
@@ -3844,7 +3844,7 @@
         const ferts = data.fertilizer_forecasts || {};
         const quarters = ['Q1', 'Q2', 'Q3', 'Q4', 'FY 2026'];
         const scenarios = ['Base Case', 'Severe Case', 'Worst Case', 'Weighted Avg'];
-        const scenarioColors = { 'Base Case': '#3b82f6', 'Severe Case': '#f59e0b', 'Worst Case': '#ef4444', 'Weighted Avg': '#10b981' };
+        const scenarioColors = { 'Base Case': Theme.c('blue'), 'Severe Case': Theme.c('amber'), 'Worst Case': Theme.c('red'), 'Weighted Avg': Theme.c('green') };
 
         let html = '';
         for (const fertName of ['Urea', 'DAP', 'Potash']) {
@@ -3854,14 +3854,14 @@
             html += `
                 <div style="margin-bottom: 24px;">
                     <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px;">
-                        <h3 style="color: #f1f5f9; font-size: 16px; font-weight: 700; margin: 0;">${fertName}</h3>
-                        <span style="color: #64748b; font-size: 12px;">${fert.unit || '$/ton'}</span>
-                        <span style="color: #ef4444; font-size: 13px; font-weight: 600;">+${fert.yoy_pct || 0}% YoY</span>
-                        <span style="color: #64748b; font-size: 12px;">2025 baseline: $${fert.baseline_2025 || 0}</span>
+                        <h3 style="color: var(--ink-strong); font-size: 16px; font-weight: 700; margin: 0;">${fertName}</h3>
+                        <span style="color: var(--ink-4); font-size: 12px;">${fert.unit || '$/ton'}</span>
+                        <span style="color: var(--red); font-size: 13px; font-weight: 600;">+${fert.yoy_pct || 0}% YoY</span>
+                        <span style="color: var(--ink-4); font-size: 12px;">2025 baseline: $${fert.baseline_2025 || 0}</span>
                     </div>
                     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                         <thead>
-                            <tr style="background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase;">
+                            <tr style="background: var(--surface-2); color: var(--ink-3); font-size: 11px; text-transform: uppercase;">
                                 <th style="padding: 8px; text-align: left;">Scenario</th>
                                 ${quarters.map(q => `<th style="padding: 8px; text-align: center;">${q}</th>`).join('')}
                             </tr>
@@ -3870,20 +3870,20 @@
 
             for (const s of scenarios) {
                 const prices = (fert.scenarios || {})[s] || {};
-                const color = scenarioColors[s] || '#94a3b8';
+                const color = scenarioColors[s] || Theme.c('ink-3');
                 const bold = s === 'Weighted Avg' ? 'font-weight: 700;' : '';
-                html += `<tr style="border-bottom: 1px solid #1e293b; ${bold}">
+                html += `<tr style="border-bottom: 1px solid var(--rule); ${bold}">
                     <td style="padding: 8px; color: ${color};">${s}</td>
-                    ${quarters.map(q => `<td style="padding: 8px; text-align: center; color: #e2e8f0;">${prices[q] != null ? '$' + prices[q].toLocaleString() : '—'}</td>`).join('')}
+                    ${quarters.map(q => `<td style="padding: 8px; text-align: center; color: var(--ink);">${prices[q] != null ? '$' + prices[q].toLocaleString() : '—'}</td>`).join('')}
                 </tr>`;
             }
 
             html += '</tbody></table></div>';
         }
 
-        html += `<div style="background: #1e293b; border-radius: 8px; padding: 12px; margin-top: 8px;">
-            <span style="color: #94a3b8; font-size: 12px;">Blended fertilizer shock (N 60% / P 25% / K 15%): </span>
-            <span style="color: #ef4444; font-weight: 700;">+${(ferts.blended_yoy_pct || 0).toFixed(1)}% YoY</span>
+        html += `<div style="background: var(--surface-2); border-radius: 8px; padding: 12px; margin-top: 8px;">
+            <span style="color: var(--ink-3); font-size: 12px;">Blended fertilizer shock (N 60% / P 25% / K 15%): </span>
+            <span style="color: var(--red); font-weight: 700;">+${(ferts.blended_yoy_pct || 0).toFixed(1)}% YoY</span>
         </div>`;
 
         panel.innerHTML = html;
@@ -3892,7 +3892,7 @@
     function _renderFertEMScenarios(panel, data) {
         const countries = data.countries || {};
         const scenarios = ['Base Case', 'Severe Case', 'Worst Case'];
-        const scenarioColors = { 'Base Case': '#3b82f6', 'Severe Case': '#f59e0b', 'Worst Case': '#ef4444' };
+        const scenarioColors = { 'Base Case': Theme.c('blue'), 'Severe Case': Theme.c('amber'), 'Worst Case': Theme.c('red') };
 
         // Sort by worst case total
         const sorted = Object.entries(countries).sort((a, b) => {
@@ -3904,13 +3904,13 @@
         let html = `<div style="overflow-x: auto;">
         <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
             <thead>
-                <tr style="background: #1e293b; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                <tr style="background: var(--surface-2); color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
                     <th style="padding: 10px 8px; text-align: left;" rowspan="2">Country</th>
-                    <th style="padding: 6px 8px; text-align: center; color: #3b82f6; border-bottom: 1px solid #334155;" colspan="2">Base Case</th>
-                    <th style="padding: 6px 8px; text-align: center; color: #f59e0b; border-bottom: 1px solid #334155;" colspan="2">Severe</th>
-                    <th style="padding: 6px 8px; text-align: center; color: #ef4444; border-bottom: 1px solid #334155;" colspan="2">Worst Case</th>
+                    <th style="padding: 6px 8px; text-align: center; color: var(--blue); border-bottom: 1px solid var(--rule-strong);" colspan="2">Base Case</th>
+                    <th style="padding: 6px 8px; text-align: center; color: var(--amber); border-bottom: 1px solid var(--rule-strong);" colspan="2">Severe</th>
+                    <th style="padding: 6px 8px; text-align: center; color: var(--red); border-bottom: 1px solid var(--rule-strong);" colspan="2">Worst Case</th>
                 </tr>
-                <tr style="background: #1e293b; color: #64748b; font-size: 10px;">
+                <tr style="background: var(--surface-2); color: var(--ink-4); font-size: 10px;">
                     <th style="padding: 4px 8px; text-align: center;">Food (pp)</th>
                     <th style="padding: 4px 8px; text-align: center;">Total (pp)</th>
                     <th style="padding: 4px 8px; text-align: center;">Food (pp)</th>
@@ -3923,14 +3923,14 @@
 
         sorted.forEach(([name, c], i) => {
             const sc = c.scenarios || {};
-            html += `<tr style="border-bottom: 1px solid #1e293b; ${i < 5 ? 'font-weight: 600;' : ''}">
-                <td style="padding: 8px; color: #f1f5f9;">${name}</td>`;
+            html += `<tr style="border-bottom: 1px solid var(--rule); ${i < 5 ? 'font-weight: 600;' : ''}">
+                <td style="padding: 8px; color: var(--ink-strong);">${name}</td>`;
 
             for (const s of scenarios) {
                 const d = sc[s] || {};
                 const color = scenarioColors[s];
                 html += `
-                    <td style="padding: 8px; text-align: center; color: #94a3b8;">+${(d.food_pp || 0).toFixed(1)}</td>
+                    <td style="padding: 8px; text-align: center; color: var(--ink-3);">+${(d.food_pp || 0).toFixed(1)}</td>
                     <td style="padding: 8px; text-align: center; color: ${color}; font-weight: 600;">+${(d.total_pp || 0).toFixed(1)}</td>`;
             }
 
@@ -3938,7 +3938,7 @@
         });
 
         html += '</tbody></table></div>';
-        html += '<p style="color: #64748b; font-size: 11px; margin-top: 12px;">Scenario weights: Base Case 70% | Severe Case 20% | Worst Case 10%. All values in percentage points of additional CPI inflation.</p>';
+        html += '<p style="color: var(--ink-4); font-size: 11px; margin-top: 12px;">Scenario weights: Base Case 70% | Severe Case 20% | Worst Case 10%. All values in percentage points of additional CPI inflation.</p>';
 
         panel.innerHTML = html;
     }
@@ -4068,7 +4068,7 @@
         if (loadEl) loadEl.style.display = 'none';
 
         // Build chart datasets and collect all dates for chronological sorting
-        const COLORS = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#06b6d4','#f97316','#e11d48','#84cc16','#64748b','#fbbf24','#a855f7'];
+        const COLORS = [Theme.c('red'),Theme.c('amber'),Theme.c('green'),Theme.c('blue'),Theme.c('violet'),Theme.c('cyan'),Theme.c('orange'),Theme.c('red-text'),Theme.c('green'),Theme.c('ink-4'),Theme.c('amber-text'),Theme.c('violet')];
         const chartDatasets = [];
         const allDates = new Set();
 
@@ -4123,13 +4123,13 @@
                     plugins: {
                         legend: {
                             position: 'bottom',
-                            labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 20, padding: 12 }
+                            labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 20, padding: 12 }
                         },
                         tooltip: {
-                            backgroundColor: '#1e293b',
-                            titleColor: '#f1f5f9',
-                            bodyColor: '#94a3b8',
-                            borderColor: '#334155',
+                            backgroundColor: Theme.c('surface-2'),
+                            titleColor: Theme.c('ink-strong'),
+                            bodyColor: Theme.c('ink-3'),
+                            borderColor: Theme.c('rule-strong'),
                             borderWidth: 1,
                             callbacks: {
                                 label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(1) + '%' : '—'}`
@@ -4139,13 +4139,13 @@
                     scales: {
                         x: {
                             type: 'category',
-                            ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 24 },
-                            grid: { color: '#1e293b' }
+                            ticks: { color: Theme.c('ink-4'), font: { size: 10 }, maxTicksLimit: 24 },
+                            grid: { color: Theme.c('surface-2') }
                         },
                         y: {
-                            title: { display: true, text: compLabel, color: '#64748b', font: { size: 11 } },
-                            ticks: { color: '#64748b', font: { size: 10 }, callback: v => v.toFixed(0) + '%' },
-                            grid: { color: '#1e293b' }
+                            title: { display: true, text: compLabel, color: Theme.c('ink-4'), font: { size: 11 } },
+                            ticks: { color: Theme.c('ink-4'), font: { size: 10 }, callback: v => v.toFixed(0) + '%' },
+                            grid: { color: Theme.c('surface-2') }
                         }
                     }
                 }
@@ -4169,18 +4169,18 @@
             const points = _insGetPoints(key, data, freq, comp);
             const latest = points.length ? points[points.length - 1] : null;
             const approx = '';
-            const bg = i % 2 === 0 ? 'background:rgba(15,23,42,0.25);' : '';
+            const bg = i % 2 === 0 ? 'background:color-mix(in srgb, var(--surface) 25%, transparent);' : '';
 
-            tbHtml += `<tr style="border-bottom:1px solid #1e293b;${bg}">
-                <td style="padding:8px;color:#f1f5f9;">
-                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${meta.color || '#94a3b8'};margin-right:8px;"></span>
+            tbHtml += `<tr style="border-bottom:1px solid var(--rule);${bg}">
+                <td style="padding:8px;color:var(--ink-strong);">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${meta.color || Theme.c('ink-3')};margin-right:8px;"></span>
                     ${meta.label || key}${approx}
                 </td>
-                <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${meta.source || ''}</td>
-                <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${(freq === 'quarterly' || comp === 'qoq') ? 'Q' : (meta.freq || 'M')}</td>
-                <td style="padding:8px;text-align:center;color:${latest && latest.value > 0 ? '#ef4444' : '#10b981'};font-weight:600;">${latest ? latest.value.toFixed(1) + '%' : '—'}</td>
-                <td style="padding:8px;text-align:center;color:#94a3b8;font-size:12px;">${latest ? latest.date : '—'}</td>
-                <td style="padding:8px;text-align:center;color:#64748b;font-size:12px;">${points.length}</td>
+                <td style="padding:8px;text-align:center;color:var(--ink-4);font-size:12px;">${meta.source || ''}</td>
+                <td style="padding:8px;text-align:center;color:var(--ink-4);font-size:12px;">${(freq === 'quarterly' || comp === 'qoq') ? 'Q' : (meta.freq || 'M')}</td>
+                <td style="padding:8px;text-align:center;color:${latest && latest.value > 0 ? Theme.c('red') : Theme.c('green')};font-weight:600;">${latest ? latest.value.toFixed(1) + '%' : '—'}</td>
+                <td style="padding:8px;text-align:center;color:var(--ink-3);font-size:12px;">${latest ? latest.date : '—'}</td>
+                <td style="padding:8px;text-align:center;color:var(--ink-4);font-size:12px;">${points.length}</td>
             </tr>`;
         });
         tbody.innerHTML = tbHtml;
@@ -4252,7 +4252,7 @@
             : Number(v).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         const fmtPct = v => {
             if (v == null || isNaN(v)) return '<span style="color:var(--text-muted)">—</span>';
-            const c = v > 0 ? '#16a34a' : (v < 0 ? '#dc2626' : 'var(--text-muted)');
+            const c = v > 0 ? Theme.c('green-text') : (v < 0 ? Theme.c('red-text') : 'var(--text-muted)');
             const s = (v > 0 ? '+' : '') + Number(v).toFixed(1) + '%';
             return `<span style="color:${c}">${s}</span>`;
         };
@@ -4398,10 +4398,10 @@
         }
 
         // Build Chart.js datasets — split EM vs. non-EM for color coding
-        const emColor = 'rgba(239, 68, 68, 0.55)';      // red/salmon (EM) like the AIG chart
-        const emBorder = 'rgba(220, 38, 38, 1)';
-        const dmColor = 'rgba(59, 130, 246, 0.55)';     // blue (non-EM)
-        const dmBorder = 'rgba(37, 99, 235, 1)';
+        const emColor = Theme.c('red', 0.55);      // red/salmon (EM) like the AIG chart
+        const emBorder = Theme.c('red-strong');
+        const dmColor = Theme.c('blue', 0.55);     // blue (non-EM)
+        const dmBorder = Theme.c('blue-strong');
 
         function pointFor(iso) {
             const c = allCountries[iso];
@@ -4529,10 +4529,10 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)',
+                        backgroundColor: Theme.c('surface-2', 0.96),
+                        titleColor: Theme.c('ink-strong'),
+                        bodyColor: Theme.c('ink-2'),
+                        borderColor: Theme.c('ink', 0.1),
                         borderWidth: 1,
                         callbacks: {
                             title: items => items.length ? items[0].raw.name + ' (' + items[0].raw.iso + ')' : '',
@@ -4595,15 +4595,15 @@
                         title: {
                             display: true,
                             text: 'Foreign Reserves / Short-Term External Debt (%)',
-                            color: '#9ca3af',
+                            color: Theme.c('ink-3'),
                             font: { size: 11 },
                         },
                         ticks: {
-                            color: '#6b7280',
+                            color: Theme.c('ink-4'),
                             font: { size: 10 },
                             callback: v => v + '%',
                         },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
+                        grid: { color: Theme.c('ink-5', 0.3) },
                         min: xAxisMin,
                         max: 1600,  // 1500% clip + 100 buffer for labels
                     },
@@ -4612,16 +4612,16 @@
                         title: {
                             display: true,
                             text: 'Basic Balance (C/A + Net FDI), % GDP',
-                            color: '#9ca3af',
+                            color: Theme.c('ink-3'),
                             font: { size: 11 },
                         },
                         ticks: {
-                            color: '#6b7280',
+                            color: Theme.c('ink-4'),
                             font: { size: 10 },
                             callback: v => v + '%',
                         },
                         grid: {
-                            color: ctx2 => (ctx2.tick.value === 0 ? 'rgba(148,163,184,0.6)' : 'rgba(55,65,81,0.3)'),
+                            color: ctx2 => (ctx2.tick.value === 0 ? Theme.c('ink-3', 0.6) : Theme.c('ink-5', 0.3)),
                             lineWidth: ctx2 => (ctx2.tick.value === 0 ? 1.2 : 1),
                         },
                     },
@@ -4799,7 +4799,7 @@
                 ctx.save();
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = Theme.c('ink-strong');
                 ctx.font = '600 10px system-ui, -apple-system, sans-serif';
                 chart.data.datasets.forEach((dataset, dsi) => {
                     const meta = chart.getDatasetMeta(dsi);
@@ -5052,7 +5052,7 @@
             }
         }
 
-        const purple = '#a78bfa';
+        const purple = Theme.c('violet-text');
         chart.data.datasets.push({
             label: SCENARIO_DATASET_PREFIX + 'p97.5',
             data: highData,
@@ -5317,9 +5317,9 @@
         const currentYear = new Date().getFullYear();
 
         const seriesOrder = [
-            { key: 'exports',      color: '#10b981', dash: []    },
-            { key: 'imports',      color: '#ef4444', dash: []    },
-            { key: 'net_exports',  color: '#3b82f6', dash: [4,3] },
+            { key: 'exports',      color: Theme.c('green'), dash: []    },
+            { key: 'imports',      color: Theme.c('red'), dash: []    },
+            { key: 'net_exports',  color: Theme.c('blue'), dash: [4,3] },
         ];
         const useSeries = seriesOrder;
 
@@ -5380,30 +5380,30 @@
             const impPct = latest('imports_pct');
             summary.innerHTML = `
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;width:100%;">
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Exports</div>
-                        <div style="color:#10b981;font-size:22px;font-weight:700;margin-top:4px;">${fmt(exp.value)}</div>
-                        <div style="color:#64748b;font-size:11px;">${exp.date}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Exports</div>
+                        <div style="color:var(--green);font-size:22px;font-weight:700;margin-top:4px;">${fmt(exp.value)}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">${exp.date}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Imports</div>
-                        <div style="color:#ef4444;font-size:22px;font-weight:700;margin-top:4px;">${fmt(imp.value)}</div>
-                        <div style="color:#64748b;font-size:11px;">${imp.date}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Imports</div>
+                        <div style="color:var(--red);font-size:22px;font-weight:700;margin-top:4px;">${fmt(imp.value)}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">${imp.date}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Net Exports</div>
-                        <div style="color:${net.value != null && net.value < 0 ? '#f59e0b' : '#3b82f6'};font-size:22px;font-weight:700;margin-top:4px;">${fmt(net.value)}</div>
-                        <div style="color:#64748b;font-size:11px;">${net.date}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Net Exports</div>
+                        <div style="color:${net.value != null && net.value < 0 ? Theme.c('amber') : Theme.c('blue')};font-size:22px;font-weight:700;margin-top:4px;">${fmt(net.value)}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">${net.date}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Exports % GDP</div>
-                        <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">${expPct.value != null ? expPct.value.toFixed(1) + '%' : '—'}</div>
-                        <div style="color:#64748b;font-size:11px;">${expPct.date}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Exports % GDP</div>
+                        <div style="color:var(--ink-strong);font-size:22px;font-weight:700;margin-top:4px;">${expPct.value != null ? expPct.value.toFixed(1) + '%' : '—'}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">${expPct.date}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Imports % GDP</div>
-                        <div style="color:#f1f5f9;font-size:22px;font-weight:700;margin-top:4px;">${impPct.value != null ? impPct.value.toFixed(1) + '%' : '—'}</div>
-                        <div style="color:#64748b;font-size:11px;">${impPct.date}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Imports % GDP</div>
+                        <div style="color:var(--ink-strong);font-size:22px;font-weight:700;margin-top:4px;">${impPct.value != null ? impPct.value.toFixed(1) + '%' : '—'}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">${impPct.date}</div>
                     </div>
                 </div>
             `;
@@ -5427,13 +5427,13 @@
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 14, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                        labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 14, padding: 10, usePointStyle: true, pointStyle: 'line' }
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)',
-                        titleColor: '#fff',
-                        bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)',
+                        backgroundColor: Theme.c('surface-2', 0.96),
+                        titleColor: Theme.c('ink-strong'),
+                        bodyColor: Theme.c('ink-2'),
+                        borderColor: Theme.c('ink', 0.1),
                         borderWidth: 1,
                         callbacks: {
                             label: (tt) => {
@@ -5447,17 +5447,17 @@
                 },
                 scales: {
                     x: {
-                        ticks: { color: '#9ca3af', font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 16 },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
-                        title: { display: true, text: 'Quarter', color: '#6b7280', font: { size: 11 } },
+                        ticks: { color: Theme.c('ink-3'), font: { size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 16 },
+                        grid: { color: Theme.c('ink-5', 0.3) },
+                        title: { display: true, text: 'Quarter', color: Theme.c('ink-4'), font: { size: 11 } },
                     },
                     y: {
                         ticks: {
-                            color: '#6b7280', font: { size: 10 },
+                            color: Theme.c('ink-4'), font: { size: 10 },
                             callback: (v) => isPct ? v.toFixed(1) + '%' : '$' + v.toFixed(0) + 'B',
                         },
-                        grid: { color: 'rgba(55,65,81,0.3)' },
-                        title: { display: true, text: yLabel, color: '#6b7280', font: { size: 11 } },
+                        grid: { color: Theme.c('ink-5', 0.3) },
+                        title: { display: true, text: yLabel, color: Theme.c('ink-4'), font: { size: 11 } },
                     }
                 }
             }
@@ -5629,10 +5629,10 @@
         const chartEl = document.getElementById('panel-chart-container');
         if (chartEl) {
             chartEl.innerHTML = `
-                <div style="padding:60px 24px;text-align:center;color:#94a3b8;">
+                <div style="padding:60px 24px;text-align:center;color:var(--ink-3);">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.4;margin-bottom:12px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
                     <p style="font-size:14px;margin:0 0 6px 0;">Domestic public debt is not published in WB IDS.</p>
-                    <p style="font-size:12px;color:#64748b;margin:0;max-width:540px;margin-left:auto;margin-right:auto;">
+                    <p style="font-size:12px;color:var(--ink-4);margin:0;max-width:540px;margin-left:auto;margin-right:auto;">
                         WB IDS only covers external debt. Domestic public debt (held by residents)
                         and its currency composition come from national authorities or IMF SDDS+.
                         This view will pick up that data once we add an integration.
@@ -5669,10 +5669,10 @@
             const top = sortedLatest.slice(0, 3);
             const fmt = (v) => v == null ? '—' : v.toFixed(1) + '%';
             const cardHtml = (rank, item) => `
-                <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                    <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">#${rank} · ${item ? item.label : '—'}</div>
-                    <div style="color:${item ? item.color : '#f1f5f9'};font-size:24px;font-weight:700;margin-top:4px;">${item ? fmt(item.value) : '—'}</div>
-                    <div style="color:#64748b;font-size:11px;">${latestYear || ''}</div>
+                <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                    <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">#${rank} · ${item ? item.label : '—'}</div>
+                    <div style="color:${item ? item.color : Theme.c('ink-strong')};font-size:24px;font-weight:700;margin-top:4px;">${item ? fmt(item.value) : '—'}</div>
+                    <div style="color:var(--ink-4);font-size:11px;">${latestYear || ''}</div>
                 </div>
             `;
             summary.innerHTML = `
@@ -5680,10 +5680,10 @@
                     ${cardHtml(1, top[0])}
                     ${cardHtml(2, top[1])}
                     ${cardHtml(3, top[2])}
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Reporting Years</div>
-                        <div style="color:#f1f5f9;font-size:24px;font-weight:700;margin-top:4px;">${years.length}</div>
-                        <div style="color:#64748b;font-size:11px;">${years.length ? years[0] + '–' + years[years.length - 1] : ''}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Reporting Years</div>
+                        <div style="color:var(--ink-strong);font-size:24px;font-weight:700;margin-top:4px;">${years.length}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">${years.length ? years[0] + '–' + years[years.length - 1] : ''}</div>
                     </div>
                 </div>
             `;
@@ -5714,17 +5714,17 @@
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'rect' } },
+                    legend: { position: 'bottom', labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'rect' } },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)', titleColor: '#fff', bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                        backgroundColor: Theme.c('surface-2', 0.96), titleColor: Theme.c('ink-strong'), bodyColor: Theme.c('ink-2'),
+                        borderColor: Theme.c('ink', 0.1), borderWidth: 1,
                         callbacks: { label: (tt) => tt.parsed.y == null ? tt.dataset.label + ': N/A' : tt.dataset.label + ': ' + tt.parsed.y.toFixed(1) + '%' }
                     },
-                    title: { display: true, text: country.name + ' — Long-Term PPG External Debt by Currency', color: '#e5e7eb', font: { size: 13, weight: '600' }, padding: { bottom: 10 } }
+                    title: { display: true, text: country.name + ' — Long-Term PPG External Debt by Currency', color: Theme.c('ink'), font: { size: 13, weight: '600' }, padding: { bottom: 10 } }
                 },
                 scales: {
-                    x: { stacked: true, ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 }, grid: { display: false }, title: { display: true, text: 'Year', color: '#6b7280', font: { size: 11 } } },
-                    y: { stacked: true, beginAtZero: true, max: 100, ticks: { color: '#6b7280', font: { size: 10 }, callback: (v) => v + '%' }, grid: { color: 'rgba(55,65,81,0.3)' }, title: { display: true, text: '% of LT PPG Debt', color: '#6b7280', font: { size: 11 } } }
+                    x: { stacked: true, ticks: { color: Theme.c('ink-3'), font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 }, grid: { display: false }, title: { display: true, text: 'Year', color: Theme.c('ink-4'), font: { size: 11 } } },
+                    y: { stacked: true, beginAtZero: true, max: 100, ticks: { color: Theme.c('ink-4'), font: { size: 10 }, callback: (v) => v + '%' }, grid: { color: Theme.c('ink-5', 0.3) }, title: { display: true, text: '% of LT PPG Debt', color: Theme.c('ink-4'), font: { size: 11 } } }
                 }
             }
         }));
@@ -5772,7 +5772,7 @@
         const stocks = data.stocks || {};
         const country = stocks[iso];
         const stockSeries = data.stock_series || [];
-        const seriesMeta = stockSeries.find(s => s.key === stockKey) || { label: subview, color: '#3b82f6' };
+        const seriesMeta = stockSeries.find(s => s.key === stockKey) || { label: subview, color: Theme.c('blue') };
 
         if (!country) {
             _drawNoCountryData(seriesMeta.label);
@@ -5804,20 +5804,20 @@
         if (summary) {
             summary.innerHTML = `
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;width:100%;">
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">${seriesMeta.label}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">${seriesMeta.label}</div>
                         <div style="color:${seriesMeta.color};font-size:24px;font-weight:700;margin-top:4px;">${fmt$B(latest)}</div>
-                        <div style="color:#64748b;font-size:11px;">${latestYear}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">${latestYear}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">5-Year Change</div>
-                        <div style="color:${fiveYrChange != null && fiveYrChange < 0 ? '#10b981' : '#f59e0b'};font-size:24px;font-weight:700;margin-top:4px;">${fiveYrChange == null ? '—' : (fiveYrChange >= 0 ? '+' : '') + fiveYrChange.toFixed(1) + '%'}</div>
-                        <div style="color:#64748b;font-size:11px;">vs ${lastIdx >= 5 ? years[lastIdx-5] : ''}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">5-Year Change</div>
+                        <div style="color:${fiveYrChange != null && fiveYrChange < 0 ? Theme.c('green') : Theme.c('amber')};font-size:24px;font-weight:700;margin-top:4px;">${fiveYrChange == null ? '—' : (fiveYrChange >= 0 ? '+' : '') + fiveYrChange.toFixed(1) + '%'}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">vs ${lastIdx >= 5 ? years[lastIdx-5] : ''}</div>
                     </div>
-                    <div style="background:#1e293b;border-radius:8px;padding:14px;text-align:center;">
-                        <div style="color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Reporting Years</div>
-                        <div style="color:#f1f5f9;font-size:24px;font-weight:700;margin-top:4px;">${years.length}</div>
-                        <div style="color:#64748b;font-size:11px;">${years.length ? years[0] + '–' + years[years.length - 1] : ''}</div>
+                    <div style="background:var(--surface-2);border-radius:8px;padding:14px;text-align:center;">
+                        <div style="color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">Reporting Years</div>
+                        <div style="color:var(--ink-strong);font-size:24px;font-weight:700;margin-top:4px;">${years.length}</div>
+                        <div style="color:var(--ink-4);font-size:11px;">${years.length ? years[0] + '–' + years[years.length - 1] : ''}</div>
                     </div>
                 </div>
             `;
@@ -5851,15 +5851,15 @@
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.9)', titleColor: '#fff', bodyColor: '#d1d5db',
-                        borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+                        backgroundColor: Theme.c('surface-2', 0.96), titleColor: Theme.c('ink-strong'), bodyColor: Theme.c('ink-2'),
+                        borderColor: Theme.c('ink', 0.1), borderWidth: 1,
                         callbacks: { label: (tt) => tt.parsed.y == null ? 'N/A' : seriesMeta.label + ': ' + fmt$B(tt.parsed.y) }
                     },
-                    title: { display: true, text: country.name + ' — ' + seriesMeta.label, color: '#e5e7eb', font: { size: 13, weight: '600' }, padding: { bottom: 10 } }
+                    title: { display: true, text: country.name + ' — ' + seriesMeta.label, color: Theme.c('ink'), font: { size: 13, weight: '600' }, padding: { bottom: 10 } }
                 },
                 scales: {
-                    x: { ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 }, grid: { color: 'rgba(55,65,81,0.3)' }, title: { display: true, text: 'Year', color: '#6b7280', font: { size: 11 } } },
-                    y: { beginAtZero: true, ticks: { color: '#6b7280', font: { size: 10 }, callback: (v) => fmt$B(v) }, grid: { color: 'rgba(55,65,81,0.3)' }, title: { display: true, text: 'USD Billions', color: '#6b7280', font: { size: 11 } } }
+                    x: { ticks: { color: Theme.c('ink-3'), font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 20 }, grid: { color: Theme.c('ink-5', 0.3) }, title: { display: true, text: 'Year', color: Theme.c('ink-4'), font: { size: 11 } } },
+                    y: { beginAtZero: true, ticks: { color: Theme.c('ink-4'), font: { size: 10 }, callback: (v) => fmt$B(v) }, grid: { color: Theme.c('ink-5', 0.3) }, title: { display: true, text: 'USD Billions', color: Theme.c('ink-4'), font: { size: 11 } } }
                 }
             }
         }));
@@ -5905,7 +5905,7 @@
         const chartEl = document.getElementById('panel-chart-container');
         if (chartEl) {
             chartEl.innerHTML = `
-                <div style="padding:60px 24px;text-align:center;color:#94a3b8;">
+                <div style="padding:60px 24px;text-align:center;color:var(--ink-3);">
                     <p style="font-size:14px;margin:0;">No ${label} data for this country in WB IDS.</p>
                 </div>
             `;

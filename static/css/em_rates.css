@@ -7,17 +7,17 @@
  */
 
 .emr-page {
-  --emr-bg:            var(--bg-primary,    #0a0e1a);
-  --emr-surface:       var(--bg-secondary,  #111827);
-  --emr-surface-2:     #1a2035;
-  --emr-border:        var(--border,        #1f2937);
-  --emr-text:          var(--text-primary,  #e5e7eb);
-  --emr-text-dim:      var(--text-secondary,#9ca3af);
-  --emr-text-mute:     var(--text-muted,    #6b7280);
-  --emr-accent:        var(--accent,        #3b82f6);
-  --emr-good:          #10b981;
-  --emr-bad:           #ef4444;
-  --emr-warn:          #f59e0b;
+  --emr-bg:            var(--bg-primary,    var(--bg));
+  --emr-surface:       var(--bg-secondary,  var(--surface));
+  --emr-surface-2:     var(--surface-2);
+  --emr-border:        var(--border,        var(--rule));
+  --emr-text:          var(--text-primary,  var(--ink));
+  --emr-text-dim:      var(--text-secondary,var(--ink-3));
+  --emr-text-mute:     var(--text-muted,    var(--ink-4));
+  --emr-accent:        var(--accent,        var(--blue));
+  --emr-good:          var(--green);
+  --emr-bad:           var(--red);
+  --emr-warn:          var(--amber);
 
   max-width: 1400px;
   margin: 0 auto;
@@ -162,8 +162,8 @@ table.emr-table {
   font-size: 10px; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase;
 }
-.emr-chip.hike { background: rgba(239, 68, 68, 0.15); color: var(--emr-bad); }
-.emr-chip.cut  { background: rgba(16, 185, 129, 0.15); color: var(--emr-good); }
+.emr-chip.hike { background: color-mix(in srgb, var(--red) 15%, transparent); color: var(--emr-bad); }
+.emr-chip.cut  { background: color-mix(in srgb, var(--green) 15%, transparent); color: var(--emr-good); }
 .emr-chip.hold { background: var(--emr-surface-2); color: var(--emr-text-dim); }
 
 /* Strategist expected chip — outlined variant so it visually reads as
@@ -195,7 +195,7 @@ table.emr-table {
 .emr-divergence-flag {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 6px; margin-top: 2px;
-  background: rgba(245, 158, 11, 0.15); color: var(--emr-warn);
+  background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--emr-warn);
   border-radius: 3px;
   font-size: 9px; font-weight: 700;
   letter-spacing: 0.05em; text-transform: uppercase;
@@ -203,10 +203,10 @@ table.emr-table {
 }
 
 /* 10Y direction chips (slightly softer than policy chips) */
-.emr-chip.higher   { background: rgba(239, 68, 68, 0.12); color: var(--emr-bad); }
-.emr-chip.lower    { background: rgba(16, 185, 129, 0.12); color: var(--emr-good); }
+.emr-chip.higher   { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--emr-bad); }
+.emr-chip.lower    { background: color-mix(in srgb, var(--green) 12%, transparent); color: var(--emr-good); }
 .emr-chip.sideways { background: var(--emr-surface-2); color: var(--emr-text-dim); }
-.emr-chip.mixed    { background: rgba(245, 158, 11, 0.15); color: var(--emr-warn); }
+.emr-chip.mixed    { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--emr-warn); }
 .emr-chip.unknown  { background: var(--emr-surface-2); color: var(--emr-text-mute); }
 
 /* Confidence dot */
@@ -232,7 +232,7 @@ table.emr-table {
 .emr-fit-issue {
   display: inline-block; margin-left: 8px;
   font-size: 10px; padding: 1px 6px;
-  background: rgba(245, 158, 11, 0.15); color: var(--emr-warn);
+  background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--emr-warn);
   border-radius: 3px; text-transform: uppercase;
   letter-spacing: 0.04em; font-weight: 700;
 }

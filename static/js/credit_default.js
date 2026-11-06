@@ -179,15 +179,15 @@
   };
 
   function colorForPd(pdFrac, thresholdKey) {
-    if (pdFrac == null || isNaN(pdFrac)) return 'rgba(148, 163, 184, 0.55)';
+    if (pdFrac == null || isNaN(pdFrac)) return Theme.c('ink-3', 0.55);
     const p = pdFrac * 100;
     const band = (watchlistThresholds || {})[thresholdKey] || {};
     const lower = (band.lower || 0.2) * 100;
     const upper = (band.upper || 0.3) * 100;
-    if (p >= 50) return 'rgba(220, 38, 38, 0.85)';       // red — highly likely crisis
-    if (p >= upper) return 'rgba(220, 38, 38, 0.55)';    // red — above threshold
-    if (p >= lower) return 'rgba(245, 158, 11, 0.75)';   // amber — in band
-    return 'rgba(16, 185, 129, 0.65)';                   // green — below threshold
+    if (p >= 50) return Theme.c('red-text', 0.85);       // red — highly likely crisis
+    if (p >= upper) return Theme.c('red-text', 0.55);    // red — above threshold
+    if (p >= lower) return Theme.c('amber', 0.75);   // amber — in band
+    return Theme.c('green', 0.65);                   // green — below threshold
   }
 
   function renderWatchlistImminent() {
@@ -242,12 +242,12 @@
           x: {
             beginAtZero: true,
             max: Math.max(60, Math.ceil(Math.max(...values) / 10) * 10),
-            ticks: { callback: (v) => `${v}%`, color: '#9ca3af', font: { size: 10 } },
-            grid: { color: 'rgba(255,255,255,0.05)' },
-            title: { display: true, text: spec.label, color: '#e5e7eb', font: { size: 11 } },
+            ticks: { callback: (v) => `${v}%`, color: Theme.c('ink-3'), font: { size: 10 } },
+            grid: { color: Theme.c('ink-strong', 0.05) },
+            title: { display: true, text: spec.label, color: Theme.c('ink'), font: { size: 11 } },
           },
           y: {
-            ticks: { color: '#e5e7eb', font: { size: 11 } },
+            ticks: { color: Theme.c('ink'), font: { size: 11 } },
             grid: { display: false },
           },
         },
@@ -290,7 +290,7 @@
     const values = rows.map((r) => r.delta_pp || 0);
     const iso3s = rows.map((r) => r.iso3);
     // Positive delta = deteriorating (red); negative delta = improving (green).
-    const bg = values.map((v) => v >= 0 ? 'rgba(220, 38, 38, 0.75)' : 'rgba(16, 185, 129, 0.70)');
+    const bg = values.map((v) => v >= 0 ? Theme.c('red-text', 0.75) : Theme.c('green', 0.70));
 
     if (watchlistDeteriorationChart) watchlistDeteriorationChart.destroy();
     watchlistDeteriorationChart = new Chart(canvas.getContext('2d'), {
@@ -315,12 +315,12 @@
         },
         scales: {
           x: {
-            ticks: { callback: (v) => `${v}pp`, color: '#9ca3af', font: { size: 10 } },
-            grid: { color: 'rgba(255,255,255,0.05)' },
-            title: { display: true, text: 'YoY PD 1Y change (pp)', color: '#e5e7eb', font: { size: 11 } },
+            ticks: { callback: (v) => `${v}pp`, color: Theme.c('ink-3'), font: { size: 10 } },
+            grid: { color: Theme.c('ink-strong', 0.05) },
+            title: { display: true, text: 'YoY PD 1Y change (pp)', color: Theme.c('ink'), font: { size: 11 } },
           },
           y: {
-            ticks: { color: '#e5e7eb', font: { size: 11 } },
+            ticks: { color: Theme.c('ink'), font: { size: 11 } },
             grid: { display: false },
           },
         },
@@ -1087,7 +1087,7 @@
 
         // 1. Red event bands (merged so overlaps don't stack).
         ctx.save();
-        ctx.fillStyle = 'rgba(229, 57, 53, 0.20)';
+        ctx.fillStyle = Theme.c('red-strong', 0.20);
         eventBands.forEach((b) => {
           const x0 = scales.x.getPixelForValue(String(b.start));
           const x1 = scales.x.getPixelForValue(String(b.end));
@@ -1112,8 +1112,8 @@
           const width = Math.abs(x1 - x0);
           const text = width >= 36 ? b.label : (b.label[0] || '');
           if (!text) return;
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-          ctx.fillStyle = 'rgba(153, 27, 27, 0.95)';
+          ctx.strokeStyle = Theme.c('ink', 0.95);
+          ctx.fillStyle = Theme.c('red-tint', 0.95);
           const tx = left + (width >= 36 ? 4 : 1);
           const ty = chartArea.top + 4;
           ctx.strokeText(text, tx, ty);
@@ -1129,12 +1129,12 @@
         // which threshold class applies (5Y=blue, 3Y=amber, 1Y=red).
         const { ctx, chartArea, scales } = chart;
         if (!chartArea || !scales.y) return;
-        const bandColorByHorizon = { 1: 'rgba(220, 38, 38, 0.10)',
-                                     3: 'rgba(245, 158, 11, 0.10)',
-                                     5: 'rgba(59, 130, 246, 0.10)' };
-        const strokeByHorizon = { 1: 'rgba(220, 38, 38, 0.55)',
-                                  3: 'rgba(245, 158, 11, 0.55)',
-                                  5: 'rgba(59, 130, 246, 0.55)' };
+        const bandColorByHorizon = { 1: Theme.c('red-text', 0.10),
+                                     3: Theme.c('amber', 0.10),
+                                     5: Theme.c('blue', 0.10) };
+        const strokeByHorizon = { 1: Theme.c('red-text', 0.55),
+                                  3: Theme.c('amber', 0.55),
+                                  5: Theme.c('blue', 0.55) };
         const lowerPct = (activeThreshold.lower || 0) * 100;
         const upperPct = (activeThreshold.upper || 0) * 100;
         if (upperPct > 0 && upperPct <= scales.y.max) {
@@ -1143,11 +1143,11 @@
           const top = Math.min(yLo, yUp);
           const bot = Math.max(yLo, yUp);
           ctx.save();
-          ctx.fillStyle = bandColorByHorizon[horizon] || 'rgba(59, 130, 246, 0.10)';
+          ctx.fillStyle = bandColorByHorizon[horizon] || Theme.c('blue', 0.10);
           ctx.fillRect(chartArea.left, top, chartArea.right - chartArea.left, bot - top);
           // Band label — right-aligned so it stays away from the event
           // bands and the legend at bottom.
-          ctx.fillStyle = strokeByHorizon[horizon] || 'rgba(59, 130, 246, 0.85)';
+          ctx.fillStyle = strokeByHorizon[horizon] || Theme.c('blue', 0.85);
           ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
           ctx.textBaseline = 'bottom';
           ctx.textAlign = 'right';
@@ -1163,7 +1163,7 @@
           const y = scales.y.getPixelForValue(50);
           if (y >= chartArea.top && y <= chartArea.bottom) {
             ctx.save();
-            ctx.strokeStyle = 'rgba(220, 38, 38, 0.75)';
+            ctx.strokeStyle = Theme.c('red-strong', 0.75);
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 4]);
             ctx.beginPath();
@@ -1171,7 +1171,7 @@
             ctx.lineTo(chartArea.right, y);
             ctx.stroke();
             ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(220, 38, 38, 0.9)';
+            ctx.fillStyle = Theme.c('red-strong', 0.9);
             ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
             ctx.textBaseline = 'bottom';
             ctx.fillText('Highly likely crisis (50%)', chartArea.left + 6, y - 2);
@@ -1192,8 +1192,8 @@
       datasets.push({
         label: 'PD 1y (%)',
         data: pd1,
-        borderColor: '#dc2626',   // red — imminent risk
-        backgroundColor: horizon === 1 ? 'rgba(220, 38, 38, 0.14)' : 'transparent',
+        borderColor: Theme.c('red-strong'),   // red — imminent risk
+        backgroundColor: horizon === 1 ? Theme.c('red-text', 0.14) : 'transparent',
         borderWidth: horizon === 1 ? 2.4 : 1.5,
         tension: 0.2, spanGaps: true, pointRadius: 1.6,
         fill: horizon === 1, yAxisID: 'y',
@@ -1203,8 +1203,8 @@
       datasets.push({
         label: 'PD 3y (%)',
         data: pd3,
-        borderColor: '#f59e0b',   // amber — medium-term stress
-        backgroundColor: horizon === 3 ? 'rgba(245, 158, 11, 0.14)' : 'transparent',
+        borderColor: Theme.c('amber'),   // amber — medium-term stress
+        backgroundColor: horizon === 3 ? Theme.c('amber', 0.14) : 'transparent',
         borderWidth: horizon === 3 ? 2.4 : 1.5,
         tension: 0.2, spanGaps: true, pointRadius: 1.4,
         fill: horizon === 3, yAxisID: 'y',
@@ -1214,8 +1214,8 @@
       datasets.push({
         label: 'PD 5y (%)',
         data: pd5,
-        borderColor: '#3b82f6',   // blue — structural fragility
-        backgroundColor: horizon === 5 ? 'rgba(59, 130, 246, 0.14)' : 'transparent',
+        borderColor: Theme.c('blue'),   // blue — structural fragility
+        backgroundColor: horizon === 5 ? Theme.c('blue', 0.14) : 'transparent',
         borderWidth: horizon === 5 ? 2.4 : 1.5,
         tension: 0.2, spanGaps: true, pointRadius: 1.4,
         fill: horizon === 5, yAxisID: 'y',
@@ -1229,8 +1229,8 @@
       datasets.push({
         label: `Model PD ${horizon}y (%) — legacy fit`,
         data: pd,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.18)',
+        borderColor: Theme.c('blue'),
+        backgroundColor: Theme.c('blue', 0.18),
         tension: 0.2, spanGaps: true, pointRadius: 2, fill: true, yAxisID: 'y',
       });
     }
@@ -1238,7 +1238,7 @@
       datasets.push({
         label: 'Composite z-score (50 = panel median)',
         data: composite,
-        borderColor: '#f59e0b',
+        borderColor: Theme.c('amber'),
         backgroundColor: 'transparent',
         borderDash: [3, 3],
         borderWidth: 1.5,
@@ -1260,7 +1260,7 @@
       datasets.push({
         label: baseLabel,
         data: agencyLine,
-        borderColor: '#a855f7',
+        borderColor: Theme.c('violet'),
         borderDash: [6, 4],
         borderWidth: 1.5,
         pointRadius: usingAgencyHistory ? 1.5 : 0,
@@ -1280,29 +1280,29 @@
           y: {
             beginAtZero: true,
             position: 'left',
-            ticks: { callback: (v) => `${v}%`, color: '#9ca3af', font: { size: 10 } },
-            title: { display: true, text: `PD ${horizon}y`, color: '#e5e7eb', font: { size: 11 } },
-            grid: { color: 'rgba(255, 255, 255, 0.06)' },
+            ticks: { callback: (v) => `${v}%`, color: Theme.c('ink-3'), font: { size: 10 } },
+            title: { display: true, text: `PD ${horizon}y`, color: Theme.c('ink'), font: { size: 11 } },
+            grid: { color: Theme.c('ink-strong', 0.06) },
           },
           yc: {
             display: composite.some((v) => v != null),
             position: 'right',
             min: 0,
             max: 100,
-            ticks: { color: '#f59e0b', font: { size: 10 } },
-            title: { display: true, text: 'Composite (0-100)', color: '#f59e0b', font: { size: 11 } },
+            ticks: { color: Theme.c('amber'), font: { size: 10 } },
+            title: { display: true, text: 'Composite (0-100)', color: Theme.c('amber'), font: { size: 11 } },
             grid: { drawOnChartArea: false },
           },
           x: {
-            title: { display: true, text: 'Year', color: '#e5e7eb', font: { size: 11 } },
-            ticks: { color: '#9ca3af', font: { size: 10 } },
-            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            title: { display: true, text: 'Year', color: Theme.c('ink'), font: { size: 11 } },
+            ticks: { color: Theme.c('ink-3'), font: { size: 10 } },
+            grid: { color: Theme.c('ink-strong', 0.04) },
           },
         },
         plugins: {
           legend: {
             display: true, position: 'bottom',
-            labels: { boxWidth: 10, font: { size: 10 }, color: '#e5e7eb' },
+            labels: { boxWidth: 10, font: { size: 10 }, color: Theme.c('ink') },
           },
           tooltip: {
             callbacks: {

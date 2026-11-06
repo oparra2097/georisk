@@ -7,17 +7,17 @@
  */
 
 .tr-page {
-  --tr-bg:            var(--bg-primary,    #0a0e1a);
-  --tr-surface:       var(--bg-secondary,  #111827);
-  --tr-surface-2:     #1a2035;
-  --tr-border:        var(--border,        #1f2937);
-  --tr-text:          var(--text-primary,  #e5e7eb);
-  --tr-text-dim:      var(--text-secondary,#9ca3af);
-  --tr-text-mute:     var(--text-muted,    #6b7280);
-  --tr-accent:        var(--accent,        #3b82f6);
-  --tr-accent-soft:   rgba(59, 130, 246, 0.12);
-  --tr-good:          #10b981;
-  --tr-bad:           #ef4444;
+  --tr-bg:            var(--bg-primary,    var(--bg));
+  --tr-surface:       var(--bg-secondary,  var(--surface));
+  --tr-surface-2:     var(--surface-2);
+  --tr-border:        var(--border,        var(--rule));
+  --tr-text:          var(--text-primary,  var(--ink));
+  --tr-text-dim:      var(--text-secondary,var(--ink-3));
+  --tr-text-mute:     var(--text-muted,    var(--ink-4));
+  --tr-accent:        var(--accent,        var(--blue));
+  --tr-accent-soft:   color-mix(in srgb, var(--blue) 12%, transparent);
+  --tr-good:          var(--green);
+  --tr-bad:           var(--red);
 
   max-width: 1400px;
   margin: 0 auto;
@@ -136,11 +136,11 @@ table.tr-table {
   text-transform: uppercase;
 }
 .tr-side.long {
-  background: rgba(16, 185, 129, 0.15);
+  background: color-mix(in srgb, var(--green) 15%, transparent);
   color: var(--tr-good);
 }
 .tr-side.short {
-  background: rgba(239, 68, 68, 0.15);
+  background: color-mix(in srgb, var(--red) 15%, transparent);
   color: var(--tr-bad);
 }
 .tr-side.hold {

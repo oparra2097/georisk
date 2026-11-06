@@ -3,101 +3,101 @@
 
 {% block extra_css %}
 <style>
-  .dc-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: #1f2937; }
+  .dc-page { max-width: 1400px; margin: 0 auto; padding: 24px; color: var(--ink); }
 
-  .dc-hero { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-             color: #f1f5f9; padding: 32px 26px; border-radius: 10px; margin-bottom: 22px; }
-  .dc-hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #93c5fd; margin-bottom: 6px; }
+  .dc-hero { background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+             color: var(--ink-strong); padding: 32px 26px; border-radius: 10px; margin-bottom: 22px; }
+  .dc-hero-eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--blue-soft); margin-bottom: 6px; }
   .dc-hero h2 { font-size: 24px; font-weight: 700; margin: 0 0 8px; line-height: 1.2; }
-  .dc-hero p { font-size: 13px; color: #cbd5e1; margin: 0 0 16px; line-height: 1.55; max-width: 820px; }
+  .dc-hero p { font-size: 13px; color: var(--ink-2); margin: 0 0 16px; line-height: 1.55; max-width: 820px; }
   .dc-hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-top: 14px; }
-  .dc-hero-stat { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08); }
-  .dc-hero-stat .num { font-size: 22px; font-weight: 600; color: #f1f5f9; }
-  .dc-hero-stat .lbl { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; line-height: 1.25; }
-  .dc-hero-stat .sub { font-size: 11px; color: #93c5fd; margin-top: 4px; }
+  .dc-hero-stat { background: color-mix(in srgb, var(--ink-strong) 5%, transparent); padding: 12px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); }
+  .dc-hero-stat .num { font-size: 22px; font-weight: 600; color: var(--ink-strong); }
+  .dc-hero-stat .lbl { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; line-height: 1.25; }
+  .dc-hero-stat .sub { font-size: 11px; color: var(--blue-soft); margin-top: 4px; }
 
   .dc-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-  .dc-tab { padding: 6px 14px; font-size: 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 4px; cursor: pointer; color: #374151; }
-  .dc-tab:hover { background: #f3f4f6; }
-  .dc-tab.active { background: #111827; color: #fff; border-color: #111827; }
-  .dc-tab[data-stress].active { background: #b91c1c; border-color: #b91c1c; color: #fff; }
-  .dc-tab[data-stress].active:hover { background: #991b1b; }
+  .dc-tab { padding: 6px 14px; font-size: 12px; border: 1px solid var(--rule-strong); background: var(--surface); border-radius: 4px; cursor: pointer; color: var(--ink-2); }
+  .dc-tab:hover { background: var(--surface-2); }
+  .dc-tab.active { background: var(--ink-strong); color: var(--surface); border-color: var(--ink); }
+  .dc-tab[data-stress].active { background: var(--red-strong); border-color: var(--red-strong); color: var(--on-accent); }
+  .dc-tab[data-stress].active:hover { background: var(--red-strong); }
   .dc-tab[data-baseline] { min-width: 80px; }
   .dc-toolbar .spacer { flex: 1; }
-  .dc-toolbar .legend-inline { font-size: 11px; color: #6b7280; }
-  .dc-select { padding: 5px 10px; font-size: 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 4px;
-                color: #374151; cursor: pointer; max-width: 200px; }
-  .dc-select:hover { border-color: #9ca3af; }
-  .dc-select:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px #dbeafe; }
+  .dc-toolbar .legend-inline { font-size: 11px; color: var(--ink-4); }
+  .dc-select { padding: 5px 10px; font-size: 12px; border: 1px solid var(--rule-strong); background: var(--surface); border-radius: 4px;
+                color: var(--ink-2); cursor: pointer; max-width: 200px; }
+  .dc-select:hover { border-color: var(--rule-strong); }
+  .dc-select:focus { outline: none; border-color: var(--blue-strong); box-shadow: 0 0 0 2px var(--blue-line); }
 
-  .dc-card { border: 1px solid #e5e7eb; background: #fff; padding: 14px; border-radius: 6px; margin-bottom: 16px; }
-  .dc-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.03em; color: #374151; }
+  .dc-card { border: 1px solid var(--rule); background: var(--surface); padding: 14px; border-radius: 6px; margin-bottom: 16px; }
+  .dc-card h3 { font-size: 13px; font-weight: 600; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-2); }
 
   .dc-layout { display: grid; grid-template-columns: minmax(0,2fr) minmax(340px,1fr); gap: 20px; }
   @media (max-width: 980px) { .dc-layout { grid-template-columns: 1fr; } }
 
-  .dc-map-host { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 360px; background: #f9fafb;
-                 border-radius: 6px; overflow: hidden; border: 1px solid #f3f4f6; }
+  .dc-map-host { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 360px; background: var(--surface-2);
+                 border-radius: 6px; overflow: hidden; border: 1px solid var(--rule); }
   .dc-map-host svg { width: 100%; height: 100%; display: block; }
-  .dc-map-host path.state { fill: #e5e7eb; stroke: #fff; stroke-width: 0.7; }
-  .dc-map-host path.state-outline { fill: none; stroke: #cbd5e1; stroke-width: 0.7; pointer-events: none; }
+  .dc-map-host path.state { fill: var(--surface-3); stroke: var(--surface); stroke-width: 0.7; }
+  .dc-map-host path.state-outline { fill: none; stroke: var(--rule-strong); stroke-width: 0.7; pointer-events: none; }
 
   .dc-bubble { cursor: pointer; transition: stroke-width 0.15s ease, opacity 0.15s ease; }
   .dc-bubble:hover { stroke-width: 2.5px !important; }
   .dc-bubble.dim { opacity: 0.18; }
   .dc-tier-ring { fill: none; pointer-events: none; }
 
-  .dc-label { font-size: 10px; fill: #1f2937; pointer-events: none; paint-order: stroke; stroke: #fff; stroke-width: 2.5px; font-weight: 600; }
+  .dc-label { font-size: 10px; fill: var(--ink); pointer-events: none; paint-order: stroke; stroke: var(--surface); stroke-width: 2.5px; font-weight: 600; }
 
   .dc-tooltip {
-    position: fixed; pointer-events: none; background: #0f172a; color: #f1f5f9;
+    position: fixed; pointer-events: none; background: var(--ink-strong); color: var(--surface-2);
     padding: 10px 12px; border-radius: 5px; font-size: 11px; line-height: 1.5;
     width: 320px; max-width: calc(100vw - 32px); opacity: 0;
     transition: opacity 0.12s ease; z-index: 1000;
-    border: 1px solid #334155; box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    border: 1px solid var(--ink-2); box-shadow: 0 6px 20px rgba(0,0,0,0.35);
   }
   .dc-tooltip.show { opacity: 1; }
-  .dc-tooltip .ttl { font-weight: 700; color: #f1f5f9; font-size: 12px; }
+  .dc-tooltip .ttl { font-weight: 700; color: var(--surface-2); font-size: 12px; }
   .dc-tooltip .tier { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 999px;
                        letter-spacing: 0.06em; text-transform: uppercase; margin-left: 6px; }
-  .dc-tooltip .tier.primary   { background: #1d4ed8; color: #dbeafe; }
-  .dc-tooltip .tier.secondary { background: #0e7490; color: #cffafe; }
-  .dc-tooltip .tier.emerging  { background: #b45309; color: #fef3c7; }
+  .dc-tooltip .tier.primary   { background: var(--blue-strong); color: var(--on-accent); }
+  .dc-tooltip .tier.secondary { background: var(--cyan-strong); color: var(--on-accent); }
+  .dc-tooltip .tier.emerging  { background: var(--amber-strong); color: var(--on-accent); }
   .dc-tooltip dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; }
-  .dc-tooltip dt { color: #94a3b8; }
-  .dc-tooltip dd { margin: 0; font-variant-numeric: tabular-nums; color: #f1f5f9; }
-  .dc-tooltip .note { color: #cbd5e1; font-size: 10px; margin-top: 6px; font-style: italic; }
-  .dc-tooltip .src  { color: #94a3b8; font-size: 10px; margin-top: 6px; font-style: italic; }
+  .dc-tooltip dt { color: var(--ink-5); }
+  .dc-tooltip dd { margin: 0; font-variant-numeric: tabular-nums; color: var(--surface-2); }
+  .dc-tooltip .note { color: var(--ink-5); font-size: 10px; margin-top: 6px; font-style: italic; }
+  .dc-tooltip .src  { color: var(--ink-5); font-size: 10px; margin-top: 6px; font-style: italic; }
   .conf-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; vertical-align: middle; margin-right: 3px; }
-  .conf-high     { background: #10b981; }
-  .conf-medium   { background: #f59e0b; }
-  .conf-low      { background: #ef4444; }
-  .conf-estimate { background: #6b7280; }
+  .conf-high     { background: var(--green); }
+  .conf-medium   { background: var(--amber); }
+  .conf-low      { background: var(--red); }
+  .conf-estimate { background: var(--ink-4); }
 
-  .dc-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 10px; font-size: 11px; color: #4b5563; }
+  .dc-legend { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 10px; font-size: 11px; color: var(--ink-3); }
   .dc-legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; margin-right: 6px; border: 1px solid rgba(0,0,0,0.1); }
   .dc-legend .ring { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; vertical-align: middle; margin-right: 6px; display: inline-block; }
   .dc-legend .grad-bar { display: inline-block; width: 130px; height: 8px; vertical-align: middle;
-                          background: linear-gradient(90deg, #10b981, #fde047, #f97316, #b91c1c); border-radius: 4px; }
+                          background: linear-gradient(90deg, var(--green), var(--amber), var(--orange), var(--red-strong)); border-radius: 4px; }
 
   table.dc-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
-  table.dc-table thead th { background: #f9fafb; color: #4b5563; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 7px 8px; text-align: left; }
+  table.dc-table thead th { background: var(--surface-2); color: var(--ink-3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 7px 8px; text-align: left; }
   table.dc-table thead th.num { text-align: right; }
-  table.dc-table tbody td { padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+  table.dc-table tbody td { padding: 6px 8px; border-bottom: 1px solid var(--rule); }
   table.dc-table tbody td.num { text-align: right; }
-  table.dc-table tbody tr:hover { background: #f9fafb; cursor: pointer; }
-  table.dc-table tbody tr.selected { background: #dbeafe; }
+  table.dc-table tbody tr:hover { background: var(--surface-2); cursor: pointer; }
+  table.dc-table tbody tr.selected { background: var(--blue-tint); }
 
   .pill { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 999px; letter-spacing: 0.06em; text-transform: uppercase; }
-  .pill.primary   { background: #dbeafe; color: #1d4ed8; }
-  .pill.secondary { background: #cffafe; color: #0e7490; }
-  .pill.emerging  { background: #fef3c7; color: #b45309; }
+  .pill.primary   { background: var(--blue-tint); color: var(--blue-text); }
+  .pill.secondary { background: var(--cyan-tint); color: var(--cyan-text); }
+  .pill.emerging  { background: var(--amber-tint); color: var(--amber-text); }
 
-  .risk-bar { display: inline-block; width: 60px; height: 5px; background: #f3f4f6; border-radius: 3px; vertical-align: middle; }
+  .risk-bar { display: inline-block; width: 60px; height: 5px; background: var(--surface-2); border-radius: 3px; vertical-align: middle; }
   .risk-bar > span { display: block; height: 100%; border-radius: 3px; }
 
-  .footer-note { font-size: 10px; color: #9ca3af; margin-top: 18px; padding-top: 10px; border-top: 1px solid #f3f4f6; line-height: 1.5; }
-  .loading { color: #9ca3af; font-size: 12px; padding: 12px; text-align: center; }
+  .footer-note { font-size: 10px; color: var(--ink-5); margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--rule); line-height: 1.5; }
+  .loading { color: var(--ink-5); font-size: 12px; padding: 12px; text-align: center; }
 
   @media (max-width: 640px) {
     .dc-page { padding: 12px; }
@@ -125,47 +125,47 @@
       speculative supply — the unleased portion of near-term builds relative to the
       installed base.
     </p>
-    <p style="font-size:11px;color:#94a3b8;margin:12px 0 0;line-height:1.5;">
+    <p style="font-size:11px;color:var(--ink-5);margin:12px 0 0;line-height:1.5;">
       <span class="conf-dot conf-high"></span> verified · public filings, CBRE H1 2025, company press releases
       &nbsp;&nbsp;<span class="conf-dot conf-medium"></span> partial · cross-referenced but not all numbers public
       &nbsp;&nbsp;<span class="conf-dot conf-low"></span> estimate · inferred from typical facility size or utility queues
-      &nbsp;&nbsp;<a href="#methodology" style="color:#93c5fd;text-decoration:underline;">methodology &rarr;</a>
+      &nbsp;&nbsp;<a href="#methodology" style="color:var(--blue);text-decoration:underline;">methodology &rarr;</a>
     </p>
     <div class="dc-hero-stats">
       <div class="dc-hero-stat"><div class="num" id="kpi-inventory">—</div><div class="lbl">Built (MW)</div><div class="sub" id="kpi-markets"></div></div>
       <div class="dc-hero-stat"><div class="num" id="kpi-uc">—</div><div class="lbl">Under construction (MW)</div></div>
       <div class="dc-hero-stat"><div class="num" id="kpi-planned">—</div><div class="lbl">Planned (MW)</div></div>
       <div class="dc-hero-stat"><div class="num" id="kpi-pipeline-ratio">—</div><div class="lbl">Pipeline / Built</div><div class="sub" id="kpi-pipeline-sub"></div></div>
-      <div class="dc-hero-stat" style="border-color: rgba(248,113,113,0.35);">
-        <div class="num" id="kpi-writedown" style="color:#fca5a5;">—</div>
+      <div class="dc-hero-stat" style="border-color: color-mix(in srgb, var(--red) 35%, transparent);">
+        <div class="num" id="kpi-writedown" style="color:var(--red);">—</div>
         <div class="lbl">Expected stranded MW</div>
-        <div class="sub" id="kpi-writedown-sub" style="color:#fca5a5;"></div>
+        <div class="sub" id="kpi-writedown-sub" style="color:var(--red);"></div>
       </div>
     </div>
   </section>
 
-  <div class="dc-card" id="sec-tile" style="background:#faf5ff;border-color:#e9d5ff;margin-bottom:16px;display:none;">
+  <div class="dc-card" id="sec-tile" style="background:var(--violet-wash);border-color:var(--violet-line);margin-bottom:16px;display:none;">
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#7c3aed;font-weight:600;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--violet-text);font-weight:600;">
         Structured-finance exposure
       </div>
-      <div style="font-size:13px;color:#374151;">
+      <div style="font-size:13px;color:var(--ink-2);">
         <strong id="sec-tile-deals">—</strong> public deals tracked ·
         <strong id="sec-tile-issuance">—</strong> total issued ·
         <strong id="sec-tile-balance">—</strong> current balance
-        <span style="color:#9ca3af;font-size:11px;margin-left:6px;">($M)</span>
+        <span style="color:var(--ink-5);font-size:11px;margin-left:6px;">($M)</span>
       </div>
-      <a href="/securitizations" style="margin-left:auto;font-size:12px;color:#7c3aed;text-decoration:none;font-weight:600;">
+      <a href="/securitizations" style="margin-left:auto;font-size:12px;color:var(--violet-text);text-decoration:none;font-weight:600;">
         Open securitizations &rarr;
       </a>
     </div>
-    <div id="sec-risk-leaderboard" style="display:none;margin-top:12px;padding-top:12px;border-top:1px dashed #e9d5ff;">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:#6b21a8;font-weight:600;margin-bottom:6px;">
+    <div id="sec-risk-leaderboard" style="display:none;margin-top:12px;padding-top:12px;border-top:1px dashed var(--violet-line);">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.06em;color:var(--violet-soft);font-weight:600;margin-bottom:6px;">
         Top deals by at-risk MW (collateral facilities)
       </div>
       <table style="width:100%;font-size:11px;border-collapse:collapse;">
         <thead>
-          <tr style="color:#9ca3af;font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid #e9d5ff;">
+          <tr style="color:var(--ink-5);font-size:9px;text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--violet-line);">
             <th style="text-align:left;padding:3px 4px;font-weight:500;">Deal</th>
             <th style="text-align:left;padding:3px 4px;font-weight:500;">Sponsor</th>
             <th style="text-align:right;padding:3px 4px;font-weight:500;">At-risk MW</th>
@@ -179,88 +179,88 @@
   </div>
 
   {% if current_user and current_user.is_authenticated and admin_email and current_user.email|lower == admin_email|lower %}
-  <details class="dc-card" id="admin-block" style="margin-bottom:16px;border-color:#fde68a;background:#fffbeb;">
-    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#78350f;text-transform:uppercase;letter-spacing:0.04em;">
+  <details class="dc-card" id="admin-block" style="margin-bottom:16px;border-color:var(--amber-line);background:var(--amber-wash);">
+    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--amber-soft);text-transform:uppercase;letter-spacing:0.04em;">
       Admin · upload data, drift signals &amp; public-source ingestors
-      <span id="freshness-strip" style="margin-left:12px;display:inline-flex;gap:8px;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:#6b7280;"></span>
+      <span id="freshness-strip" style="margin-left:12px;display:inline-flex;gap:8px;font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-4);"></span>
     </summary>
     <div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
       <div>
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:#78350f;margin-bottom:6px;">Upload markets CSV</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--amber-soft);margin-bottom:6px;">Upload markets CSV</div>
         <form id="upload-markets-form" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <input type="file" name="file" accept=".csv" required style="font-size:11px;flex:1;min-width:160px;">
-          <button type="submit" class="dc-tab" style="background:#b45309;color:#fff;border-color:#b45309;">Upload</button>
+          <button type="submit" class="dc-tab" style="background:var(--amber-strong);color:var(--on-accent);border-color:var(--amber-strong);">Upload</button>
         </form>
-        <div id="upload-markets-result" style="font-size:11px;margin-top:6px;color:#374151;"></div>
+        <div id="upload-markets-result" style="font-size:11px;margin-top:6px;color:var(--ink-2);"></div>
       </div>
       <div>
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:#78350f;margin-bottom:6px;">Upload facilities CSV</div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--amber-soft);margin-bottom:6px;">Upload facilities CSV</div>
         <form id="upload-facilities-form" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <input type="file" name="file" accept=".csv" required style="font-size:11px;flex:1;min-width:160px;">
-          <button type="submit" class="dc-tab" style="background:#b45309;color:#fff;border-color:#b45309;">Upload</button>
+          <button type="submit" class="dc-tab" style="background:var(--amber-strong);color:var(--on-accent);border-color:var(--amber-strong);">Upload</button>
         </form>
-        <div id="upload-facilities-result" style="font-size:11px;margin-top:6px;color:#374151;"></div>
+        <div id="upload-facilities-result" style="font-size:11px;margin-top:6px;color:var(--ink-2);"></div>
       </div>
     </div>
-    <div style="margin-top:18px;border-top:1px solid #fde68a;padding-top:14px;">
+    <div style="margin-top:18px;border-top:1px solid var(--amber-line);padding-top:14px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:#78350f;">
-          Drift signals <span id="drift-last-scanned" style="color:#9ca3af;text-transform:none;letter-spacing:0;font-weight:400;"></span>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--amber-soft);">
+          Drift signals <span id="drift-last-scanned" style="color:var(--ink-5);text-transform:none;letter-spacing:0;font-weight:400;"></span>
         </div>
         <button id="drift-scan-btn" class="dc-tab" style="margin-left:auto;font-size:11px;">Scan now</button>
       </div>
-      <div id="drift-flags" style="font-size:11px;color:#374151;line-height:1.5;">loading…</div>
+      <div id="drift-flags" style="font-size:11px;color:var(--ink-2);line-height:1.5;">loading…</div>
     </div>
 
-    <div style="margin-top:18px;border-top:1px solid #fde68a;padding-top:14px;">
+    <div style="margin-top:18px;border-top:1px solid var(--amber-line);padding-top:14px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:#78350f;">
-          SEC EDGAR REIT 10-Ks <span style="color:#9ca3af;text-transform:none;letter-spacing:0;font-weight:400;">· EQIX, DLR, IRM</span>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--amber-soft);">
+          SEC EDGAR REIT 10-Ks <span style="color:var(--ink-5);text-transform:none;letter-spacing:0;font-weight:400;">· EQIX, DLR, IRM</span>
         </div>
-        <button id="sec-merge-btn" class="dc-tab" style="margin-left:auto;font-size:11px;background:#15803d;color:#fff;border-color:#15803d;">Auto-merge into facilities</button>
+        <button id="sec-merge-btn" class="dc-tab" style="margin-left:auto;font-size:11px;background:var(--green-strong);color:var(--surface);border-color:var(--green-strong);">Auto-merge into facilities</button>
         <button id="sec-pull-btn" class="dc-tab" style="font-size:11px;">Preview only</button>
         <button id="sec-csv-btn" class="dc-tab" style="font-size:11px;">Download raw CSV</button>
       </div>
-      <div id="sec-result" style="font-size:11px;color:#374151;line-height:1.5;">
+      <div id="sec-result" style="font-size:11px;color:var(--ink-2);line-height:1.5;">
         "Auto-merge" pulls each REIT's latest 10-K, maps the Properties table into our facilities schema (city → metro, sqft → MW estimate at ~150 W/sqft), and appends new rows to <code>data/datacenter_facilities.csv</code>. Existing entries (matched by name) are preserved so manual curation is not overwritten. Backup kept as <code>.bak</code>.
       </div>
     </div>
 
-    <div style="margin-top:18px;border-top:1px solid #fde68a;padding-top:14px;">
+    <div style="margin-top:18px;border-top:1px solid var(--amber-line);padding-top:14px;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:#78350f;">
-          ISO interconnection queues <span style="color:#9ca3af;text-transform:none;letter-spacing:0;font-weight:400;">· PJM (NoVA, NJ, OH, IL) + ERCOT (TX)</span>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--amber-soft);">
+          ISO interconnection queues <span style="color:var(--ink-5);text-transform:none;letter-spacing:0;font-weight:400;">· PJM (NoVA, NJ, OH, IL) + ERCOT (TX)</span>
         </div>
         <button id="iso-pull-btn" class="dc-tab" style="margin-left:auto;font-size:11px;">Pull latest queues</button>
         <button id="iso-csv-btn" class="dc-tab" style="font-size:11px;">Download CSV</button>
       </div>
-      <div id="iso-result" style="font-size:11px;color:#374151;line-height:1.5;">
+      <div id="iso-result" style="font-size:11px;color:var(--ink-2);line-height:1.5;">
         Forward-visibility into pending grid-connection requests. PJM publishes a JSON API; ERCOT publishes a monthly XLSX. Aggregates total queue MW per CBRE metro plus the data-center-named subset (project name contains "data center", "AI", or known operator). Use to sanity-check or update the planned_mw column in the markets CSV.
       </div>
     </div>
   </details>
   {% endif %}
 
-  <details class="dc-card" id="overlay-block" style="margin-bottom:16px;border-color:#bfdbfe;background:#eff6ff;">
-    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:0.04em;">
+  <details class="dc-card" id="overlay-block" style="margin-bottom:16px;border-color:var(--blue-line);background:var(--blue-wash);">
+    <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--blue-soft);text-transform:uppercase;letter-spacing:0.04em;">
       Private overlay analysis · compare your portfolio against the public map
     </summary>
-    <div style="margin-top:14px;font-size:12px;color:#374151;">
-      <div style="background:#dbeafe;color:#1e3a8a;border:1px solid #93c5fd;border-radius:5px;padding:8px 10px;margin-bottom:10px;font-size:11px;line-height:1.5;">
+    <div style="margin-top:14px;font-size:12px;color:var(--ink-2);">
+      <div style="background:var(--blue-tint);color:var(--blue-soft);border:1px solid var(--blue-line);border-radius:5px;padding:8px 10px;margin-bottom:10px;font-size:11px;line-height:1.5;">
         <strong>Privacy guarantee:</strong> this tool runs entirely in your browser.
         Your file is parsed by JavaScript locally — nothing is uploaded to the server, written
         to disk, or logged. Reload the page and your data is gone.
         Source: <code>/static/js/private-overlay.js</code> (no fetch, no XHR, no postMessage).
       </div>
 
-      <p style="margin:0 0 10px;color:#4b5563;">
+      <p style="margin:0 0 10px;color:var(--ink-3);">
         Upload a CSV of data centers you track internally. The tool will (1) match each row
         against the public risk map, (2) report which facilities we don't capture (your
         coverage gap), and (3) overlay our stranded-risk &amp; securitization data onto
         your matches.
       </p>
 
-      <p style="margin:0 0 10px;font-size:11px;color:#6b7280;line-height:1.5;">
+      <p style="margin:0 0 10px;font-size:11px;color:var(--ink-4);line-height:1.5;">
         <strong>Recognized columns</strong> (case-insensitive, header row required):
         <code>name</code> / <code>facility</code> / <code>asset_name</code> ·
         <code>city</code> · <code>state</code> · <code>location</code> or <code>dc_location</code> (combined "City, ST" fine) ·
@@ -276,16 +276,16 @@
 
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
         <input type="file" id="overlay-file" accept=".csv,text/csv"
-               style="font-size:11px;padding:4px;border:1px solid #d1d5db;border-radius:4px;">
+               style="font-size:11px;padding:4px;border:1px solid var(--rule-strong);border-radius:4px;">
         <button type="button" id="overlay-run"
-                style="padding:6px 12px;border:1px solid #1e40af;background:#dbeafe;color:#1e3a8a;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;" disabled>
+                style="padding:6px 12px;border:1px solid var(--blue-strong);background:var(--blue-tint);color:var(--blue-soft);border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;" disabled>
           Run analysis (local)
         </button>
         <button type="button" id="overlay-clear"
-                style="padding:6px 12px;border:1px solid #d1d5db;background:#fff;color:#6b7280;border-radius:4px;cursor:pointer;font-size:11px;">
+                style="padding:6px 12px;border:1px solid var(--rule-strong);background:var(--surface);color:var(--ink-4);border-radius:4px;cursor:pointer;font-size:11px;">
           Clear from memory
         </button>
-        <span id="overlay-status" style="font-size:11px;color:#6b7280;"></span>
+        <span id="overlay-status" style="font-size:11px;color:var(--ink-4);"></span>
       </div>
 
       <div id="overlay-results" style="display:none;margin-top:14px;"></div>
@@ -307,12 +307,12 @@
     <button class="dc-tab" data-stress="stress_hyperscaler_pause">Hyperscaler capex pause</button>
     <button class="dc-tab" data-stress="stress_ercot">ERCOT power crisis</button>
     <button class="dc-tab" id="stress-clear" style="border-style:dashed;">Clear</button>
-    <button class="dc-tab" id="energy-overlay-btn" style="margin-left:8px;border-color:#10b981;color:#065f46;" title="Industrial electricity rates by state (EIA)">⚡ Energy cost overlay</button>
-    <a href="#" id="share-scenario" class="legend-inline" style="margin-left:8px;text-decoration:none;color:#2563eb;cursor:pointer;">Copy share link</a>
+    <button class="dc-tab" id="energy-overlay-btn" style="margin-left:8px;border-color:var(--green);color:var(--green-soft);" title="Industrial electricity rates by state (EIA)">⚡ Energy cost overlay</button>
+    <a href="#" id="share-scenario" class="legend-inline" style="margin-left:8px;text-decoration:none;color:var(--blue-text);cursor:pointer;">Copy share link</a>
   </div>
   <div class="dc-toolbar" style="border-top:none;padding-top:0;">
     <span class="legend-inline" id="mode-help" style="flex:1;">Bubble area &prop; pipeline MW · color = selected metric</span>
-    <span class="legend-inline" id="scenario-help" style="color:#374151;font-style:italic;"></span>
+    <span class="legend-inline" id="scenario-help" style="color:var(--ink-2);font-style:italic;"></span>
   </div>
 
   <div class="dc-toolbar" id="markets-toolbar">
@@ -359,17 +359,17 @@
         <div id="dc-map-host" class="dc-map-host"></div>
         <div class="dc-legend" id="legend-markets">
           <span><span class="grad-bar"></span> &nbsp;low &rarr; high (selected metric)</span>
-          <span><span class="swatch" style="background:#1d4ed8"></span>Primary</span>
-          <span><span class="swatch" style="background:#0e7490"></span>Secondary</span>
-          <span><span class="swatch" style="background:#b45309"></span>Emerging</span>
+          <span><span class="swatch" style="background:var(--blue-strong)"></span>Primary</span>
+          <span><span class="swatch" style="background:var(--cyan-strong)"></span>Secondary</span>
+          <span><span class="swatch" style="background:var(--amber-strong)"></span>Emerging</span>
           <span style="margin-left:auto">Bubble area &prop; pipeline MW (UC + planned)</span>
         </div>
         <div class="dc-legend" id="legend-facilities" style="display:none;">
           <span id="legend-facilities-swatches" style="display:flex;flex-wrap:wrap;gap:14px;flex:1 1 100%;"></span>
-          <span style="width:100%;color:#6b7280;font-size:10px;">
-            <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#374151;vertical-align:middle;margin-right:4px;"></span>built
-            &nbsp; <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;border:2px dashed #374151;vertical-align:middle;margin-right:4px;"></span>under construction
-            &nbsp; <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;border:1.4px solid #374151;vertical-align:middle;margin-right:4px;"></span>planned
+          <span style="width:100%;color:var(--ink-4);font-size:10px;">
+            <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ink-2);vertical-align:middle;margin-right:4px;"></span>built
+            &nbsp; <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--surface);border:2px dashed var(--ink-2);vertical-align:middle;margin-right:4px;"></span>under construction
+            &nbsp; <span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--surface);border:1.4px solid var(--ink-2);vertical-align:middle;margin-right:4px;"></span>planned
             &nbsp;&nbsp; · radius &prop; &radic;MW
           </span>
         </div>
@@ -425,15 +425,15 @@
         </table>
       </div>
 
-      <div class="dc-card" style="border-color:#fecaca;background:#fef2f2;">
-        <h3 style="color:#991b1b;">Top stranded-asset risks</h3>
+      <div class="dc-card" style="border-color:var(--red-line);background:var(--red-wash);">
+        <h3 style="color:var(--red-soft);">Top stranded-asset risks</h3>
         <table class="dc-table" id="stranded-table">
           <thead>
             <tr><th>Facility</th><th class="num">Risk</th><th class="num">MW</th><th class="num">At-risk</th></tr>
           </thead>
           <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
         </table>
-        <div style="font-size:10px;color:#991b1b;margin-top:6px;line-height:1.4;">
+        <div style="font-size:10px;color:var(--red-soft);margin-top:6px;line-height:1.4;">
           Stranded-asset risk is a 0–100 composite of tenant concentration, tenant credit quality,
           speculative build, capital structure, and metro-level demand correlation.
           At-risk MW = facility MW × default probability for the (tenant tier, status) cell.
@@ -448,7 +448,7 @@
           </thead>
           <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
         </table>
-        <div style="font-size:10px;color:#6b7280;margin-top:6px;line-height:1.4;">
+        <div style="font-size:10px;color:var(--ink-4);margin-top:6px;line-height:1.4;">
           Where the writedown lands if AI demand neutralizes — i.e. who absorbs the loss.
           Click a row to filter the map.
         </div>
@@ -462,7 +462,7 @@
           </thead>
           <tbody><tr><td colspan="4" class="loading">loading…</td></tr></tbody>
         </table>
-        <div style="font-size:10px;color:#6b7280;margin-top:6px;line-height:1.4;">
+        <div style="font-size:10px;color:var(--ink-4);margin-top:6px;line-height:1.4;">
           Hover a row for the tenant's published AI capex / FCF context. At-risk MW reflects the active scenario.
         </div>
       </div>
@@ -504,12 +504,12 @@
 
   <div id="methodology" class="dc-card" style="margin-top:24px;">
     <h3>Methodology &amp; sources</h3>
-    <div style="font-size:12px;color:#374151;line-height:1.6;">
+    <div style="font-size:12px;color:var(--ink-2);line-height:1.6;">
       <p style="margin:0 0 12px;">
         <strong>Market-level MW</strong> (operational, under-construction, pre-leased %, vacancy) for the seven CBRE
         primary markets (NoVA, DFW, Phoenix, Atlanta, Chicago, Silicon Valley, NY-NJ) plus selected secondaries
         (Houston, Austin, Hillsboro) come from the
-        <a href="https://www.cbre.com/insights/briefs/north-america-data-center-trends-h1-2025-ai-and-hyperscaler-demand-lead-to-record-low-vacancy" target="_blank" rel="noopener" style="color:#2563eb;">CBRE
+        <a href="https://www.cbre.com/insights/briefs/north-america-data-center-trends-h1-2025-ai-and-hyperscaler-demand-lead-to-record-low-vacancy" target="_blank" rel="noopener" style="color:var(--blue-text);">CBRE
         North America Data Center Trends H1 2025</a> report and CBRE press releases. Headline figures: primary-market
         inventory hit a record <strong>8,155 MW</strong> (+43% YoY), <strong>74.3%</strong> of all under-construction
         capacity is pre-leased, primary-market vacancy is at a record-low <strong>1.6%</strong> (NoVA colo as low as
@@ -521,15 +521,15 @@
         from primary sources: company press releases (Microsoft, Meta, Google, AWS, Apple, Oracle), Crusoe newsroom,
         SEC filings (EQIX, DLR, IRM 10-Ks), DigitalBridge / Macquarie / Blackstone / KKR / Brookfield holding
         disclosures, and trade press (Data Center Dynamics, Data Center Frontier, Tom's Hardware, Bloomberg, Reuters).
-        Each row in the Top stranded-asset risks table carries a <span style="color:#2563eb;">↗</span> link to the
+        Each row in the Top stranded-asset risks table carries a <span style="color:var(--blue-text);">↗</span> link to the
         primary source. Confidence dots
         (<span class="conf-dot conf-high"></span> high / <span class="conf-dot conf-medium"></span> medium /
         <span class="conf-dot conf-low"></span> low) reflect whether the MW figure is directly disclosed
         (high), inferred from utility filings or building permits (medium), or a campus-design / typical-Meta-hall
         estimate (low). Hyperscalers (Meta, Google, Apple) rarely disclose facility MW directly; figures are
         inferred from state filings and trackers like
-        <a href="https://interconnection.fyi/" target="_blank" rel="noopener" style="color:#2563eb;">interconnection.fyi</a>
-        and <a href="https://baxtel.com/" target="_blank" rel="noopener" style="color:#2563eb;">Baxtel</a>.
+        <a href="https://interconnection.fyi/" target="_blank" rel="noopener" style="color:var(--blue-text);">interconnection.fyi</a>
+        and <a href="https://baxtel.com/" target="_blank" rel="noopener" style="color:var(--blue-text);">Baxtel</a>.
       </p>
       <p style="margin:0 0 12px;">
         <strong>Tenant credit profile</strong> uses public S&amp;P / Moody's ratings for IG mega-caps
@@ -543,7 +543,7 @@
         <code>backend/data_centers/service.py</code> as <code>_SCENARIOS</code>, <code>_STRESS_TESTS</code>,
         <code>_WRITEDOWN_PROB</code>, and <code>TENANT_FCF_HEADROOM</code> and are easy to swap for a house view.
       </p>
-      <p style="margin:0;color:#6b7280;font-size:11px;">
+      <p style="margin:0;color:var(--ink-4);font-size:11px;">
         Last verified: April 2026. Refresh via <code>POST /api/data-centers/refresh</code> after editing
         <code>data/datacenter_markets.csv</code> or <code>data/datacenter_facilities.csv</code>.
       </p>

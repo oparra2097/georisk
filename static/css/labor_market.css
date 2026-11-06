@@ -5,18 +5,18 @@
  */
 
 .lm-page {
-  --lm-bg:        var(--bg-primary,    #0a0e1a);
-  --lm-surface:   var(--bg-secondary,  #111827);
-  --lm-surface-2: #1a2035;
-  --lm-border:    var(--border,        #1f2937);
-  --lm-border-strong: #2a3245;
-  --lm-text:      var(--text-primary,  #e5e7eb);
-  --lm-text-dim:  var(--text-secondary,#9ca3af);
-  --lm-text-mute: var(--text-muted,    #6b7280);
-  --lm-accent:    var(--accent,        #3b82f6);
-  --lm-good:      #10b981;
-  --lm-bad:       #ef4444;
-  --lm-warn:      #f59e0b;
+  --lm-bg:        var(--bg-primary,    var(--bg));
+  --lm-surface:   var(--bg-secondary,  var(--surface));
+  --lm-surface-2: var(--surface-2);
+  --lm-border:    var(--border,        var(--rule));
+  --lm-border-strong: var(--rule-strong);
+  --lm-text:      var(--text-primary,  var(--ink));
+  --lm-text-dim:  var(--text-secondary,var(--ink-3));
+  --lm-text-mute: var(--text-muted,    var(--ink-4));
+  --lm-accent:    var(--accent,        var(--blue));
+  --lm-good:      var(--green);
+  --lm-bad:       var(--red);
+  --lm-warn:      var(--amber);
 
   --lm-fs-xs: 10px;
   --lm-fs-sm: 12px;
@@ -36,8 +36,8 @@
 .lm-stale-banner {
   display: flex; align-items: center; gap: 14px;
   padding: 12px 18px;
-  background: linear-gradient(90deg, rgba(245,158,11,0.12) 0%, rgba(245,158,11,0.04) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--amber) 12%, transparent) 0%, color-mix(in srgb, var(--amber) 4%, transparent) 100%);
+  border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
   border-radius: 10px;
   margin-bottom: 16px;
 }
@@ -45,13 +45,13 @@
   width: 26px; height: 26px; flex-shrink: 0;
   border-radius: 50%; background: var(--lm-warn);
   display: flex; align-items: center; justify-content: center;
-  color: #0a0e1a; font-weight: 800; font-size: 14px;
+  color: var(--bg); font-weight: 800; font-size: 14px;
 }
 .lm-stale-text { flex: 1; font-size: var(--lm-fs-sm); color: var(--lm-text); line-height: 1.55; }
 .lm-stale-text strong { color: var(--lm-warn); margin-right: 6px; }
 .lm-stale-text span { color: var(--lm-text-dim); }
 .lm-stale-text code {
-  background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 3px;
+  background: color-mix(in srgb, var(--ink-strong) 6%, transparent); padding: 1px 5px; border-radius: 3px;
   font-size: 11px; color: var(--lm-text);
 }
 .lm-stale-link {
@@ -68,18 +68,18 @@
   align-items: center;
   gap: 24px;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #0c1424 0%, #111d36 100%);
+  background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 100%);
   border: 1px solid var(--lm-border);
   border-radius: 12px;
   margin-bottom: 24px;
 }
 .lm-release-banner--imminent {
   border-color: var(--lm-warn);
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18) inset;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--amber) 18%, transparent) inset;
 }
 .lm-release-banner--today {
   border-color: var(--lm-bad);
-  background: linear-gradient(135deg, #1f0f0f 0%, #2a1212 100%);
+  background: linear-gradient(135deg, var(--red-wash) 0%, var(--red-wash) 100%);
 }
 .lm-release-eyebrow {
   font-size: var(--lm-fs-xs); text-transform: uppercase; letter-spacing: 0.08em;
@@ -97,7 +97,7 @@
 }
 .lm-cd-cell {
   display: flex; flex-direction: column; align-items: center;
-  padding: 10px 16px; background: rgba(255,255,255,0.04);
+  padding: 10px 16px; background: color-mix(in srgb, var(--ink-strong) 4%, transparent);
   border: 1px solid var(--lm-border); border-radius: 8px;
   min-width: 64px;
 }
@@ -118,7 +118,7 @@
   display: inline-flex; align-items: center; gap: 6px;
   transition: filter 0.1s, background 0.1s, border-color 0.1s;
 }
-.lm-btn-primary  { background: var(--lm-accent); color: #fff; }
+.lm-btn-primary  { background: var(--lm-accent); color: var(--on-accent); }
 .lm-btn-primary:hover { filter: brightness(1.1); }
 .lm-btn-ghost {
   background: transparent; color: var(--lm-text-dim);
@@ -142,8 +142,8 @@
   display: flex; flex-direction: column; gap: 4px;
 }
 .lm-kpi-card--nowcast {
-  border-color: rgba(245, 158, 11, 0.3);
-  background: linear-gradient(180deg, var(--lm-surface) 0%, rgba(245,158,11,0.04) 100%);
+  border-color: color-mix(in srgb, var(--amber) 30%, transparent);
+  background: linear-gradient(180deg, var(--lm-surface) 0%, color-mix(in srgb, var(--amber) 4%, transparent) 100%);
 }
 .lm-kpi-label {
   font-size: var(--lm-fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
@@ -205,7 +205,7 @@
 }
 .lm-toggle:last-child { border-right: 0; }
 .lm-toggle:hover { background: var(--lm-surface-2); color: var(--lm-text); }
-.lm-toggle.active { background: var(--lm-accent); color: #fff; }
+.lm-toggle.active { background: var(--lm-accent); color: var(--on-accent); }
 
 /* ── Sector ranking ───────────────────────────────────────── */
 .lm-rank-grid {
@@ -234,14 +234,14 @@
   position: sticky; top: 0; background: var(--lm-surface);
 }
 .lm-table td {
-  padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding: 6px 8px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 4%, transparent);
 }
 .lm-table th.num, .lm-table td.num {
   text-align: right; font-variant-numeric: tabular-nums;
 }
-.lm-table tr:hover td { background: rgba(255,255,255,0.02); }
+.lm-table tr:hover td { background: color-mix(in srgb, var(--ink-strong) 2%, transparent); }
 .lm-row-headline td {
-  background: rgba(59, 130, 246, 0.06);
+  background: color-mix(in srgb, var(--blue) 6%, transparent);
   font-weight: 600;
 }
 .lm-pos { color: var(--lm-good); }
@@ -292,11 +292,11 @@
 }
 .lm-spark-card--active {
   border-color: var(--lm-accent);
-  background: rgba(59, 130, 246, 0.06);
+  background: color-mix(in srgb, var(--blue) 6%, transparent);
 }
 .lm-spark-card--flash {
   border-color: var(--lm-warn);
-  background: rgba(245, 158, 11, 0.08);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 .lm-spark-head {
   display: flex; align-items: center; gap: 6px;
@@ -375,11 +375,11 @@
   grid-template-columns: 200px 1fr 1fr auto;
   gap: 14px; align-items: center;
   padding: 8px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 4%, transparent);
   font-size: var(--lm-fs-sm);
 }
 .lm-release-row:last-child { border-bottom: 0; }
-.lm-release-row--today { background: rgba(239, 68, 68, 0.04); }
+.lm-release-row--today { background: color-mix(in srgb, var(--red) 4%, transparent); }
 .lm-rel-date { font-weight: 600; color: var(--lm-text); }
 .lm-rel-label { color: var(--lm-text-dim); }
 .lm-rel-meta { color: var(--lm-text-mute); }

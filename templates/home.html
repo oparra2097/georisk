@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Parra Macro — Country Risk & Commodities Strategy{% endblock %}
+{% block title %}Parra Macro — Macro Strategy{% endblock %}
 
 {% block body_class %}page-home{% endblock %}
 
@@ -21,10 +21,10 @@
   </p>
   <h1 class="hv-title">How are markets reading the economy?</h1>
   <p class="hv-lede">
-    A daily read on growth, inflation, rates and risk from live market
-    prices, next to our Fed call and the sovereign trade board. Country
-    detail lives in the <a href="/georisk">GeoRisk Monitor</a>; monthly
-    notes go out on <a href="https://theparrable.substack.com" target="_blank" rel="noopener">Substack</a>.
+    Macro strategy across rates, FX, sovereign credit and commodities:
+    what markets are pricing today, our Fed call against futures, and the
+    weekly trade board. Monthly notes go out on
+    <a href="https://theparrable.substack.com" target="_blank" rel="noopener">Substack</a>.
   </p>
 </header>
 
@@ -118,23 +118,19 @@
   <div id="home-call-secondary-slot" class="home-call-secondary-row" style="display:none"></div>
 </section>
 
-<!-- Platform directory -->
+<!-- Strategy directory + the GeoRisk app -->
 <section class="hv-section">
   <div class="hv-section-head">
-    <h2>Explore the platform</h2>
+    <h2>Strategy</h2>
   </div>
   <ul class="hv-directory">
-    <li><a href="/georisk">
-      <span class="hv-dir-name">GeoRisk Monitor</span>
-      <span class="hv-dir-desc">Live map of geopolitical risk scores, hotspots and news signals by country.</span>
+    <li><a href="/us-rates">
+      <span class="hv-dir-name">Rates</span>
+      <span class="hv-dir-desc">Fed path model against futures pricing, plus emerging-market policy rates.</span>
     </a></li>
     <li><a href="/country-risk">
       <span class="hv-dir-name">Country Risk</span>
       <span class="hv-dir-desc">Sovereign default probabilities, 1–10 internal ratings and EM FX screens.</span>
-    </a></li>
-    <li><a href="/us-rates">
-      <span class="hv-dir-name">Rates</span>
-      <span class="hv-dir-desc">Fed path model against futures pricing, plus emerging-market policy rates.</span>
     </a></li>
     <li><a href="/commodities">
       <span class="hv-dir-name">Commodities</span>
@@ -154,9 +150,22 @@
     </a></li>
     <li><a href="/research">
       <span class="hv-dir-name">Research</span>
-      <span class="hv-dir-desc">Notes and write-ups on country risk, EM FX and commodities.</span>
+      <span class="hv-dir-desc">Notes and write-ups on rates, country risk, EM FX and commodities.</span>
     </a></li>
   </ul>
+</section>
+
+<section class="hv-section">
+  <div class="hv-section-head">
+    <h2>Apps</h2>
+  </div>
+  <a href="/georisk" class="hv-app">
+    <div>
+      <div class="hv-app-name">GeoRisk Monitor</div>
+      <p class="hv-app-desc">Live geopolitical risk for 190+ countries: a world map of composite risk scores, active hotspots and scored news headlines, refreshed through the day.</p>
+    </div>
+    <span class="hv-app-cta">Open the app &rarr;</span>
+  </a>
 </section>
 
 <!-- Latest note — home.js swaps in the newest Substack post when available -->

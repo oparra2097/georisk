@@ -1,34 +1,34 @@
 /* US Data Center Risk Map — D3 v7, Albers USA. */
 
 const TIER_COLOR = {
-  primary:   '#1d4ed8',
-  secondary: '#0e7490',
-  emerging:  '#b45309',
+  primary:   Theme.c('blue-text'),
+  secondary: Theme.c('cyan-text'),
+  emerging:  Theme.c('amber-text'),
 };
 
 const FUNDING_COLOR = {
-  hyperscaler:      '#6366f1',
-  reit:             '#059669',
-  infra_fund:       '#d97706',
-  sovereign_jv:     '#be123c',
-  specialty_pe:     '#0891b2',
-  public_specialty: '#7c3aed',
+  hyperscaler:      Theme.c('violet'),
+  reit:             Theme.c('green-text'),
+  infra_fund:       Theme.c('amber-text'),
+  sovereign_jv:     Theme.c('red-text'),
+  specialty_pe:     Theme.c('cyan-text'),
+  public_specialty: Theme.c('violet-text'),
 };
 
 // Tenant brand-ish palette. Falls back to gray for any unmapped tenant.
 const TENANT_COLOR = {
-  'Microsoft':            '#0078d4',
-  'Meta':                 '#0668e1',
-  'Google':               '#ea4335',
-  'Amazon':               '#ff9900',
-  'OpenAI':               '#10a37f',
-  'xAI':                  '#1f2937',
-  'Apple':                '#6b7280',
-  'Oracle':               '#c74634',
-  'Colo (multi-tenant)':  '#94a3b8',
-  'Unleased':             '#fbbf24',
+  'Microsoft':            Theme.c('brand-microsoft'),
+  'Meta':                 Theme.c('brand-meta'),
+  'Google':               Theme.c('brand-google'),
+  'Amazon':               Theme.c('brand-amazon'),
+  'OpenAI':               Theme.c('brand-openai'),
+  'xAI':                  Theme.c('ink'),
+  'Apple':                Theme.c('ink-4'),
+  'Oracle':               Theme.c('brand-oracle'),
+  'Colo (multi-tenant)':  Theme.c('ink-5'),
+  'Unleased':             Theme.c('amber'),
 };
-const TENANT_FALLBACK = '#9ca3af';
+const TENANT_FALLBACK = Theme.c('ink-5');
 
 let _developerColor = null;  // built lazily once we know the developer set
 
@@ -75,7 +75,7 @@ const DataCenterMap = {
 
     this.svg.append('rect')
       .attr('width', this.width).attr('height', this.height)
-      .attr('fill', '#f9fafb');
+      .attr('fill', Theme.c('surface-2'));
 
     this.g = this.svg.append('g');
     this.projection = d3.geoAlbersUsa()
@@ -120,20 +120,20 @@ const DataCenterMap = {
         .sort((a, b) => (b.at_risk_mw_total || 0) - (a.at_risk_mw_total || 0))
         .slice(0, 5);
       if (ranked.length) {
-        const riskColor = s => s == null ? '#d1d5db'
-                              : s >= 75 ? '#dc2626'
-                              : s >= 50 ? '#f59e0b'
-                              : s >= 25 ? '#facc15' : '#10b981';
+        const riskColor = s => s == null ? Theme.c('ink-5')
+                              : s >= 75 ? Theme.c('red-text')
+                              : s >= 50 ? Theme.c('amber')
+                              : s >= 25 ? Theme.c('amber') : Theme.c('green');
         const body = document.getElementById('sec-risk-leaderboard-body');
         body.innerHTML = ranked.map(d => `
-          <tr style="border-bottom:1px solid #f3f4f6;">
-            <td style="padding:4px 4px;color:#374151;">${d.deal_name}</td>
-            <td style="padding:4px 4px;color:#6b7280;">${d.sponsor}</td>
-            <td style="padding:4px 4px;text-align:right;font-weight:600;color:#7c3aed;">${fmt(d.at_risk_mw_total)}</td>
+          <tr style="border-bottom:1px solid var(--rule);">
+            <td style="padding:4px 4px;color:var(--ink-2);">${d.deal_name}</td>
+            <td style="padding:4px 4px;color:var(--ink-4);">${d.sponsor}</td>
+            <td style="padding:4px 4px;text-align:right;font-weight:600;color:var(--violet-text);">${fmt(d.at_risk_mw_total)}</td>
             <td style="padding:4px 4px;text-align:right;">
               <span style="display:inline-block;padding:1px 5px;border-radius:3px;background:${riskColor(d.stranded_risk_avg)}22;color:${riskColor(d.stranded_risk_avg)};font-weight:600;">${d.stranded_risk_avg != null ? Math.round(d.stranded_risk_avg) : '—'}</span>
             </td>
-            <td style="padding:4px 4px;text-align:right;color:#6b7280;">${fmt(d.total_size_usd_m)}</td>
+            <td style="padding:4px 4px;text-align:right;color:var(--ink-4);">${fmt(d.total_size_usd_m)}</td>
           </tr>`).join('');
         document.getElementById('sec-risk-leaderboard').style.display = '';
       }
@@ -154,9 +154,9 @@ const DataCenterMap = {
         return Math.round(d / 30) + 'mo';
       };
       const dot = (status) => {
-        const color = status === 'fresh' ? '#10b981'
-                     : status === 'stale' ? '#dc2626'
-                     : '#9ca3af';
+        const color = status === 'fresh' ? Theme.c('green')
+                     : status === 'stale' ? Theme.c('red-text')
+                     : Theme.c('ink-5');
         return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${color};margin-right:4px;vertical-align:middle;"></span>`;
       };
       strip.innerHTML = j.sources.map(s => {
@@ -185,13 +185,13 @@ const DataCenterMap = {
         e.preventDefault();
         const fd = new FormData(form);
         out.textContent = 'uploading…';
-        out.style.color = '#374151';
+        out.style.color = Theme.c('ink-2');
         try {
           const r = await fetch(endpoint, { method: 'POST', body: fd });
           const j = await r.json();
           if (!j.ok) {
             out.textContent = '✗ ' + (j.error || `HTTP ${r.status}`);
-            out.style.color = '#b91c1c';
+            out.style.color = Theme.c('red-text');
             return;
           }
           const d = j.diff || {};
@@ -201,20 +201,20 @@ const DataCenterMap = {
           if (d.top_changes?.length)  parts.push(`${d.top_changes.length} field changes`);
           out.innerHTML = parts.join(' · ') +
             (d.top_changes?.length
-              ? '<details style="margin-top:4px;"><summary style="cursor:pointer;color:#6b7280;">show top changes</summary>'
+              ? '<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--ink-4);">show top changes</summary>'
                 + '<ul style="margin:4px 0 0 16px;padding:0;">'
                 + d.top_changes.slice(0, 10).map(c =>
                     `<li>${c.market || c.name} — ${c.field} ${c.old} → ${c.new}${c.delta != null ? ` (${c.delta > 0 ? '+' : ''}${c.delta})` : ''}</li>`).join('')
                 + '</ul></details>'
               : '');
-          out.style.color = '#065f46';
+          out.style.color = Theme.c('green-soft');
           // Refresh main view to reflect the new file.
           await this.loadData();
           this.render();
           this.applyScenario();
         } catch (err) {
           out.textContent = '✗ ' + err.message;
-          out.style.color = '#b91c1c';
+          out.style.color = Theme.c('red-text');
         }
       });
     };
@@ -246,30 +246,30 @@ const DataCenterMap = {
         const r = await fetch('/api/data-centers/admin/sec/preview', { method: 'POST' });
         const j = await r.json();
         if (!j.ok && !j.reits) {
-          out.innerHTML = `<span style="color:#b91c1c;">SEC fetch failed: ${j.error || r.status}</span>`;
+          out.innerHTML = `<span style="color:var(--red-text);">SEC fetch failed: ${j.error || r.status}</span>`;
           return;
         }
         const lines = [];
         for (const [tk, rep] of Object.entries(j.reits || {})) {
           if (!rep.ok) {
-            lines.push(`<div><strong>${tk}</strong> — <span style="color:#b91c1c;">${rep.error || 'error'}</span></div>`);
+            lines.push(`<div><strong>${tk}</strong> — <span style="color:var(--red-text);">${rep.error || 'error'}</span></div>`);
             continue;
           }
           const sample = (rep.tables[0]?.rows?.slice(0, 3) || [])
             .map(row => row.slice(0, 4).join(' · ')).join('<br>');
           lines.push(`
-            <div style="border-left:3px solid #059669;padding:6px 10px;margin-bottom:6px;background:#fff;border-radius:3px;">
+            <div style="border-left:3px solid var(--green-strong);padding:6px 10px;margin-bottom:6px;background:var(--surface);border-radius:3px;">
               <div><strong>${rep.company} (${tk})</strong> — 10-K filed ${rep.filed_date} · ${rep.tables_found} table(s) · ${rep.total_rows} rows
-                <a href="${rep.doc_url}" target="_blank" rel="noopener" style="color:#2563eb;margin-left:6px;">open filing ↗</a>
+                <a href="${rep.doc_url}" target="_blank" rel="noopener" style="color:var(--blue-text);margin-left:6px;">open filing ↗</a>
               </div>
-              ${sample ? `<div style="color:#6b7280;font-size:10px;margin-top:3px;font-family:ui-monospace,monospace;">${sample}</div>` : ''}
+              ${sample ? `<div style="color:var(--ink-4);font-size:10px;margin-top:3px;font-family:ui-monospace,monospace;">${sample}</div>` : ''}
             </div>`);
         }
-        const note = `<div style="color:#6b7280;font-size:10px;margin-top:4px;">Heuristic table detection — review the CSV before merging into facilities. Total rows: ${j.total_rows}</div>`;
+        const note = `<div style="color:var(--ink-4);font-size:10px;margin-top:4px;">Heuristic table detection — review the CSV before merging into facilities. Total rows: ${j.total_rows}</div>`;
         out.innerHTML = lines.join('') + note;
         this.refreshFreshness();
       } catch (e) {
-        out.innerHTML = `<span style="color:#b91c1c;">fetch error: ${e.message}</span>`;
+        out.innerHTML = `<span style="color:var(--red-text);">fetch error: ${e.message}</span>`;
       } finally {
         secBtn.disabled = false;
         secBtn.textContent = 'Pull latest 10-Ks';
@@ -286,24 +286,24 @@ const DataCenterMap = {
         const r = await fetch('/api/data-centers/admin/sec/merge', { method: 'POST' });
         const j = await r.json();
         if (!j.ok) {
-          out.innerHTML = `<span style="color:#b91c1c;">merge failed: ${j.error || `HTTP ${r.status}`}</span>`;
+          out.innerHTML = `<span style="color:var(--red-text);">merge failed: ${j.error || `HTTP ${r.status}`}</span>`;
           return;
         }
         const lines = [];
         const reitLines = Object.entries(j.reit_status).map(([t, s]) => {
-          if (!s.ok) return `<span style="color:#b91c1c;">${t} ✗ ${s.error || 'error'}</span>`;
-          return `<span style="color:#15803d;">${t} ✓ ${s.tables_found || 0} table(s) · ${s.total_rows || 0} rows · 10-K ${s.filed_date}</span>`;
+          if (!s.ok) return `<span style="color:var(--red-text);">${t} ✗ ${s.error || 'error'}</span>`;
+          return `<span style="color:var(--green-text);">${t} ✓ ${s.tables_found || 0} table(s) · ${s.total_rows || 0} rows · 10-K ${s.filed_date}</span>`;
         }).join(' · ');
         lines.push(`<div style="margin-bottom:6px;">${reitLines}</div>`);
         lines.push(`<div style="font-weight:600;">${j.added} added · ${j.skipped} skipped (already in CSV) · ${j.pulled} parsed total</div>`);
         if (j.preview_added.length) {
-          lines.push('<details style="margin-top:6px;"><summary style="cursor:pointer;color:#6b7280;">show added facilities</summary><ul style="margin:6px 0 0 16px;padding:0;">'
+          lines.push('<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--ink-4);">show added facilities</summary><ul style="margin:6px 0 0 16px;padding:0;">'
             + j.preview_added.map(p =>
-                `<li>${p.name} <span style="color:#6b7280;">· ${p.market} · ${Math.round(p.mw)} MW · conf=${p.confidence}</span></li>`).join('')
+                `<li>${p.name} <span style="color:var(--ink-4);">· ${p.market} · ${Math.round(p.mw)} MW · conf=${p.confidence}</span></li>`).join('')
             + '</ul></details>');
         }
         if (j.preview_skipped.length) {
-          lines.push('<details style="margin-top:4px;"><summary style="cursor:pointer;color:#6b7280;">show skipped (existing) facilities</summary><ul style="margin:6px 0 0 16px;padding:0;color:#9ca3af;">'
+          lines.push('<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--ink-4);">show skipped (existing) facilities</summary><ul style="margin:6px 0 0 16px;padding:0;color:var(--ink-5);">'
             + j.preview_skipped.map(n => `<li>${n}</li>`).join('') + '</ul></details>');
         }
         out.innerHTML = lines.join('');
@@ -313,7 +313,7 @@ const DataCenterMap = {
         this.applyScenario();
         this.refreshFreshness();
       } catch (e) {
-        out.innerHTML = `<span style="color:#b91c1c;">merge error: ${e.message}</span>`;
+        out.innerHTML = `<span style="color:var(--red-text);">merge error: ${e.message}</span>`;
       } finally {
         secMergeBtn.disabled = false;
         secMergeBtn.textContent = 'Auto-merge into facilities';
@@ -357,15 +357,15 @@ const DataCenterMap = {
         const lines = [];
         const status = (iso) => {
           const o = j[iso] || {};
-          if (!o.ok) return `<span style="color:#b91c1c;">${iso.toUpperCase()} failed: ${o.error || 'error'}</span>`;
-          return `<span style="color:#15803d;">${iso.toUpperCase()} ✓ ${o.count} requests</span>`;
+          if (!o.ok) return `<span style="color:var(--red-text);">${iso.toUpperCase()} failed: ${o.error || 'error'}</span>`;
+          return `<span style="color:var(--green-text);">${iso.toUpperCase()} ✓ ${o.count} requests</span>`;
         };
         lines.push(`<div style="margin-bottom:6px;">${status('pjm')} · ${status('ercot')}</div>`);
 
         const metros = (j.by_metro || []).filter(m => m.metro !== 'Other').slice(0, 12);
         if (metros.length) {
           lines.push(`<table style="width:100%;font-size:11px;border-collapse:collapse;">
-            <thead><tr style="text-align:left;color:#6b7280;border-bottom:1px solid #e5e7eb;">
+            <thead><tr style="text-align:left;color:var(--ink-4);border-bottom:1px solid var(--rule);">
               <th style="padding:4px 6px;">Metro</th>
               <th style="padding:4px 6px;text-align:right;">Total queue MW</th>
               <th style="padding:4px 6px;text-align:right;">DC-named MW</th>
@@ -374,26 +374,26 @@ const DataCenterMap = {
             </tr></thead><tbody>`);
           for (const m of metros) {
             const top = m.top_projects[0];
-            lines.push(`<tr style="border-bottom:1px solid #f3f4f6;">
+            lines.push(`<tr style="border-bottom:1px solid var(--rule);">
               <td style="padding:4px 6px;">${m.metro}</td>
               <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;">${Math.round(m.queue_mw_total).toLocaleString()}</td>
-              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:#b45309;">${Math.round(m.dc_named_mw).toLocaleString()}</td>
-              <td style="padding:4px 6px;text-align:right;color:#9ca3af;">${m.project_count}</td>
-              <td style="padding:4px 6px;color:#374151;">${top ? `${top.name.slice(0, 40)}${top.name.length > 40 ? '…' : ''} · ${Math.round(top.mw)} MW` : ''}</td>
+              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:var(--amber-text);">${Math.round(m.dc_named_mw).toLocaleString()}</td>
+              <td style="padding:4px 6px;text-align:right;color:var(--ink-5);">${m.project_count}</td>
+              <td style="padding:4px 6px;color:var(--ink-2);">${top ? `${top.name.slice(0, 40)}${top.name.length > 40 ? '…' : ''} · ${Math.round(top.mw)} MW` : ''}</td>
             </tr>`);
           }
           lines.push('</tbody></table>');
           if (j.by_metro.find(m => m.metro === 'Other')) {
             const other = j.by_metro.find(m => m.metro === 'Other');
-            lines.push(`<div style="color:#9ca3af;margin-top:6px;font-size:10px;">+${Math.round(other.queue_mw_total).toLocaleString()} MW in unmapped counties</div>`);
+            lines.push(`<div style="color:var(--ink-5);margin-top:6px;font-size:10px;">+${Math.round(other.queue_mw_total).toLocaleString()} MW in unmapped counties</div>`);
           }
         }
 
         // Diff vs. cached planned_mw
         const diff = (j.diff_vs_cached || []).filter(d => d.suggestion).slice(0, 8);
         if (diff.length) {
-          lines.push('<div style="margin-top:10px;font-size:11px;font-weight:600;color:#78350f;text-transform:uppercase;letter-spacing:0.04em;">Δ vs. cached planned_mw</div>');
-          lines.push('<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:4px;"><thead><tr style="text-align:left;color:#6b7280;border-bottom:1px solid #e5e7eb;">'
+          lines.push('<div style="margin-top:10px;font-size:11px;font-weight:600;color:var(--amber-soft);text-transform:uppercase;letter-spacing:0.04em;">Δ vs. cached planned_mw</div>');
+          lines.push('<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:4px;"><thead><tr style="text-align:left;color:var(--ink-4);border-bottom:1px solid var(--rule);">'
             + '<th style="padding:4px 6px;">Metro</th>'
             + '<th style="padding:4px 6px;text-align:right;">Queue DC MW</th>'
             + '<th style="padding:4px 6px;text-align:right;">Cached planned_mw</th>'
@@ -401,14 +401,14 @@ const DataCenterMap = {
             + '<th style="padding:4px 6px;">Suggestion</th>'
             + '</tr></thead><tbody>');
           for (const d of diff) {
-            const dColor = d.delta_mw > 0 ? '#15803d' : '#b91c1c';
+            const dColor = d.delta_mw > 0 ? Theme.c('green-text') : Theme.c('red-text');
             const dSign  = d.delta_mw > 0 ? '+' : '';
-            lines.push(`<tr style="border-bottom:1px solid #f3f4f6;">
+            lines.push(`<tr style="border-bottom:1px solid var(--rule);">
               <td style="padding:4px 6px;">${d.metro}</td>
               <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;">${Math.round(d.queue_dc_named_mw).toLocaleString()}</td>
-              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:#9ca3af;">${Math.round(d.cached_planned_mw).toLocaleString()}</td>
+              <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-5);">${Math.round(d.cached_planned_mw).toLocaleString()}</td>
               <td style="padding:4px 6px;text-align:right;font-variant-numeric:tabular-nums;color:${dColor};font-weight:600;">${dSign}${Math.round(d.delta_mw).toLocaleString()}</td>
-              <td style="padding:4px 6px;color:#374151;">${d.suggestion}</td>
+              <td style="padding:4px 6px;color:var(--ink-2);">${d.suggestion}</td>
             </tr>`);
           }
           lines.push('</tbody></table>');
@@ -416,7 +416,7 @@ const DataCenterMap = {
         out.innerHTML = lines.join('');
         this.refreshFreshness();
       } catch (e) {
-        out.innerHTML = `<span style="color:#b91c1c;">fetch error: ${e.message}</span>`;
+        out.innerHTML = `<span style="color:var(--red-text);">fetch error: ${e.message}</span>`;
       } finally {
         isoBtn.disabled = false;
         isoBtn.textContent = 'Pull latest queues';
@@ -459,21 +459,21 @@ const DataCenterMap = {
       const flags = j.drift_flags || [];
       const failed = j.urls_failed || [];
       const failNote = failed.length
-        ? `<div style="color:#9ca3af;font-size:10px;margin-top:6px;">${failed.length} source URL(s) unreachable — `
+        ? `<div style="color:var(--ink-5);font-size:10px;margin-top:6px;">${failed.length} source URL(s) unreachable — `
           + failed.map(u => { try { return new URL(u.url).hostname.replace(/^www\./, ''); } catch (_) { return u.url; } }).join(', ')
           + `</div>`
         : '';
       if (!flags.length) {
-        out.innerHTML = `<span style="color:#6b7280;">No MW drift detected vs. cached values${j.signals?.length ? ` · ${j.signals.length} matched mention(s) on file` : ''}.</span>${failNote}`;
+        out.innerHTML = `<span style="color:var(--ink-4);">No MW drift detected vs. cached values${j.signals?.length ? ` · ${j.signals.length} matched mention(s) on file` : ''}.</span>${failNote}`;
         return;
       }
       out.innerHTML = flags.map(f => `
-        <div style="border-left:3px solid #dc2626;padding:6px 10px;margin-bottom:6px;background:#fff;border-radius:3px;">
+        <div style="border-left:3px solid var(--red-strong);padding:6px 10px;margin-bottom:6px;background:var(--surface);border-radius:3px;">
           <div><strong>${f.name}</strong> — cached ${f.cached_mw} MW vs. observed ${f.observed_mw} MW
-            (<span style="color:${f.delta_pct > 0 ? '#15803d' : '#b91c1c'};">${f.delta_pct > 0 ? '+' : ''}${f.delta_pct}%</span>)
+            (<span style="color:${f.delta_pct > 0 ? Theme.c('green-text') : Theme.c('red-text')};">${f.delta_pct > 0 ? '+' : ''}${f.delta_pct}%</span>)
           </div>
-          <div style="color:#6b7280;font-size:10px;margin-top:2px;">${(f.context || '').slice(0, 200)}…
-            <a href="${f.url}" target="_blank" rel="noopener" style="color:#2563eb;margin-left:4px;">open ↗</a>
+          <div style="color:var(--ink-4);font-size:10px;margin-top:2px;">${(f.context || '').slice(0, 200)}…
+            <a href="${f.url}" target="_blank" rel="noopener" style="color:var(--blue-text);margin-left:4px;">open ↗</a>
           </div>
         </div>
       `).join('') + failNote;
@@ -532,7 +532,7 @@ const DataCenterMap = {
     const all = Object.values(rates);
     const min = Math.min(...all), max = Math.max(...all);
     const colorFor = v => {
-      if (v == null) return '#f3f4f6';
+      if (v == null) return Theme.c('surface-2');
       const t = (v - min) / (max - min);
       // Cheap = green, expensive = red.
       const r = Math.round(16 + t * 220);
@@ -546,7 +546,7 @@ const DataCenterMap = {
         .style('fill', d => {
           const name = d?.properties?.name;
           const rate = rates[name];
-          return rate != null ? colorFor(rate) : '#f3f4f6';
+          return rate != null ? colorFor(rate) : Theme.c('surface-2');
         })
         .style('fill-opacity', 0.72)
         .append('title')
@@ -568,22 +568,22 @@ const DataCenterMap = {
     if (!el) {
       el = document.createElement('div');
       el.id = 'dc-energy-legend';
-      el.style.cssText = 'position:absolute;bottom:18px;left:18px;background:rgba(255,255,255,0.95);'
-        + 'border:1px solid #e5e7eb;border-radius:6px;padding:8px 12px;font-size:11px;color:#374151;'
+      el.style.cssText = 'position:absolute;bottom:18px;left:18px;background:color-mix(in srgb, var(--surface) 95%, transparent);'
+        + 'border:1px solid var(--rule);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--ink-2);'
         + 'box-shadow:0 2px 8px rgba(0,0,0,0.06);z-index:5;line-height:1.5;';
       const mapParent = this.svg?.node()?.parentElement;
       if (mapParent) mapParent.appendChild(el);
     }
     el.innerHTML = `
-      <div style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:#1f2937;margin-bottom:4px;">
+      <div style="font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--ink);margin-bottom:4px;">
         Industrial electricity rate (¢/kWh)
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <span style="color:#10a040;">${min.toFixed(1)}¢</span>
-        <div style="height:8px;width:140px;border-radius:4px;background:linear-gradient(to right,rgb(16,160,80),rgb(126,95,50),rgb(236,30,20));"></div>
-        <span style="color:#dc2626;">${max.toFixed(1)}¢</span>
+        <span style="color:var(--green-text);">${min.toFixed(1)}¢</span>
+        <div style="height:8px;width:140px;border-radius:4px;background:linear-gradient(to right,var(--scale-energy-1),var(--scale-energy-2),var(--scale-energy-3));"></div>
+        <span style="color:var(--red-text);">${max.toFixed(1)}¢</span>
       </div>
-      <div style="margin-top:4px;color:#6b7280;font-size:10px;">
+      <div style="margin-top:4px;color:var(--ink-4);font-size:10px;">
         Source: EIA Monthly Electricity Report (2024-25). Cheap = WA/ID/OR/UT/LA. Expensive = HI/CA/CT.
       </div>`;
   },
@@ -880,10 +880,10 @@ const DataCenterMap = {
     const rows = this.summary?.by_funding || [];
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="loading">no data</td></tr>'; return; }
     const riskColor = pct => {
-      if (pct < 5) return '#10b981';
-      if (pct < 15) return '#fde047';
-      if (pct < 30) return '#f97316';
-      return '#dc2626';
+      if (pct < 5) return Theme.c('green');
+      if (pct < 15) return Theme.c('amber');
+      if (pct < 30) return Theme.c('orange');
+      return Theme.c('red-text');
     };
     tbody.innerHTML = rows.map(r => {
       const at_risk = this.scenarioAtRiskMw(r);
@@ -892,7 +892,7 @@ const DataCenterMap = {
       return `
         <tr data-funding="${r.funding_type}">
           <td>
-            <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${FUNDING_COLOR[r.funding_type] || '#9ca3af'};margin-right:6px;vertical-align:middle;"></span>
+            <span class="swatch" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${FUNDING_COLOR[r.funding_type] || Theme.c('ink-5')};margin-right:6px;vertical-align:middle;"></span>
             ${r.label}
           </td>
           <td class="num">${Math.round(r.mw).toLocaleString()}</td>
@@ -925,19 +925,19 @@ const DataCenterMap = {
       const at_risk = r.at_risk_mw || 0;
       const conf = (r.confidence || 'medium').toLowerCase();
       const srcLink = r.source_url
-        ? `<a href="${r.source_url}" target="_blank" rel="noopener" title="Source" style="color:#2563eb;text-decoration:none;margin-left:4px;font-size:10px;">↗</a>`
+        ? `<a href="${r.source_url}" target="_blank" rel="noopener" title="Source" style="color:var(--blue-text);text-decoration:none;margin-left:4px;font-size:10px;">↗</a>`
         : '';
       return `
         <tr title="${r.name}\nTenant: ${r.tenant_norm} (${r.tenant_credit_label})\nFunding: ${r.funding_detail || r.funding_type}\nStatus: ${r.status}">
           <td><span class="conf-dot conf-${conf}" title="${conf} confidence"></span>${shortName}${srcLink}</td>
           <td class="num">
-            <span style="display:inline-block;width:30px;height:5px;background:#f3f4f6;border-radius:3px;vertical-align:middle;margin-right:4px;">
+            <span style="display:inline-block;width:30px;height:5px;background:var(--surface-2);border-radius:3px;vertical-align:middle;margin-right:4px;">
               <span style="display:block;height:100%;border-radius:3px;width:${(r.stranded_risk||0).toFixed(0)}%;background:${c};"></span>
             </span>
             ${(r.stranded_risk || 0).toFixed(0)}
           </td>
           <td class="num">${Math.round(r.mw).toLocaleString()}</td>
-          <td class="num" style="color:#991b1b;font-weight:600;">${Math.round(at_risk).toLocaleString()}</td>
+          <td class="num" style="color:var(--red-soft);font-weight:600;">${Math.round(at_risk).toLocaleString()}</td>
         </tr>`;
     }).join('');
   },
@@ -956,9 +956,9 @@ const DataCenterMap = {
         tip.push(`${r.tenant_rating} · ~${r.tenant_spread_bps} bps spread (illustrative)`);
       const tipAttr = tip.length ? ` title="${tip.join(' · ')}"` : '';
       const ratingCell = r.tenant_rating
-        ? `<span style="font-size:10px;color:#6b7280;">${r.tenant_rating}</span>
-           <span style="font-size:10px;color:#9ca3af;margin-left:4px;">${r.tenant_spread_bps != null ? r.tenant_spread_bps + 'bps' : ''}</span>`
-        : `<span style="color:#cbd5e1;font-size:10px;">—</span>`;
+        ? `<span style="font-size:10px;color:var(--ink-4);">${r.tenant_rating}</span>
+           <span style="font-size:10px;color:var(--ink-5);margin-left:4px;">${r.tenant_spread_bps != null ? r.tenant_spread_bps + 'bps' : ''}</span>`
+        : `<span style="color:var(--ink-5);font-size:10px;">—</span>`;
       return `
         <tr data-tenant="${r.tenant}"${tipAttr}>
           <td>
@@ -968,7 +968,7 @@ const DataCenterMap = {
           </td>
           <td class="num">${r.count}</td>
           <td class="num">${Math.round(r.mw).toLocaleString()}</td>
-          <td class="num" style="color:${at_risk > 0 ? '#991b1b' : '#9ca3af'};">${Math.round(at_risk).toLocaleString()}</td>
+          <td class="num" style="color:${at_risk > 0 ? Theme.c('red-soft') : Theme.c('ink-5')};">${Math.round(at_risk).toLocaleString()}</td>
         </tr>`;
     }).join('');
     tbody.querySelectorAll('tr').forEach(tr => {
@@ -995,7 +995,7 @@ const DataCenterMap = {
     const rows = this.summary?.top_developers || [];
     if (!rows.length) { tbody.innerHTML = '<tr><td colspan="4" class="loading">no data</td></tr>'; return; }
     tbody.innerHTML = rows.map(r => {
-      const devColor = (_developerColor && _developerColor(r.developer)) || '#9ca3af';
+      const devColor = (_developerColor && _developerColor(r.developer)) || Theme.c('ink-5');
       return `
         <tr data-developer="${r.developer}">
           <td>${r.developer}</td>
@@ -1103,7 +1103,7 @@ const DataCenterMap = {
     const [lo, hi] = this.metricExtent();
     return d3.scaleLinear()
       .domain([lo, lo + (hi - lo) * 0.33, lo + (hi - lo) * 0.66, hi])
-      .range(['#10b981', '#fde047', '#f97316', '#b91c1c'])
+      .range([Theme.c('green'), Theme.c('amber'), Theme.c('orange'), Theme.c('red-text')])
       .clamp(true);
   },
 
@@ -1147,7 +1147,7 @@ const DataCenterMap = {
       .attr('r', d => radius(d.pipeline_mw))
       .attr('fill', d => color(d[this.activeMetric] || 0))
       .attr('fill-opacity', 0.78)
-      .attr('stroke', '#0f172a')
+      .attr('stroke', Theme.c('ink'))
       .attr('stroke-width', 0.8)
       .classed('dim', d => this.activeTier !== 'all' && d.tier !== this.activeTier)
       .on('mouseover', (e, d) => this.showTip(e, d))
@@ -1186,7 +1186,7 @@ const DataCenterMap = {
   riskScale() {
     return d3.scaleLinear()
       .domain([0, 30, 55, 75, 100])
-      .range(['#10b981', '#fde047', '#f97316', '#dc2626', '#7f1d1d'])
+      .range([Theme.c('green'), Theme.c('amber'), Theme.c('orange'), Theme.c('red-text'), Theme.c('red-soft')])
       .clamp(true);
   },
 
@@ -1196,12 +1196,12 @@ const DataCenterMap = {
       return TENANT_COLOR[key] || TENANT_FALLBACK;
     }
     if (this.colorBy === 'developer') {
-      return (_developerColor && _developerColor(d.developer)) || '#9ca3af';
+      return (_developerColor && _developerColor(d.developer)) || Theme.c('ink-5');
     }
     if (this.colorBy === 'risk') {
       return this.riskScale()(d.stranded_risk || 0);
     }
-    return FUNDING_COLOR[d.funding_type] || '#9ca3af';
+    return FUNDING_COLOR[d.funding_type] || Theme.c('ink-5');
   },
 
   facilityPasses(f) {
@@ -1226,7 +1226,7 @@ const DataCenterMap = {
       .attr('cx', d => { const p = this.projection([d.lon, d.lat]); return p ? p[0] : -9999; })
       .attr('cy', d => { const p = this.projection([d.lon, d.lat]); return p ? p[1] : -9999; })
       .attr('r', d => radius(d.mw))
-      .attr('fill', d => d.status === 'planned' ? '#fff' : this.colorForFacility(d))
+      .attr('fill', d => d.status === 'planned' ? Theme.c('surface') : this.colorForFacility(d))
       .attr('fill-opacity', d => d.status === 'planned' ? 0 : (d.status === 'under_construction' ? 0.55 : 0.85))
       .attr('stroke', d => this.colorForFacility(d))
       .attr('stroke-width', d => d.status === 'planned' ? 1.6 : (d.status === 'under_construction' ? 1.8 : 0.8))
@@ -1250,29 +1250,29 @@ const DataCenterMap = {
     let items = [];
     if (this.colorBy === 'funding') {
       const types = this.fundingTypes || {};
-      items = Object.entries(types).map(([k, label]) => swatch(FUNDING_COLOR[k] || '#9ca3af', label));
+      items = Object.entries(types).map(([k, label]) => swatch(FUNDING_COLOR[k] || Theme.c('ink-5'), label));
     } else if (this.colorBy === 'tenant') {
       const present = (this.summary?.by_tenant || []).map(t => t.tenant);
       items = present.map(name => swatch(TENANT_COLOR[name] || TENANT_FALLBACK, name));
     } else if (this.colorBy === 'developer') {
       // developer — show top 8 to keep it readable, plus an "other" swatch
       const top = (this.summary?.top_developers || []).slice(0, 8).map(d => d.developer);
-      items = top.map(dev => swatch((_developerColor && _developerColor(dev)) || '#9ca3af', dev));
-      items.push(`<span style="color:#6b7280;font-size:10px;">…hover any marker for full attribution</span>`);
+      items = top.map(dev => swatch((_developerColor && _developerColor(dev)) || Theme.c('ink-5'), dev));
+      items.push(`<span style="color:var(--ink-4);font-size:10px;">…hover any marker for full attribution</span>`);
     } else {
       // risk — gradient bar with low/mid/high anchors
       items = [
         `<span style="display:inline-flex;align-items:center;gap:8px;">
           low
           <span style="display:inline-block;width:160px;height:8px;border-radius:4px;
-            background:linear-gradient(90deg,#10b981,#fde047,#f97316,#dc2626,#7f1d1d);"></span>
+            background:linear-gradient(90deg,var(--green),var(--amber),var(--orange),var(--red-strong),var(--red-strong));"></span>
           high (0 → 100 stranded-risk score)
         </span>`,
-        swatch('#10b981', 'Locked / IG'),
-        swatch('#fde047', 'Watch'),
-        swatch('#f97316', 'Elevated'),
-        swatch('#dc2626', 'High'),
-        swatch('#7f1d1d', 'Severe'),
+        swatch(Theme.c('green'), 'Locked / IG'),
+        swatch(Theme.c('amber'), 'Watch'),
+        swatch(Theme.c('orange'), 'Elevated'),
+        swatch(Theme.c('red-text'), 'High'),
+        swatch(Theme.c('red-soft'), 'Severe'),
       ];
     }
     host.innerHTML = items.join('');
@@ -1297,43 +1297,43 @@ const DataCenterMap = {
       <dl>
         <dt>Status</dt><dd>${statusLabel}${target}</dd>
         <dt>Capacity</dt><dd>${Math.round(d.mw).toLocaleString()} MW
-          <span class="conf-dot conf-${conf}"></span><span style="color:#94a3b8;font-size:10px;">${confLabel}</span>
+          <span class="conf-dot conf-${conf}"></span><span style="color:var(--ink-5);font-size:10px;">${confLabel}</span>
         </dd>
         <dt>Operator</dt><dd>${d.operator || '—'}</dd>
         <dt>Developer</dt><dd>${d.developer || '—'}</dd>
-        <dt>Funding</dt><dd><span style="color:${FUNDING_COLOR[d.funding_type] || '#fff'};font-weight:600;">${fundingLabel}</span></dd>
-        <dt></dt><dd style="color:#cbd5e1;">${d.funding_detail || ''}</dd>
-        ${d.tenant ? `<dt>Tenant</dt><dd>${d.tenant} <span style="color:#94a3b8;">(${credit})</span></dd>` : ''}
-        ${d.tenant_rating ? `<dt>Rating</dt><dd>${d.tenant_rating} <span style="color:#94a3b8;">· ${d.tenant_spread_bps != null ? d.tenant_spread_bps + ' bps spread' : 'no spread'} · ~${(d.tenant_annual_pd*100).toFixed(2)}% PD/yr</span></dd>` : ''}
+        <dt>Funding</dt><dd><span style="color:${FUNDING_COLOR[d.funding_type] || Theme.c('surface')};font-weight:600;">${fundingLabel}</span></dd>
+        <dt></dt><dd style="color:var(--ink-5);">${d.funding_detail || ''}</dd>
+        ${d.tenant ? `<dt>Tenant</dt><dd>${d.tenant} <span style="color:var(--ink-5);">(${credit})</span></dd>` : ''}
+        ${d.tenant_rating ? `<dt>Rating</dt><dd>${d.tenant_rating} <span style="color:var(--ink-5);">· ${d.tenant_spread_bps != null ? d.tenant_spread_bps + ' bps spread' : 'no spread'} · ~${(d.tenant_annual_pd*100).toFixed(2)}% PD/yr</span></dd>` : ''}
         <dt>Market</dt><dd>${d.market}</dd>
       </dl>
-      <div style="margin-top:8px;padding-top:6px;border-top:1px solid #334155;">
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--ink-2);">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span style="color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">Stranded risk</span>
-          <span style="display:inline-block;flex:1;height:5px;background:#1f2937;border-radius:3px;">
+          <span style="color:var(--ink-5);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">Stranded risk</span>
+          <span style="display:inline-block;flex:1;height:5px;background:var(--ink);border-radius:3px;">
             <span style="display:block;height:100%;width:${(d.stranded_risk||0).toFixed(0)}%;background:${riskColor};border-radius:3px;"></span>
           </span>
           <span style="color:${riskColor};font-weight:700;font-size:11px;">${(d.stranded_risk||0).toFixed(0)}/100</span>
         </div>
-        <div style="font-size:10px;color:#94a3b8;margin-top:4px;line-height:1.5;">
+        <div style="font-size:10px;color:var(--ink-5);margin-top:4px;line-height:1.5;">
           tenant ${drv.tenant_concentration ?? 0} · credit ${drv.tenant_credit ?? 0} ·
           spec ${drv.speculative_build ?? 0} · funding ${drv.funding_resilience ?? 0} ·
           geo ${drv.geographic_correlation ?? 0} · stretch ${drv.tenant_stretch ?? 0}
         </div>
         ${(d.tenant_fcf_b != null && d.tenant_capex_b != null) ? `
-          <div style="font-size:10px;color:#cbd5e1;margin-top:3px;">
+          <div style="font-size:10px;color:var(--ink-5);margin-top:3px;">
             ${d.tenant} ~$${d.tenant_capex_b}B 2025 AI capex on ~$${d.tenant_fcf_b}B FCF
           </div>` : ''}
         ${(() => {
           const sb = d.at_risk_mw_baselines || {};
-          return `<div style="font-size:10px;color:#fca5a5;margin-top:5px;line-height:1.5;">
+          return `<div style="font-size:10px;color:var(--red);margin-top:5px;line-height:1.5;">
             <div style="font-weight:600;">At-risk MW (${this.scenarioLabel()}):
               ${Math.round(d.at_risk_mw || 0).toLocaleString()}
-              <span style="color:#94a3b8;font-weight:400;">
+              <span style="color:var(--ink-5);font-weight:400;">
                 · ${((d.writedown_prob || 0) * 100).toFixed(0)}% prob × MW
               </span>
             </div>
-            <div style="color:#94a3b8;">
+            <div style="color:var(--ink-5);">
               baselines: mild ${Math.round(sb.mild ?? 0)} · moderate ${Math.round(sb.moderate ?? 0)} · severe ${Math.round(sb.severe ?? 0)} MW
             </div>
           </div>`;
