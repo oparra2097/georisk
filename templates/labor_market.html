@@ -2,7 +2,7 @@
 {% block title %}US Labor Market — Parra Macro{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/labor_market.css?v=4">
+<link rel="stylesheet" href="/static/css/labor_market.css?v=5">
 {% endblock %}
 
 {% block content %}
@@ -241,4 +241,6 @@
 {% block scripts %}
 <script src="/static/vendor/chart.umd.js"></script>
 <script src="/static/js/labor_market.js?v=4"></script>
+<script src="/static/js/chart-export.js"></script>
+<script>ChartExport.attach({ source: 'U.S. Bureau of Labor Statistics; Parra Macro estimates' });</script>
 {% endblock %}

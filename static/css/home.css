@@ -145,6 +145,61 @@ body.page-home {
 }
 
 
+/* ===== Latest US releases ===== */
+
+.hv-releases {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 48px;
+}
+
+.hv-release {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--rule);
+    min-width: 0;
+}
+.hv a.hv-release { color: inherit; }
+.hv a.hv-release:hover { text-decoration: none; }
+.hv-release:hover .hv-release-name,
+.hv-release:hover .hv-release-cta { text-decoration: underline; text-underline-offset: 3px; }
+
+.hv-release-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+.hv-release-name { font-size: 15px; font-weight: 600; }
+.hv-release-month { font-size: 13px; color: var(--ink-4); }
+
+.hv-release-stats {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+}
+.hv-release-stats > div { display: flex; flex-direction: column; min-width: 0; }
+.hv-rel-lbl { font-size: 12px; color: var(--ink-4); margin-bottom: 2px; }
+.hv-rel-val {
+    font-family: var(--font-serif);
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.15;
+}
+.hv-rel-sub { font-size: 13px; color: var(--ink-3); margin-top: 2px; }
+
+.hv-release-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--ink-4);
+}
+.hv-release-cta { margin-left: auto; color: var(--link); white-space: nowrap; }
+
+
 /* ===== Fed outlook (rates forecast) ===== */
 
 .home-fedstrip {
@@ -564,6 +619,7 @@ body.page-home {
     .hf-val { font-size: 19px; }
 
     .hv-tables,
+    .hv-releases,
     .home-call-secondary-row,
     .hv-directory { grid-template-columns: 1fr; }
 

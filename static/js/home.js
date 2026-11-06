@@ -12,6 +12,7 @@ let marketsCache = null;
 document.addEventListener('DOMContentLoaded', () => {
     renderDateline();
     fetchMarkets();
+    fetchReleases();
     fetchLatestPost();
     // Auto-refresh every 5 minutes
     setInterval(fetchMarkets, 5 * 60 * 1000);
@@ -460,6 +461,64 @@ function renderHistoryChart(data) {
             }
         }
     });
+}
+
+
+// ===== Latest US releases (jobs report, CPI) =====
+
+async function fetchReleases() {
+    const section = document.getElementById('hv-releases');
+    if (!section) return;
+    let data = null;
+    try {
+        const resp = await fetch('/api/releases/us');
+        if (resp.ok) data = await resp.json();
+    } catch (err) { /* handled below */ }
+    if (!data || (!data.jobs && !data.cpi)) { section.style.display = 'none'; return; }
+
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    const signed = (v, digits, unit) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(digits)}${unit}`;
+
+    const j = data.jobs;
+    if (j) {
+        set('hv-jobs-month', releaseMonth(j.month));
+        set('hv-jobs-payrolls', j.payrolls_change == null ? '—'
+            : `${j.payrolls_change >= 0 ? '+' : ''}${Math.round(j.payrolls_change).toLocaleString()}k`);
+        set('hv-jobs-unrate', j.unemployment == null ? '—' : `${j.unemployment.toFixed(1)}%`);
+        if (j.unemployment_change != null) set('hv-jobs-unrate-chg', `${signed(j.unemployment_change, 1, 'pp')} on the month`);
+        set('hv-jobs-wages', j.wages_yoy == null ? '—' : `${j.wages_yoy.toFixed(1)}%`);
+        set('hv-jobs-next', nextReleaseText(j.next_release));
+    } else {
+        document.getElementById('hv-rel-jobs').style.display = 'none';
+    }
+
+    const c = data.cpi;
+    if (c) {
+        set('hv-cpi-month', releaseMonth(c.month));
+        set('hv-cpi-headline', c.headline_yoy == null ? '—' : `${c.headline_yoy.toFixed(1)}%`);
+        if (c.headline_mom != null) set('hv-cpi-headline-mom', `${signed(c.headline_mom, 1, '%')} m/m`);
+        set('hv-cpi-core', c.core_yoy == null ? '—' : `${c.core_yoy.toFixed(1)}%`);
+        if (c.core_mom != null) set('hv-cpi-core-mom', `${signed(c.core_mom, 1, '%')} m/m`);
+        set('hv-cpi-next', nextReleaseText(c.next_release));
+    } else {
+        document.getElementById('hv-rel-cpi').style.display = 'none';
+    }
+}
+
+// '2026-10-01' -> 'October 2026'
+function releaseMonth(s) {
+    if (!s) return '';
+    const [y, m] = s.split('-').map(Number);
+    if (!y || !m) return '';
+    return new Date(Date.UTC(y, m - 1, 15)).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+function nextReleaseText(rel) {
+    if (!rel || !rel.release_date) return '';
+    const d = new Date(rel.release_date + 'T12:00:00Z');
+    if (isNaN(d)) return '';
+    const day = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return `Next release ${day}${rel.time_eastern ? ', ' + rel.time_eastern : ''}`;
 }
 
 

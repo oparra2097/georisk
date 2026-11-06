@@ -207,6 +207,20 @@
 .lm-toggle:hover { background: var(--lm-surface-2); color: var(--lm-text); }
 .lm-toggle.active { background: var(--lm-accent); color: var(--on-accent); }
 
+/* Header actions: view toggles + PNG download (added by chart-export.js) */
+.lm-section-actions {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.chart-png-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 12px;
+  font-size: var(--lm-fs-sm); font-weight: 500;
+  background: var(--lm-surface); color: var(--lm-text-dim);
+  border: 1px solid var(--lm-border); border-radius: 6px;
+  cursor: pointer; transition: background 0.1s, color 0.1s;
+}
+.chart-png-btn:hover { background: var(--lm-surface-2); color: var(--lm-text); }
+
 /* ── Sector ranking ───────────────────────────────────────── */
 .lm-rank-grid {
   display: grid;

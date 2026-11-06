@@ -2,7 +2,7 @@
 {% block title %}CPI Release Monitor — Parra Macro{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/labor_market.css?v=4">
+<link rel="stylesheet" href="/static/css/labor_market.css?v=5">
 <link rel="stylesheet" href="/static/css/cpi_release.css?v=3">
 {% endblock %}
 
@@ -173,4 +173,6 @@
 {% block scripts %}
 <script src="/static/vendor/chart.umd.js"></script>
 <script src="/static/js/cpi_release.js?v=3"></script>
+<script src="/static/js/chart-export.js"></script>
+<script>ChartExport.attach({ source: 'U.S. Bureau of Labor Statistics' });</script>
 {% endblock %}

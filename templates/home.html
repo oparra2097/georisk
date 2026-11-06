@@ -37,6 +37,46 @@
   <div class="hv-vital"><div class="hv-vital-topic">Risk</div></div>
 </section>
 
+<!-- Latest US data releases — filled by home.js from /api/releases/us.
+     Each card opens its dashboard. -->
+<section class="hv-section" id="hv-releases">
+  <div class="hv-section-head">
+    <h2>Latest US releases</h2>
+    <span class="hv-section-note">Bureau of Labor Statistics</span>
+  </div>
+  <div class="hv-releases">
+    <a href="/labor-market" class="hv-release" id="hv-rel-jobs">
+      <div class="hv-release-head">
+        <span class="hv-release-name">Jobs report</span>
+        <span class="hv-release-month" id="hv-jobs-month"></span>
+      </div>
+      <div class="hv-release-stats">
+        <div><span class="hv-rel-lbl">Payrolls</span><span class="hv-rel-val" id="hv-jobs-payrolls">—</span></div>
+        <div><span class="hv-rel-lbl">Unemployment</span><span class="hv-rel-val" id="hv-jobs-unrate">—</span><span class="hv-rel-sub" id="hv-jobs-unrate-chg"></span></div>
+        <div><span class="hv-rel-lbl">Wages, y/y</span><span class="hv-rel-val" id="hv-jobs-wages">—</span></div>
+      </div>
+      <div class="hv-release-foot">
+        <span id="hv-jobs-next"></span>
+        <span class="hv-release-cta">Labor market dashboard &rarr;</span>
+      </div>
+    </a>
+    <a href="/cpi-release" class="hv-release" id="hv-rel-cpi">
+      <div class="hv-release-head">
+        <span class="hv-release-name">Consumer prices (CPI)</span>
+        <span class="hv-release-month" id="hv-cpi-month"></span>
+      </div>
+      <div class="hv-release-stats">
+        <div><span class="hv-rel-lbl">Headline, y/y</span><span class="hv-rel-val" id="hv-cpi-headline">—</span><span class="hv-rel-sub" id="hv-cpi-headline-mom"></span></div>
+        <div><span class="hv-rel-lbl">Core, y/y</span><span class="hv-rel-val" id="hv-cpi-core">—</span><span class="hv-rel-sub" id="hv-cpi-core-mom"></span></div>
+      </div>
+      <div class="hv-release-foot">
+        <span id="hv-cpi-next"></span>
+        <span class="hv-release-cta">CPI dashboard &rarr;</span>
+      </div>
+    </a>
+  </div>
+</section>
+
 <!-- Fed outlook — current target, next FOMC, market vs model call -->
 <section class="hv-section" id="home-rates">
   <div class="hv-section-head">
