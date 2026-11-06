@@ -2,9 +2,10 @@
  *
  * ChartExport.attach({ source }) adds a "PNG" button to the header of
  * every .lm-section that holds a chart <canvas id="…">. The download is
- * the chart redrawn onto a solid background with its section title,
- * a source line, a "parramacro.com" footer and a faint "Parra Macro"
- * watermark across the plot. Colours follow the current theme.
+ * the chart redrawn onto a solid background with its section title on
+ * top, the source bottom-left and the Parra Macro wordmark bottom-right
+ * (the house style of bank research charts). Colours follow the
+ * current theme.
  *
  * ChartExport.download(canvas, { title, source, filename }) does the
  * same for any canvas.
@@ -13,7 +14,7 @@
 (function () {
   'use strict';
 
-  const SITE = 'parramacro.com';
+  const BRAND = 'Parra Macro';
 
   function slug(s) {
     return (s || 'chart').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
@@ -31,7 +32,8 @@
     const titleSize = 18 * k;
     const metaSize = 12 * k;
     const headH = opts.title ? titleSize + 18 * k : 0;
-    const footH = 34 * k;
+    const logoSize = 20 * k;
+    const footH = 48 * k;
 
     const out = document.createElement('canvas');
     out.width = canvas.width + pad * 2;
@@ -53,28 +55,18 @@
     const chartTop = pad + headH;
     ctx.drawImage(canvas, pad, chartTop);
 
-    // Watermark: centred over the plot, faint enough not to fight the data.
-    ctx.save();
-    ctx.fillStyle = Theme.c('ink', 0.07);
-    ctx.font = `600 ${Math.min(canvas.width / 9, 64 * k)}px ${serif}`;
-    ctx.textAlign = 'center';
+    // Footer: source bottom-left, wordmark logo bottom-right, both
+    // centred on the same line below the plot.
+    const footMid = chartTop + canvas.height + footH / 2;
     ctx.textBaseline = 'middle';
-    ctx.fillText('Parra Macro', pad + canvas.width / 2, chartTop + canvas.height / 2);
-    ctx.restore();
-
-    // Footer: source left, site right, divided from the chart by a rule.
-    const footY = chartTop + canvas.height + 10 * k;
-    ctx.fillStyle = Theme.c('rule');
-    ctx.fillRect(pad, footY, canvas.width, Math.max(1, k));
-    ctx.textBaseline = 'top';
     ctx.font = `${metaSize}px ${sans}`;
     ctx.fillStyle = Theme.c('ink-4');
     ctx.textAlign = 'left';
-    ctx.fillText(opts.source ? `Source: ${opts.source}` : '', pad, footY + 9 * k);
-    ctx.font = `600 ${metaSize}px ${sans}`;
-    ctx.fillStyle = Theme.c('ink-2');
+    if (opts.source) ctx.fillText(`Source: ${opts.source}`, pad, footMid);
+    ctx.font = `700 ${logoSize}px ${serif}`;
+    ctx.fillStyle = Theme.c('ink-strong');
     ctx.textAlign = 'right';
-    ctx.fillText(SITE, pad + canvas.width, footY + 9 * k);
+    ctx.fillText(BRAND, pad + canvas.width, footMid);
 
     return out;
   }
