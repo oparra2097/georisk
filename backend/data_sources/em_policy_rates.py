@@ -27,14 +27,68 @@ by date ascending, matching the ``fred_client.fetch_series`` contract.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional
+
+import requests
 
 from backend.data_sources._cache import cached
 from backend.data_sources import fred_client
 from backend.rates.em_config import COUNTRIES
 
 logger = logging.getLogger(__name__)
+
+# DBnomics mirrors BIS + IMF IFS and already backs other fetchers in this
+# codebase (see imf_ifs.py). We use it as the primary source because the
+# OECD-on-FRED policy-rate / CPI series were discontinued in 2025, which left
+# the previous FRED-first path returning empty for the whole panel.
+_DBNOMICS_BASE = 'https://api.db.nomics.world/v22'
+
+
+def _period_to_date(p: str) -> str:
+    """DBnomics monthly period 'YYYY-MM' -> 'YYYY-MM-01'; pass others through."""
+    return f'{p}-01' if len(p) == 7 else p
+
+
+def _dbnomics_monthly(provider: str, dataset: str, iso2: str,
+                      extra_dims: Optional[dict] = None) -> list[dict]:
+    """Fetch one country's monthly series from DBnomics as a list of
+    ``{'date': 'YYYY-MM-01', 'value': float}`` sorted ascending. [] on failure.
+
+    Matches the ``fred_client.fetch_series`` contract so callers are drop-in.
+    """
+    dims = {'FREQ': ['M'], 'REF_AREA': [iso2]}
+    if extra_dims:
+        dims.update(extra_dims)
+    params = {
+        'dimensions': json.dumps(dims),
+        'observations': '1',
+        'limit': '10',
+        'metadata': 'false',
+    }
+    url = f'{_DBNOMICS_BASE}/series/{provider}/{dataset}'
+    try:
+        resp = requests.get(url, params=params, timeout=45)
+        resp.raise_for_status()
+        docs = resp.json().get('series', {}).get('docs', []) or []
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f'DBnomics {provider}/{dataset} {iso2} fetch failed: {e}')
+        return []
+
+    out: list[dict] = []
+    for doc in docs:
+        if (doc.get('dimensions', {}) or {}).get('REF_AREA') != iso2:
+            continue
+        for p, v in zip(doc.get('period', []) or [], doc.get('value', []) or []):
+            if v is None or v == 'NA':
+                continue
+            try:
+                out.append({'date': _period_to_date(p), 'value': float(v)})
+            except (ValueError, TypeError):
+                continue
+    out.sort(key=lambda r: r['date'])
+    return out
 
 
 # Candidate FRED series IDs per country. First one that returns data wins.
@@ -68,27 +122,31 @@ def get_policy_rate_history(iso3: str) -> list[dict]:
     iso3 = iso3.upper()
     if iso3 not in COUNTRIES:
         return []
+    iso2 = COUNTRIES[iso3]['iso2']
 
+    # Primary: BIS central-bank policy rates (WS_CBPOL) via DBnomics —
+    # authoritative, monthly, full panel coverage.
+    data = _dbnomics_monthly('BIS', 'WS_CBPOL', iso2)
+    if data and len(data) >= 24:  # need >= 2 years for any Taylor fit
+        logger.info(f'{iso3} policy rate: BIS CBPOL returned {len(data)} obs')
+        return data
+
+    # Fallback 1: IMF IFS monetary-policy-related rate (FPOLM_PA) via DBnomics.
+    ifs = _dbnomics_monthly('IMF', 'IFS', iso2, extra_dims={'INDICATOR': ['FPOLM_PA']})
+    if ifs and len(ifs) >= 24:
+        logger.info(f'{iso3} policy rate: IMF IFS FPOLM_PA returned {len(ifs)} obs')
+        return ifs
+
+    # Fallback 2: FRED OECD candidates. These series were discontinued in
+    # 2025 (OECD migrated its database), so they return empty today — kept
+    # in case they are restored under the same IDs.
     for candidate in _FRED_CANDIDATES.get(iso3, []):
-        data = fred_client.fetch_series(candidate)
-        if data and len(data) >= 24:  # need at least 2 years for any Taylor fit
-            logger.info(f'{iso3} policy rate: FRED {candidate} returned {len(data)} obs')
-            return data
-        logger.debug(f'{iso3} policy rate: FRED {candidate} returned {len(data) if data else 0} obs')
+        fred_data = fred_client.fetch_series(candidate)
+        if fred_data and len(fred_data) >= 24:
+            logger.info(f'{iso3} policy rate: FRED {candidate} returned {len(fred_data)} obs')
+            return fred_data
 
-    # IMF IFS fallback — some codebases stub this out for offline dev.
-    try:
-        from backend.data_sources import imf_ifs
-        ifs_data = imf_ifs.get_series(country_iso=iso3, indicator=COUNTRIES[iso3]['ifs_policy'])
-        if ifs_data and len(ifs_data) >= 24:
-            logger.info(f'{iso3} policy rate: IMF IFS returned {len(ifs_data)} obs')
-            return ifs_data
-    except (ImportError, AttributeError) as e:
-        logger.debug(f'IMF IFS fallback unavailable for {iso3}: {e}')
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f'IMF IFS fetch failed for {iso3}: {e}')
-
-    logger.warning(f'{iso3}: no policy rate history found via FRED or IMF IFS')
+    logger.warning(f'{iso3}: no policy rate history found via BIS, IMF IFS or FRED')
     return []
 
 
@@ -106,7 +164,13 @@ def get_cpi_history(iso3: str) -> list[dict]:
         return []
     iso2 = COUNTRIES[iso3]['iso2']
 
-    # Try the OECD YoY-published series first.
+    # Primary: IMF IFS CPI index (PCPI_IX) via DBnomics → compute YoY.
+    index_data = _dbnomics_monthly('IMF', 'IFS', iso2, extra_dims={'INDICATOR': ['PCPI_IX']})
+    if index_data and len(index_data) >= 13:
+        return _compute_yoy(index_data)
+
+    # Fallback: OECD YoY-published series on FRED (discontinued 2025; kept
+    # in case the IDs are restored).
     for candidate in (
         f'CPALTT01{iso2}M657N',  # OECD headline CPI YoY %
         f'CPALTT01{iso2}Q657N',  # Q analog if monthly missing
@@ -114,17 +178,6 @@ def get_cpi_history(iso3: str) -> list[dict]:
         data = fred_client.fetch_series(candidate)
         if data and len(data) >= 24:
             return data
-
-    # Fallback: fetch CPI index and compute YoY manually.
-    try:
-        from backend.data_sources import imf_ifs
-        index_data = imf_ifs.get_series(country_iso=iso3, indicator='PCPI_IX')
-        if index_data and len(index_data) >= 13:
-            return _compute_yoy(index_data)
-    except (ImportError, AttributeError):
-        pass
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f'IMF IFS CPI fetch failed for {iso3}: {e}')
     return []
 
 
