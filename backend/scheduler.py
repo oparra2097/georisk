@@ -306,32 +306,6 @@ def init_scheduler(app):
     )
     logger.info("Data center ISO queue pull scheduled (Monday 08:00 UTC).")
 
-    # Job 9: Sovereign Credit Default weekly refresh (Saturday 09:00 UTC).
-    # The dashboard stamps `as_of` at panel-build time and caches 6h in
-    # memory with no scheduled rebuild, so the displayed vintage only moves
-    # when someone forces it. A weekly force-refresh re-pulls IMF WEO +
-    # World Bank (whose own caches are 24h, so a 7-day cadence always gets a
-    # fresh pull) and re-scores, keeping the "as of" date current.
-    def _refresh_credit_default():
-        try:
-            from backend.credit_default import service as cd_svc
-            data = cd_svc.get_dashboard(force_refresh=True)
-            n = len((data or {}).get('countries', {}) or {})
-            logger.info(f"Credit-default weekly refresh: panel as_of={data.get('as_of')}, {n} sovereigns scored.")
-        except Exception as e:
-            logger.error(f"Credit-default weekly refresh failed: {e}")
-
-    scheduler.add_job(
-        func=_refresh_credit_default,
-        trigger='cron',
-        day_of_week='sat', hour=9, minute=0,
-        id='credit_default_weekly_refresh',
-        replace_existing=True,
-        misfire_grace_time=7200,
-        max_instances=1,
-    )
-    logger.info("Sovereign Credit Default refresh scheduled (Saturday 09:00 UTC).")
-
     scheduler.start()
     logger.info(
         f"Scheduler started. GDELT every {gdelt_interval}min (ALL countries), "
@@ -489,14 +463,3 @@ def init_scheduler(app):
         except Exception as e:
             logger.error(f"commodities warmup failed: {e}")
     threading.Thread(target=_warm_commodities, daemon=True).start()
-
-    # Pre-warm Sovereign Credit Default so the dashboard's "as of" date is
-    # current right after a deploy (the weekly cron keeps it fresh after).
-    def _warm_credit_default():
-        try:
-            from backend.credit_default import service as cd_svc
-            data = cd_svc.get_dashboard()
-            logger.info(f"credit_default warmup: as_of={data.get('as_of') if data else 'none'}")
-        except Exception as e:
-            logger.error(f"credit_default warmup failed: {e}")
-    threading.Thread(target=_warm_credit_default, daemon=True).start()
