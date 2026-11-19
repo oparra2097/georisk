@@ -594,6 +594,19 @@ def register():
             email = request.form.get('email', '').strip().lower()
             password = request.form.get('password', '')
             confirm = request.form.get('confirm', '')
+            # Honeypot — any value in this field means a bot filled every
+            # text input on the page. Silently redirect with the same
+            # success message a real signup gets so the bot doesn't learn
+            # what tripped it, but DON'T create the account. Also log the
+            # IP + attempted email so we can see what's being tried.
+            honeypot = request.form.get('website', '').strip()
+            if honeypot:
+                logger.warning(
+                    f'register: honeypot tripped — ip={request.remote_addr} '
+                    f'email={email!r} honeypot={honeypot!r} ua={request.headers.get("User-Agent", "?")!r}'
+                )
+                flash('Account created! Check your email for a verification link.', 'success')
+                return redirect(url_for('auth.login'))
 
             if not email or not password:
                 flash('Email and password are required.', 'error')
