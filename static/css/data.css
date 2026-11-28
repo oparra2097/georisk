@@ -345,6 +345,183 @@
 }
 
 
+/* ===== Forecast dashboard hero (Phase A) ===== */
+
+.forecast-kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.forecast-kpi-tile {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    min-width: 0;
+}
+
+.forecast-kpi-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.forecast-kpi-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.forecast-kpi-value.delta-up { color: var(--red, #ef4444); }
+.forecast-kpi-value.delta-down { color: var(--green, #10b981); }
+.forecast-kpi-value.delta-neutral { color: var(--text-primary); }
+
+.forecast-kpi-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.forecast-spot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.forecast-spot-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.forecast-spot-card:hover,
+.forecast-spot-card:focus-visible {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.spot-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    min-height: 20px;
+}
+
+.spot-card-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.spot-card-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.spot-card-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ink-strong) 6%, transparent);
+    color: var(--text-muted);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.spot-card-badge.delta-up {
+    background: color-mix(in srgb, var(--red, #ef4444) 15%, transparent);
+    color: var(--red, #ef4444);
+}
+
+.spot-card-badge.delta-down {
+    background: color-mix(in srgb, var(--green, #10b981) 15%, transparent);
+    color: var(--green, #10b981);
+}
+
+.spot-card-badge.delta-neutral {
+    background: color-mix(in srgb, var(--ink-3) 10%, transparent);
+    color: var(--text-muted);
+}
+
+.spot-card-badge.delta-missing {
+    background: transparent;
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+.spot-card-price {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.spot-card-price-val {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.spot-card-price-unit {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.spot-card-spark {
+    width: 100%;
+    height: 40px;
+    display: block;
+}
+
+.spot-card-forecast {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    padding-top: 6px;
+}
+
+.spot-card-forecast-val {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+
 /* ===== Chart ===== */
 
 .chart-container {

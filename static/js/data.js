@@ -1575,9 +1575,8 @@
             });
         }
 
-        // Summary not used
-        const summary = document.getElementById('panel-summary');
-        if (summary) summary.innerHTML = '';
+        // ── Hero KPI strip + per-commodity spot card grid ──
+        renderForecastHeroCards(groupName, group, data, scenario);
 
         // ── Chart ──
         PD.destroyChart('main');
@@ -1730,6 +1729,354 @@
         if (histSection) histSection.style.display = 'none';
     }
 
+    // Convert a forecast label like "2026 Q4" to the consensus key "Q4_2026"
+    // used in data/consensus.yaml.
+    function labelToConsensusKey(label) {
+        if (!label) return null;
+        const parts = String(label).split(' ');
+        if (parts.length === 2 && parts[1].startsWith('Q')) {
+            return parts[1] + '_' + parts[0];
+        }
+        return null;
+    }
+
+    // Build a {quarterLabel: medianForecast} map across all consensus banks
+    // for one commodity. Returns the median across banks for each forecast
+    // quarter the frontend displays.
+    function consensusMedianByLabel(consensusList, forecastLabels) {
+        const result = {};
+        if (!Array.isArray(consensusList) || consensusList.length === 0) return result;
+        forecastLabels.forEach(label => {
+            const key = labelToConsensusKey(label);
+            if (!key) return;
+            const values = [];
+            consensusList.forEach(entry => {
+                const q = (entry && entry.quarters) || {};
+                const v = q[key];
+                if (typeof v === 'number' && Number.isFinite(v)) values.push(v);
+            });
+            if (values.length > 0) {
+                values.sort((a, b) => a - b);
+                const mid = Math.floor(values.length / 2);
+                result[label] = values.length % 2 === 1
+                    ? values[mid]
+                    : (values[mid - 1] + values[mid]) / 2;
+            }
+        });
+        return result;
+    }
+
+    // Draw a tiny sparkline from an array of points onto a canvas; dashed
+    // segment for the forecast portion.
+    function renderMiniSparkline(canvas, points, color, forecastStartIdx) {
+        if (!canvas || !Array.isArray(points) || points.length === 0) return;
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        const vals = points.filter(p => p != null && Number.isFinite(p));
+        if (vals.length < 2) return;
+        const min = Math.min.apply(null, vals);
+        const max = Math.max.apply(null, vals);
+        const span = Math.max(max - min, 1e-6);
+
+        const n = points.length;
+        const pad = 2;
+        const innerW = W - pad * 2;
+        const innerH = H - pad * 2;
+
+        function x(i) { return pad + (i * innerW) / Math.max(1, n - 1); }
+        function y(v) { return pad + innerH - ((v - min) / span) * innerH; }
+
+        // Area fill (forecast portion only)
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        let moved = false;
+        for (let i = 0; i < n; i++) {
+            const v = points[i];
+            if (v == null) continue;
+            if (!moved) { ctx.moveTo(x(i), y(v)); moved = true; }
+            else ctx.lineTo(x(i), y(v));
+        }
+        ctx.lineTo(x(n - 1), H - pad);
+        ctx.lineTo(x(0), H - pad);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Lines: solid for history, dashed for forecast
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.lineJoin = 'round';
+
+        // Solid portion
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        moved = false;
+        for (let i = 0; i < Math.min(n, forecastStartIdx + 1); i++) {
+            const v = points[i];
+            if (v == null) continue;
+            if (!moved) { ctx.moveTo(x(i), y(v)); moved = true; }
+            else ctx.lineTo(x(i), y(v));
+        }
+        ctx.stroke();
+
+        // Dashed portion
+        ctx.setLineDash([3, 2]);
+        ctx.beginPath();
+        moved = false;
+        for (let i = Math.max(0, forecastStartIdx); i < n; i++) {
+            const v = points[i];
+            if (v == null) continue;
+            if (!moved) { ctx.moveTo(x(i), y(v)); moved = true; }
+            else ctx.lineTo(x(i), y(v));
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Dot at the last historical point
+        if (forecastStartIdx > 0 && points[forecastStartIdx - 1] != null) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x(forecastStartIdx - 1), y(points[forecastStartIdx - 1]), 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Render hero KPI strip + per-commodity spot card grid above the group
+    // chart. Mounts into #panel-summary.
+    function renderForecastHeroCards(groupName, group, data, scenario) {
+        const summary = document.getElementById('panel-summary');
+        if (!summary) return;
+
+        const commodities = group.commodities || {};
+        const groupColors = group.colors || {};
+        const scenarioOrder = group.scenario_order || [];
+        const baseScenario = scenarioOrder.find(sc => sc === 'Base Case' || sc === 'Base')
+            || scenarioOrder[1] || scenarioOrder[0];
+        const activeScenario = scenario && scenario !== 'All'
+            ? scenario
+            : baseScenario;
+
+        const timeCtx = data.time_context || {};
+        const forecastLabels = timeCtx.labels || [];
+        const labelTypes = timeCtx.label_types || [];
+        // Future-quarter labels (what we'd call Q+1..Q+N).
+        const horizonLabels = forecastLabels.filter((_, i) => labelTypes[i] === 'forecast');
+        const firstHorizon = horizonLabels[0];
+
+        const meta = data.meta || {};
+        const sourceCounts = meta.forecast_sources || {};
+        const modelCount = sourceCounts.model || 0;
+        const hardcodedCount = sourceCounts.hardcoded || 0;
+        const totalCount = modelCount + hardcodedCount;
+
+        // Collect per-commodity deltas vs consensus for the first horizon
+        const perCommodityDeltas = [];
+        Object.entries(commodities).forEach(([name, info]) => {
+            const scenData = (info.scenarios || {})[activeScenario] || {};
+            const ours = firstHorizon ? scenData[firstHorizon] : null;
+            const medianMap = consensusMedianByLabel(info.consensus || [], horizonLabels);
+            const theirs = firstHorizon ? medianMap[firstHorizon] : null;
+            if (ours != null && theirs != null) {
+                perCommodityDeltas.push({
+                    name,
+                    ours,
+                    theirs,
+                    deltaPct: ((ours - theirs) / Math.abs(theirs)) * 100,
+                });
+            }
+        });
+
+        let avgDeltaPct = null;
+        if (perCommodityDeltas.length > 0) {
+            avgDeltaPct = perCommodityDeltas.reduce((s, d) => s + d.deltaPct, 0) / perCommodityDeltas.length;
+        }
+
+        // Latest spot refresh — prefer meta.last_updated.
+        let refreshedShort = '';
+        if (meta.last_updated) {
+            try {
+                const d = new Date(meta.last_updated);
+                refreshedShort = d.toISOString().slice(5, 10).replace('-', '/');
+            } catch (_) { refreshedShort = meta.last_updated.slice(5, 10); }
+        }
+
+        // ── Build KPI strip ──
+        const kpiTiles = [];
+        kpiTiles.push({
+            label: 'Commodities',
+            value: String(Object.keys(commodities).length),
+            sub: totalCount > 0 ? modelCount + ' modelled' : '',
+        });
+        kpiTiles.push({
+            label: 'Active scenario',
+            value: activeScenario || '—',
+            sub: group.scenario_weights && group.scenario_weights[activeScenario]
+                ? (group.scenario_weights[activeScenario] * 100).toFixed(0) + '% weight'
+                : '',
+        });
+        if (firstHorizon) {
+            kpiTiles.push({
+                label: 'Horizon',
+                value: firstHorizon.replace(' Q', ' Q') + ' → ' + (horizonLabels[horizonLabels.length - 1] || ''),
+                sub: horizonLabels.length + '-quarter rolling',
+            });
+        }
+        if (avgDeltaPct != null) {
+            const deltaSign = avgDeltaPct >= 0 ? '+' : '';
+            const deltaClass = Math.abs(avgDeltaPct) < 2 ? 'delta-neutral'
+                : (avgDeltaPct > 0 ? 'delta-up' : 'delta-down');
+            kpiTiles.push({
+                label: 'Avg Δ vs consensus (' + (firstHorizon || '') + ')',
+                value: deltaSign + avgDeltaPct.toFixed(1) + '%',
+                sub: perCommodityDeltas.length + ' with consensus',
+                valueClass: deltaClass,
+            });
+        } else if (refreshedShort) {
+            kpiTiles.push({
+                label: 'Last refresh',
+                value: refreshedShort,
+                sub: 'daily 24h cache',
+            });
+        }
+
+        let kpiHtml = '<div class="forecast-kpi-strip">';
+        kpiTiles.forEach(t => {
+            kpiHtml += '<div class="forecast-kpi-tile">'
+                + '<div class="forecast-kpi-label">' + escapeHtml(t.label) + '</div>'
+                + '<div class="forecast-kpi-value ' + (t.valueClass || '') + '">' + escapeHtml(t.value) + '</div>'
+                + (t.sub ? '<div class="forecast-kpi-sub">' + escapeHtml(t.sub) + '</div>' : '')
+                + '</div>';
+        });
+        kpiHtml += '</div>';
+
+        // ── Build spot card grid ──
+        let cardsHtml = '<div class="forecast-spot-grid">';
+        Object.entries(commodities).forEach(([name, info]) => {
+            const color = groupColors[name] || Theme.c('accent');
+            const spot = info.latest_close;
+            const unit = info.unit || '';
+            const scenData = (info.scenarios || {})[activeScenario] || {};
+
+            // Build spark points: last 4 historical quarters + 4 forecast horizons
+            const hist = (info.historical || []).slice(-4);
+            const sparkPoints = hist.map(h => h.avg_price);
+            const forecastStartIdx = sparkPoints.length;
+            horizonLabels.forEach(l => {
+                const v = scenData[l];
+                sparkPoints.push(typeof v === 'number' ? v : null);
+            });
+
+            // Compute Q+1 forecast and delta vs consensus
+            const ours = firstHorizon ? scenData[firstHorizon] : null;
+            const medianMap = consensusMedianByLabel(info.consensus || [], horizonLabels);
+            const theirs = firstHorizon ? medianMap[firstHorizon] : null;
+
+            let badgeHtml = '';
+            if (ours != null && theirs != null) {
+                const deltaPct = ((ours - theirs) / Math.abs(theirs)) * 100;
+                const sign = deltaPct >= 0 ? '+' : '';
+                const cls = Math.abs(deltaPct) < 2 ? 'delta-neutral'
+                    : (deltaPct > 0 ? 'delta-up' : 'delta-down');
+                badgeHtml = '<div class="spot-card-badge ' + cls + '" title="Us vs consensus median at ' + escapeHtml(firstHorizon) + '">'
+                    + sign + deltaPct.toFixed(1) + '% vs Street'
+                    + '</div>';
+            } else if (info.consensus && info.consensus.length === 0) {
+                badgeHtml = '<div class="spot-card-badge delta-missing">No consensus</div>';
+            }
+
+            const subviewId = ds_subview_id(name);
+            const groupId = state.datasetId || '';
+            const linkAttr = groupId
+                ? ' data-forecast-link="' + escapeHtml(groupId) + '|' + escapeHtml(subviewId) + '"'
+                : '';
+
+            const forecastStr = ours != null ? ours.toFixed(2) : '—';
+            const horizonStr = firstHorizon || '';
+
+            cardsHtml += '<div class="forecast-spot-card"' + linkAttr + ' role="button" tabindex="0">'
+                + '<div class="spot-card-header">'
+                +   '<div class="spot-card-name">'
+                +     '<span class="spot-card-swatch" style="background:' + color + '"></span>'
+                +     escapeHtml(name)
+                +   '</div>'
+                +   badgeHtml
+                + '</div>'
+                + '<div class="spot-card-price">'
+                +   '<span class="spot-card-price-val">' + (spot != null ? spot.toFixed(2) : '—') + '</span>'
+                +   '<span class="spot-card-price-unit">' + escapeHtml(unit) + '</span>'
+                + '</div>'
+                + '<canvas class="spot-card-spark" width="200" height="40" data-spark="' + escapeHtml(name) + '"></canvas>'
+                + '<div class="spot-card-forecast">'
+                +   '<span class="spot-card-forecast-label">' + escapeHtml(horizonStr) + ' ' + escapeHtml(activeScenario) + '</span>'
+                +   '<span class="spot-card-forecast-val">' + forecastStr + '</span>'
+                + '</div>'
+                + '</div>';
+        });
+        cardsHtml += '</div>';
+
+        summary.innerHTML = kpiHtml + cardsHtml;
+
+        // Render sparklines after mount (canvas elements exist now)
+        Object.entries(commodities).forEach(([name, info]) => {
+            const canvas = summary.querySelector('canvas[data-spark="' + CSS.escape(name) + '"]');
+            if (!canvas) return;
+            const color = groupColors[name] || Theme.c('accent');
+            const scenData = (info.scenarios || {})[activeScenario] || {};
+            const hist = (info.historical || []).slice(-4);
+            const points = hist.map(h => h.avg_price);
+            const forecastStartIdx = points.length;
+            horizonLabels.forEach(l => {
+                const v = scenData[l];
+                points.push(typeof v === 'number' ? v : null);
+            });
+            renderMiniSparkline(canvas, points, color, forecastStartIdx);
+        });
+
+        // Click handler — jump to single-commodity subview
+        summary.querySelectorAll('.forecast-spot-card').forEach(card => {
+            const link = card.getAttribute('data-forecast-link');
+            if (!link) return;
+            const [groupId, subview] = link.split('|');
+            const activate = () => {
+                if (typeof window.PD !== 'undefined' && typeof window.PD.activateDataset === 'function') {
+                    window.PD.activateDataset(groupId, subview);
+                } else {
+                    state.subview = subview;
+                    // Fallback: full re-render by clicking the tab if present.
+                    const tab = document.querySelector('.dataset-tab[data-subview="' + CSS.escape(subview) + '"]');
+                    if (tab) tab.click();
+                }
+            };
+            card.addEventListener('click', activate);
+            card.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+            });
+        });
+    }
+
+    // Minimal HTML escape for user-safe text injection.
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // Derive a tab/subview id from a commodity name — matches the id scheme
+    // used in data-catalog for forecast subviews.
+    function ds_subview_id(commodityName) {
+        return String(commodityName)
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+    }
+
     function renderForecastCommodity(ds, data, commodityName) {
         const groupName = ds.forecastGroupName;
         const group = (data.groups || {})[groupName];
@@ -1801,6 +2148,81 @@
             });
         }
 
+        // ── Fan chart band: filled area between extreme scenarios ──
+        // For Oil & Gas (directional: Base/Severe/Worst) fill between Base
+        // and Worst. For Agri/Metals (symmetric Bear/Base/Bull) fill between
+        // Bear and Bull. Rendered as two near-invisible lines with the upper
+        // one filling to the lower one.
+        const scenarioKeys = scenarioOrder.filter(sc => scenarios[sc] && sc !== 'Actual');
+        let lowBandScenario = null, highBandScenario = null;
+        if (scenarioKeys.length >= 2) {
+            // Compute mean of each scenario's forecast values to find the
+            // lowest / highest envelope — robust to naming conventions.
+            const scenMeans = scenarioKeys.map(sc => {
+                const vals = forecastLabels
+                    .map(l => scenarios[sc][l])
+                    .filter(v => typeof v === 'number' && Number.isFinite(v));
+                const m = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+                return { sc, m };
+            }).filter(x => x.m != null);
+            if (scenMeans.length >= 2) {
+                scenMeans.sort((a, b) => a.m - b.m);
+                lowBandScenario = scenMeans[0].sc;
+                highBandScenario = scenMeans[scenMeans.length - 1].sc;
+            }
+        }
+
+        if (lowBandScenario && highBandScenario && lowBandScenario !== highBandScenario) {
+            const bandColor = Theme.c('accent') || '#60a5fa';
+            const lowData = allLabels.map((l, i) => {
+                if (i < forecastStartIdx) {
+                    return i === forecastStartIdx - 1 && histMap[l] != null ? histMap[l] : null;
+                }
+                const fl = forecastLabels[i - forecastStartIdx];
+                const v = scenarios[lowBandScenario][fl];
+                return typeof v === 'number' ? v : null;
+            });
+            const highData = allLabels.map((l, i) => {
+                if (i < forecastStartIdx) {
+                    return i === forecastStartIdx - 1 && histMap[l] != null ? histMap[l] : null;
+                }
+                const fl = forecastLabels[i - forecastStartIdx];
+                const v = scenarios[highBandScenario][fl];
+                return typeof v === 'number' ? v : null;
+            });
+
+            // Lower boundary — invisible line, no fill
+            datasets.push({
+                label: lowBandScenario + ' (band low)',
+                data: lowData,
+                borderColor: 'rgba(0,0,0,0)',
+                backgroundColor: 'rgba(0,0,0,0)',
+                borderWidth: 0,
+                pointRadius: 0,
+                pointHitRadius: 0,
+                tension: 0.3,
+                spanGaps: true,
+                fill: false,
+                order: 10,
+                _bandBoundary: true,
+            });
+            // Upper boundary — invisible line filled to previous dataset
+            datasets.push({
+                label: 'Scenario band',
+                data: highData,
+                borderColor: 'rgba(0,0,0,0)',
+                backgroundColor: bandColor + '22',
+                borderWidth: 0,
+                pointRadius: 0,
+                pointHitRadius: 0,
+                tension: 0.3,
+                spanGaps: true,
+                fill: '-1',
+                order: 9,
+                _bandBoundary: true,
+            });
+        }
+
         // Scenario lines (covering the forecast portion, connecting from last historical point)
         scenarioOrder
             .filter(sc => scenarios[sc] && sc !== 'Actual')
@@ -1846,7 +2268,14 @@
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: { color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 12, padding: 10, usePointStyle: true, pointStyle: 'line' }
+                        labels: {
+                            color: Theme.c('ink-3'), font: { size: 11 }, boxWidth: 12, padding: 10,
+                            usePointStyle: true, pointStyle: 'line',
+                            filter: (legendItem, chartData) => {
+                                const ds = chartData.datasets[legendItem.datasetIndex];
+                                return !ds._bandBoundary;
+                            },
+                        }
                     },
                     tooltip: {
                         backgroundColor: Theme.c('surface-2', 0.96),
@@ -1855,6 +2284,7 @@
                         borderColor: Theme.c('ink', 0.1),
                         borderWidth: 1,
                         bodyFont: { size: 12 },
+                        filter: (tooltipItem) => !tooltipItem.dataset._bandBoundary,
                         callbacks: {
                             label: (tooltipCtx) => {
                                 const val = tooltipCtx.parsed.y;
